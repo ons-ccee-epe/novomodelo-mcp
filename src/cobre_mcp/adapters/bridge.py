@@ -1,6 +1,6 @@
 """Adaptador da CLI do cobre-bridge.
 
-`run_bridge` é a ÚNICA peça compartilhada entre as frentes de trabalho. Ela:
+`run_bridge` é a ÚNICA peça compartilhada por todas as ferramentas. Ela:
   - monta `cobre-bridge <argv> --json --no-color`;
   - executa como subprocesso (isolamento de processo);
   - NUNCA levanta exceção para o chamador — toda falha vira um envelope de erro;
