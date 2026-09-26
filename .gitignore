@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Artefatos gerados pelas edições de deck (deck_io.edit_json/edit_parquet)
+*.bak
+*.tmp
+
+# Ambiente local
+.env
+.env.*
+
+# Cobertura de testes
+.coverage
+htmlcov/
+
+# Documento interno de revisão
+REVISAO_COBRE_MCP.md
+
+# scratch local
+_scratch_ignore/
