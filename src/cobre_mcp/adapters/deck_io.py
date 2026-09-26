@@ -76,7 +76,6 @@ def validate_json(obj: Any, schema_path: str | None) -> dict[str, Any]:
         return {"validated": False, "errors": [],
                 "note": "sem schema correspondente — validação por schema pulada"}
     try:
-        import jsonschema
         from jsonschema.validators import validator_for
     except ImportError:
         return {"validated": False, "errors": [],
@@ -181,7 +180,7 @@ def _pl():
 
 
 def _schema_map(df) -> dict[str, str]:
-    return {name: str(dtype) for name, dtype in zip(df.columns, df.dtypes)}
+    return {name: str(dtype) for name, dtype in zip(df.columns, df.dtypes, strict=True)}
 
 
 def read_parquet_summary(path: str, columns: list[str] | None = None,

@@ -18,8 +18,8 @@ def build_server() -> FastMCP:
     settings = load_settings()
     mcp = FastMCP("cobre")
 
-    register_pre_run(mcp, settings)     # Júlia: check / convert / validate
-    register_post_run(mcp, settings)    # Ana:   compare_* / dashboard
+    register_pre_run(mcp, settings)     # pré-rodada: check / convert / validate
+    register_post_run(mcp, settings)    # pós-rodada: compare_* / dashboard
     register_deck(mcp, settings)        # manipulador de decks (JSON/Parquet)
     register_results(mcp, settings)     # leitura/análise de resultados (pós-rodada)
     register_reference(mcp, settings)   # schemas + documentação (referência)

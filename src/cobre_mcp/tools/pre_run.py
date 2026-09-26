@@ -1,11 +1,11 @@
-"""Frente PRÉ-RODADA (Júlia): validação, conversão e prontidão para simular.
+"""Ferramentas de pré-rodada: validação, conversão e prontidão para simular.
 
 Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 """
 from __future__ import annotations
 
 from ..adapters.bridge import run_bridge
-from ..adapters.cobre import run_cobre, validate_deck_binding, validate_deck_cli
+from ..adapters.cobre import validate_deck_binding, validate_deck_cli
 from ..adapters.discovery import find_cobre
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings

@@ -151,12 +151,6 @@ uv run ruff check .
 uv run ruff format .
 ```
 
-## Divisão de trabalho
-
-Cada pessoa é dona de um módulo de tools; as peças compartilhadas são
-`adapters/bridge.py` (`run_bridge`), `adapters/paths.py` (guard) e `tools/shaping.py`.
-Combinar mudanças nessas antes de mexer.
-
 ## Licença
 
 Apache-2.0 (ver arquivo `LICENSE`), alinhado ao ecossistema Cobre.

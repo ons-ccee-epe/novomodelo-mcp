@@ -1,4 +1,4 @@
-"""Frente PÓS-RODADA (Ana): comparação de casos e visualização (dashboard).
+"""Ferramentas de pós-rodada: comparação de casos e visualização (dashboard).
 
 Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 """

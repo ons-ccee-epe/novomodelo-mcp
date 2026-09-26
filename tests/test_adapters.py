@@ -1,5 +1,4 @@
 """Testes de contrato do adaptador (pytest). Usam o cobre-bridge falso."""
-import os
 from pathlib import Path
 
 from cobre_mcp.adapters.bridge import run_bridge

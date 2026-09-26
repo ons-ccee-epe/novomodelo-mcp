@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Smoke test das tools de referência (schema/docs), stdlib puro.
 Roda: python3 tests/smoke_reference.py"""
-import json
 import os
 import sys
 import tempfile
