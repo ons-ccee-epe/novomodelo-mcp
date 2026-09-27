@@ -13,6 +13,7 @@ from pathlib import Path
 from ..adapters import deck_io
 from ..adapters.cobre import validate_deck_binding
 from ..adapters.envelope import error
+from ..adapters.obs import log
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .shaping import cap_envelope
@@ -85,6 +86,31 @@ def register_deck(mcp, settings: Settings) -> None:
             return error(1, f"falha ao descrever: {exc}")
         out["status"] = "ok"
         return out
+
+
+    @mcp.tool()
+    def deck_sql(query: str, max_rows: int | None = None) -> dict:
+        """Consulta SQL read-only (DuckDB) sobre Parquet/CSV/JSON do deck ou dos resultados.
+
+        Para AGREGAR / FILTRAR / juntar o que as outras tools nao cobrem: contagem
+        condicional, min/max e P10/P90 por usina ou estagio, joins entre parquets.
+        Aponte os arquivos por CAMINHO ABSOLUTO em read_parquet('/caminho/arq.parquet')
+        (tambem read_csv/read_json).
+
+        So leitura: apenas SELECT/WITH; COPY/ATTACH/INSTALL/escrita sao recusados.
+        Todo caminho referenciado precisa estar dentro do workspace
+        (COBRE_MCP_WORKSPACE); acesso remoto e a caminhos de fora e negado. A saida
+        tem teto de linhas (COBRE_MCP_MAX_QUERY_ROWS) e `truncated: true` avisa que
+        ha mais — refine com agregacao/LIMIT.
+
+        Ex.: SELECT hydro_id, min(value_m3s) AS min_v, max(value_m3s) AS max_v,
+                    count(*) FILTER (WHERE value_m3s < 0) AS n_neg
+             FROM read_parquet('/.../scenarios/inflow_history.parquet')
+             GROUP BY hydro_id ORDER BY min_v LIMIT 20
+        """
+        from ..adapters.sql import run_readonly_sql
+        log(settings, "deck_sql", query=query, max_rows=max_rows)
+        return run_readonly_sql(query, settings=settings, max_rows=max_rows)
 
     @mcp.tool()
     def deck_edit_json(path: str, changes: list[dict], dry_run: bool = False,
