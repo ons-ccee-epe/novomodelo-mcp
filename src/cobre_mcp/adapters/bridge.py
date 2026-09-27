@@ -18,6 +18,7 @@ from typing import Any
 from ..config import Settings, load_settings
 from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_bridge
+from .obs import log
 
 
 
@@ -54,6 +55,7 @@ def run_bridge(argv: list[str], *, timeout: float | None = None,
     if binpath is None:
         return _error(127, "cobre-bridge não encontrado. Instale-o "
                            "(uv tool install cobre-bridge) ou defina COBRE_BRIDGE_BIN.")
+    log(settings, "bridge", argv=argv)
     cmd = [binpath, *argv, "--json", "--no-color"]
     try:
         proc = subprocess.run(
@@ -69,4 +71,5 @@ def run_bridge(argv: list[str], *, timeout: float | None = None,
 
     envelope = _parse_envelope(proc.stdout, proc.stderr)
     envelope["exit_code"] = proc.returncode
+    log(settings, "bridge.done", exit_code=envelope.get("exit_code"), status=envelope.get("status"))
     return envelope

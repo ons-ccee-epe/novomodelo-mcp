@@ -72,6 +72,7 @@ Edições com `force=True` (gravar violando o schema) exigem `COBRE_MCP_ALLOW_FO
 | `COBRE_DOCS_DIR` | — | mirror local do `cobre-docs` (habilita `docs_list`/`docs_read`) |
 | `COBRE_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando setada) |
 | `COBRE_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)` |
+| `COBRE_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
 | `COBRE_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
 | `COBRE_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
 | `COBRE_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |

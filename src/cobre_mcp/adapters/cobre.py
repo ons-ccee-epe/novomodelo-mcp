@@ -13,6 +13,7 @@ from typing import Any
 from ..config import Settings, load_settings
 from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_cobre
+from .obs import log
 
 
 
@@ -24,6 +25,7 @@ def run_cobre(subargv: list[str], *, timeout: float | None = None,
     binpath = find_cobre(settings)
     if binpath is None:
         return _error(127, "cobre não encontrado no PATH (defina COBRE_BIN).")
+    log(settings, "cobre", subargv=subargv)
     cmd = [binpath, "--color", "never", *subargv]
     try:
         proc = subprocess.run(
@@ -48,6 +50,7 @@ def run_cobre(subargv: list[str], *, timeout: float | None = None,
             env = {"status": "error",
                    "diagnostics": ["saída não-JSON da CLI", text[:MAX_DETAIL_CHARS]]}
     env["exit_code"] = proc.returncode
+    log(settings, "cobre.done", exit_code=env.get("exit_code"), status=env.get("status"))
     return env
 
 
@@ -57,6 +60,7 @@ def validate_deck_binding(case_dir: str, *, settings: Settings | None = None) ->
     Retorna {"valid": bool, "errors": [{kind,message,file,entity}], "warnings": [...]}.
     Sem parsing de texto e sem depender do binario Rust. Transporte puro.
     """
+    log(settings, "validate_deck_binding", case_dir=case_dir)
     try:
         import cobre.io as _cio
     except ImportError:

@@ -15,6 +15,7 @@ class Settings:
     docs_dir: str | None            # COBRE_DOCS_DIR (mirror local do cobre-docs)
     workspace: str | None           # COBRE_MCP_WORKSPACE (raiz(es) permitidas; os.pathsep)
     allow_force: bool               # COBRE_MCP_ALLOW_FORCE (habilita edições force=True)
+    log_calls: bool                 # COBRE_MCP_LOG (loga chamadas no stderr)
     default_timeout: float          # COBRE_MCP_TIMEOUT (segundos)
     max_diagnostics: int            # COBRE_MCP_MAX_DIAGNOSTICS
     max_summary_chars: int          # COBRE_MCP_MAX_SUMMARY_CHARS
@@ -53,6 +54,7 @@ def load_settings() -> Settings:
         docs_dir=os.environ.get("COBRE_DOCS_DIR") or None,
         workspace=os.environ.get("COBRE_MCP_WORKSPACE") or None,
         allow_force=_env_bool("COBRE_MCP_ALLOW_FORCE", False),
+        log_calls=_env_bool("COBRE_MCP_LOG", False),
         default_timeout=_env_float("COBRE_MCP_TIMEOUT", 900.0),
         max_diagnostics=_env_int("COBRE_MCP_MAX_DIAGNOSTICS", 50),
         max_summary_chars=_env_int("COBRE_MCP_MAX_SUMMARY_CHARS", 20000),
