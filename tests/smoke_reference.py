@@ -41,6 +41,55 @@ def test_docs_list_and_read():
     os.environ.pop("COBRE_DOCS_DIR", None)
 
 
+def test_discover_prefers_content_subpath():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        content = base / "cobre-docs" / "src" / "content" / "docs"
+        content.mkdir(parents=True)
+        (content / "intro.md").write_text("# intro")
+        found = REF._search_docs_in([base])
+        assert found is not None and Path(found) == content, found
+
+
+def test_discover_accepts_repo_root_layout():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        root = base / "cobre-docs"
+        root.mkdir()
+        (root / "guide.mdx").write_text("# guide")
+        found = REF._search_docs_in([base])
+        assert found is not None and Path(found) == root, found
+
+
+def test_discover_none_when_absent():
+    with tempfile.TemporaryDirectory() as d:
+        assert REF._search_docs_in([Path(d)]) is None
+
+
+def test_docs_unavailable_messages_distinguish_and_hint():
+    os.environ.pop("COBRE_DOCS_DIR", None)
+    REF._DOCS_DISCOVER_CACHE.clear()
+    with tempfile.TemporaryDirectory() as empty:
+        # força bases vazias para a auto-descoberta não achar nada
+        orig = REF._candidate_bases
+        REF._candidate_bases = lambda: [Path(empty)]
+        try:
+            s = load_settings()
+            und = REF.list_docs(s)
+            assert und["status"] == "error", und
+            assert "nao definido" in und["diagnostics"][0], und
+            assert "cobre-docs" in und["diagnostics"][1], und
+            os.environ["COBRE_DOCS_DIR"] = "/tmp/nao/existe/xyz"
+            s2 = load_settings()
+            bad = REF.read_doc(s2, "foo", 100)
+            assert bad["status"] == "error" and "/tmp/nao/existe/xyz" in bad["diagnostics"][0], bad
+        finally:
+            REF._candidate_bases = orig
+            os.environ.pop("COBRE_DOCS_DIR", None)
+            REF._DOCS_DISCOVER_CACHE.clear()
+
+
+
 def main():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]
