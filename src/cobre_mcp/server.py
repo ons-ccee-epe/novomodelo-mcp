@@ -5,6 +5,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .adapters.discovery import find_bridge, find_cobre, tool_version
 from .adapters.paths import allowed_roots
+from .adapters.reference import docs_root
 from .config import load_settings
 from .tools.deck import register_deck
 from .tools.post_run import register_post_run
@@ -36,6 +37,7 @@ def build_server() -> FastMCP:
             "cobre": {"path": cobre, "version": tool_version(cobre),
                       "available": cobre is not None},
             "schemas_dir": settings.schemas_dir,
+            "docs_dir": docs_root(settings),
             "workspace": [str(r) for r in allowed_roots(settings)] or "irrestrito (defina COBRE_MCP_WORKSPACE)",
             "allow_force": settings.allow_force,
             "settings": {

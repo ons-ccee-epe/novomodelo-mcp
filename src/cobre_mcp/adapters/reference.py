@@ -2,7 +2,10 @@
 
 Fontes:
 - schemas: `COBRE_SCHEMAS_DIR`, ou exportados sob demanda via `cobre schema export`.
-- docs: `COBRE_DOCS_DIR` (ex.: o clone `cobre-docs/src/content/docs`).
+- docs: `COBRE_DOCS_DIR`; se ausente/inválido, AUTO-DESCOBERTA de um clone
+  `cobre-docs` em locais previsíveis (ao lado do repo do MCP ou do diretório de
+  trabalho — ex.: .../codigo/<repositório anterior> + .../codigo/cobre-docs). Sem env var e
+  sem caminho pessoal fixo: a mesma heurística vale para qualquer checkout.
 Leitura confinada à raiz; conteúdo com teto. Sem regra de negócio.
 """
 from __future__ import annotations
@@ -16,6 +19,7 @@ from ..config import Settings
 from .discovery import find_cobre
 
 _SCHEMA_EXPORT_CACHE: dict[str, str] = {}
+_DOCS_DISCOVER_CACHE: dict[str, str] = {}
 _SUFFIX = ".schema.json"
 
 
@@ -75,10 +79,109 @@ def _within(path: Path, root: Path) -> bool:
         return False
 
 
+# ---------------------------------------------------------------- docs
+
+_CLONE_HINT = (
+    "clone https://github.com/cobre-rs/cobre-docs e defina COBRE_DOCS_DIR para a "
+    "pasta de paginas .md/.mdx (no layout padrao do repo, src/content/docs), ou "
+    "deixe o clone ao lado do repo do cobre/<repositório anterior> para a descoberta automatica "
+    "encontra-lo"
+)
+
+
+def _has_docs(d: Path) -> bool:
+    """True se o diretório contém ao menos um .md/.mdx (para no primeiro achado)."""
+    try:
+        for p in d.rglob("*"):
+            if p.suffix in (".md", ".mdx"):
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def _search_docs_in(bases: list[Path]) -> str | None:
+    """Procura, na ordem dada, um clone `cobre-docs` com conteúdo dentro das bases.
+
+    Puro e testável: recebe as bases já resolvidas. Prefere a subpasta de conteúdo
+    do layout padrão (`cobre-docs/src/content/docs`); aceita também a raiz do clone,
+    caso o repo seja reorganizado.
+    """
+    for base in bases:
+        for cand in (base / "cobre-docs" / "src" / "content" / "docs",
+                     base / "cobre-docs"):
+            if cand.is_dir() and _has_docs(cand):
+                return str(cand)
+    return None
+
+
+def _candidate_bases() -> list[Path]:
+    """Bases previsíveis onde um clone `cobre-docs` costuma ficar (sem env var).
+
+    Ancestrais do próprio pacote do MCP e do diretório de trabalho — cobre o
+    layout usual de checkouts lado a lado, sem depender de caminho pessoal.
+    """
+    bases: list[Path] = []
+    seen: set[str] = set()
+
+    def add(p: Path) -> None:
+        try:
+            rp = p.resolve()
+        except OSError:
+            return
+        key = str(rp)
+        if key not in seen:
+            seen.add(key)
+            bases.append(rp)
+
+    for anc in list(Path(__file__).resolve().parents)[:6]:
+        add(anc)
+    try:
+        cwd = Path.cwd()
+    except OSError:
+        cwd = None
+    if cwd is not None:
+        add(cwd)
+        for anc in list(cwd.resolve().parents)[:4]:
+            add(anc)
+    return bases
+
+
+def _discover_docs_dir() -> str | None:
+    """Auto-descoberta de um clone `cobre-docs` (com cache do acerto)."""
+    cached = _DOCS_DISCOVER_CACHE.get("root")
+    if cached and Path(cached).is_dir():
+        return cached
+    found = _search_docs_in(_candidate_bases())
+    if found:
+        _DOCS_DISCOVER_CACHE["root"] = found
+    return found
+
+
+def docs_root(settings: Settings) -> str | None:
+    """Raiz efetiva das docs: `COBRE_DOCS_DIR` válido vence; senão, auto-descoberta."""
+    if settings.docs_dir and Path(settings.docs_dir).is_dir():
+        return settings.docs_dir
+    return _discover_docs_dir()
+
+
+def _docs_unavailable(settings: Settings) -> dict:
+    """Erro quando não há docs: env var ausente/quebrada E nada descoberto."""
+    configured = settings.docs_dir
+    if not configured:
+        msg = ("docs indisponiveis: COBRE_DOCS_DIR nao definido e nenhum clone "
+               "cobre-docs encontrado automaticamente")
+    else:
+        msg = ("docs indisponiveis: COBRE_DOCS_DIR aponta para caminho inexistente "
+               f"ou que nao e diretorio ({configured}) e nenhum clone cobre-docs "
+               "encontrado automaticamente")
+    return {"status": "error", "diagnostics": [msg, _CLONE_HINT]}
+
+
 def list_docs(settings: Settings, section: str | None = None) -> dict:
-    root = settings.docs_dir
-    if not root or not Path(root).is_dir():
-        return {"status": "error", "diagnostics": ["docs indisponiveis; defina COBRE_DOCS_DIR"]}
+    root = docs_root(settings)
+    if root is None:
+        return _docs_unavailable(settings)
     base = Path(root)
     pages = []
     for p in sorted(base.rglob("*")):
@@ -87,13 +190,13 @@ def list_docs(settings: Settings, section: str | None = None) -> dict:
             if section and not rel.startswith(section):
                 continue
             pages.append(rel)
-    return {"status": "ok", "count": len(pages), "pages": pages}
+    return {"status": "ok", "docs_dir": str(base), "count": len(pages), "pages": pages}
 
 
 def read_doc(settings: Settings, page: str, max_chars: int) -> dict:
-    root = settings.docs_dir
-    if not root or not Path(root).is_dir():
-        return {"status": "error", "diagnostics": ["docs indisponiveis; defina COBRE_DOCS_DIR"]}
+    root = docs_root(settings)
+    if root is None:
+        return _docs_unavailable(settings)
     base = Path(root).resolve()
     candidates = [base / page, base / f"{page}.md", base / f"{page}.mdx"]
     target = next((c for c in candidates if c.exists() and c.is_file()), None)
