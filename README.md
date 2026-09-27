@@ -78,6 +78,7 @@ Edições com `force=True` (gravar violando o schema) exigem `COBRE_MCP_ALLOW_FO
 | `COBRE_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |
 | `COBRE_MCP_MAX_INLINE_ROWS` | `50` | teto de linhas de amostra (parquet) |
 | `COBRE_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes na leitura direta de JSON |
+| `COBRE_MCP_MAX_QUERY_ROWS` | `1000` | teto de linhas do `deck_sql` |
 
 ## Ferramentas
 
@@ -100,6 +101,7 @@ Edições com `force=True` (gravar violando o schema) exigem `COBRE_MCP_ALLOW_FO
 **Manipulador de decks** (`tools/deck.py`)
 - `deck_list` · `deck_read_json` · `deck_read_parquet` · `deck_describe_parquet`
 - `deck_edit_json` (valida contra schema, backup + atômico) · `deck_edit_parquet` (preserva colunas/dtypes)
+- `deck_sql(query, max_rows)` — consulta SQL **read-only** (DuckDB) sobre parquet/csv/json do deck ou dos resultados; guard confina os caminhos ao workspace
 
 **Referência** (`tools/reference.py`)
 - `schema_list()` / `schema_get(tipo)` — JSON Schemas de entrada (via `cobre schema export` ou `COBRE_SCHEMAS_DIR`); também expostos no resource `cobre://schema/{tipo}`
@@ -119,12 +121,13 @@ src/cobre_mcp/
 │   ├── discovery.py     # acha binários e versões
 │   ├── deck_io.py       # leitura/edição de deck (JSON/Parquet)
 │   ├── results.py       # leitura de resultados
+│   ├── sql.py           # consulta SQL read-only (DuckDB) + guard fail-closed
 │   ├── paths.py         # guard de workspace (fail-closed)
 │   └── envelope.py      # envelope de erro (fonte única)
 └── tools/
     ├── pre_run.py · post_run.py · results.py · deck.py · shaping.py
 tests/
-├── smoke.py · smoke_deck.py · smoke_results.py · smoke_paths.py   # stdlib, offline
+├── smoke.py · smoke_deck.py · smoke_results.py · smoke_paths.py · smoke_sql.py   # stdlib, offline
 ├── test_adapters.py                                               # pytest
 ├── fake_cobre_bridge.py                                           # cobre-bridge falso
 └── try_tools.py                                                   # utilitário manual (não é CI)

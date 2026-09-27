@@ -10,6 +10,7 @@ dependencies = [
     "polars>=1.0",
     "jsonschema>=4.0",
     "cobre-python>=0.16",
+    "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
 ]
 
 [project.scripts]

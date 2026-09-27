@@ -21,6 +21,7 @@ class Settings:
     max_summary_chars: int          # COBRE_MCP_MAX_SUMMARY_CHARS
     max_inline_rows: int            # COBRE_MCP_MAX_INLINE_ROWS (parquet head)
     max_read_bytes: int             # COBRE_MCP_MAX_READ_BYTES (teto de leitura de JSON)
+    max_query_rows: int             # COBRE_MCP_MAX_QUERY_ROWS (teto de linhas do deck_sql)
 
 
 def _env_float(name: str, default: float) -> float:
@@ -60,4 +61,5 @@ def load_settings() -> Settings:
         max_summary_chars=_env_int("COBRE_MCP_MAX_SUMMARY_CHARS", 20000),
         max_inline_rows=_env_int("COBRE_MCP_MAX_INLINE_ROWS", 50),
         max_read_bytes=_env_int("COBRE_MCP_MAX_READ_BYTES", 5_000_000),
+        max_query_rows=_env_int("COBRE_MCP_MAX_QUERY_ROWS", 1000),
     )
