@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from ..adapters.bridge import run_bridge
 from ..adapters.paths import ensure_in_workspace
+from ..adapters.validate import validate_compare_inputs
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
 
@@ -46,6 +47,8 @@ def register_post_run(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(newave_dir, cobre_dir, out_dir, settings=settings)):
             return err
+        if (err := validate_compare_inputs(tolerance, fmt)):
+            return err
         return _compare("newave", newave_dir, cobre_dir, tolerance, fmt, out_dir,
                         settings)
 
@@ -63,6 +66,8 @@ def register_post_run(mcp, settings: Settings) -> None:
         restrições e evaporação.
         """
         if (err := ensure_in_workspace(decomp_dir, cobre_dir, out_dir, settings=settings)):
+            return err
+        if (err := validate_compare_inputs(tolerance, fmt)):
             return err
         return _compare("decomp", decomp_dir, cobre_dir, tolerance, fmt, out_dir,
                         settings)
