@@ -66,13 +66,43 @@ def test_discover_none_when_absent():
         assert REF._search_docs_in([Path(d)]) is None
 
 
-def test_docs_unavailable_messages_distinguish_and_hint():
+def test_docs_fallback_to_bundled_when_no_env_or_discovery():
+    """Sem COBRE_DOCS_DIR e sem clone descoberto, o fallback EMBUTIDO responde.
+
+    Contrato novo (docs embutidos no pacote): list_docs nunca fica indisponivel
+    quando o snapshot embutido esta presente — retorna as paginas embutidas.
+    """
     os.environ.pop("COBRE_DOCS_DIR", None)
     REF._DOCS_DISCOVER_CACHE.clear()
     with tempfile.TemporaryDirectory() as empty:
-        # força bases vazias para a auto-descoberta não achar nada
+        # forca bases vazias para a auto-descoberta nao achar nada
         orig = REF._candidate_bases
         REF._candidate_bases = lambda: [Path(empty)]
+        try:
+            s = load_settings()
+            und = REF.list_docs(s)
+            assert und["status"] == "ok", und
+            assert und["count"] > 0, und
+            assert str(Path("_bundled") / "docs") in und["docs_dir"], und
+        finally:
+            REF._candidate_bases = orig
+            REF._DOCS_DISCOVER_CACHE.clear()
+
+
+def test_docs_unavailable_messages_when_bundled_missing():
+    """Quando NAO ha env var, nem clone, nem embutido, a msg de erro orienta.
+
+    Cenario de borda (build sem o snapshot embutido): a mensagem deve distinguir
+    o caso (COBRE_DOCS_DIR nao definido) e dar a dica do clone cobre-docs; e um
+    COBRE_DOCS_DIR invalido deve aparecer na mensagem do read_doc.
+    """
+    os.environ.pop("COBRE_DOCS_DIR", None)
+    REF._DOCS_DISCOVER_CACHE.clear()
+    with tempfile.TemporaryDirectory() as empty:
+        orig_bases = REF._candidate_bases
+        orig_bundled = REF._bundled_dir
+        REF._candidate_bases = lambda: [Path(empty)]
+        REF._bundled_dir = lambda name: None  # simula build sem o embutido
         try:
             s = load_settings()
             und = REF.list_docs(s)
@@ -84,7 +114,8 @@ def test_docs_unavailable_messages_distinguish_and_hint():
             bad = REF.read_doc(s2, "foo", 100)
             assert bad["status"] == "error" and "/tmp/nao/existe/xyz" in bad["diagnostics"][0], bad
         finally:
-            REF._candidate_bases = orig
+            REF._candidate_bases = orig_bases
+            REF._bundled_dir = orig_bundled
             os.environ.pop("COBRE_DOCS_DIR", None)
             REF._DOCS_DISCOVER_CACHE.clear()
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+from importlib import resources
 from pathlib import Path
 
 from ..config import Settings
@@ -21,6 +22,28 @@ from .discovery import find_cobre
 _SCHEMA_EXPORT_CACHE: dict[str, str] = {}
 _DOCS_DISCOVER_CACHE: dict[str, str] = {}
 _SUFFIX = ".schema.json"
+
+#: Subpacote que carrega o snapshot embutido (docs + schemas) no wheel.
+_BUNDLED_PKG = "cobre_mcp._bundled"
+
+
+def _bundled_dir(name: str) -> str | None:
+    """Caminho absoluto de uma subpasta embutida (``docs`` | ``schemas``).
+
+    Usa ``importlib.resources`` para localizar o conteudo empacotado, de modo a
+    funcionar tanto num checkout quanto num wheel instalado. Retorna ``None`` se
+    o snapshot embutido nao estiver presente.
+    """
+    try:
+        root = resources.files(_BUNDLED_PKG) / name
+    except (ModuleNotFoundError, TypeError):
+        return None
+    try:
+        if root.is_dir():
+            return str(root)
+    except (OSError, AttributeError):
+        return None
+    return None
 
 
 def _export_schemas(settings: Settings) -> str | None:
@@ -46,7 +69,16 @@ def _export_schemas(settings: Settings) -> str | None:
 
 
 def schemas_root(settings: Settings) -> str | None:
-    return settings.schemas_dir or _export_schemas(settings)
+    """Raiz efetiva dos schemas (cascata; primeiro que existir vence).
+
+    ``COBRE_SCHEMAS_DIR`` -> ``cobre schema export`` -> schemas EMBUTIDOS
+    (``_bundled/schemas``). O embutido garante o caminho feliz offline.
+    """
+    return (
+        settings.schemas_dir
+        or _export_schemas(settings)
+        or _bundled_dir("schemas")
+    )
 
 
 def list_schema_types(settings: Settings) -> list[str]:
@@ -68,7 +100,7 @@ def read_schema(settings: Settings, tipo: str) -> dict:
         return {"status": "error",
                 "diagnostics": [f"schema inexistente: {tipo}",
                                 f"disponiveis: {list_schema_types(settings)}"]}
-    return {"status": "ok", "tipo": tipo, "schema": json.loads(f.read_text())}
+    return {"status": "ok", "tipo": tipo, "schema": json.loads(f.read_text(encoding="utf-8"))}
 
 
 def _within(path: Path, root: Path) -> bool:
@@ -159,10 +191,15 @@ def _discover_docs_dir() -> str | None:
 
 
 def docs_root(settings: Settings) -> str | None:
-    """Raiz efetiva das docs: `COBRE_DOCS_DIR` válido vence; senão, auto-descoberta."""
+    """Raiz efetiva das docs (cascata; primeiro que existir vence).
+
+    ``COBRE_DOCS_DIR`` (valido) -> auto-descoberta de um clone ``cobre-docs``
+    -> docs EMBUTIDOS (``_bundled/docs``). O embutido garante o caminho feliz
+    offline, sem clone nem env var.
+    """
     if settings.docs_dir and Path(settings.docs_dir).is_dir():
         return settings.docs_dir
-    return _discover_docs_dir()
+    return _discover_docs_dir() or _bundled_dir("docs")
 
 
 def _docs_unavailable(settings: Settings) -> dict:
@@ -205,7 +242,7 @@ def read_doc(settings: Settings, page: str, max_chars: int) -> dict:
     tr = target.resolve()
     if not _within(tr, base):
         return {"status": "error", "diagnostics": [f"pagina fora do docs root: {page}"]}
-    text = tr.read_text(errors="replace")
+    text = tr.read_text(encoding="utf-8", errors="replace")
     truncated = len(text) > max_chars
     return {"status": "ok", "page": page, "path": str(tr), "truncated": truncated,
             "content": text[:max_chars] + ("\n... [truncado]" if truncated else "")}

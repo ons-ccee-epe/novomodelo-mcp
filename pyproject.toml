@@ -22,6 +22,14 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cobre_mcp"]
+# Garante que o snapshot embutido (docs .md/.mdx + schemas .json) entre no wheel.
+# Sem isto, o hatch empacota apenas .py e as tools de doc/schema ficariam sem
+# conteudo offline.
+artifacts = [
+    "src/cobre_mcp/_bundled/**/*.md",
+    "src/cobre_mcp/_bundled/**/*.mdx",
+    "src/cobre_mcp/_bundled/**/*.json",
+]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]

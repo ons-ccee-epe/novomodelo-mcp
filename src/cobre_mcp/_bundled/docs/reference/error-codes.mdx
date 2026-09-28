@@ -1,0 +1,1123 @@
+---
+title: Error Codes
+description: The `LoadError` and `ErrorKind` taxonomy cobre-io returns during case loading and layered validation, with causes and resolutions.
+---
+
+`cobre-io` reports two kinds of errors: `LoadError` variants (the top-level
+`Result<System, LoadError>` returned by `load_case`) and `ErrorKind` values
+(diagnostic categories collected by `ValidationContext` during the layered
+validation pipeline).
+
+For an explanation of how the validation pipeline works and when each error
+phase runs, see the `cobre-io` crate documentation in the cobre repository.
+
+---
+
+## `LoadError` variants
+
+`LoadError` is the top-level error type returned by `load_case` and by every
+individual file parser. The variants are listed below, ordered by the pipeline phase
+in which they typically occur.
+
+### `IoError`
+
+**When it occurs:** A required file exists in the file manifest but cannot be
+read from disk — file not found, permission denied, or other OS-level I/O
+failure. Occurs in Layer 1 (structural) or Layer 2 (schema) when
+`std::fs::read_to_string` or a Parquet reader returns an error.
+
+**Display format:**
+
+```
+I/O error reading {path}: {source}
+```
+
+**Fields:**
+
+| Field    | Type             | Description                             |
+| -------- | ---------------- | --------------------------------------- |
+| `path`   | `PathBuf`        | Path to the file that could not be read |
+| `source` | `std::io::Error` | Underlying OS I/O error                 |
+
+**Example:**
+
+```
+I/O error reading system/hydros.json: No such file or directory (os error 2)
+```
+
+**Resolution:** Verify the file exists in the case directory. Check that the
+process has read permissions for the directory and file. For `load_case`, the
+case root must contain all required files (see [Case Directory Format](/reference/case-directory-format/)).
+
+---
+
+### `ParseError`
+
+**When it occurs:** A file is readable but its content is malformed — invalid
+JSON syntax, unexpected end of input, or an unreadable Parquet column header.
+Occurs in Layer 2 (schema) during initial deserialization before any
+field-level validation runs. Also returned for a `deny_unknown_fields`
+violation inside a tagged JSON union whose underlying `serde_json` message
+does not contain `unknown variant` or `missing field` — the only two
+substrings `parse_config` promotes to `SchemaError` — so the error falls
+through to `ParseError` instead. The primary case is `training.stopping_rules`:
+`StoppingRuleConfig` is `#[serde(tag = "type", deny_unknown_fields)]`, so a
+rule entry carrying a field that belongs to a *different* rule `type` (for
+example, `seconds` — a `time_limit` field — set on a `bound_stalling` rule)
+hard-fails at config load with an `unknown field` message.
+
+**Display format:**
+
+```
+parse error in {path}: {message}
+```
+
+**Fields:**
+
+| Field     | Type      | Description                                     |
+| --------- | --------- | ----------------------------------------------- |
+| `path`    | `PathBuf` | Path to the file that failed to parse           |
+| `message` | `String`  | Human-readable description of the parse failure |
+
+**Example:**
+
+```
+parse error in stages.json: expected `:` at line 5 column 12
+```
+
+```
+parse error in config.json: unknown field `seconds`, expected `iterations` or `tolerance` at line N column M
+```
+
+**Resolution:** Open the file in a JSON validator or Parquet viewer. The message
+contains the location of the syntax error. For JSON files, a trailing comma,
+missing closing brace, or unquoted key are common causes. For an `unknown
+field` message inside a `stopping_rules` entry, remove the field that does not
+belong to that entry's `type`, or move it to an entry whose `type` declares it.
+
+#### Unknown field in a generic-constraint entry
+
+**When it occurs:** `constraints/generic_constraints.json`'s per-constraint
+object is `#[serde(deny_unknown_fields)]` with exactly five known fields
+(`id`, `name`, `description`, `expression`, `slack`), and the whole file
+deserializes in a single `serde_json::from_str` call with no promotion step —
+unlike `config.json`'s `parse_config` (above), nothing here promotes an
+`unknown field` substring to `SchemaError`. Any unknown key therefore fails at
+deserialization and surfaces as `ParseError`, never `SchemaError`. Two v0.13.0
+spellings hit this deliberately, with no alias:
+
+- A constraint object still carrying the removed **`sense`** field
+  (`">="`/`"<="`/`"=="`) — a constraint's shape is now derived from which
+  endpoints its `generic_constraint_bounds.parquet` row supplies, never
+  authored on the constraint itself.
+- A constraint object still carrying the retired **`bound_upper_ref`** (or
+  `bound_lower_ref`) field — a symbolic RHS endpoint is now authored inline in
+  `expression` (e.g. `... <= @demanda`), not as a separate JSON key.
+
+**Fields:**
+
+| Field     | Type      | Description                                                                             |
+| --------- | --------- | ---------------------------------------------------------------------------------------- |
+| `path`    | `PathBuf` | Always `constraints/generic_constraints.json`                                            |
+| `message` | `String`  | The `serde_json` "unknown field" message, naming the offending key and the five accepted field names |
+
+**Example:**
+
+```
+parse error in constraints/generic_constraints.json: unknown field `sense`, expected one of `id`, `name`, `description`, `expression`, `slack`
+```
+
+**Resolution:** Remove the unknown field. For `sense`, drop it and let the
+bounds row's endpoints derive the shape. For `bound_upper_ref`/
+`bound_lower_ref`, move the reference inline into `expression`. See
+[Generic Constraints](/reference/generic-constraints/) for the current
+grammar and the v0.13.0 → v0.14.0 worked migration example.
+
+---
+
+### `SchemaError`
+
+**When it occurs:** A file parses successfully but a field violates a schema
+constraint: a required field is missing, a value is outside its valid range, or
+an enum discriminator names an unknown variant. Occurs in Layer 2
+(schema) during post-deserialization validation. Also returned by `parse_config`
+when `training.forward_passes` or `training.stopping_rules` is absent.
+
+**Display format:**
+
+```
+schema error in {path}, field {field}: {message}
+```
+
+**Fields:**
+
+| Field     | Type      | Description                                                            |
+| --------- | --------- | ---------------------------------------------------------------------- |
+| `path`    | `PathBuf` | Path to the file containing the invalid entry                          |
+| `field`   | `String`  | Dot-separated path to the offending field (e.g., `"hydros[3].bus_id"`) |
+| `message` | `String`  | Human-readable description of the violation                            |
+
+**Example:**
+
+```
+schema error in config.json, field training.forward_passes: required field is missing
+```
+
+```
+schema error in system/buses.json, field buses[1].id: duplicate id 5 in buses array
+```
+
+**Resolution:** The `field` value identifies the exact location of the problem.
+Check that required fields are present and that values fall within documented
+ranges. For `config.json`, `training.forward_passes` and
+`training.stopping_rules` are mandatory and have no defaults.
+
+#### Namespace collision between a scalar parameter and a named expression
+
+**When it occurs:** `constraints/generic_constraints.json`'s `expressions`
+array declares named linear expressions that share the `@name` reference
+namespace with `constraints/generic_parameters.json`'s scalar parameters. A
+named-expression entry whose `name` matches an already-loaded scalar
+parameter's `name` is rejected — a `@name` token must resolve unambiguously to
+exactly one kind of thing.
+
+**Fields:**
+
+| Field     | Type      | Description                                                       |
+| --------- | --------- | ------------------------------------------------------------------|
+| `path`    | `PathBuf` | Always `constraints/generic_constraints.json`                     |
+| `field`   | `String`  | `expressions[i].name` — the colliding entry's index                |
+| `message` | `String`  | `name "<name>" is declared as both a scalar parameter and a named expression; the "@name" namespace is shared` |
+
+**Example:**
+
+```
+schema error in constraints/generic_constraints.json, field expressions[2].name: name "demanda" is declared as both a scalar parameter and a named expression; the "@name" namespace is shared
+```
+
+**Resolution:** Rename the named expression (or the scalar parameter) so the
+two `@name` tables do not overlap. See
+[Generic Constraints](/reference/generic-constraints/) for the `@name`
+grammar shared between the two files.
+
+#### Named-expression reference cycle
+
+**When it occurs:** `expressions[]` entries reference each other by `@name`;
+a cycle in that reference graph (including a length-1 self-reference) is
+detected by an iterative three-colour DFS before any expression is inlined,
+so a cyclic declaration is rejected even if no constraint ever uses it.
+
+**Fields:**
+
+| Field     | Type      | Description                                                        |
+| --------- | --------- | -------------------------------------------------------------------|
+| `path`    | `PathBuf` | Always `constraints/generic_constraints.json`                      |
+| `field`   | `String`  | Always `expressions`                                                |
+| `message` | `String`  | `named-expression reference cycle detected: <a> -> <b> -> ... -> <a>` |
+
+**Example:**
+
+```
+schema error in constraints/generic_constraints.json, field expressions: named-expression reference cycle detected: fnese -> fnese_margin -> fnese
+```
+
+**Resolution:** Break the cycle — rewrite one of the named expressions in the
+reported chain so it no longer refers back to an ancestor. See
+[Generic Constraints](/reference/generic-constraints/) for the `@name`
+composition rules.
+
+#### Named-expression inlining term budget exceeded
+
+**When it occurs:** Inlining substitutes every `@name` reference with its
+referenced expression's terms. An acyclic but exponentially-expanding
+declaration — e.g. a doubling chain `@e_k = @e_{k-1} + @e_{k-1}` — is caught
+once the flattened term count would exceed a hard cap of 100,000 terms, far
+above any legitimately authored expression, aborting the blow-up before the
+full vector materializes. The cap applies only when a constraint (or another
+expression) actually references the runaway declaration — declaring it
+without referencing it is a cheap existence check, not an expansion.
+
+**Fields:**
+
+| Field     | Type      | Description                                                                     |
+| --------- | --------- | --------------------------------------------------------------------------------|
+| `path`    | `PathBuf` | Always `constraints/generic_constraints.json`                                   |
+| `field`   | `String`  | `constraints[i].expression` (or the referencing expression's own field)          |
+| `message` | `String`  | `named-expression reference "@<name>" expands to more than 100000 inlined terms; this indicates an exponential reference pattern (e.g. a doubling chain "@e = @prev + @prev")` |
+
+**Example:**
+
+```
+schema error in constraints/generic_constraints.json, field constraints[0].expression: named-expression reference "@e60" expands to more than 100000 inlined terms; this indicates an exponential reference pattern (e.g. a doubling chain "@e = @prev + @prev")
+```
+
+**Resolution:** Rewrite the named-expression chain to grow linearly rather
+than by repeated self-addition — e.g. accumulate into one running expression
+instead of doubling a reference at each step. See
+[Generic Constraints](/reference/generic-constraints/) for the `@name`
+composition rules.
+
+#### `@parameter` / `@name` reference misuse
+
+**When it occurs:** The expression grammar accepts at most one `@`-prefixed
+reference per term, and a parenthesized group takes only a literal
+coefficient. Four distinct authoring mistakes are rejected at the same parse
+site (`constraints[i].expression`, or `expressions[i].expression` for a named
+expression's own definition):
+
+| Mistake                                                        | Example message                                                                                          |
+| ---------------------------------------------------------------| -----------------------------------------------------------------------------------------------------------|
+| Two `@` references in one term (`@param * @name`, or two `@param`s) | `only one @parameter reference is allowed per term; found "@a" and "@b"`                              |
+| `@param` scaling a parenthesized group (`@param * (...)`)      | `parameter "@a" cannot scale a parenthesized group: a group takes only a literal coefficient, not "@a * (...)"` |
+| `@name` naming no loaded scalar parameter, in a coefficient position | `unknown parameter "@a": no definition with this name was loaded`                                  |
+| `@name` naming no declared expression, in a reference position | `undeclared named-expression reference "@a": no expression with this name was declared`                  |
+
+**Fields:**
+
+| Field     | Type      | Description                                                          |
+| --------- | --------- | -----------------------------------------------------------------------|
+| `path`    | `PathBuf` | Always `constraints/generic_constraints.json`                        |
+| `field`   | `String`  | `constraints[i].expression` or `expressions[i].expression`            |
+| `message` | `String`  | One of the four messages in the table above                          |
+
+**Resolution:** A term carries at most one `@` reference, and only a literal
+number may scale a `(...)` group. Check that a bound `@name` matches a
+parameter actually declared in `constraints/generic_parameters.json`, and
+that a reference `@name` matches an entry actually declared in this file's own
+`expressions` array. See [Generic Constraints](/reference/generic-constraints/)
+for the full grammar.
+
+#### Legacy Parquet column spellings rejected
+
+**When it occurs:** Three input columns were renamed in v0.14.0 with no
+alias; the legacy spelling is treated as a missing required column, exactly
+like any other absent required column.
+
+| File                                          | Required column      | Legacy spelling (rejected) |
+| ---------------------------------------------- | --------------------- | --------------------------- |
+| `scenarios/external_ncs_scenarios.parquet`     | `availability_factor` | `value`                     |
+| `constraints/penalty_overrides_ncs.parquet`    | `ncs_id`               | `source_id`                 |
+| `constraints/pumping_bounds.parquet`           | `pumping_station_id`  | `station_id`                |
+
+**Fields:**
+
+| Field     | Type      | Description                                            |
+| --------- | --------- | ---------------------------------------------------------|
+| `path`    | `PathBuf` | The parquet file listed above                           |
+| `field`   | `String`  | The required column name (not the legacy spelling)       |
+| `message` | `String`  | `missing required column "<name>"`                       |
+
+**Example:**
+
+```
+schema error in scenarios/external_ncs_scenarios.parquet, field availability_factor: missing required column "availability_factor"
+```
+
+**Resolution:** Rename the column in the Parquet file to the required
+spelling, keeping the data in the same cell — the schema and semantics are
+unchanged, only the name is. `pumping_station_id` and `ncs_id` are the same
+entity-id spellings a generic constraint's own `pumping_flow(id)` /
+`non_controllable_generation(id)` expression terms address — see
+[Generic Constraints — variable catalog](/reference/generic-constraints/)
+for the full addressing grammar.
+
+#### Deterministic external inflow column under an autoregressive model
+
+**When it occurs:** Under the `external` inflow sampling scheme, a class's mean
+and standard deviation are derived from its external scenario file itself. A
+constant (σ = 0) column is accepted for load, NCS, and an order-0 inflow model,
+but **rejected** for an inflow whose model is autoregressive of order `> 0`: a
+single deterministic value cannot stand in for such a model, since it would have
+to equal that model's own stage-by-stage deterministic PAR output, which the
+loader does not reconstruct from a flat column. (Earlier releases reported this
+as "requires a positive standard deviation"; the message now states the real
+reason.)
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                              |
+| ------------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `description` | `String` | Contains a `[BusinessRuleViolation] <external inflow file> (inflow entity <e> stage <stage_id>): <message>` line |
+
+**Example:**
+
+```
+constraint violation: [BusinessRuleViolation] scenarios/external_inflow_scenarios.parquet (inflow entity 7 stage 3): inflow external library at stage 3, entity 7: every scenario value is constant (σ = 0), but this hydro's inflow follows an autoregressive model of order > 0; a deterministic value here would have to equal that model's own deterministic PAR output at every stage, which this loader does not compute upstream
+```
+
+**Resolution:** Give the external column genuine stage-to-stage variation, or
+drop the plant's autoregressive inflow model to order 0 (no lag coefficient, no
+annual component) if its inflow really is deterministic. See
+[Scenario Generation §4.4](/math/scenario-generation) for the accept/reject
+rule and [`scenario_source`](/running/configuration/#scenario_source) for the
+scheme configuration.
+
+---
+
+### `CrossReferenceError`
+
+**When it occurs:** An entity ID field references an entity that does not exist
+in the expected registry. Occurs in Layer 3 (referential integrity). All broken
+references across all entity types are collected before returning.
+
+**Display format:**
+
+```
+cross-reference error: {source_entity} in {source_file} references
+non-existent {target_entity} in {target_collection}
+```
+
+**Fields:**
+
+| Field               | Type      | Description                                                                            |
+| ------------------- | --------- | -------------------------------------------------------------------------------------- |
+| `source_file`       | `PathBuf` | Path to the file that contains the dangling reference                                  |
+| `source_entity`     | `String`  | String identifier of the entity that holds the broken reference (e.g., `"Hydro 'H1'"`) |
+| `target_collection` | `String`  | Name of the registry that was expected to contain the target (e.g., `"bus registry"`)  |
+| `target_entity`     | `String`  | String identifier of the entity that could not be found (e.g., `"BUS_99"`)             |
+
+**Example:**
+
+```
+cross-reference error: Hydro 'FURNAS' in system/hydros.json references
+non-existent BUS_99 in bus registry
+```
+
+**Resolution:** The `target_entity` does not exist in the `target_collection`.
+Either add the missing entity to its registry file, or correct the ID reference
+in `source_file`. Common causes: a bus was deleted from `system/buses.json`
+but a hydro, thermal, or line still references its old ID.
+
+**Generic-constraints note:** none of the v0.14.0 authoring failure modes
+surface as this variant. A generic constraint's own reference-integrity
+problems — for example a bound reference with no activation rows in
+`generic_constraint_bounds.parquet` — are collected by `ValidationContext` as
+an `InvalidReference` [`ErrorKind`](#invalidreference) and returned as
+`ConstraintError` below, not as a standalone `CrossReferenceError`.
+
+---
+
+### `ConstraintError`
+
+**When it occurs:** A catch-all for all validation diagnostics collected by
+`ValidationContext` across any validation layer, for `SystemBuilder::build()`
+rejections, and for guards raised directly by loaders after assembly (for
+example, a non-finite closure-derived innovation scale — a non-stationary
+fitted inflow model — is rejected here naming the hydro and season). The
+`description` field contains every collected error message joined by newlines,
+each prefixed with its `[ErrorKind]`, source file, optional entity identifier,
+and message text.
+
+**Display format:**
+
+```
+constraint violation: {description}
+```
+
+**Fields:**
+
+| Field         | Type     | Description                           |
+| ------------- | -------- | ------------------------------------- |
+| `description` | `String` | All error messages joined by newlines |
+
+**Example:**
+
+```
+constraint violation: [FileNotFound] system/hydros.json: required file 'system/hydros.json' not found in case directory
+[SchemaViolation] system/buses.json (bus_42): missing field bus_id
+```
+
+**Resolution:** Read every line in `description` — each line is a separate
+problem. Address them all and re-run. The `[ErrorKind]` prefix identifies the
+category of each problem; see the `ErrorKind` catalog below for resolution
+guidance per category.
+
+#### Generic-constraint bound reference with no activation rows
+
+**When it occurs:** `constraints/generic_constraint_bounds.parquet` is the
+**activation grid** for generic constraints — a constraint applies at
+`(stage, block)` if and only if a row exists for it there, independent of
+whether the row supplies a numeric endpoint or the endpoint comes entirely
+from the constraint's own inline affine remainder (an inline `<= @demanda`,
+say). A constraint whose only endpoints come from that affine remainder, but
+which has zero rows in the bounds parquet, is collected as `InvalidReference`
+— the reference would otherwise apply to nothing and be silently inert.
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                          |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------------|
+| `description` | `String` | Contains a `[InvalidReference] constraints/generic_constraints.json (GenericConstraint <id>): GenericConstraint <id> declares a bound reference but has no activation rows in generic_constraint_bounds.parquet: the reference would apply to nothing` line |
+
+**Example:**
+
+```
+constraint violation: [InvalidReference] constraints/generic_constraints.json (GenericConstraint 3): GenericConstraint 3 declares a bound reference but has no activation rows in generic_constraint_bounds.parquet: the reference would apply to nothing
+```
+
+**Resolution:** Add at least one row for the constraint's `id` to
+`generic_constraint_bounds.parquet` at every `(stage, block)` where it should
+apply — the row may leave both `bound_lower`/`bound_upper` null as long as the
+constraint's own affine remainder supplies the value; the row's job is then
+only to activate the cell. See
+[Generic Constraints — the activation grid](/reference/generic-constraints/)
+for the full model.
+
+#### Generic-constraint bounds row with neither endpoint and no affine remainder
+
+**When it occurs:** A `generic_constraint_bounds.parquet` row with
+`bound_lower = null` and `bound_upper = null` is legal only when the
+constraint's own `bound_lower_affine`/`bound_upper_affine` supplies at least
+one endpoint (the row then only activates the cell, per above). A both-null
+row on a constraint with **no** affine remainder on either side has no
+endpoint at all and is collected as `InvalidValue`.
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                                              |
+| ------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------|
+| `description` | `String` | Contains a `[InvalidValue] constraints/generic_constraint_bounds.parquet (GenericConstraintBoundsRow[<i>]): GenericConstraintBoundsRow[<i>] on constraint <id> has neither bound_lower nor bound_upper: at least one endpoint is required` line |
+
+**Example:**
+
+```
+constraint violation: [InvalidValue] constraints/generic_constraint_bounds.parquet (GenericConstraintBoundsRow[4]): GenericConstraintBoundsRow[4] on constraint 3 has neither bound_lower nor bound_upper: at least one endpoint is required
+```
+
+**Resolution:** Either supply `bound_lower` and/or `bound_upper` on the row,
+or add an inline relational operator (`<=`, `>=`, `==`) to the constraint's
+`expression` so an affine remainder fills the missing endpoint. See
+[Generic Constraints — the activation grid](/reference/generic-constraints/).
+
+#### Relocated `generic_parameters.json` path
+
+**When it occurs:** v0.14.0 moved the scalar-parameters input from
+`system/scalar_parameters.json` to `constraints/generic_parameters.json`,
+beside the generic constraints that reference its `@name` parameters — the
+file's contents and schema are unchanged, only its directory and filename
+changed. Layer 1 (structural validation) rejects the file's mere *presence*
+at the old path — it never parses the old-path file's contents, so a
+well-formed but misplaced file is still refused.
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                                            |
+| ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------|
+| `description` | `String` | Contains a `[BusinessRuleViolation] system/scalar_parameters.json: system/scalar_parameters.json is no longer read; scalar parameters are now read from constraints/generic_parameters.json, beside the constraints that reference them by @name. Move the file (its contents are unchanged).` line |
+
+**Example:**
+
+```
+constraint violation: [BusinessRuleViolation] system/scalar_parameters.json: system/scalar_parameters.json is no longer read; scalar parameters are now read from constraints/generic_parameters.json, beside the constraints that reference them by @name. Move the file (its contents are unchanged).
+```
+
+**Resolution:** `mkdir -p <case>/constraints && git mv <case>/system/scalar_parameters.json <case>/constraints/generic_parameters.json` — the contents do not change. See
+[Generic Constraints — the five parameter kinds](/reference/generic-constraints/)
+for the current file's schema.
+
+#### Commitment on a non-anticipated thermal
+
+**When it occurs:** `initial_conditions.json`'s `past_anticipated_commitments`
+entries declare an externally-decided commitment for an anticipated thermal,
+keyed by `thermal_id`. Layer 5 (semantic validation) rejects any entry whose
+`thermal_id` does not resolve to a thermal with `anticipated_config: Some(_)` —
+either the thermal does not exist, or it exists but is not configured as
+anticipated. (In earlier releases the same check also ran on a separate
+`future_anticipated_deliveries` field, now removed — post-horizon
+in-study-decided deliveries are declared in `post_study_stages.json` instead.)
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                                                                                                                                                     |
+| ------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | `String` | Contains a `[BusinessRuleViolation] initial_conditions.json (initial_conditions.past_anticipated_commitments[thermal_id=<id>]): Thermal <id>: referenced in past_anticipated_commitments but is not an anticipated thermal (anticipated_config is None or thermal does not exist)` line |
+
+**Example:**
+
+```
+constraint violation: [BusinessRuleViolation] initial_conditions.json (initial_conditions.past_anticipated_commitments[thermal_id=12]): Thermal 12: referenced in past_anticipated_commitments but is not an anticipated thermal (anticipated_config is None or thermal does not exist)
+```
+
+**Resolution:** Either set `anticipated_config` on thermal `<id>` in
+`system/thermals.json`, or remove/correct the `thermal_id` in the offending
+`past_anticipated_commitments` entry. See
+[System Elements §4](/math/system-elements) for anticipated-thermal
+configuration and [Case Directory Format](/reference/case-directory-format/)
+for `initial_conditions.json`'s schema.
+
+#### Post-study boundary unanchored or malformed
+
+**When it occurs:** Layer 5 validates `post_study_stages.json` — the
+post-horizon boundary calendar — and the anticipated-thermal deliveries that
+resolve onto it. Several distinct failures are collected under this one check.
+(A plant whose lead reaches past the horizon while **no** post-study stage
+exists is caught earlier, at anticipated-thermal validation, with a
+`system/thermals.json … the plant can never deliver within the study horizon`
+message — see below.) The post-study failures, keyed to
+`post_study_stages.json`:
+
+- The post-study calendar's first stage does not start exactly at the study
+  horizon end.
+- The post-study stages are not date-contiguous (a gap or overlap between
+  consecutive stages).
+- A post-study stage's `duration_hours` rounds to a non-positive whole-day span.
+- **Rule 1** — a plant's lead reaches a post-study stage with no
+  `thermal_bounds` cell for its `(thermal_id, post_study_stage_index)`.
+- **V2** — a plant's pre-study-decided (_já-comandada_) commitments do not tile
+  the post-study stages they cover at coverage `1.0`.
+- **V3** — a commitment window covers a post-study stage the study itself
+  decides (`carried`), or one past the plant's decision reach.
+- **V5** — a non-zero fixed commitment covers a post-study stage outside the
+  plant's commissioning window.
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                                        |
+| ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------|
+| `description` | `String` | Contains one `[BusinessRuleViolation] post_study_stages.json (...): <message>` line per failure — see the messages below |
+
+**Examples:**
+
+```
+constraint violation: [BusinessRuleViolation] post_study_stages.json (stages[0].start_date): first post-study stage starts 2026-09-08 but the study horizon ends 2026-09-05; the post-study calendar must begin exactly at the study horizon end.
+```
+
+```
+constraint violation: [BusinessRuleViolation] post_study_stages.json (stages start_date=2026-10-01): post-study stages are not date-contiguous: the stage starting 2026-09-05 ends 2026-09-28 but the next stage starts 2026-10-01; each stage must end exactly where the next begins.
+```
+
+```
+constraint violation: [BusinessRuleViolation] post_study_stages.json (thermals[id=12].anticipated_config): Thermal 12: anticipated lead reaches post-study stage index 0, but post_study_stages.json has no thermal_bounds entry for (thermal_id 12, post_study_stage_index 0).
+```
+
+```
+constraint violation: [BusinessRuleViolation] post_study_stages.json (thermals[id=12].anticipated_config): Thermal 12: past_anticipated_commitments do not tile post-study stage index(es) [0] at coverage 1.0; declare the fixed commitment for each (a committed 0 MW is explicit).
+```
+
+```
+constraint violation: [BusinessRuleViolation] post_study_stages.json (thermals[id=12].anticipated_config): Thermal 12: past_anticipated_commitments cover post-study stage index(es) [1], which the study itself decides; a declared fixed value there contradicts the study's own decision. Remove the window, or lengthen anticipated_config's lead so the delivery becomes pre-study-decided.
+```
+
+```
+constraint violation: [BusinessRuleViolation] post_study_stages.json (thermals[id=12].anticipated_config): Thermal 12: past_anticipated_commitments cover post-study stage index(es) [2], which are past the plant's decision reach and cannot be represented. Remove the window, or shorten anticipated_config's lead so the delivery falls inside the reach.
+```
+
+```
+constraint violation: [BusinessRuleViolation] post_study_stages.json (thermals[id=12].anticipated_config): Thermal 12: past_anticipated_commitments window [2026-10-01, 2026-11-01) value_mw = 120 covers post-study stage index 0, which is outside the plant's commissioning window [entry=Some(0), exit=Some(6)); the plant is not in service for this stage and the fixed commitment cannot be delivered. Declare a zero commitment at this stage, or widen the commissioning window.
+```
+
+**Resolution:** Declare `post_study_stages.json` with its first stage starting
+exactly at the study horizon end and every stage date-contiguous with the next.
+Add a `thermal_bounds` cell for every `(thermal_id, post_study_stage_index)` a
+plant's in-study-decided lead reaches. Tile every post-study stage a
+_já-comandada_ `past_anticipated_commitments` window covers at coverage `1.0`,
+never covering a stage the study decides or one past the plant's reach, and
+keep a non-zero fixed commitment inside the plant's commissioning window. See
+[Post-Study Boundary](/math/post-study-boundary) for the boundary model and
+[Case Directory Format](/reference/case-directory-format/) for
+`post_study_stages.json`'s schema.
+
+#### Uncovered or over-covered `past_anticipated_commitments` window
+
+**When it occurs:** An anticipated thermal's `past_anticipated_commitments`
+windows must tile its leading `K` (calendar-derived) **in-study** delivery
+stages exactly — every leading stage covered at fraction `1.0`, and never a
+stage the study itself decides (at or beyond `K`, in-study). Layer 5 (semantic
+validation) reports a gap (an uncovered leading stage), an over-reach (a window
+covering a study-decided stage), and a horizon-straddle (a single window
+crossing the horizon end) as separate diagnostics; each can fire independently.
+A window may legitimately extend **past** the horizon (the _já-comandada_ case)
+— that post-study coverage is validated separately, under
+[Post-study boundary](#post-study-boundary-unanchored-or-malformed) above.
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                                                                  |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------|
+| `description` | `String` | Contains a `[BusinessRuleViolation] initial_conditions.json (thermals[id=<id>].anticipated_config): <message>` line — see the messages below |
+
+**Examples:**
+
+```
+constraint violation: [BusinessRuleViolation] initial_conditions.json (thermals[id=7].anticipated_config): Thermal 7: past_anticipated_commitments do not tile the leading 2 delivery stage(s) at coverage 1.0; study stage id(s) [0] are not covered exactly once. Write a commitment window (a committed 0 MW is explicit) for every leading delivery stage.
+```
+
+```
+constraint violation: [BusinessRuleViolation] initial_conditions.json (thermals[id=7].anticipated_config): Thermal 7: past_anticipated_commitments cover study stage id(s) [3] beyond the leading 2 calendar-derived delivery stage(s); a commitment window may not cover a study stage the study itself decides. Shorten the plant's anticipated_config lead so its window stays within the leading 2 delivery stage(s).
+```
+
+```
+constraint violation: [BusinessRuleViolation] initial_conditions.json (thermals[id=7].anticipated_config): Thermal 7: past_anticipated_commitments window [2026-08-15, 2026-09-15) straddles the study horizon end (2026-09-01); a single window may not cover both in-study and post-study delivery. Declare two windows split at the horizon instead: one ending at 2026-09-01 for the in-study coverage, one starting at 2026-09-01 for the post-study coverage.
+```
+
+**Resolution:** Write a commitment window for every one of the plant's leading
+`K` in-study delivery stages (a committed `0` MW is a legitimate, explicit
+window — not an omission), never covering a stage the study itself decides, and
+split any window at the horizon end rather than straddling it. `K` is
+calendar-derived from `anticipated_config` (`lead_stages`, or `lead_time`
+resolved on the stage calendar) — see
+[System Elements §4](/math/system-elements).
+
+**Note:** A deck whose `past_anticipated_commitments` entries still carry the
+retired `values_mw` array (rather than the current per-window `value_mw`
+scalar on a `{thermal_id, start_date, end_date, value_mw}` record) fails
+earlier, at initial deserialization: the record type is
+`#[serde(deny_unknown_fields)]`, so an unrecognized `values_mw` key is rejected
+as a top-level `ParseError` naming `initial_conditions.json` — it never reaches
+this `ConstraintError` check. Re-emit the commitment history as dated windows.
+
+#### Diversion floor without a declared channel
+
+**When it occurs:** `constraints/hydro_bounds.parquet` may override a hydro's
+`min_diversion_m3s` floor per `(hydro, stage)`. When the hydro declares no
+`diversion` channel, the bound resolver pins the diversion column to `[0, 0]`
+— a positive floor is then the infeasible interval `[min > 0, 0]`. Layer 5
+(semantic validation) rejects the override before it ever reaches the LP.
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                                                                          |
+| ------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | `String` | Contains a `[InvalidValue] constraints/hydro_bounds.parquet (Hydro <id>): Hydro <id>: hydro_bounds row at stage_id=<stage> sets min_diversion_m3s=<value>, but the hydro declares no diversion channel; diversion is pinned [0, 0] with no channel, making a positive floor infeasible` line |
+
+**Example:**
+
+```
+constraint violation: [InvalidValue] constraints/hydro_bounds.parquet (Hydro 3): Hydro 3: hydro_bounds row at stage_id=5 sets min_diversion_m3s=2.0, but the hydro declares no diversion channel; diversion is pinned [0, 0] with no channel, making a positive floor infeasible
+```
+
+**Resolution:** Either declare a `diversion` channel on the hydro in
+`system/hydros.json` (see [System Elements](/math/system-elements)), or remove
+the `min_diversion_m3s` override for that `(hydro, stage)` in
+`constraints/hydro_bounds.parquet`.
+
+#### Spillage-band inversion
+
+**When it occurs:** `constraints/hydro_bounds.parquet`'s row-level parser
+(`parse_hydro_bounds`) rejects a same-row `min_spillage_m3s > max_spillage_m3s`
+inversion, and separately rejects a negative `min_diversion_m3s`,
+`min_spillage_m3s`, or `max_spillage_m3s`. Called directly, this parser returns
+a top-level `LoadError::SchemaError` (`schema error in {path}, field {field}:
+{message}`, per the [`SchemaError`](#schemaerror) `LoadError` variant above).
+When the file is loaded as part of `load_case`, the same error is instead
+collected into the shared `ValidationContext` — `hydro_bounds.parquet` is an
+optional file whose Layer 2 failures are gathered rather than short-circuited
+— and surfaces here, in `ConstraintError`'s aggregate description, tagged
+`[SchemaViolation]` instead of the parser's own `SchemaError` label.
+
+**Fields:**
+
+| Field         | Type     | Description                                                                                                                       |
+| ------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | `String` | Contains a `[SchemaViolation] constraints/hydro_bounds.parquet: field hydro_bounds[<i>].<column>: <message>` line — see below |
+
+**Example:**
+
+```
+constraint violation: [SchemaViolation] constraints/hydro_bounds.parquet: field hydro_bounds[0].max_spillage_m3s: max_spillage_m3s (5.0) must be >= min_spillage_m3s (10.0)
+```
+
+```
+constraint violation: [SchemaViolation] constraints/hydro_bounds.parquet: field hydro_bounds[0].min_diversion_m3s: value must be >= 0.0, got -5.0
+```
+
+**Resolution:** Correct the offending row so `min_spillage_m3s <=
+max_spillage_m3s`, and so `min_diversion_m3s`, `min_spillage_m3s`, and
+`max_spillage_m3s` are all non-negative. See
+[Case Directory Format](/reference/case-directory-format/) for
+`hydro_bounds.parquet`'s column reference.
+
+---
+
+### `PolicyIncompatible`
+
+**When it occurs:** After all five validation layers pass, when `policy.mode` is
+`"warm_start"` or `"resume"` and the stored policy file is structurally
+incompatible with the current case. The four compatibility checks are: hydro
+count, stage count, cut dimension, and entity identity hash.
+
+**Display format:**
+
+```
+policy incompatible: {check} mismatch — policy has {policy_value}, system has {system_value}
+```
+
+**Fields:**
+
+| Field          | Type     | Description                                                     |
+| -------------- | -------- | --------------------------------------------------------------- |
+| `check`        | `String` | Name of the failing compatibility check (e.g., `"hydro count"`) |
+| `policy_value` | `String` | Value recorded in the policy file                               |
+| `system_value` | `String` | Value present in the current system                             |
+
+**Example:**
+
+```
+policy incompatible: hydro count mismatch — policy has 42, system has 43
+```
+
+**Resolution:** The stored policy was produced by a run with a different system
+configuration. Options:
+
+- Set `policy.mode` to `"fresh"` to start from scratch without loading the policy.
+- Revert the system change that caused the mismatch.
+- Delete the policy directory and start fresh.
+
+---
+
+## `ErrorKind` values
+
+`ErrorKind` categorises the validation problem within the `ValidationContext`
+diagnostic system. Every `ValidationEntry` carries one `ErrorKind`. When
+`ValidationContext::into_result()` produces a `ConstraintError`, each line in
+`description` is prefixed with the `ErrorKind` in debug format (e.g., `[FileNotFound]`).
+
+The `ErrorKind` values are listed below. The `Severity::Warning` variants are
+reported but do not block execution; all other variants default to `Severity::Error`
+and must be resolved before `load_case` succeeds. One value, `NotImplemented`, is
+reserved and never emitted by the current validator, so it is not documented in
+detail below.
+
+### `FileNotFound`
+
+**Default severity:** Error
+
+**What triggers it:** A file that is required by the case structure is missing
+from the case directory. Emitted by Layer 1 (structural validation) for each of
+the required files that is not found on disk.
+
+**Example message:** `required file 'system/hydros.json' not found in case directory`
+
+**Resolution:** Create the missing file in the correct subdirectory. The required files are: `config.json`, `penalties.json`, `stages.json`,
+`initial_conditions.json`, `system/buses.json`, `system/lines.json`,
+`system/hydros.json`, and `system/thermals.json`.
+
+---
+
+### `ParseError`
+
+**Default severity:** Error
+
+**What triggers it:** A file exists and was read but could not be parsed —
+invalid JSON syntax, an unreadable Parquet header, or an unknown enum variant
+in a tagged JSON union. Emitted by Layer 2 (schema validation) when the
+initial deserialization of a file fails.
+
+**Example message:** `parse error in stages.json: expected `:` at line 5 column 12`
+
+**Resolution:** Fix the syntax error in the indicated file. Use a JSON linter
+or Parquet viewer to find the exact location. For JSON files, common causes are
+trailing commas, missing quotation marks, or mismatched braces.
+
+---
+
+### `SchemaViolation`
+
+**Default severity:** Error
+
+**What triggers it:** A file parses successfully but a field fails a schema
+constraint: a required field is missing, a value is outside its valid range
+(e.g., negative capacity, non-positive penalty cost), or a field contains an
+unexpected type. Emitted by Layer 2 (schema validation) during post-deserialization
+validation.
+
+**Example message:** `schema error in system/buses.json, field buses[2].deficit_segments[0].cost: penalty value must be > 0.0, got -100.0`
+
+**Resolution:** Correct the value in the indicated field. Field paths use
+dot-notation and zero-based array indices. Consult the
+[Case Directory Format](/reference/case-directory-format/) page for valid ranges and required fields.
+
+**See also:** a `constraints/hydro_bounds.parquet` spillage-band inversion or
+non-negativity rejection is collected under this kind when loaded via
+`load_case` — see
+[Spillage-band inversion](#spillage-band-inversion) under `ConstraintError`.
+
+---
+
+### `InvalidReference`
+
+**Default severity:** Error
+
+**What triggers it:** A cross-entity foreign-key reference points to an entity
+that does not exist in the expected registry. For example, one of a hydro
+plant's unit groups' `bus_id` references a bus that is not in
+`system/buses.json`. Emitted by Layer 3 (referential integrity).
+
+**Example message:** `Hydro 'FURNAS' references non-existent bus BUS_99 in bus registry`
+
+**Resolution:** Either add the referenced entity to its registry file, or
+correct the ID in the referencing file. Check all ID references:
+`unit_groups[].bus_id`, `thermals.bus_id`, `lines.source_bus_id`,
+`lines.target_bus_id`, `hydros.downstream_id`.
+
+---
+
+### `DuplicateId`
+
+**Default severity:** Error
+
+**What triggers it:** Two entities within the same registry share the same ID.
+IDs must be unique within each entity type. Emitted by Layer 2 (schema validation)
+when duplicate IDs are detected within a single file.
+
+**Example message:** `duplicate id 5 in buses array`
+
+**Resolution:** Assign a unique ID to each entity. IDs are integers; use any
+non-negative value as long as each is unique within its registry file.
+
+---
+
+### `InvalidValue`
+
+**Default severity:** Error
+
+**What triggers it:** A field value falls outside its valid range or violates a
+value constraint that is specific to the field's domain. Examples: a reservoir's
+`min_storage_hm3` exceeds `max_storage_hm3`, or a stage has `num_openings: 0`.
+Emitted by Layer 2 (schema validation).
+
+**Example message:** `min_storage_hm3 (8000.0) must be <= max_storage_hm3 (5000.0)`
+
+**Resolution:** Correct the field value to be within the valid range. Consult
+the [Case Directory Format](/reference/case-directory-format/) page for documented constraints. For storage
+bounds, ensure `min <= max`. For opening counts, ensure `num_openings >= 1`.
+
+**See also:** a `min_diversion_m3s` floor on a hydro with no declared
+diversion channel is reported this way — see
+[Diversion floor without a declared channel](#diversion-floor-without-a-declared-channel)
+under `ConstraintError`.
+
+---
+
+### `CycleDetected`
+
+**Default severity:** Error
+
+**What triggers it:** A directed graph contains a cycle. The primary case is the
+hydro cascade: the `downstream_id` links among hydro plants must form a directed
+forest (no cycles). A cycle would mean plant A drains into plant B which drains
+back into plant A. Detected by topological sort in Layer 5 (semantic validation).
+
+**Example message:** `hydro cascade contains a cycle involving plants: [H1, H2, H3]`
+
+**Resolution:** Review the `downstream_id` chain for the listed plants and remove
+the cycle. Every hydro cascade must be a directed tree rooted at plants with no
+downstream (tailwater discharge).
+
+---
+
+### `DimensionMismatch`
+
+**Default severity:** Error
+
+**What triggers it:** A cross-file coverage check fails. For example, when
+`scenarios/inflow_seasonal_stats.parquet` is present, every hydro plant must
+have at least one row of statistics. A mismatch means an optional per-entity
+file provides data for some entities but not all that require it. Emitted by
+Layer 4 (dimensional consistency).
+
+**Example message:** `hydro 'ITAIPU' has no inflow seasonal statistics`
+
+**Resolution:** Add the missing rows to the Parquet file. Every hydro plant that
+is active during the study must appear in `inflow_seasonal_stats.parquet` when
+that file is present.
+
+---
+
+### `BusinessRuleViolation`
+
+**Default severity:** Error
+
+**What triggers it:** A domain-specific business rule is violated that cannot
+be expressed as a simple range constraint. Examples: penalty tiers must be
+monotonically ordered (lower-tier penalties may not exceed upper-tier penalties
+for the same entity), PAR model stationarity requirements are violated, or
+stage count is inconsistent across files. Emitted by Layer 5 (semantic validation).
+
+**Example message:** `penalty tier ordering violated for hydro 'FURNAS': spillage_cost (500.0) exceeds storage_violation_below_cost (100.0)`
+
+**Resolution:** Read the message carefully — it describes the specific rule that
+was violated and which entities are involved. For penalty ordering, ensure that
+costs increase from lower-priority to higher-priority tiers. For stationarity,
+verify that the PAR model parameters satisfy the required statistical properties.
+
+**See also:** the anticipated-thermal / post-study boundary cluster is also
+reported this way — see
+[Commitment on a non-anticipated thermal](#commitment-on-a-non-anticipated-thermal),
+[Post-study boundary unanchored or malformed](#post-study-boundary-unanchored-or-malformed),
+and
+[Uncovered or over-covered past_anticipated_commitments window](#uncovered-or-over-covered-past_anticipated_commitments-window)
+under `ConstraintError`.
+
+---
+
+### `WarmStartIncompatible`
+
+**Default severity:** Error
+
+**What triggers it:** A warm-start policy is structurally incompatible with the
+current system. The four compatibility checks are: hydro count, stage count, cut
+dimension, and entity identity hash. The policy was produced by a run with a
+different system configuration. This `ErrorKind` is the `ValidationContext`
+counterpart to the `LoadError::PolicyIncompatible` variant.
+
+**Example message:** `warm-start policy has 42 hydros but current system has 43`
+
+**Resolution:** See `PolicyIncompatible` under `LoadError` above.
+
+---
+
+### `ResumeIncompatible`
+
+**Default severity:** Error
+
+**What triggers it:** A resume state (checkpoint) is incompatible with the current
+run configuration. The checkpoint may have been produced by a run with a different
+`config.json` or a different system, making it impossible to resume from that
+state consistently.
+
+**Example message:** `resume checkpoint iteration 150 is beyond current iteration_limit 100`
+
+**Resolution:** Either adjust `config.json` to be consistent with the checkpoint
+(e.g., increase the iteration limit), or set `policy.mode` to `"fresh"` to
+discard the checkpoint and start a new run.
+
+---
+
+### `UnusedEntity`
+
+**Default severity:** Warning (does not block execution)
+
+**What triggers it:** An entity is defined in a registry file but appears to be
+inactive — for example, a thermal plant with `max_generation_mw: 0.0` for all
+stages. The entity is valid but contributes nothing to the model. Reported as a
+warning to alert the user to possible input errors or unintentional inclusions.
+
+**Example message:** `thermal 'OLD_PLANT' has max_generation_mw = 0.0 and will contribute no generation`
+
+**Resolution:** Either remove the entity from the registry file or set a
+non-zero generation capacity if the omission was accidental. If the entity is
+intentionally inactive, this warning can be ignored.
+
+---
+
+### `ModelQuality`
+
+**Default severity:** Warning (does not block execution)
+
+**What triggers it:** A statistical quality concern is detected in the input
+model. Examples: residual bias in the PAR model seasonal statistics, high
+autocorrelation residuals, or an AR order that is suspiciously large for the
+data. These do not prevent execution but may indicate that the model needs
+recalibration.
+
+**Example message:** `residual bias detected in inflow_seasonal_stats for hydro 'FURNAS' at stage 0: mean residual 45.2 m3/s`
+
+**Resolution:** Review the flagged model parameters. Consider recalibrating the
+PAR model for the affected hydro plants. Warnings of this type do not prevent
+the solver from running, but they may indicate that the stochastic model does
+not accurately represent historical inflows.
+
+---
+
+### `SemanticAmbiguity`
+
+**Default severity:** Warning (does not block execution)
+
+**What triggers it:** A valid construct whose semantics are ambiguous or
+stage-dependent in a way that is likely to surprise the user. The primary case
+is using `thermal_generation(N)` in a generic constraint when thermal `N` is an
+anticipated thermal. `thermal_generation` refers to the per-block generation
+measured at the _delivery_ stage (when the commitment matures), not the
+commitment decision made at the current stage. Users who intend to constrain the
+commitment itself should use `anticipated_decision(N)` instead. Emitted by Layer
+5 (semantic validation) in `constraints/generic_constraints.json`.
+
+**Example message:** `Constraint "peak_cap": thermal_generation(5) references an anticipated thermal. thermal_generation refers to the per-block generation at the delivery stage, not the forward commitment. If you intend to constrain the commitment itself, use anticipated_decision(5) instead.`
+
+**Resolution:** Review the constraint expression. If you want to bound the
+generation dispatched at the delivery stage, `thermal_generation(N)` is correct
+and the warning can be ignored. If you want to bound the advance commitment
+decision itself, replace `thermal_generation(N)` with `anticipated_decision(N)`.
+
+---
+
+## Solver profile validation (`SddpError`)
+
+Per-phase solver-profile overrides (`training.solver.backward`,
+`training.solver.forward`, `simulation.solver`) are validated against the
+compiled backend's support matrix in `StudySetup::from_broadcast_params`, at
+study setup and before any LP template is built, on every rank. A validation
+failure returns `SddpError::Validation` — every rejection documented below
+reuses this one error kind; there is no separate enum variant per rule.
+
+### CLP backend: every override is rejected
+
+**When it occurs:** cobre built with the `clp` feature (`--features clp`)
+rejects every solver-profile override field outright — CLP's own option
+surface has not been measured against these fields, so cobre refuses to
+silently apply a HiGHS-flavored value to it. An empty `"solver": {}` block and
+an absent `solver` block are both legal; only a field that is actually *set*
+triggers the error. When a profile sets more than one field, only the first
+field in declaration order is named, so fixing one field at a time surfaces
+one error per fix cycle rather than a combined report.
+
+**Example message:**
+
+```
+solver profile field "dual_edge_weight" for phase "backward" is unsupported on backend "clp": rejected until CLP is re-measured
+```
+
+For `primal_feasibility_tolerance`, the field token additionally carries the
+value that was set:
+
+```
+solver profile field "primal_feasibility_tolerance" (1e-7) for phase "forward" is unsupported on backend "clp": rejected until CLP is re-measured
+```
+
+`"<phase>"` is one of `forward`, `backward`, or `simulation`.
+
+**Resolution:** Remove the override field from `config.json` on a CLP-built
+binary, or switch to the default HiGHS backend if the override is required.
+
+### HiGHS backend: seven per-field range checks
+
+The default (`highs`) backend accepts every solver-profile field. The closed
+enums (`dual_edge_weight`, `scale`, `price`, `presolve`) and `use_warm_start`
+are unconditionally valid — every variant is already checked at deserialize
+time, so there is no separate runtime range check for them. The remaining
+seven numeric fields are range-checked at study setup; each failure names the
+field, the rejected value, and the phase (`forward` / `backward` /
+`simulation`) whose profile set it.
+
+| Field | Rule | Message |
+| --- | --- | --- |
+| `primal_feasibility_tolerance` | must be finite | `unsupported primal_feasibility_tolerance {value} for backend "highs" in phase "{phase}": value must be finite` |
+| `dual_feasibility_tolerance` | must be finite and `>= 0.0000000001` | `unsupported dual_feasibility_tolerance {value} for backend "highs" in phase "{phase}": value must be finite and >= 0.0000000001` |
+| `simplex_update_limit` | must be `<= 2147483647` | `unsupported simplex_update_limit {value} for backend "highs" in phase "{phase}": value must be <= 2147483647` |
+| `cost_perturbation` | must be finite and `>= 0` | `unsupported cost_perturbation {value} for backend "highs" in phase "{phase}": value must be finite and >= 0` |
+| `refactor_error_tolerance` | must be finite and `>= 0` | `unsupported refactor_error_tolerance {value} for backend "highs" in phase "{phase}": value must be finite and >= 0` |
+| `factor_pivot_threshold` | must be in `[0.0008, 0.5]` | `unsupported factor_pivot_threshold {value} for backend "highs" in phase "{phase}": value must be in [0.0008, 0.5]` |
+| `steepest_edge_devex_fallback_threshold` | must be finite and `>= 1.0` | `unsupported steepest_edge_devex_fallback_threshold {value} for backend "highs" in phase "{phase}": value must be finite and >= 1.0` |
+
+`0.0000000001` is the compiled `MIN_DUAL_FEASIBILITY_TOLERANCE` (`1e-10`,
+printed expanded rather than in scientific notation); `2147483647` is
+`i32::MAX`; `[0.0008, 0.5]` is HiGHS's own accepted pivot-threshold range.
+
+**Resolution:** Adjust the offending field to satisfy the rule in the table.
+`{phase}` in the message identifies which of `training.solver.backward`,
+`training.solver.forward`, or `simulation.solver` set the invalid value.
+
+---
+
+## Severity reference
+
+| Severity | Effect                                | `ErrorKind` values                                                       |
+| -------- | ------------------------------------- | ------------------------------------------------------------------------ |
+| Error    | Prevents `load_case` from succeeding  | All kinds except `UnusedEntity`, `ModelQuality`, and `SemanticAmbiguity` |
+| Warning  | Reported but does not block execution | `UnusedEntity`, `ModelQuality`, `SemanticAmbiguity`                      |
+
+To inspect warnings after a successful `load_case`, call
+`ValidationContext::warnings()` before calling `into_result()`. Warnings are
+not surfaced in the `Result` returned by `load_case`; they must be read from
+the context directly.
