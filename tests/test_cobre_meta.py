@@ -1,0 +1,145 @@
+"""Testes por exemplo da Version_Tool (pytest). Usam o `cobre` falso.
+
+Toda a suíte é offline: a CLI `cobre` falsa é alcançada via `COBRE_BIN`
+(`monkeypatch.setenv`), espelhando o padrão de `test_adapters.py`. Nenhum teste
+exige o binário real nem faz requisição de rede.
+
+O `cobre` falso (`fake_cobre.py`) é um script Python; `version_cli` o executa
+diretamente como `COBRE_BIN`. Em POSIX o shebang basta; para rodar o mesmo
+script de forma portátil, cada teste aponta `COBRE_BIN` para um lançador gerado
+em diretório temporário que invoca o script com o interpretador corrente.
+"""
+
+import os
+import stat
+import sys
+from pathlib import Path
+
+import pytest
+
+import cobre_mcp.tools.cobre_meta as cobre_meta
+from cobre_mcp.config import load_settings
+from cobre_mcp.tools.cobre_meta import register_cobre_meta
+
+FAKE = Path(__file__).resolve().parent / "fake_cobre.py"
+
+
+class _CaptureMCP:
+    """`mcp` falso cujo `tool()` captura a função registrada, para chamá-la direto.
+
+    Dispensa a maquinaria async do FastMCP: a tool é uma função Python comum e o
+    teste a invoca como o servidor faria após o despacho stdio.
+    """
+
+    def __init__(self):
+        self.tools = {}
+
+    def tool(self, *args, **kwargs):
+        def deco(fn):
+            self.tools[fn.__name__] = fn
+            return fn
+
+        return deco
+
+
+def _version_tool(settings):
+    mcp = _CaptureMCP()
+    register_cobre_meta(mcp, settings)
+    return mcp.tools["cobre_version"]
+
+
+@pytest.fixture
+def fake_cobre_bin(tmp_path):
+    """Lançador executável do `cobre` falso, confinado a um diretório temporário.
+
+    Devolve o caminho a apontar em `COBRE_BIN`. Portátil: em Windows gera um
+    `.cmd`; em POSIX, um shell script. Ambos repassam o argv ao script falso via
+    o interpretador corrente.
+    """
+    if os.name == "nt":
+        launcher = tmp_path / "cobre.cmd"
+        launcher.write_text(f'@"{sys.executable}" "{FAKE}" %*\r\n', encoding="utf-8")
+    else:
+        launcher = tmp_path / "cobre"
+        launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{FAKE}" "$@"\n')
+        launcher.chmod(launcher.stat().st_mode | stat.S_IEXEC)
+    return str(launcher)
+
+
+def test_happy_path_parses_version_fields(monkeypatch, fake_cobre_bin):
+    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    env = _version_tool(load_settings())()
+    assert env["status"] == "ok"
+    assert env["exit_code"] == 0
+    assert env["version"] == "v9.9.9"
+    assert env["solver"] == "HiGHS 1.13.1"
+    assert "cobre" in env["raw"]
+    assert "v9.9.9" in env["raw"]
+
+
+def test_version_runs_without_json_flag(monkeypatch, fake_cobre_bin):
+    """`version_cli` roda `cobre version` SEM `--json` (que a CLI real rejeitaria).
+
+    A prova é indireta mas honesta: a CLI falsa só emite o texto parseável para
+    `version` puro. Se `--json` (ou qualquer flag extra) fosse enviado, o ramo de
+    texto não dispararia e `version`/`raw` não bateriam.
+    """
+    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    env = _version_tool(load_settings())()
+    assert env["status"] == "ok"
+    assert env["version"] == "v9.9.9"
+    assert env["raw"].splitlines()[0].split()[0] == "cobre"
+
+
+def test_missing_binary_returns_127(monkeypatch):
+    monkeypatch.delenv("COBRE_BIN", raising=False)
+    monkeypatch.setattr("cobre_mcp.adapters.cobre.find_cobre", lambda settings: None)
+    env = _version_tool(load_settings())()
+    assert env["status"] == "error"
+    assert env["exit_code"] == 127
+
+
+def test_timeout_returns_minus_one(monkeypatch):
+    monkeypatch.setattr(cobre_meta, "version_cli", _version_cli_envelope(-1))
+    env = _version_tool(load_settings())()
+    assert env["status"] == "error"
+    assert env["exit_code"] == -1
+
+
+def test_error_exit_carries_text(monkeypatch):
+    """Saída de erro (exit != 0) vira Error_Envelope carregando o texto da CLI."""
+    monkeypatch.setattr(
+        cobre_meta,
+        "version_cli",
+        _version_cli_envelope(2, detail="error: unexpected argument '--json'"),
+    )
+    env = _version_tool(load_settings())()
+    assert env["status"] == "error"
+    assert env["exit_code"] == 2
+    assert any("--json" in d for d in env["diagnostics"])
+
+
+def test_never_raises_on_adapter_exception(monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("falha de transporte simulada")
+
+    monkeypatch.setattr(cobre_meta, "version_cli", boom)
+    env = _version_tool(load_settings())()
+    assert env["status"] == "error"
+    assert "exit_code" in env
+    assert isinstance(env["diagnostics"], list) and env["diagnostics"]
+
+
+def _version_cli_envelope(exit_code, *, detail=""):
+    """Substitui `version_cli` por um sentinela que devolve um Error_Envelope fixo.
+
+    `version_cli` não aceita `subargv` (roda sempre `cobre version` puro), logo os
+    códigos de transporte (-1 timeout, erro != 0) são exercidos devolvendo o
+    envelope diretamente, pelos construtores do owner.
+    """
+    from cobre_mcp.adapters.envelope import error as _error
+
+    def fake(*args, **kwargs):
+        return _error(exit_code, "cobre version encerrou com erro", detail)
+
+    return fake

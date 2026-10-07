@@ -8,6 +8,7 @@ from .adapters.paths import allowed_roots
 from .adapters.reference import docs_root
 from .adapters.state import state_dir
 from .config import load_settings
+from .tools.cobre_meta import register_cobre_meta
 from .tools.deck import register_deck
 from .tools.post_run import register_post_run
 from .tools.pre_run import register_pre_run
@@ -26,6 +27,7 @@ def build_server() -> FastMCP:
     register_deck(mcp, settings)        # manipulador de decks (JSON/Parquet)
     register_results(mcp, settings)     # leitura/análise de resultados (pós-rodada)
     register_reference(mcp, settings)   # schemas + documentação (referência)
+    register_cobre_meta(mcp, settings)  # meta do cobre: version + schema export
     register_run(mcp, settings)         # init / plano / apply / run assíncrono
 
     @mcp.tool()
