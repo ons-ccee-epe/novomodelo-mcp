@@ -341,6 +341,22 @@ def test_init_list_and_guard():
         forced = t["cobre_init"](directory=target, template="1dtoy", force=True)
         assert forced["exit_code"] == 13, "force deveria exigir COBRE_MCP_ALLOW_FORCE"
         assert t["cobre_init"]()["exit_code"] == 22
+        # nome de template vindo do agente não pode virar opção da CLI
+        for bad in ("--force", "-x", "../x", "a b"):
+            r = t["cobre_init"](directory=target, template=bad)
+            assert r["exit_code"] == 22, (bad, r)
+
+
+def test_cli_paths_are_absolute_even_for_dash_prefixed_input():
+    from cobre_mcp.tools.run import _cli_path
+    cwd = os.getcwd()
+    with tempfile.TemporaryDirectory() as d:
+        os.chdir(d)
+        try:
+            out = _cli_path("-output")
+            assert Path(out).is_absolute() and not out.startswith("-"), out
+        finally:
+            os.chdir(cwd)
 
 
 def test_run_apply_config_only():
@@ -373,7 +389,7 @@ def test_run_async_lifecycle():
         r = t["cobre_run_start"](str(case), threads=2)
         assert r["status"] == "ok" and r["job_id"], r
         assert time.time() - t0 < 5, "start deveria voltar na hora"
-        assert r["cmd"][-7:] == ["--output", str(case / "output"), "--threads", "2",
+        assert r["cmd"][-7:] == ["--output", str((case / "output").resolve()), "--threads", "2",
                                  "--comm-backend", "local", "--quiet"], r["cmd"]
         busy = t["cobre_run_start"](str(case), threads=2)
         assert busy["status"] == "error" and busy["exit_code"] == 16, busy

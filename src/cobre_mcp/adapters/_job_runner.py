@@ -43,7 +43,7 @@ def _taskkill() -> str:
 def _kill_tree(proc: subprocess.Popen, *, force: bool) -> None:
     if _WIN:
         # TerminateProcess não alcança netos; taskkill /T derruba a árvore toda.
-        subprocess.run([_taskkill(), "/T", "/F", "/PID", str(proc.pid)],
+        subprocess.run([_taskkill(), "/T", "/F", "/PID", str(int(proc.pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                        capture_output=True, check=False)
     elif force:
         proc.kill()
@@ -61,7 +61,8 @@ def main(argv: list[str]) -> int:
 
     flags = subprocess.CREATE_NO_WINDOW if _WIN else 0  # type: ignore[attr-defined]
     try:
-        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, creationflags=flags)
+        # argv em lista e sem shell, montada pelo servidor (tools.run) com caminhos absolutos.
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, creationflags=flags)  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
     except OSError as exc:
         print(f"runner: falha ao iniciar {cmd[:1]}: {exc}", file=sys.stderr, flush=True)
         _write(job_dir / "exit_code", "127")

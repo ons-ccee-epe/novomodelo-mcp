@@ -6,6 +6,7 @@ deck_io.edit_json (schema + backup + atômico). Zero regra de negócio.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ..adapters import deck_io, jobs, runtime
@@ -44,6 +45,15 @@ def harvest_calibrations(settings: Settings) -> int:
             n += 1
         jobs.update_meta(settings, j["job_id"], calibration_recorded=True)
     return n
+
+
+_TEMPLATE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+
+
+def _cli_path(path: str) -> str:
+    """Caminho ABSOLUTO para a argv da CLI: um relativo iniciado por `-` seria lido
+    pelo cobre como opção (injeção de argumento)."""
+    return str(Path(path).resolve())
 
 
 def make_plan(case_dir: str, settings: Settings, *, time_budget_s: float = 900,
@@ -121,6 +131,8 @@ def register_run(mcp, settings: Settings) -> None:
             return cap_envelope(env, settings)
         if not directory or not template:
             return error(22, "informe `directory` e `template` (ou use list=True)")
+        if not _TEMPLATE_NAME_RE.match(template):
+            return error(22, f"nome de template inválido: {template!r}")
         if (err := ensure_in_workspace(directory, settings=settings)):
             return err
         if force and not settings.allow_force:
@@ -129,7 +141,7 @@ def register_run(mcp, settings: Settings) -> None:
         argv = ["init", "--template", template]
         if force:
             argv.append("--force")
-        argv.append(directory)
+        argv.append(_cli_path(directory))
         env = run_cobre(argv, settings=settings, parse_json=False)
         if env.get("exit_code") == 0:
             attach_artifact(env, "case_dir", directory)
@@ -219,7 +231,7 @@ def register_run(mcp, settings: Settings) -> None:
                     "diagnostics": ["plano diz 'nao_cabe' — run recusado",
                                     "ajuste com cobre_run_apply ou passe override=True"]}
         n = threads or plan.get("target_threads") or 1
-        cmd = [binpath, "--color", "never", "run", case_dir, "--output", output,
+        cmd = [binpath, "--color", "never", "run", _cli_path(case_dir), "--output", _cli_path(output),
                "--threads", str(n), "--comm-backend", "local", "--quiet"]
         jobs.prune_jobs(settings)
         try:

@@ -184,7 +184,8 @@ def detect_cpu_count() -> int:
 
 def _sysctl_int(name: str) -> int | None:
     try:
-        out = subprocess.run([_sysctl(), "-n", name], capture_output=True, text=True,
+        # argv fixa (ferramenta do SO + nome de chave interno), sem shell: nada vem do agente.
+        out = subprocess.run([_sysctl(), "-n", name], capture_output=True, text=True,  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                              timeout=5)
         return int(out.stdout.strip()) if out.returncode == 0 else None
     except (OSError, subprocess.SubprocessError, ValueError):
@@ -296,7 +297,8 @@ def _raw_machine_id() -> str | None:
             return None
     if sys.platform == "darwin":
         try:
-            out = subprocess.run([system_tool("ioreg", "/usr/sbin"),
+            # argv fixa, sem shell: nada vem do agente.
+            out = subprocess.run([system_tool("ioreg", "/usr/sbin"),  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                                   "-rd1", "-c", "IOPlatformExpertDevice"],
                                  capture_output=True, text=True, timeout=5)
         except (OSError, subprocess.SubprocessError):
