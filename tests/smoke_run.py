@@ -85,7 +85,13 @@ def _sandbox(**kv):
     with tempfile.TemporaryDirectory() as d, \
             _env(COBRE_MCP_WORKSPACE=d, COBRE_MCP_STATE_DIR=str(Path(d) / "state"), **kv):
         os.environ.pop("COBRE_MCP_ALLOW_FORCE", None)
-        yield Path(d)
+        try:
+            yield Path(d)
+        finally:
+            # no Windows, arquivo aberto por um runner vivo impede a limpeza da pasta
+            for proc in list(jobs._PROCS.values()):
+                proc.wait(timeout=30)
+            jobs._PROCS.clear()
 
 
 def _tools():
@@ -454,6 +460,16 @@ def test_calibration_registry_by_machine_id():
         plan = make_plan(str(case2), load_settings(),
                          machine={**m, "machine_id": "ffffffffffffffff"})
         assert plan["verdict"] == "indeterminado", plan
+
+
+def test_terminal_state_only_after_runner_exits():
+    with _sandbox(COBRE_BIN=FAKE) as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        job = t["cobre_run_start"](str(case), override=True)["job_id"]
+        st = _wait(t, job)
+        assert st["state"] == "succeeded", st
+        assert job not in jobs._PROCS, "estado terminal com o runner ainda vivo"
 
 
 def test_job_lost_when_runner_dies():

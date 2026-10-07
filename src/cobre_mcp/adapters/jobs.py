@@ -36,6 +36,8 @@ from .state import atomic_write_text, file_lock, state_dir
 KEEP_DAYS = 7
 #: Heartbeat mais velho que isto (sem exit_code) => runner morreu ("lost").
 STALE_S = max(15.0, 5 * _job_runner.HEARTBEAT_S)
+#: Espera máxima para o runner sair depois de gravar o exit_code.
+REAP_TIMEOUT_S = 5.0
 
 _WIN = sys.platform == "win32"
 _RUNNER = str(Path(_job_runner.__file__).resolve())
@@ -96,11 +98,19 @@ def job_state(settings: Settings, job_id: str) -> dict[str, Any] | None:
     if meta is None:
         return None
     d = _job_dir(settings, job_id)
+    rc = _exit_code(d)
     proc = _PROCS.get(job_id)
+    if proc is not None and rc is not None:
+        # O runner grava exit_code ANTES de sair: sem esta espera, um estado terminal
+        # conviveria com o runner ainda segurando stdout/stderr.log — no Windows a
+        # pasta do run não pode ser movida/apagada nessa janela.
+        try:
+            proc.wait(timeout=REAP_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            pass
     own_alive = proc is not None and proc.poll() is None
     if proc is not None and not own_alive:
-        _PROCS.pop(job_id, None)  # colhido
-    rc = _exit_code(d)
+        _PROCS.pop(job_id, None)
     cancelled = (d / "cancel").exists()
     beat = _mtime(d / "heartbeat")
     if rc is not None:
