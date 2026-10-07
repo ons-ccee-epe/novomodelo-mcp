@@ -126,3 +126,45 @@ def validate_deck_cli(case_dir: str, *, settings: Settings | None = None) -> dic
         "report_truncated": truncated,
         "report": report,
     }
+
+
+def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
+    """Roda `cobre version` em modo TEXTO e devolve os campos parseados + o texto bruto.
+
+    A CLI real não aceita `--json` em `version` (clap rejeita com exit 2); a saída
+    é texto humano, uma `label: valor` por linha, exceto a primeira que separa por
+    espaço (ex.: `cobre   v0.17.0`). Transporte puro, sem regra de domínio.
+    """
+    settings = settings or load_settings()
+    binpath = find_cobre(settings)
+    if binpath is None:
+        return _error(127, "cobre nao encontrado no PATH (defina COBRE_BIN).")
+    cmd = [binpath, "--color", "never", "version"]
+    # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout), nunca propagam ao stdio.
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=settings.default_timeout)
+    except subprocess.TimeoutExpired:
+        return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
+    except OSError as exc:
+        return _error(-1, f"erro ao executar cobre: {exc}")
+
+    stdout = (proc.stdout or "").strip()
+    if proc.returncode != 0:
+        detail = (proc.stderr or stdout or "")[:MAX_DETAIL_CHARS]
+        return _error(proc.returncode, "cobre version encerrou com erro", detail)
+
+    fields: dict[str, Any] = {}
+    lines = stdout.splitlines()
+    if lines:
+        first = lines[0].split()
+        if first and first[0] == "cobre" and len(first) > 1:
+            fields["version"] = first[1]
+    for line in lines[1:]:
+        if ":" in line:
+            key, _, value = line.partition(":")
+            fields[key.strip().lower()] = value.strip()
+
+    # `raw` é a fonte de verdade: a saída é texto humano e pode mudar de formato;
+    # se o parsing não achar `version`, ainda devolvemos ok com o texto autoritativo.
+    return {"status": "ok", "exit_code": 0, **fields, "raw": stdout}
