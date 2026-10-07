@@ -68,6 +68,8 @@ def fake_cobre_bin(tmp_path):
 
 def test_happy_path_status_ok(monkeypatch, fake_cobre_bin):
     monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    # smoke_* siblings leak COBRE_MCP_WORKSPACE; drop it so the guard lets us reach the fake CLI.
+    monkeypatch.delenv("COBRE_MCP_WORKSPACE", raising=False)
     env = _schema_export_tool(load_settings())()
     assert env["status"] == "ok"
     assert env["exit_code"] == 0
@@ -75,6 +77,7 @@ def test_happy_path_status_ok(monkeypatch, fake_cobre_bin):
 
 def test_single_subcommand_is_schema_export(monkeypatch, fake_cobre_bin):
     monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.delenv("COBRE_MCP_WORKSPACE", raising=False)
     env = _schema_export_tool(load_settings())()
     non_flag = [a for a in env["argv"] if not a.startswith("--")]
     assert non_flag == ["schema", "export"]
@@ -82,6 +85,7 @@ def test_single_subcommand_is_schema_export(monkeypatch, fake_cobre_bin):
 
 def test_output_dir_appends_flag(monkeypatch, fake_cobre_bin, tmp_path):
     monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.delenv("COBRE_MCP_WORKSPACE", raising=False)
     out_dir = str(tmp_path / "schemas")
     env = _schema_export_tool(load_settings())(output_dir=out_dir)
     assert env["argv"][:2] == ["schema", "export"]
