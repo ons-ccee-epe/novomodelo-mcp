@@ -168,7 +168,9 @@ def start_job(settings: Settings, cmd: list[str], *, info: dict[str, Any] | None
                 "job_dir": str(d), **(info or {})}
         atomic_write_text(d / "job.json", json.dumps(meta, indent=2, ensure_ascii=False))
         with open(d / "stdout.log", "wb") as out, open(d / "stderr.log", "wb") as err:
-            proc = subprocess.Popen([sys.executable, _RUNNER, str(d), *cmd],
+            # argv em lista e sem shell: os caminhos do agente chegam como argumentos
+            # literais (absolutos, já validados pelo guard em tools.run), nunca interpretados.
+            proc = subprocess.Popen([sys.executable, _RUNNER, str(d), *cmd],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                                     stdin=subprocess.DEVNULL, stdout=out, stderr=err,
                                     cwd=cwd, **_spawn_kwargs())
         _PROCS[job_id] = proc
@@ -200,11 +202,11 @@ def job_logs(settings: Settings, job_id: str, *, lines: int = 100,
 def _force_kill_runner(pid: int) -> None:
     """Último recurso, se o runner não responde: derruba o runner E a árvore dele."""
     if _WIN:
-        subprocess.run([_job_runner._taskkill(), "/T", "/F", "/PID", str(pid)],
+        subprocess.run([_job_runner._taskkill(), "/T", "/F", "/PID", str(int(pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                        capture_output=True, check=False)
         return
     try:
-        os.killpg(pid, signal.SIGKILL)  # runner é líder da própria sessão
+        os.killpg(int(pid), signal.SIGKILL)  # runner é líder da própria sessão
     except (ProcessLookupError, PermissionError):
         pass
 
