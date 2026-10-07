@@ -223,7 +223,7 @@ def list_docs(settings: Settings, section: str | None = None) -> dict:
     pages = []
     for p in sorted(base.rglob("*")):
         if p.is_file() and p.suffix in (".md", ".mdx"):
-            rel = str(p.relative_to(base).with_suffix(""))
+            rel = p.relative_to(base).with_suffix("").as_posix()  # id estável em qualquer SO
             if section and not rel.startswith(section):
                 continue
             pages.append(rel)

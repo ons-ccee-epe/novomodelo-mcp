@@ -36,7 +36,7 @@ def register_deck(mcp, settings: Settings) -> None:
         files = []
         for p in sorted(root.rglob("*")):
             if p.is_file() and p.suffix in (".json", ".parquet"):
-                files.append({"path": str(p), "rel": str(p.relative_to(root)),
+                files.append({"path": str(p), "rel": p.relative_to(root).as_posix(),
                               "kind": p.suffix.lstrip("."), "bytes": p.stat().st_size})
         return {"status": "ok", "case_dir": str(root), "count": len(files), "files": files}
 

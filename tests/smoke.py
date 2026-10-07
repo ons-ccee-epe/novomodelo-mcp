@@ -10,12 +10,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "tests"))
 
 from cobre_mcp.adapters.bridge import run_bridge          # noqa: E402
 from cobre_mcp.config import load_settings                # noqa: E402
 from cobre_mcp.tools.shaping import cap_envelope          # noqa: E402
+from _fakes import fake_bin                                # noqa: E402
 
-FAKE = str(Path(__file__).resolve().parent / "fake_cobre_bridge.py")
+FAKE = fake_bin("fake_cobre_bridge.py")
 
 
 def _settings():
