@@ -22,17 +22,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-# Generated-file banner tells a human reader where to edit instead — the Kiro
-# steering files are generated, so edits belong in the .claude/ source.
 BANNER = (
     "<!-- GENERATED FILE — DO NOT EDIT.\n"
     "     Source of truth: {source}\n"
     "     Regenerate: python scripts/gen/sync-kiro-steering.py -->\n"
 )
 
-# Default name the CLAUDE.md projection takes in .kiro/steering/. The cobre repo
-# uses this; cobre-bridge's established steering calls it agent-guidelines.md,
-# so the name is overridable via --hard-rules-name.
+# Overridable via --hard-rules-name because cobre-bridge calls this agent-guidelines.md.
 DEFAULT_HARD_RULES_NAME = "00-hard-rules.md"
 
 
@@ -100,8 +96,7 @@ def kiro_front_matter(source_rel: str, claude_fm: dict, overrides: dict) -> str:
         return "---\ninclusion: manual\n---\n"
 
     if paths:
-        # Kiro's fileMatchPattern takes one pattern; join multiple globs with the
-        # brace-alternation form Kiro accepts, else emit the single glob.
+        # Kiro's fileMatchPattern takes a single pattern, so multiple globs join as brace-alternation.
         pattern = paths[0] if len(paths) == 1 else "{" + ",".join(paths) + "}"
         return (
             "---\n"
