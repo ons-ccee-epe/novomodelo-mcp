@@ -19,8 +19,12 @@ from .obs import log
 
 
 def run_cobre(subargv: list[str], *, timeout: float | None = None,
-              settings: Settings | None = None) -> dict[str, Any]:
-    """Executa `cobre --color never <subargv>` esperando saída JSON (use --json)."""
+              settings: Settings | None = None, parse_json: bool = True) -> dict[str, Any]:
+    """Executa `cobre --color never <subargv>` esperando saída JSON (use --json).
+
+    `parse_json=False` para subcomandos sem `--json` (ex.: `init`): devolve o
+    stdout/stderr como texto (truncados), com status pelo código de saída.
+    """
     settings = settings or load_settings()
     binpath = find_cobre(settings)
     if binpath is None:
@@ -38,8 +42,14 @@ def run_cobre(subargv: list[str], *, timeout: float | None = None,
         return _error(-1, f"erro ao executar cobre: {exc}")
 
     text = (proc.stdout or "").strip()
-    if not text:
-        env: dict[str, Any] = {
+    env: dict[str, Any]
+    if not parse_json:
+        env = {"status": "ok" if proc.returncode == 0 else "error",
+               "stdout": text[:MAX_DETAIL_CHARS],
+               "stderr": (proc.stderr or "").strip()[:MAX_DETAIL_CHARS],
+               "diagnostics": []}
+    elif not text:
+        env = {
             "status": "ok" if proc.returncode == 0 else "error",
             "diagnostics": [(proc.stderr or "")[:MAX_DETAIL_CHARS]] if proc.stderr else [],
         }
