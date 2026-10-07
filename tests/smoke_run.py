@@ -1,0 +1,489 @@
+#!/usr/bin/env python3
+"""Smoke test de init / plano / apply / run assíncrono (stdlib puro, offline).
+
+Usa o `cobre` falso (tests/fake_cobre.py, via lançador portável em _fakes.py) e
+uma máquina MOCKADA (machine_id, hostname, cores, RAM) com metadata/config
+sintéticos -> veredito determinístico em qualquer SO. Cada teste usa um state
+dir temporário (COBRE_MCP_STATE_DIR) — nunca o do usuário.
+A execução REAL do solver só roda com COBRE_MCP_REAL_SOLVER=1 (fora do CI).
+Roda com: python3 tests/smoke_run.py
+"""
+import contextlib
+import json
+import os
+import socket
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "tests"))
+
+from _fakes import fake_bin                              # noqa: E402
+from cobre_mcp.adapters import jobs, machine, run_plan, runtime, state  # noqa: E402
+from cobre_mcp.config import load_settings              # noqa: E402
+from cobre_mcp.tools.run import make_plan, register_run  # noqa: E402
+
+FAKE = fake_bin("fake_cobre.py")
+HOST = "host-sintetico"
+MID = "0123456789abcdef"
+GIB = 1024 ** 3
+MOCK_MACHINE = {"machine_id": MID, "hostname": HOST, "cpu_count": 8,
+                "ram_bytes": 16 * GIB, "ram_gib": 16.0, "platform": "Test"}
+
+# Fixture sintética com ordens de grandeza de um run real de porte médio
+# (8 CPUs/16 GiB, 4 threads): 72 estágios × 159 hidros, fwd=4, iters=6,
+# 8 aberturas -> 15408 solves, ~243 s de treino. Valida o modelo de custo.
+REF_META = {
+    "hostname": HOST, "duration_seconds": 242.633, "completed_at": "2026-10-01T00:00:00Z",
+    "configuration": {"max_iterations": 6, "forward_passes": 4},
+    "problem_dimensions": {"num_stages": 72, "num_hydros": 159, "num_buses": 1},
+    "solve_stats": {"total_lp_solves": 15408, "forward_solve_seconds": 158.5009550469995,
+                    "backward_solve_seconds": 553.9910048730003, "parallelism": 4},
+    "distribution": {"backend": "local", "world_size": 1, "threads_per_rank": 4},
+}
+SIM_META = {"duration_seconds": 148.623,
+            "solve_stats": {"total_lp_solves": 7200, "solve_seconds": 582.49, "parallelism": 4}}
+# Mesmo caso a 7 threads numa CPU híbrida 4P+4E: MAIS LENTO que a 4 threads.
+REF_META_7 = {**REF_META, "duration_seconds": 255.905, "completed_at": "2026-10-02T00:00:00Z",
+              "solve_stats": {**REF_META["solve_stats"], "forward_solve_seconds": 180.0,
+                              "backward_solve_seconds": 573.8, "parallelism": 7},
+              "distribution": {"backend": "local", "world_size": 1, "threads_per_rank": 7}}
+SIM_META_7 = {"duration_seconds": 164.962,
+              "solve_stats": {"total_lp_solves": 7200, "solve_seconds": 1114.9, "parallelism": 7}}
+
+
+class _StubMCP:
+    """Captura as funções decoradas com @mcp.tool() (sem depender do pacote mcp)."""
+
+    def __init__(self):
+        self.tools = {}
+
+    def tool(self):
+        def deco(fn):
+            self.tools[fn.__name__] = fn
+            return fn
+        return deco
+
+
+@contextlib.contextmanager
+def _env(**kv):
+    saved = dict(os.environ)
+    os.environ.update({k: str(v) for k, v in kv.items()})
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+
+
+@contextlib.contextmanager
+def _sandbox(**kv):
+    """Workspace + state dir temporários (nunca toca o estado real do usuário)."""
+    with tempfile.TemporaryDirectory() as d, \
+            _env(COBRE_MCP_WORKSPACE=d, COBRE_MCP_STATE_DIR=str(Path(d) / "state"), **kv):
+        os.environ.pop("COBRE_MCP_ALLOW_FORCE", None)
+        yield Path(d)
+
+
+def _tools():
+    mcp = _StubMCP()
+    register_run(mcp, load_settings())
+    return mcp.tools
+
+
+def _make_case(root: Path, *, fwd=4, iters=6, n_stages=72, openings=8, hydros=159,
+               sim=100, meta_host=HOST, modeling="penalty") -> Path:
+    case = root / "caso"
+    (case / "system").mkdir(parents=True)
+    (case / "config.json").write_text(json.dumps({
+        "training": {"selection": {"method": "sampled", "forward_passes": fwd},
+                     "stopping_rules": [{"type": "iteration_limit", "limit": iters}]},
+        "simulation": {"enabled": True, "selection": {"method": "sampled",
+                                                      "num_scenarios": sim}},
+        "modeling": {"inflow_non_negativity": {"method": modeling}},
+    }))
+    (case / "stages.json").write_text(json.dumps({"stages": [
+        {"id": i, "num_openings": openings} for i in range(n_stages)]}))
+    (case / "system" / "hydros.json").write_text(json.dumps(
+        {"hydros": [{"id": i} for i in range(hydros)]}))
+    (case / "system" / "buses.json").write_text(json.dumps({"buses": [{"id": 0}]}))
+    if meta_host:
+        tr = case / "output" / "training"
+        tr.mkdir(parents=True)
+        (tr / "metadata.json").write_text(json.dumps({**REF_META, "hostname": meta_host}))
+        (case / "output" / "simulation").mkdir()
+        (case / "output" / "simulation" / "metadata.json").write_text(json.dumps(SIM_META))
+    return case
+
+
+def _wait(tools, job_id, timeout=15.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        st = tools["cobre_run_status"](job_id)
+        if st["state"] != "running":
+            return st
+        time.sleep(0.1)
+    raise AssertionError(f"job {job_id} não terminou em {timeout}s")
+
+
+# ── máquina ───────────────────────────────────────────────────────────────────
+
+def test_machine_meminfo_and_mock():
+    assert machine.parse_meminfo("MemTotal:       16384000 kB\nMemFree: 1 kB") == 16384000 * 1024
+    assert machine.parse_meminfo("nada") is None
+    m = machine.detect_machine(hostname="h", cpu_count=8, ram_bytes=16 * GIB)
+    assert (m["hostname"], m["cpu_count"], m["ram_gib"]) == ("h", 8, 16.0), m
+    real = machine.detect_machine()
+    assert real["hostname"] and real["cpu_count"] >= 1, real
+    assert real["ram_bytes"], "RAM não detectada neste SO"
+    assert len(real["machine_id"]) == 16 and real["machine_id"] == machine.detect_machine_id()
+
+
+def test_machine_cgroup_parsers_and_hostname():
+    assert machine.parse_cpu_max("200000 100000") == 2.0
+    assert machine.parse_cpu_max("max 100000") is None
+    assert machine.parse_mem_limit("max") is None
+    assert machine.parse_mem_limit("8589934592\n") == 8 * GIB
+    assert machine.parse_mem_limit(str(2 ** 63 - 4096)) is None  # cgroup v1 "ilimitado"
+    assert machine.normalize_hostname(" Host-A.local ") == "host-a"
+
+
+def test_state_dir_is_persistent_not_tmp():
+    d = state.default_state_dir()
+    assert d.name == "cobre-mcp", d
+    assert not str(d).startswith(tempfile.gettempdir()), d
+
+
+# ── custo ─────────────────────────────────────────────────────────────────────
+
+def test_machine_hybrid_parsers():
+    assert machine.parse_cpu_list("0-7,16-23") == 16 and machine.parse_cpu_list("3") == 1
+    assert machine.performance_from_classes([(1, 2)] * 4 + [(0, 1)] * 4) == 8
+    assert machine.performance_from_classes([(0, 2)] * 8) is None  # não híbrida
+
+    def core(eff, mask):  # registro RelationProcessorCore (64 bits), 48 bytes
+        rec = bytearray(48)
+        rec[0:4] = (0).to_bytes(4, "little")
+        rec[4:8] = (48).to_bytes(4, "little")
+        rec[9] = eff
+        rec[30:32] = (1).to_bytes(2, "little")
+        rec[32:40] = mask.to_bytes(8, "little")
+        return bytes(rec)
+    buf = core(1, 0b11) + core(1, 0b1100) + core(0, 0b10000) + core(0, 0b100000)
+    cores = machine.parse_win_cores(buf)
+    assert cores == [(1, 2), (1, 2), (0, 1), (0, 1)], cores
+    assert machine.performance_from_classes(cores) == 4
+    m = machine.detect_machine(hostname="h", cpu_count=8, ram_bytes=GIB, performance_cpus=4)
+    assert m["hybrid"] is True and m["performance_cpus"] == 4
+
+
+# ── tempo de execução ─────────────────────────────────────────────────────────
+
+def test_runtime_model_matches_reference_point():
+    p4 = runtime.point_from_run(REF_META, SIM_META, source="ref4")
+    assert abs(p4["train"]["s_per_solve"] - 0.046) < 0.001, p4
+    solves = runtime.training_solves(6, 4, [8] * 72)
+    assert abs(solves - 15408) / 15408 < 0.01, solves  # modelo ≈ contagem real (~1%)
+    est = runtime.estimate([p4], 4, solves, 7200)
+    assert abs(est["training_seconds"] - 243) / 243 < 0.02, est
+    assert abs(est["simulation_seconds"] - 149) / 149 < 0.01, est
+    # acima do medido: SEM ganho; abaixo: reescala linear
+    assert runtime.estimate([p4], 8, solves, 7200)["total_seconds"] == est["total_seconds"]
+    half = runtime.estimate([p4], 2, solves, 7200)
+    assert abs(half["training_seconds"] - 2 * est["training_seconds"]) < 0.2, half
+    # com o ponto a 7 threads: 7 previsto pelo próprio ponto (real 256 s), 5 interpolado
+    p7 = runtime.point_from_run(REF_META_7, SIM_META_7, source="ref7")
+    e7 = runtime.estimate([p4, p7], 7, solves, 7200)
+    assert abs(e7["training_seconds"] - 256) / 256 < 0.02, e7
+    e5 = runtime.estimate([p4, p7], 5, solves, 7200)
+    assert est["training_seconds"] < e5["training_seconds"] < e7["training_seconds"], e5
+    assert "interpolado" in e5["training_method"]
+
+
+def test_threads_choice_hybrid_and_measured():
+    p4 = {**runtime.point_from_run(REF_META, SIM_META, source="a"), "threads": 4}
+    p7 = runtime.point_from_run(REF_META_7, SIM_META_7, source="b")
+    ref = {"level": 3, "points": [p4, p7]}
+    hybrid = {**MOCK_MACHINE, "performance_cpus": 4}
+    assert run_plan.choose_threads(hybrid, None, None)[0] == 4
+    assert run_plan.choose_threads(MOCK_MACHINE, None, None)[0] == 7  # cores − 1
+    t, basis = run_plan.choose_threads(MOCK_MACHINE, ref, None)
+    assert t == 4 and "medido" in basis, (t, basis)                  # dado medido vence
+    assert run_plan.choose_threads(MOCK_MACHINE, ref, 6)[0] == 6      # informado vence
+
+
+def test_find_reference_same_host_only():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        for name, host, total in (("a", HOST, 15408), ("b", "outra-maquina", 99999),
+                                  ("c", HOST, 0)):
+            tr = root / name / "output" / "training"
+            tr.mkdir(parents=True)
+            meta = {**REF_META, "hostname": host,
+                    "solve_stats": {**REF_META["solve_stats"], "total_lp_solves": total}}
+            (tr / "metadata.json").write_text(json.dumps(meta))
+        runs = runtime.find_reference_runs([d], HOST.upper() + ".local")  # normalizado
+        assert len(runs) == 1 and f"{os.sep}a{os.sep}" in runs[0]["source"], runs
+        assert runs[0]["sim"] is None
+        assert runtime.find_reference_runs([d], "ninguem") == []
+
+
+def test_reference_prefers_same_modeling_and_reports_range():
+    with _sandbox() as d:
+        (d / "pen").mkdir()
+        (d / "trn").mkdir()
+        (d / "alvo").mkdir()
+        _make_case(d / "pen", modeling="penalty")
+        trn = _make_case(d / "trn", modeling="truncation")
+        # truncation: LP mais barato e run MAIS RECENTE (antes vencia o desempate)
+        meta = {**REF_META, "duration_seconds": 186.6, "completed_at": "2026-12-31T00:00:00Z"}
+        (trn / "output" / "training" / "metadata.json").write_text(json.dumps(meta))
+        case = _make_case(d / "alvo", modeling="penalty", meta_host=None)
+        plan = make_plan(str(case), load_settings(), machine={**MOCK_MACHINE,
+                                                              "performance_cpus": 4})
+        assert plan["reference"]["level"] == "mesma_modelagem", plan["reference"]
+        src = plan["reference"]["points"][0]["source"]
+        assert f"{os.sep}pen{os.sep}" in src, src
+        rng = plan["time"]["range"]
+        assert rng["n_groups"] == 2 and rng["min_seconds"] < rng["max_seconds"], rng
+        assert f"{os.sep}trn{os.sep}" in rng["min_source"], rng
+
+
+# ── plano ─────────────────────────────────────────────────────────────────────
+
+def test_plan_fits_with_reference():
+    with _sandbox() as d:
+        case = _make_case(d)
+        plan = make_plan(str(case), load_settings(), time_budget_s=900, machine=MOCK_MACHINE)
+        assert plan["status"] == "ok", plan
+        assert plan["verdict"] == "cabe", plan
+        assert plan["target_threads"] == 7 and plan["threads_basis"] == "cores − 1", plan
+        src = plan["reference"]["points"][0]["source"]
+        assert src.endswith(os.path.join("training", "metadata.json")), plan
+        assert any("SEM ganho" in w or "NÃO aceleram" in w for w in plan["warnings"])
+        assert plan["machine"]["hostname"] == HOST
+        assert any("NÃO CONVERGIR" in w for w in plan["warnings"]), plan["warnings"]
+        assert plan["apply_overrides"] == {}, plan
+        assert plan["params_current"]["forward_passes"] == 4
+        assert plan["dimensions"]["num_hydros"] == 159
+
+
+def test_plan_suggests_reductions_deterministically():
+    with _sandbox() as d:
+        case = _make_case(d, fwd=20, iters=50)
+        p1 = make_plan(str(case), load_settings(), time_budget_s=300, machine=MOCK_MACHINE)
+        p2 = make_plan(str(case), load_settings(), time_budget_s=300, machine=MOCK_MACHINE)
+        assert p1["verdict"] == "cabe_com_ajustes", p1
+        assert p1["time"]["suggested"]["total_seconds"] <= 300, p1["time"]
+        assert p1["apply_overrides"] == p2["apply_overrides"], "não determinístico"
+        ov = p1["apply_overrides"]
+        assert ov.get("forward_passes", 20) < 20 or ov.get("iteration_limit", 50) < 50, ov
+        assert set(ov) <= set(run_plan.CONFIG_KNOBS), ov
+
+
+def test_plan_reduces_simulation_when_it_alone_breaks_budget():
+    with _sandbox() as d:
+        case = _make_case(d)  # simulação sozinha ~149 s a 4 threads
+        m = {**MOCK_MACHINE, "performance_cpus": 4}
+        plan = make_plan(str(case), load_settings(), time_budget_s=120, machine=m)
+        assert plan["verdict"] == "cabe_com_ajustes", plan
+        assert plan["time"]["suggested"]["total_seconds"] <= 120, plan["time"]["suggested"]
+        ov = plan["apply_overrides"]
+        assert 0 < ov["simulation_scenarios"] < 100, ov
+        assert plan["time"]["suggested"]["simulation_seconds"] <= 60, plan["time"]
+        alt = plan["alternatives"][0]
+        assert alt["apply_overrides"] == {"simulation_enabled": False}, alt
+        assert any("NÃO comparáveis" in w for w in plan["warnings"]), plan["warnings"]
+        tiny = make_plan(str(case), load_settings(), time_budget_s=20, machine=m)
+        assert tiny["apply_overrides"].get("simulation_enabled") is False, tiny
+
+
+def test_plan_nao_cabe_and_indeterminado():
+    with _sandbox() as d:
+        case = _make_case(d)
+        plan = make_plan(str(case), load_settings(), time_budget_s=1, machine=MOCK_MACHINE)
+        assert plan["verdict"] == "nao_cabe", plan
+    with _sandbox() as d:
+        case = _make_case(d, meta_host="outra-maquina")
+        plan = make_plan(str(case), load_settings(), machine=MOCK_MACHINE)
+        assert plan["verdict"] == "indeterminado", plan
+        assert plan["reference"] is None
+        assert any("calibração" in w for w in plan["warnings"]), plan["warnings"]
+
+
+def test_plan_memory_gate():
+    with _sandbox() as d:
+        case = _make_case(d, fwd=200, iters=50)
+        tiny = {**MOCK_MACHINE, "ram_bytes": 64 * 1024 ** 2}  # 64 MiB
+        plan = make_plan(str(case), load_settings(), time_budget_s=10 ** 9, machine=tiny)
+        assert plan["memory"]["level"] == "nao_cabe", plan["memory"]
+        assert plan["verdict"] == "nao_cabe", plan
+
+
+# ── tools: init / apply ───────────────────────────────────────────────────────
+
+def test_init_list_and_guard():
+    with _sandbox(COBRE_BIN=FAKE) as d:
+        t = _tools()
+        env = t["cobre_init"](list=True)
+        assert env["status"] == "ok" and env["exit_code"] == 0, env
+        assert env["templates"][0]["name"] == "1dtoy", env
+        out = t["cobre_init"](directory=str(d.parent / "fora-do-ws"), template="1dtoy")
+        assert out["status"] == "error" and out["exit_code"] == 13, out
+        target = str(d / "novo")
+        ok = t["cobre_init"](directory=target, template="1dtoy")
+        assert ok["status"] == "ok" and ok["artifacts"]["case_dir"] == target, ok
+        again = t["cobre_init"](directory=target, template="1dtoy")
+        assert again["status"] == "error", again
+        forced = t["cobre_init"](directory=target, template="1dtoy", force=True)
+        assert forced["exit_code"] == 13, "force deveria exigir COBRE_MCP_ALLOW_FORCE"
+        assert t["cobre_init"]()["exit_code"] == 22
+
+
+def test_run_apply_config_only():
+    with _sandbox() as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        r = t["cobre_run_apply"](str(case), {"forward_passes": 2, "iteration_limit": 3})
+        assert r["status"] == "ok" and r["written"] is True, r
+        cfg = json.loads((case / "config.json").read_text())
+        assert cfg["training"]["selection"]["forward_passes"] == 2
+        assert cfg["training"]["stopping_rules"][0]["limit"] == 3
+        assert (case / "config.json.bak").exists()
+        bad = t["cobre_run_apply"](str(case), {"num_openings": 2})
+        assert bad["status"] == "error" and bad["exit_code"] == 22, bad
+        neg = t["cobre_run_apply"](str(case), {"forward_passes": 0})
+        assert neg["status"] == "error", neg
+        dry = t["cobre_run_apply"](str(case), {"simulation_scenarios": 5}, dry_run=True)
+        assert dry["written"] is False, dry
+        assert json.loads((case / "config.json").read_text())["simulation"]["selection"][
+            "num_scenarios"] == 100
+
+
+# ── tools: run assíncrono ─────────────────────────────────────────────────────
+
+def test_run_async_lifecycle():
+    with _sandbox(COBRE_BIN=FAKE, FAKE_COBRE_SLEEP="0.3") as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        t0 = time.time()
+        r = t["cobre_run_start"](str(case), threads=2)
+        assert r["status"] == "ok" and r["job_id"], r
+        assert time.time() - t0 < 5, "start deveria voltar na hora"
+        assert r["cmd"][-7:] == ["--output", str(case / "output"), "--threads", "2",
+                                 "--comm-backend", "local", "--quiet"], r["cmd"]
+        busy = t["cobre_run_start"](str(case), threads=2)
+        assert busy["status"] == "error" and busy["exit_code"] == 16, busy
+        st = _wait(t, r["job_id"])
+        assert st["state"] == "succeeded" and st["exit_code"] == 0, st
+        assert st["milestones"]["training"] is True, st
+        logs = t["cobre_run_logs"](r["job_id"])
+        assert "fake run: done" in logs["stdout"], logs
+        assert t["cobre_run_status"]("../../etc")["status"] == "error"
+
+
+def test_run_async_failure_and_cancel():
+    with _sandbox(COBRE_BIN=FAKE, FAKE_COBRE_RC="3") as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        st = _wait(t, t["cobre_run_start"](str(case))["job_id"])
+        assert st["state"] == "failed" and st["exit_code"] == 3, st
+        assert "solver falhou" in st["stderr_tail"], st
+    with _sandbox(COBRE_BIN=FAKE, FAKE_COBRE_SLEEP="30") as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        job = t["cobre_run_start"](str(case))["job_id"]
+        time.sleep(0.3)
+        c = t["cobre_run_cancel"](job)
+        assert c["state"] == "cancelled", c
+        assert t["cobre_run_status"](job)["state"] == "cancelled"
+
+
+def test_run_start_refuses_nao_cabe():
+    with _sandbox(COBRE_BIN=FAKE) as d:
+        case = _make_case(d, meta_host=socket.gethostname().upper())  # casa normalizado
+        t = _tools()
+        r = t["cobre_run_start"](str(case), time_budget_s=0.01)
+        assert r["status"] == "error" and r["plan"]["verdict"] == "nao_cabe", r
+        ok = t["cobre_run_start"](str(case), time_budget_s=0.01, override=True)
+        assert ok["status"] == "ok", ok
+        _wait(t, ok["job_id"])
+        outside = t["cobre_run_start"](str(case), output=str(Path(d).parent / "fora-do-ws"))
+        assert outside["exit_code"] == 13, outside
+
+
+def test_calibration_registry_by_machine_id():
+    """Run via cobre_run_start alimenta o registro; o plano o usa mesmo se o hostname mudar."""
+    with _sandbox(COBRE_BIN=FAKE, FAKE_COBRE_META=json.dumps(REF_META)) as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        st = _wait(t, t["cobre_run_start"](str(case), override=True)["job_id"])
+        assert st["state"] == "succeeded", st
+        reg = json.loads((d / "state" / "calibration.json").read_text())
+        mid = machine.detect_machine_id()
+        assert reg["version"] == 2 and len(reg["entries"]) == 1, reg
+        assert reg["entries"][0]["machine_id"] == mid, reg
+        assert reg["entries"][0]["config_sig"], reg  # assinatura gravada no start
+        # hostname "novo" (rede/VPN mudou), mesmo machine_id -> referência encontrada
+        other = d / "outro"
+        other.mkdir()
+        case2 = _make_case(other, meta_host=None)
+        m = {**MOCK_MACHINE, "machine_id": mid, "hostname": "hostname-mudou"}
+        plan = make_plan(str(case2), load_settings(), machine=m)
+        assert plan["reference"]["points"][0]["origin"] == "cobre_run_start", plan
+        # outra máquina NÃO herda a calibração
+        plan = make_plan(str(case2), load_settings(),
+                         machine={**m, "machine_id": "ffffffffffffffff"})
+        assert plan["verdict"] == "indeterminado", plan
+
+
+def test_job_lost_when_runner_dies():
+    with _sandbox():
+        settings = load_settings()
+        d = jobs.jobs_root(settings) / "20200101-000000-abcdef"
+        d.mkdir()
+        (d / "job.json").write_text(json.dumps({"job_id": d.name, "cmd": ["x"], "pid": 1,
+                                                "started_at": time.time() - 3600}))
+        (d / "heartbeat").touch()
+        old = time.time() - 3600
+        os.utime(d / "heartbeat", (old, old))
+        assert jobs.job_state(settings, d.name)["state"] == "lost"
+        assert jobs.prune_jobs(settings, keep_days=0) == [d.name]
+
+
+def test_real_solver_gated():
+    """Execução REAL (cobre init 1dtoy + 1 iteração). Só com COBRE_MCP_REAL_SOLVER=1."""
+    if os.environ.get("COBRE_MCP_REAL_SOLVER") != "1":
+        print("    (pulado: defina COBRE_MCP_REAL_SOLVER=1 para rodar o solver real)")
+        return
+    with _sandbox() as d:
+        t = _tools()
+        case = str(d / "toy")
+        assert t["cobre_init"](directory=case, template="1dtoy")["status"] == "ok"
+        assert t["cobre_run_apply"](case, {"iteration_limit": 1,
+                                           "simulation_scenarios": 1})["status"] == "ok"
+        r = t["cobre_run_start"](case, threads=1, override=True)
+        st = _wait(t, r["job_id"], timeout=300)
+        assert st["state"] == "succeeded", (st, t["cobre_run_logs"](r["job_id"]))
+
+
+def main():
+    tests = [v for k, v in sorted(globals().items())
+             if k.startswith("test_") and callable(v)]
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            print(f"  PASS {t.__name__}")
+        except AssertionError as e:
+            failed += 1
+            print(f"  FAIL {t.__name__}: {e}")
+    print(f"\n{len(tests) - failed}/{len(tests)} passaram")
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()
