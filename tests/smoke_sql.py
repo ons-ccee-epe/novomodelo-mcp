@@ -102,9 +102,9 @@ def _has_exec_libs() -> bool:
 
 
 def _settings_for(ws: str, max_rows: int = 1000):
-    os.environ["COBRE_MCP_WORKSPACE"] = ws
-    os.environ["COBRE_MCP_MAX_QUERY_ROWS"] = str(max_rows)
-    os.environ["COBRE_MCP_TIMEOUT"] = "30"
+    os.environ["NOVOMODELO_MCP_WORKSPACE"] = ws
+    os.environ["NOVOMODELO_MCP_MAX_QUERY_ROWS"] = str(max_rows)
+    os.environ["NOVOMODELO_MCP_TIMEOUT"] = "30"
     from cobre_mcp.config import load_settings
     return load_settings()
 

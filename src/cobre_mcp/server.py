@@ -8,6 +8,7 @@ from .adapters.paths import allowed_roots
 from .adapters.reference import docs_root
 from .adapters.state import state_dir
 from .config import load_settings
+from .names import SERVER_NAME
 from .tools.cobre_meta import register_cobre_meta
 from .tools.deck import register_deck
 from .tools.post_run import register_post_run
@@ -20,7 +21,7 @@ from .tools.run import register_run
 def build_server() -> FastMCP:
     """Constrói e configura o servidor com todas as ferramentas registradas."""
     settings = load_settings()
-    mcp = FastMCP("cobre")
+    mcp = FastMCP(SERVER_NAME)
 
     register_pre_run(mcp, settings)     # pré-rodada: check / convert / validate
     register_post_run(mcp, settings)    # pós-rodada: compare_* / dashboard
@@ -31,19 +32,19 @@ def build_server() -> FastMCP:
     register_run(mcp, settings)         # init / plano / apply / run assíncrono
 
     @mcp.tool()
-    def cobre_mcp_info() -> dict:
+    def server_info() -> dict:
         """Diagnóstico do próprio MCP: binários descobertos e suas versões."""
         bridge = find_bridge(settings)
         cobre = find_cobre(settings)
         return {
-            "server": "cobre-mcp",
+            "server": f"{SERVER_NAME}-mcp",
             "bridge": {"path": bridge, "version": tool_version(bridge),
                        "available": bridge is not None},
             "cobre": {"path": cobre, "version": tool_version(cobre),
                       "available": cobre is not None},
             "schemas_dir": settings.schemas_dir,
             "docs_dir": docs_root(settings),
-            "workspace": [str(r) for r in allowed_roots(settings)] or "irrestrito (defina COBRE_MCP_WORKSPACE)",
+            "workspace": [str(r) for r in allowed_roots(settings)] or "irrestrito (defina NOVOMODELO_MCP_WORKSPACE)",
             "allow_force": settings.allow_force,
             "state_dir": str(state_dir(settings)),
             "max_jobs": settings.max_jobs,

@@ -1,10 +1,10 @@
-"""Guard de caminho: confina leitura/escrita à raiz permitida (COBRE_MCP_WORKSPACE).
+"""Guard de caminho: confina leitura/escrita à raiz permitida (NOVOMODELO_MCP_WORKSPACE).
 
 Modelo de ameaça: um agente de IA controla os caminhos passados às tools. Mesmo
 offline, o servidor lê/escreve com os privilégios do usuário. Este guard trata a
 entrada como não confiável.
 
-- Sem `COBRE_MCP_WORKSPACE`: opera irrestrito (o `cobre_mcp_info` sinaliza isso).
+- Sem `NOVOMODELO_MCP_WORKSPACE`: opera irrestrito (o `server_info` sinaliza isso).
 - Com raiz(es) configurada(s) (separadas por os.pathsep): qualquer caminho fora
   delas é RECUSADO (fail-closed). `resolve()` neutraliza symlinks e `..`.
 """

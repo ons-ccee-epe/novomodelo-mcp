@@ -21,13 +21,13 @@ FAKE = fake_bin("fake_cobre_bridge.py")
 
 
 def _settings():
-    os.environ["COBRE_BRIDGE_BIN"] = f"{sys.executable} {FAKE}".split()[0]
+    os.environ["NOVOMODELO_MCP_BRIDGE_BIN"] = f"{sys.executable} {FAKE}".split()[0]
     # Executa o fake via interpretador atual, com caminho absoluto.
     return load_settings()
 
 
 def test_ok_envelope():
-    os.environ["COBRE_BRIDGE_BIN"] = FAKE  # é executável (shebang)
+    os.environ["NOVOMODELO_MCP_BRIDGE_BIN"] = FAKE  # é executável (shebang)
     env = run_bridge(["check", "newave", "/caminho/caso"], settings=load_settings())
     assert env["status"] == "ok", env
     assert env["exit_code"] == 0, env
@@ -37,14 +37,14 @@ def test_ok_envelope():
 
 
 def test_error_envelope():
-    os.environ["COBRE_BRIDGE_BIN"] = FAKE
+    os.environ["NOVOMODELO_MCP_BRIDGE_BIN"] = FAKE
     env = run_bridge(["boom"], settings=load_settings())
     assert env["status"] == "error", env
     assert env["exit_code"] == 3, env
 
 
 def test_missing_binary():
-    os.environ["COBRE_BRIDGE_BIN"] = "/nao/existe/cobre-bridge-xyz"
+    os.environ["NOVOMODELO_MCP_BRIDGE_BIN"] = "/nao/existe/cobre-bridge-xyz"
     env = run_bridge(["check", "newave", "x"], settings=load_settings())
     assert env["status"] == "error", env
     assert env["exit_code"] in (126, 127), env

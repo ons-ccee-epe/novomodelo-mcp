@@ -2,7 +2,7 @@
 
 Garantias de "não quebrar o Cobre":
   - JSON: a edição é validada contra o JSON Schema oficial do tipo (quando
-    disponível em COBRE_SCHEMAS_DIR); grava só se passar (ou com force=True).
+    disponível em NOVOMODELO_MCP_SCHEMAS_DIR); grava só se passar (ou com force=True).
   - Parquet: a edição preserva o schema (mesmas colunas e mesmos dtypes); se a
     edição mudaria coluna/dtype, aborta sem gravar.
   - Sempre faz backup (`<arquivo>.bak`) e escrita atômica (tmp + os.replace).

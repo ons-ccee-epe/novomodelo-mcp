@@ -11,9 +11,9 @@ from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
 
 
-def _compare(kind: str, src_dir: str, cobre_dir: str, tolerance, fmt, out_dir,
+def _compare(kind: str, src_dir: str, case_dir: str, tolerance, fmt, out_dir,
              settings: Settings) -> dict:
-    argv = ["compare", kind, src_dir, cobre_dir]
+    argv = ["compare", kind, src_dir, case_dir]
     if tolerance is not None:
         argv += ["--tolerance", str(tolerance)]
     if fmt:
@@ -33,7 +33,7 @@ def register_post_run(mcp, settings: Settings) -> None:
     @mcp.tool()
     def bridge_compare_newave(
         newave_dir: str,
-        cobre_dir: str,
+        case_dir: str,
         tolerance: float | None = None,
         fmt: str = "json",
         out_dir: str | None = None,
@@ -45,17 +45,17 @@ def register_post_run(mcp, settings: Settings) -> None:
         o caminho volta em `artifacts.report_dir`. O veredito de aderência está
         no envelope (`status`/`diagnostics`), não no código de saída.
         """
-        if (err := ensure_in_workspace(newave_dir, cobre_dir, out_dir, settings=settings)):
+        if (err := ensure_in_workspace(newave_dir, case_dir, out_dir, settings=settings)):
             return err
         if (err := validate_compare_inputs(tolerance, fmt)):
             return err
-        return _compare("newave", newave_dir, cobre_dir, tolerance, fmt, out_dir,
+        return _compare("newave", newave_dir, case_dir, tolerance, fmt, out_dir,
                         settings)
 
     @mcp.tool()
     def bridge_compare_decomp(
         decomp_dir: str,
-        cobre_dir: str,
+        case_dir: str,
         tolerance: float | None = None,
         fmt: str = "json",
         out_dir: str | None = None,
@@ -65,11 +65,11 @@ def register_post_run(mcp, settings: Settings) -> None:
         Como `bridge_compare_newave`; o relatório HTML acrescenta seções de REE,
         restrições e evaporação.
         """
-        if (err := ensure_in_workspace(decomp_dir, cobre_dir, out_dir, settings=settings)):
+        if (err := ensure_in_workspace(decomp_dir, case_dir, out_dir, settings=settings)):
             return err
         if (err := validate_compare_inputs(tolerance, fmt)):
             return err
-        return _compare("decomp", decomp_dir, cobre_dir, tolerance, fmt, out_dir,
+        return _compare("decomp", decomp_dir, case_dir, tolerance, fmt, out_dir,
                         settings)
 
     @mcp.tool()

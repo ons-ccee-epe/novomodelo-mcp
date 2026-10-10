@@ -222,13 +222,13 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
     if not iters:
         plan.update(verdict="indeterminado", reference=None)
         warnings.append("sem regra iteration_limit no config.json — duração ilimitada; "
-                        "defina iteration_limit (cobre_run_apply) para estimar")
+                        "defina iteration_limit (run_apply) para estimar")
         return plan
     if ref is None:
         plan.update(verdict="indeterminado", reference=None)
         warnings.append("sem run anterior nesta máquina para medir o tempo por solve; "
                         "probe de calibração (1dtoy, 1 iteração) ainda não implementado. "
-                        "Rode um caso uma vez nesta máquina (cobre_run_start) e replaneje.")
+                        "Rode um caso uma vez nesta máquina (run_start) e replaneje.")
         return plan
 
     points = ref["points"]
@@ -318,7 +318,7 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
     if s_open != openings:
         non_config.append({"file": "stages.json", "path": "stages[*].num_openings",
                            "value": max(s_open),
-                           "note": "fora do cobre_run_apply (não é knob de config); "
+                           "note": "fora do run_apply (não é knob de config); "
                                    "editar via deck_edit_json se desejado"})
 
     calc = (f"treino {sug['training_wall_per_solve']:.4f} s/solve × {sug['training_solves']}"

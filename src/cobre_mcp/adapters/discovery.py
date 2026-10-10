@@ -5,23 +5,24 @@ import shutil
 import subprocess
 
 from ..config import Settings
+from ..names import BRIDGE_CLI, SOLVER_CLI
 
 
 def find_bridge(settings: Settings) -> str | None:
-    """Caminho do executável `cobre-bridge` (env COBRE_BRIDGE_BIN tem prioridade)."""
-    return settings.bridge_bin or shutil.which("cobre-bridge")
+    """Caminho do executável do bridge (NOVOMODELO_MCP_BRIDGE_BIN tem prioridade)."""
+    return settings.bridge_bin or shutil.which(BRIDGE_CLI)
 
 
 def find_cobre(settings: Settings) -> str | None:
-    """Caminho do executável `cobre` (env COBRE_BIN tem prioridade)."""
-    return settings.cobre_bin or shutil.which("cobre")
+    """Caminho do executável do solver (NOVOMODELO_MCP_SOLVER_BIN tem prioridade)."""
+    return settings.solver_bin or shutil.which(SOLVER_CLI)
 
 
 def tool_version(binpath: str | None) -> str | None:
     """Primeira linha da versão do binário, ou None se indisponível.
 
-    Tenta `--version` (cobre-bridge) e, se falhar, o subcomando `version`
-    (o CLI do cobre expõe a versão como subcomando, não como flag).
+    Tenta `--version` (bridge) e, se falhar, o subcomando `version`
+    (o CLI do solver expõe a versão como subcomando, não como flag).
     """
     if not binpath:
         return None

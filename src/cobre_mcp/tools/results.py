@@ -37,7 +37,11 @@ def register_results(mcp, settings: Settings) -> None:
             "iterations": t.get("iterations"),
             "duration_seconds": t.get("duration_seconds"),
             "problem_dimensions": t.get("problem_dimensions"),
-            "cobre_version": t.get("cobre_version"),
+            # Contrato ≥ 0.18: `software` + `software_version`. Runs antigos (≤ 0.17,
+            # ex.: rodadas CASO_GRANDE da PEE) gravavam `cobre_version`: é DADO já escrito
+            # em disco, não nome do MCP, por isso o fallback fica.
+            "software": t.get("software"),
+            "software_version": t.get("software_version") or t.get("cobre_version"),
             "simulation_ran": env["simulation_ran"],
             "simulation_cost": s.get("cost"),
         }

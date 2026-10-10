@@ -63,11 +63,11 @@ These are non-negotiable. Fix them before any commit.
   failures (missing binary, timeout, non-JSON output) become envelopes.
 - **Path guard is fail-closed.** Every tool that takes a path calls
   `ensure_in_workspace(...)` before touching the filesystem. With
-  `COBRE_MCP_WORKSPACE` set, any path outside the allowed roots is refused;
+  `NOVOMODELO_MCP_WORKSPACE` set, any path outside the allowed roots is refused;
   `resolve()` neutralises symlinks and `..`. Never bypass the guard, and never
   weaken it to fail-open.
 - **Force writes are gated.** A schema-violating write (`force=True`) requires
-  `COBRE_MCP_ALLOW_FORCE=1`. Do not remove that gate.
+  `NOVOMODELO_MCP_ALLOW_FORCE=1`. Do not remove that gate.
 - **NEWAVE/DECOMP tool parity.** A tool added for one conversion track ships for
   the other in the same change, mirroring the existing `*_newave` / `*_decomp`
   pairs — or the asymmetry is recorded.

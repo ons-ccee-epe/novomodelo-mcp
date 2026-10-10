@@ -1,7 +1,7 @@
 """Ferramentas de scaffold e execução: `cobre init`, plano, ajuste de config e run assíncrono.
 
-Fachada: `cobre_init` e `cobre_run_start` envelopam a CLI do cobre; o plano só
-LÊ o caso e estima; `cobre_run_apply` só edita knobs de config.json via
+Fachada: `case_init` e `run_start` envelopam a CLI do cobre; o plano só
+LÊ o caso e estima; `run_apply` só edita knobs de config.json via
 deck_io.edit_json (schema + backup + atômico). Zero regra de negócio.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ def _calibration_file(settings: Settings) -> Path:
 
 
 def harvest_calibrations(settings: Settings) -> int:
-    """Registra no registro de calibração os runs concluídos via cobre_run_start.
+    """Registra no registro de calibração os runs concluídos via run_start.
 
     Idempotente: cada job é colhido uma vez (`calibration_recorded` no job.json).
     A assinatura de modelagem usada é a gravada no START (o config pode ter mudado).
@@ -112,13 +112,13 @@ def register_run(mcp, settings: Settings) -> None:
     """Registra as tools de scaffold/execução no servidor `mcp`."""
 
     @mcp.tool()
-    def cobre_init(directory: str | None = None, template: str | None = None,
+    def case_init(directory: str | None = None, template: str | None = None,
                    list: bool = False, force: bool = False) -> dict:  # noqa: A002
         """Cria um caso a partir de um template embutido (`cobre init`).
 
         `list=True` lista os templates disponíveis (ex.: `1dtoy`) e sai.
         Senão, `directory` + `template` escrevem o caso. `force=True`
-        (sobrescrever arquivos existentes) só é aceito com COBRE_MCP_ALLOW_FORCE=1.
+        (sobrescrever arquivos existentes) só é aceito com NOVOMODELO_MCP_ALLOW_FORCE=1.
         """
         if list:
             env = run_cobre(["init", "--list"], settings=settings, parse_json=False)
@@ -137,7 +137,7 @@ def register_run(mcp, settings: Settings) -> None:
             return err
         if force and not settings.allow_force:
             return error(13, "force=True desabilitado",
-                         "defina COBRE_MCP_ALLOW_FORCE=1 para sobrescrever arquivos")
+                         "defina NOVOMODELO_MCP_ALLOW_FORCE=1 para sobrescrever arquivos")
         argv = ["init", "--template", template]
         if force:
             argv.append("--force")
@@ -148,20 +148,20 @@ def register_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool()
-    def cobre_run_plan(case_dir: str, time_budget_s: float = 900,
+    def run_plan(case_dir: str, time_budget_s: float = 900,
                        threads: int | None = None) -> dict:
         """Planeja um run LOCAL do caso: estima tempo e memória. NÃO executa, NÃO grava.
 
         Lê config.json (forward_passes, iteration_limit, simulação), stages.json
         (estágios, num_openings) e system/*.json (dimensões). O tempo por solve
         (treino e simulação, separados) é MEDIDO em runs anteriores NESTA máquina:
-        registro do MCP (runs via cobre_run_start, por machine_id) e, depois,
+        registro do MCP (runs via run_start, por machine_id) e, depois,
         metadata.json do workspace com o mesmo hostname. Prefere runs com a mesma
         modelagem; `time.range` mostra a dispersão entre candidatos. Threads:
         núcleos de performance em CPU híbrida (senão cores−1), ou o nº medido
         mais rápido; acima do maior nº medido NÃO assume ganho. Se não couber em
         `time_budget_s`, sugere reduzir forward_passes/iterações/aberturas
-        (`apply_overrides` serve direto no cobre_run_apply).
+        (`apply_overrides` serve direto no run_apply).
         Veredito: cabe | cabe_com_ajustes | nao_cabe | indeterminado.
         Run local pequeno PODE NÃO CONVERGIR — serve p/ mecânica/comparação.
         """
@@ -173,12 +173,12 @@ def register_run(mcp, settings: Settings) -> None:
             return as_error(exc)
 
     @mcp.tool()
-    def cobre_run_apply(case_dir: str, overrides: dict, dry_run: bool = False) -> dict:
+    def run_apply(case_dir: str, overrides: dict, dry_run: bool = False) -> dict:
         """Aplica knobs de execução no config.json do caso (só config; nada mais).
 
         `overrides`: {"forward_passes": 2, "iteration_limit": 3,
         "simulation_scenarios": 20, "simulation_enabled": true} — tipicamente o
-        `apply_overrides` devolvido pelo cobre_run_plan. Via deck_io.edit_json:
+        `apply_overrides` devolvido pelo run_plan. Via deck_io.edit_json:
         valida contra o schema, backup `.bak` + escrita atômica. `dry_run` não grava.
         """
         if (err := ensure_in_workspace(case_dir, settings=settings)):
@@ -193,12 +193,12 @@ def register_run(mcp, settings: Settings) -> None:
         changes = _knob_changes(config, overrides)
         if isinstance(changes, dict):
             return changes
-        log(settings, "cobre_run_apply", path=path, changes=changes)
+        log(settings, "run_apply", path=path, changes=changes)
         return deck_io.edit_json(path, changes, schemas_dir=schemas_root(settings),
                                  dry_run=dry_run)
 
     @mcp.tool()
-    def cobre_run_start(case_dir: str, threads: int | None = None,
+    def run_start(case_dir: str, threads: int | None = None,
                         output: str | None = None, time_budget_s: float = 900,
                         override: bool = False) -> dict:
         """Dispara `cobre run` em BACKGROUND e devolve `job_id` na hora.
@@ -206,16 +206,16 @@ def register_run(mcp, settings: Settings) -> None:
         Comando: `cobre run <case> --output <output> --threads N --comm-backend
         local --quiet`. `threads` default = o do plano (núcleos de performance em
         CPU híbrida, ou o nº medido mais rápido); `output` default =
-        `<case_dir>/output`. Antes de lançar roda o cobre_run_plan: se o veredito
+        `<case_dir>/output`. Antes de lançar roda o run_plan: se o veredito
         for `nao_cabe`, RECUSA (salvo `override=True`). Acompanhe com
-        cobre_run_status / cobre_run_logs; interrompa com cobre_run_cancel.
+        run_status / run_logs; interrompa com run_cancel.
         """
         output = output or str(Path(case_dir) / "output")
         if (err := ensure_in_workspace(case_dir, output, settings=settings)):
             return err
         binpath = find_cobre(settings)
         if binpath is None:
-            return error(127, "cobre não encontrado no PATH (defina COBRE_BIN).")
+            return error(127, "cobre não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN).")
         if threads is not None and threads < 1:
             return error(22, "threads deve ser >= 1")
         machine = detect_machine()
@@ -229,7 +229,7 @@ def register_run(mcp, settings: Settings) -> None:
         if plan["verdict"] == "nao_cabe" and not override:
             return {"status": "error", "exit_code": 28, "plan": plan,
                     "diagnostics": ["plano diz 'nao_cabe' — run recusado",
-                                    "ajuste com cobre_run_apply ou passe override=True"]}
+                                    "ajuste com run_apply ou passe override=True"]}
         n = threads or plan.get("target_threads") or 1
         cmd = [binpath, "--color", "never", "run", _cli_path(case_dir), "--output", _cli_path(output),
                "--threads", str(n), "--comm-backend", "local", "--quiet"]
@@ -242,15 +242,15 @@ def register_run(mcp, settings: Settings) -> None:
                 "estimated_seconds": ((plan.get("time") or {}).get("current") or {})
                 .get("total_seconds")})
         except RuntimeError as busy:
-            return error(16, f"limite de runs simultâneos atingido (COBRE_MCP_MAX_JOBS="
+            return error(16, f"limite de runs simultâneos atingido (NOVOMODELO_MCP_MAX_JOBS="
                          f"{settings.max_jobs})", f"em andamento: {busy}")
         except (OSError, TimeoutError) as exc:
             return as_error(exc)
-        log(settings, "cobre_run_start", job_id=meta["job_id"], cmd=cmd)
+        log(settings, "run_start", job_id=meta["job_id"], cmd=cmd)
         return {"status": "ok", **meta, "warnings": plan.get("warnings", [])}
 
     @mcp.tool()
-    def cobre_run_status(job_id: str) -> dict:
+    def run_status(job_id: str) -> dict:
         """Estado de um run: running | succeeded | failed | cancelled | lost.
 
         Inclui tempo decorrido, estimativa do plano e marcos de saída
@@ -270,7 +270,7 @@ def register_run(mcp, settings: Settings) -> None:
         return {"status": "ok", **st}
 
     @mcp.tool()
-    def cobre_run_logs(job_id: str, lines: int = 100) -> dict:
+    def run_logs(job_id: str, lines: int = 100) -> dict:
         """Últimas `lines` linhas de stdout/stderr do run (com teto de caracteres)."""
         logs = jobs.job_logs(settings, job_id, lines=max(1, lines),
                              max_chars=settings.max_summary_chars)
@@ -279,7 +279,7 @@ def register_run(mcp, settings: Settings) -> None:
         return {"status": "ok", "job_id": job_id, **logs}
 
     @mcp.tool()
-    def cobre_run_cancel(job_id: str) -> dict:
+    def run_cancel(job_id: str) -> dict:
         """Interrompe um run em andamento (encerra a árvore de processos; força se não sair).
 
         Funciona igual em Windows, macOS e Linux. Pode levar alguns segundos.

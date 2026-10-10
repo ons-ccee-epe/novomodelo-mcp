@@ -1,7 +1,7 @@
 """Testes do fallback EMBUTIDO de docs/schemas (funciona offline, sem clone/env var).
 
 Requisito de produto: as tools ``docs_*`` e ``schema_*`` devem funcionar assim
-que o MCP e conectado, sem ``COBRE_DOCS_DIR``/``COBRE_SCHEMAS_DIR``, sem clone
+que o MCP e conectado, sem ``NOVOMODELO_MCP_DOCS_DIR``/``NOVOMODELO_MCP_SCHEMAS_DIR``, sem clone
 ``cobre-docs`` e sem o binario ``cobre``. Estes testes forcam esse cenario e
 verificam que o conteudo vem do snapshot embutido em ``cobre_mcp/_bundled``.
 """
@@ -14,9 +14,9 @@ from cobre_mcp.config import load_settings
 @pytest.fixture
 def offline_settings(monkeypatch):
     """Settings sem env vars e SEM auto-descoberta (forca o fallback embutido)."""
-    monkeypatch.delenv("COBRE_DOCS_DIR", raising=False)
-    monkeypatch.delenv("COBRE_SCHEMAS_DIR", raising=False)
-    monkeypatch.delenv("COBRE_BIN", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_DOCS_DIR", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_SCHEMAS_DIR", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_SOLVER_BIN", raising=False)
     # Neutraliza a auto-descoberta de clone cobre-docs e o cache, para o teste
     # exercitar deterministicamente o fallback embutido.
     monkeypatch.setattr(R, "_discover_docs_dir", lambda: None)

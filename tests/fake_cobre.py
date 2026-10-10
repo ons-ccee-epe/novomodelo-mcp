@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Um `cobre` FALSO para testes: imita o contrato da CLI real.
 
-Alcançado via `COBRE_BIN` (ver `find_cobre`; no Windows via o lançador de
+Alcançado via `NOVOMODELO_MCP_SOLVER_BIN` (ver `find_cobre`; no Windows via o lançador de
 `_fakes.fake_bin`). O adaptador antepõe `--color never`; o primeiro argumento
 após o subcomando pode sinalizar um cenário de falha de transporte, para exercer
 os códigos estáveis sem binário real:

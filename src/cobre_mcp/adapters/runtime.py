@@ -24,7 +24,7 @@ knobs que o próprio plano varia (forward_passes, parada, simulação, sementes)
 
 Fontes dos pontos:
   1. registro de calibração do MCP (`calibration.json` no state dir), alimentado
-     por runs do cobre_run_start e indexado por `machine_id` (independe de hostname);
+     por runs do run_start e indexado por `machine_id` (independe de hostname);
   2. `training/metadata.json` no workspace com o mesmo hostname NORMALIZADO.
 Sem pontos: `calibration_probe` é o gancho (1dtoy, 1 iteração) — não implementado.
 """
@@ -195,7 +195,7 @@ def record_calibration(path: Path, machine_id: str, point: dict[str, Any]) -> No
     with file_lock(path.with_name(path.name + ".lock")):
         entries = [e for e in load_calibrations(path)
                    if e.get("source") != point.get("source")]
-        entries.append({**point, "machine_id": machine_id, "origin": "cobre_run_start"})
+        entries.append({**point, "machine_id": machine_id, "origin": "run_start"})
         atomic_write_text(path, json.dumps(
             {"version": REGISTRY_VERSION, "entries": entries[-MAX_CALIBRATIONS:]},
             indent=1, ensure_ascii=False))

@@ -1,7 +1,7 @@
 """Teste de propriedade da Schema_Export_Tool: destino vira artefato, não conteúdo.
 
 Property 2 do design `schema-export-version-tools`. Toda a suíte é offline: a CLI
-`cobre` falsa é alcançada via `COBRE_BIN` (`monkeypatch.setenv`), espelhando o
+`cobre` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN` (`monkeypatch.setenv`), espelhando o
 padrão de `test_cobre_meta.py`. Nenhum teste exige o binário real nem faz
 requisição de rede.
 
@@ -29,7 +29,7 @@ FAKE = Path(__file__).resolve().parent / "fake_cobre.py"
 _SCHEMA_CONTENT_KEYS = frozenset({"schemas", "schema", "content", "contents", "files"})
 
 # Segmento de caminho seguro: sem separadores, sem `..`, sem vazio; mantém o
-# destino confinado sob a raiz temporária gerada em COBRE_MCP_WORKSPACE.
+# destino confinado sob a raiz temporária gerada em NOVOMODELO_MCP_WORKSPACE.
 _segment = st.text(
     alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="_-"),
     min_size=1,
@@ -54,7 +54,7 @@ class _CaptureMCP:
 def _schema_export_tool(settings):
     mcp = _CaptureMCP()
     register_cobre_meta(mcp, settings)
-    return mcp.tools["cobre_schema_export"]
+    return mcp.tools["schema_export"]
 
 
 @pytest.fixture
@@ -86,8 +86,8 @@ def fake_cobre_bin(tmp_path):
 @given(segments=st.lists(_segment, min_size=1, max_size=4))
 def test_destination_is_artifact_not_content(monkeypatch, tmp_path, fake_cobre_bin, segments):
     root = tmp_path.resolve()
-    monkeypatch.setenv("COBRE_MCP_WORKSPACE", str(root))
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_WORKSPACE", str(root))
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
 
     output_dir = str(root.joinpath(*segments))
     env = _schema_export_tool(load_settings())(output_dir=output_dir)

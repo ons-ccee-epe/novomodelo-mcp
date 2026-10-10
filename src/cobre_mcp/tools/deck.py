@@ -2,8 +2,8 @@
 
 Segurança: toda tool confina o caminho à raiz permitida (ver adapters/paths).
 Edições fazem backup + escrita atômica; JSON valida contra o schema oficial;
-Parquet preserva colunas/dtypes. `ensure_cobre_valid` revalida (estruturado) e
-reverte se reprovar. `force` só é aceito com COBRE_MCP_ALLOW_FORCE.
+Parquet preserva colunas/dtypes. `ensure_valid` revalida (estruturado) e
+reverte se reprovar. `force` só é aceito com NOVOMODELO_MCP_ALLOW_FORCE.
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def register_deck(mcp, settings: Settings) -> None:
     def deck_read_json(path: str) -> dict:
         """Lê um arquivo JSON do deck (com teto de tamanho).
 
-        Recusa arquivos acima de COBRE_MCP_MAX_READ_BYTES — para arquivos grandes,
+        Recusa arquivos acima de NOVOMODELO_MCP_MAX_READ_BYTES — para arquivos grandes,
         edite por caminho com deck_edit_json em vez de ler tudo.
         """
         if (err := _guard(path)):
@@ -54,7 +54,7 @@ def register_deck(mcp, settings: Settings) -> None:
         size = os.path.getsize(path)
         if size > settings.max_read_bytes:
             return error(7, f"arquivo grande demais para leitura direta ({size} bytes)",
-                         f"teto: {settings.max_read_bytes} (COBRE_MCP_MAX_READ_BYTES)")
+                         f"teto: {settings.max_read_bytes} (NOVOMODELO_MCP_MAX_READ_BYTES)")
         try:
             content = deck_io.read_json(path)
         except Exception as exc:  # noqa: BLE001 - repassa como erro, nao derruba
@@ -99,8 +99,8 @@ def register_deck(mcp, settings: Settings) -> None:
 
         So leitura: apenas SELECT/WITH; COPY/ATTACH/INSTALL/escrita sao recusados.
         Todo caminho referenciado precisa estar dentro do workspace
-        (COBRE_MCP_WORKSPACE); acesso remoto e a caminhos de fora e negado. A saida
-        tem teto de linhas (COBRE_MCP_MAX_QUERY_ROWS) e `truncated: true` avisa que
+        (NOVOMODELO_MCP_WORKSPACE); acesso remoto e a caminhos de fora e negado. A saida
+        tem teto de linhas (NOVOMODELO_MCP_MAX_QUERY_ROWS) e `truncated: true` avisa que
         ha mais — refine com agregacao/LIMIT.
 
         Ex.: SELECT hydro_id, min(value_m3s) AS min_v, max(value_m3s) AS max_v,
@@ -114,32 +114,32 @@ def register_deck(mcp, settings: Settings) -> None:
 
     @mcp.tool()
     def deck_edit_json(path: str, changes: list[dict], dry_run: bool = False,
-                       ensure_cobre_valid: bool = False, force: bool = False) -> dict:
+                       ensure_valid: bool = False, force: bool = False) -> dict:
         """Edita valores de um JSON do deck por caminho, DENTRO do contrato.
 
         `changes`: lista de {"path": "training.stopping_rules[0].limit", "value": 80}.
-        Valida contra o JSON Schema oficial (se COBRE_SCHEMAS_DIR estiver definido);
+        Valida contra o JSON Schema oficial (se NOVOMODELO_MCP_SCHEMAS_DIR estiver definido);
         backup em `<arquivo>.bak` + escrita atômica. `dry_run` não grava.
-        `ensure_cobre_valid=True` revalida o caso (estruturado) e REVERTE se reprovar.
-        `force=True` só é aceito com COBRE_MCP_ALLOW_FORCE=1.
+        `ensure_valid=True` revalida o caso (estruturado) e REVERTE se reprovar.
+        `force=True` só é aceito com NOVOMODELO_MCP_ALLOW_FORCE=1.
         """
         if (err := _guard(path)):
             return err
         if force and not settings.allow_force:
             return error(13, "force=True desabilitado",
-                         "defina COBRE_MCP_ALLOW_FORCE=1 para gravar violando o schema")
+                         "defina NOVOMODELO_MCP_ALLOW_FORCE=1 para gravar violando o schema")
         result = deck_io.edit_json(path, changes, schemas_dir=settings.schemas_dir,
                                    dry_run=dry_run, force=force)
         if result.get("status") != "ok" or not result.get("written"):
             return result
-        if ensure_cobre_valid:
+        if ensure_valid:
             case = deck_io.find_case_dir(path)
             if case is None:
-                result["cobre_validation"] = "pulada (raiz do caso nao encontrada)"
+                result["case_validation"] = "pulada (raiz do caso nao encontrada)"
                 return result
             v = validate_deck_binding(case, settings=settings)
             if v.get("exit_code") == 127:
-                result["cobre_validation"] = "pulada (cobre-python ausente)"
+                result["case_validation"] = "pulada (cobre-python ausente)"
                 return result
             if v.get("status") != "ok":
                 deck_io.restore_backup(path)
@@ -147,7 +147,7 @@ def register_deck(mcp, settings: Settings) -> None:
                         "changes": result.get("changes"),
                         "validation": cap_envelope(v, settings),
                         "diagnostics": ["validacao reprovou — edicao revertida"]}
-            result["cobre_validation"] = "ok"
+            result["case_validation"] = "ok"
         return result
 
     @mcp.tool()

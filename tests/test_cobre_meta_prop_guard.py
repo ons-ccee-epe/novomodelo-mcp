@@ -1,6 +1,6 @@
 """Teste de propriedade da guarda de workspace fail-closed na Schema_Export_Tool.
 
-Offline: a CLI `cobre` falsa é alcançada via `COBRE_BIN` (`monkeypatch.setenv`),
+Offline: a CLI `cobre` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN` (`monkeypatch.setenv`),
 espelhando `test_cobre_meta.py` e `test_adapters.py`. Nenhum teste exige o
 binário real nem faz requisição de rede; todo acesso ao FS fica em diretórios
 temporários.
@@ -53,7 +53,7 @@ class _CaptureMCP:
 def _schema_export_tool(settings):
     mcp = _CaptureMCP()
     register_cobre_meta(mcp, settings)
-    return mcp.tools["cobre_schema_export"]
+    return mcp.tools["schema_export"]
 
 
 def _write_launcher(tmp_path: Path) -> str:
@@ -70,7 +70,7 @@ def _write_launcher(tmp_path: Path) -> str:
 
 @pytest.fixture
 def fake_cobre_bin(tmp_path):
-    """Lançador do `cobre` falso a apontar em `COBRE_BIN` (ver `test_cobre_meta.py`)."""
+    """Lançador do `cobre` falso a apontar em `NOVOMODELO_MCP_SOLVER_BIN` (ver `test_cobre_meta.py`)."""
     return _write_launcher(tmp_path)
 
 
@@ -90,7 +90,7 @@ def test_workspace_guard_is_fail_closed(monkeypatch, tmp_path_factory, inside, o
     base = tmp_path_factory.mktemp("guard")
     root = base / "workspace"
     root.mkdir()
-    monkeypatch.setenv("COBRE_MCP_WORKSPACE", str(root))
+    monkeypatch.setenv("NOVOMODELO_MCP_WORKSPACE", str(root))
 
     reached: list[list[str]] = []
 
@@ -120,14 +120,14 @@ def test_workspace_guard_is_fail_closed(monkeypatch, tmp_path_factory, inside, o
 
 
 def test_guard_accept_reaches_fake_cli(monkeypatch, tmp_path, fake_cobre_bin):
-    """Caminho dentro do workspace alcança a CLI `cobre` falsa real via `COBRE_BIN`.
+    """Caminho dentro do workspace alcança a CLI `cobre` falsa real via `NOVOMODELO_MCP_SOLVER_BIN`.
 
     Validates: Requirements 1.6, 5.2
     """
     root = tmp_path / "workspace"
     root.mkdir()
-    monkeypatch.setenv("COBRE_MCP_WORKSPACE", str(root))
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_WORKSPACE", str(root))
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
 
     inside_dir = str(root / "schemas")
     env = _schema_export_tool(load_settings())(output_dir=inside_dir)
@@ -145,8 +145,8 @@ def test_guard_refuses_outside_before_reaching_fake_cli(monkeypatch, tmp_path, f
     """
     root = tmp_path / "workspace"
     root.mkdir()
-    monkeypatch.setenv("COBRE_MCP_WORKSPACE", str(root))
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_WORKSPACE", str(root))
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
 
     outside_dir = str(tmp_path / "outside" / "schemas")
     assert not Path(outside_dir).exists()

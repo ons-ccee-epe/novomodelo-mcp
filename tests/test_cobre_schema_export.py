@@ -1,12 +1,12 @@
 """Testes por exemplo da Schema_Export_Tool (pytest). Usam o `cobre` falso.
 
-Toda a suíte é offline: a CLI `cobre` falsa é alcançada via `COBRE_BIN`
+Toda a suíte é offline: a CLI `cobre` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN`
 (`monkeypatch.setenv`), espelhando o padrão de `test_cobre_meta.py`. Nenhum
 teste exige o binário real nem faz requisição de rede.
 
 O `cobre` falso (`fake_cobre.py`) é um script Python; `run_cobre` o executa
-diretamente como `COBRE_BIN`. Para rodá-lo de forma portátil, cada teste aponta
-`COBRE_BIN` para um lançador gerado em diretório temporário que invoca o script
+diretamente como `NOVOMODELO_MCP_SOLVER_BIN`. Para rodá-lo de forma portátil, cada teste aponta
+`NOVOMODELO_MCP_SOLVER_BIN` para um lançador gerado em diretório temporário que invoca o script
 com o interpretador corrente.
 """
 
@@ -45,14 +45,14 @@ class _CaptureMCP:
 def _schema_export_tool(settings):
     mcp = _CaptureMCP()
     register_cobre_meta(mcp, settings)
-    return mcp.tools["cobre_schema_export"]
+    return mcp.tools["schema_export"]
 
 
 @pytest.fixture
 def fake_cobre_bin(tmp_path):
     """Lançador executável do `cobre` falso, confinado a um diretório temporário.
 
-    Devolve o caminho a apontar em `COBRE_BIN`. Portátil: em Windows gera um
+    Devolve o caminho a apontar em `NOVOMODELO_MCP_SOLVER_BIN`. Portátil: em Windows gera um
     `.cmd`; em POSIX, um shell script. Ambos repassam o argv ao script falso via
     o interpretador corrente.
     """
@@ -67,25 +67,25 @@ def fake_cobre_bin(tmp_path):
 
 
 def test_happy_path_status_ok(monkeypatch, fake_cobre_bin):
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
-    # smoke_* siblings leak COBRE_MCP_WORKSPACE; drop it so the guard lets us reach the fake CLI.
-    monkeypatch.delenv("COBRE_MCP_WORKSPACE", raising=False)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
+    # smoke_* siblings leak NOVOMODELO_MCP_WORKSPACE; drop it so the guard lets us reach the fake CLI.
+    monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
     env = _schema_export_tool(load_settings())()
     assert env["status"] == "ok"
     assert env["exit_code"] == 0
 
 
 def test_single_subcommand_is_schema_export(monkeypatch, fake_cobre_bin):
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
-    monkeypatch.delenv("COBRE_MCP_WORKSPACE", raising=False)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
+    monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
     env = _schema_export_tool(load_settings())()
     non_flag = [a for a in env["argv"] if not a.startswith("--")]
     assert non_flag == ["schema", "export"]
 
 
 def test_output_dir_appends_flag(monkeypatch, fake_cobre_bin, tmp_path):
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
-    monkeypatch.delenv("COBRE_MCP_WORKSPACE", raising=False)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
+    monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
     out_dir = str(tmp_path / "schemas")
     env = _schema_export_tool(load_settings())(output_dir=out_dir)
     assert env["argv"][:2] == ["schema", "export"]
@@ -95,7 +95,7 @@ def test_output_dir_appends_flag(monkeypatch, fake_cobre_bin, tmp_path):
 
 
 def test_missing_binary_returns_127(monkeypatch):
-    monkeypatch.delenv("COBRE_BIN", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_SOLVER_BIN", raising=False)
     monkeypatch.setattr("cobre_mcp.adapters.cobre.find_cobre", lambda settings: None)
     env = _schema_export_tool(load_settings())()
     assert env["status"] == "error"
@@ -103,7 +103,7 @@ def test_missing_binary_returns_127(monkeypatch):
 
 
 def test_timeout_returns_minus_one(monkeypatch, fake_cobre_bin):
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
     monkeypatch.setattr(cobre_meta, "run_cobre", _run_cobre_with_mode("timeout", timeout=2.0))
     env = _schema_export_tool(load_settings())()
     assert env["status"] == "error"
@@ -111,7 +111,7 @@ def test_timeout_returns_minus_one(monkeypatch, fake_cobre_bin):
 
 
 def test_nonjson_output_carries_raw_text(monkeypatch, fake_cobre_bin):
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
     monkeypatch.setattr(cobre_meta, "run_cobre", _run_cobre_with_mode("nonjson"))
     env = _schema_export_tool(load_settings())()
     assert env["status"] == "error"

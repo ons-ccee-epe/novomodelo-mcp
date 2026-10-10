@@ -14,7 +14,7 @@ FAKE = fake_bin("fake_cobre_bridge.py")
 
 
 def test_ok_envelope(monkeypatch):
-    monkeypatch.setenv("COBRE_BRIDGE_BIN", FAKE)
+    monkeypatch.setenv("NOVOMODELO_MCP_BRIDGE_BIN", FAKE)
     env = run_bridge(["check", "newave", "/x"], settings=load_settings())
     assert env["status"] == "ok"
     assert env["exit_code"] == 0
@@ -22,14 +22,14 @@ def test_ok_envelope(monkeypatch):
 
 
 def test_error_exit_code(monkeypatch):
-    monkeypatch.setenv("COBRE_BRIDGE_BIN", FAKE)
+    monkeypatch.setenv("NOVOMODELO_MCP_BRIDGE_BIN", FAKE)
     env = run_bridge(["boom"], settings=load_settings())
     assert env["status"] == "error"
     assert env["exit_code"] == 3
 
 
 def test_missing_binary(monkeypatch):
-    monkeypatch.setenv("COBRE_BRIDGE_BIN", "/nope/cobre-bridge")
+    monkeypatch.setenv("NOVOMODELO_MCP_BRIDGE_BIN", "/nope/cobre-bridge")
     env = run_bridge(["check", "newave", "x"], settings=load_settings())
     assert env["status"] == "error"
 

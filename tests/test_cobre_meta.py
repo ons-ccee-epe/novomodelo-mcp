@@ -1,12 +1,12 @@
 """Testes por exemplo da Version_Tool (pytest). Usam o `cobre` falso.
 
-Toda a suíte é offline: a CLI `cobre` falsa é alcançada via `COBRE_BIN`
+Toda a suíte é offline: a CLI `cobre` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN`
 (`monkeypatch.setenv`), espelhando o padrão de `test_adapters.py`. Nenhum teste
 exige o binário real nem faz requisição de rede.
 
 O `cobre` falso (`fake_cobre.py`) é um script Python; `version_cli` o executa
-diretamente como `COBRE_BIN`. Em POSIX o shebang basta; para rodar o mesmo
-script de forma portátil, cada teste aponta `COBRE_BIN` para um lançador gerado
+diretamente como `NOVOMODELO_MCP_SOLVER_BIN`. Em POSIX o shebang basta; para rodar o mesmo
+script de forma portátil, cada teste aponta `NOVOMODELO_MCP_SOLVER_BIN` para um lançador gerado
 em diretório temporário que invoca o script com o interpretador corrente.
 """
 
@@ -45,14 +45,14 @@ class _CaptureMCP:
 def _version_tool(settings):
     mcp = _CaptureMCP()
     register_cobre_meta(mcp, settings)
-    return mcp.tools["cobre_version"]
+    return mcp.tools["solver_version"]
 
 
 @pytest.fixture
 def fake_cobre_bin(tmp_path):
     """Lançador executável do `cobre` falso, confinado a um diretório temporário.
 
-    Devolve o caminho a apontar em `COBRE_BIN`. Portátil: em Windows gera um
+    Devolve o caminho a apontar em `NOVOMODELO_MCP_SOLVER_BIN`. Portátil: em Windows gera um
     `.cmd`; em POSIX, um shell script. Ambos repassam o argv ao script falso via
     o interpretador corrente.
     """
@@ -67,7 +67,7 @@ def fake_cobre_bin(tmp_path):
 
 
 def test_happy_path_parses_version_fields(monkeypatch, fake_cobre_bin):
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
     env = _version_tool(load_settings())()
     assert env["status"] == "ok"
     assert env["exit_code"] == 0
@@ -84,7 +84,7 @@ def test_version_runs_without_json_flag(monkeypatch, fake_cobre_bin):
     `version` puro. Se `--json` (ou qualquer flag extra) fosse enviado, o ramo de
     texto não dispararia e `version`/`raw` não bateriam.
     """
-    monkeypatch.setenv("COBRE_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
     env = _version_tool(load_settings())()
     assert env["status"] == "ok"
     assert env["version"] == "v9.9.9"
@@ -92,7 +92,7 @@ def test_version_runs_without_json_flag(monkeypatch, fake_cobre_bin):
 
 
 def test_missing_binary_returns_127(monkeypatch):
-    monkeypatch.delenv("COBRE_BIN", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_SOLVER_BIN", raising=False)
     monkeypatch.setattr("cobre_mcp.adapters.cobre.find_cobre", lambda settings: None)
     env = _version_tool(load_settings())()
     assert env["status"] == "error"
@@ -143,3 +143,26 @@ def _version_cli_envelope(exit_code, *, detail=""):
         return _error(exit_code, "cobre version encerrou com erro", detail)
 
     return fake
+
+
+def test_version_parse_does_not_depend_on_program_name(monkeypatch):
+    """A 1ª linha é lida por posição: o parse vale para qualquer nome de programa.
+
+    Regressão do rename: antes, `version` só era preenchido se a 1ª palavra fosse
+    exatamente o nome antigo; com o binário renomeado o campo sumia em silêncio.
+    """
+    import subprocess
+
+    from cobre_mcp.adapters import cobre as adapter
+
+    text = "qualquernome   v0.18.0\nsolver: HiGHS 1.13.1\narch:   aarch64-macos\n"
+    monkeypatch.setattr(adapter, "find_cobre", lambda settings: "/fake/bin")
+    monkeypatch.setattr(
+        adapter.subprocess, "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 0, stdout=text, stderr=""),
+    )
+    env = adapter.version_cli(settings=load_settings())
+    assert env["status"] == "ok"
+    assert env["program"] == "qualquernome"
+    assert env["version"] == "v0.18.0"
+    assert env["solver"] == "HiGHS 1.13.1"

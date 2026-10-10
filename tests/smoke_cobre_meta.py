@@ -58,17 +58,17 @@ def _write_fake_cobre(dir_path: Path, body: str) -> str:
 
 
 def test_missing_binary_is_127():
-    """find_cobre -> None (sem COBRE_BIN e PATH vazio) vira envelope 127, sem exceção."""
-    old_bin = os.environ.pop("COBRE_BIN", None)
+    """find_cobre -> None (sem NOVOMODELO_MCP_SOLVER_BIN e PATH vazio) vira envelope 127, sem exceção."""
+    old_bin = os.environ.pop("NOVOMODELO_MCP_SOLVER_BIN", None)
     old_path = os.environ.get("PATH")
     os.environ["PATH"] = ""
     try:
-        env = _tools()["cobre_version"]()
+        env = _tools()["solver_version"]()
         assert env["status"] == "error", env
         assert env["exit_code"] == 127, env
     finally:
         if old_bin is not None:
-            os.environ["COBRE_BIN"] = old_bin
+            os.environ["NOVOMODELO_MCP_SOLVER_BIN"] = old_bin
         if old_path is not None:
             os.environ["PATH"] = old_path
         else:
@@ -83,35 +83,35 @@ def test_nonjson_output_lands_in_diagnostics():
             "print('isto nao e json: falha simulada da CLI')\n"
             "sys.exit(1)\n",
         )
-        old_bin = os.environ.get("COBRE_BIN")
-        os.environ["COBRE_BIN"] = binpath
+        old_bin = os.environ.get("NOVOMODELO_MCP_SOLVER_BIN")
+        os.environ["NOVOMODELO_MCP_SOLVER_BIN"] = binpath
         try:
-            env = _tools()["cobre_version"]()
+            env = _tools()["solver_version"]()
             assert env["status"] == "error", env
             blob = " ".join(env.get("diagnostics", []))
             assert "isto nao e json" in blob, env
         finally:
             if old_bin is not None:
-                os.environ["COBRE_BIN"] = old_bin
+                os.environ["NOVOMODELO_MCP_SOLVER_BIN"] = old_bin
             else:
-                os.environ.pop("COBRE_BIN", None)
+                os.environ.pop("NOVOMODELO_MCP_SOLVER_BIN", None)
 
 
 def test_output_dir_outside_workspace_refused_13():
     """output_dir fora da raiz é recusado pelo Workspace_Guard com exit_code 13."""
     with tempfile.TemporaryDirectory() as ws, tempfile.TemporaryDirectory() as outside:
-        old_ws = os.environ.get("COBRE_MCP_WORKSPACE")
-        os.environ["COBRE_MCP_WORKSPACE"] = ws
+        old_ws = os.environ.get("NOVOMODELO_MCP_WORKSPACE")
+        os.environ["NOVOMODELO_MCP_WORKSPACE"] = ws
         try:
             target = str(Path(outside) / "schemas")
-            env = _tools()["cobre_schema_export"](output_dir=target)
+            env = _tools()["schema_export"](output_dir=target)
             assert env["status"] == "error", env
             assert env["exit_code"] == 13, env
         finally:
             if old_ws is not None:
-                os.environ["COBRE_MCP_WORKSPACE"] = old_ws
+                os.environ["NOVOMODELO_MCP_WORKSPACE"] = old_ws
             else:
-                os.environ.pop("COBRE_MCP_WORKSPACE", None)
+                os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
 
 
 def main():

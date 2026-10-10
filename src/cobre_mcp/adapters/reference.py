@@ -1,8 +1,8 @@
 """Referência: JSON Schemas de entrada e páginas de documentação (offline).
 
 Fontes:
-- schemas: `COBRE_SCHEMAS_DIR`, ou exportados sob demanda via `cobre schema export`.
-- docs: `COBRE_DOCS_DIR`; se ausente/inválido, AUTO-DESCOBERTA de um clone
+- schemas: `NOVOMODELO_MCP_SCHEMAS_DIR`, ou exportados sob demanda via `cobre schema export`.
+- docs: `NOVOMODELO_MCP_DOCS_DIR`; se ausente/inválido, AUTO-DESCOBERTA de um clone
   `cobre-docs` em locais previsíveis (ao lado do repo do MCP ou do diretório de
   trabalho — ex.: .../codigo/<repositório anterior> + .../codigo/cobre-docs). Sem env var e
   sem caminho pessoal fixo: a mesma heurística vale para qualquer checkout.
@@ -71,7 +71,7 @@ def _export_schemas(settings: Settings) -> str | None:
 def schemas_root(settings: Settings) -> str | None:
     """Raiz efetiva dos schemas (cascata; primeiro que existir vence).
 
-    ``COBRE_SCHEMAS_DIR`` -> ``cobre schema export`` -> schemas EMBUTIDOS
+    ``NOVOMODELO_MCP_SCHEMAS_DIR`` -> ``cobre schema export`` -> schemas EMBUTIDOS
     (``_bundled/schemas``). O embutido garante o caminho feliz offline.
     """
     return (
@@ -94,7 +94,7 @@ def read_schema(settings: Settings, tipo: str) -> dict:
     root = schemas_root(settings)
     if not root:
         return {"status": "error",
-                "diagnostics": ["schemas indisponiveis; defina COBRE_SCHEMAS_DIR ou COBRE_BIN"]}
+                "diagnostics": ["schemas indisponiveis; defina NOVOMODELO_MCP_SCHEMAS_DIR ou NOVOMODELO_MCP_SOLVER_BIN"]}
     f = Path(root) / f"{tipo}{_SUFFIX}"
     if not f.exists():
         return {"status": "error",
@@ -114,7 +114,7 @@ def _within(path: Path, root: Path) -> bool:
 # ---------------------------------------------------------------- docs
 
 _CLONE_HINT = (
-    "clone https://github.com/cobre-rs/cobre-docs e defina COBRE_DOCS_DIR para a "
+    "clone https://github.com/ons-ccee-epe/novomodelo-docs e defina NOVOMODELO_MCP_DOCS_DIR para a "
     "pasta de paginas .md/.mdx (no layout padrao do repo, src/content/docs), ou "
     "deixe o clone ao lado do repo do cobre/<repositório anterior> para a descoberta automatica "
     "encontra-lo"
@@ -193,7 +193,7 @@ def _discover_docs_dir() -> str | None:
 def docs_root(settings: Settings) -> str | None:
     """Raiz efetiva das docs (cascata; primeiro que existir vence).
 
-    ``COBRE_DOCS_DIR`` (valido) -> auto-descoberta de um clone ``cobre-docs``
+    ``NOVOMODELO_MCP_DOCS_DIR`` (valido) -> auto-descoberta de um clone ``cobre-docs``
     -> docs EMBUTIDOS (``_bundled/docs``). O embutido garante o caminho feliz
     offline, sem clone nem env var.
     """
@@ -206,10 +206,10 @@ def _docs_unavailable(settings: Settings) -> dict:
     """Erro quando não há docs: env var ausente/quebrada E nada descoberto."""
     configured = settings.docs_dir
     if not configured:
-        msg = ("docs indisponiveis: COBRE_DOCS_DIR nao definido e nenhum clone "
+        msg = ("docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR nao definido e nenhum clone "
                "cobre-docs encontrado automaticamente")
     else:
-        msg = ("docs indisponiveis: COBRE_DOCS_DIR aponta para caminho inexistente "
+        msg = ("docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR aponta para caminho inexistente "
                f"ou que nao e diretorio ({configured}) e nenhum clone cobre-docs "
                "encontrado automaticamente")
     return {"status": "error", "diagnostics": [msg, _CLONE_HINT]}

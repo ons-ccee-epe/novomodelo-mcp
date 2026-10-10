@@ -13,35 +13,35 @@ from cobre_mcp.adapters.paths import ensure_in_workspace  # noqa: E402
 
 
 def test_unrestricted():
-    os.environ.pop("COBRE_MCP_WORKSPACE", None)
+    os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
     assert ensure_in_workspace("/etc/passwd", settings=load_settings()) is None
 
 
 def test_within_root():
     with tempfile.TemporaryDirectory() as d:
-        os.environ["COBRE_MCP_WORKSPACE"] = d
+        os.environ["NOVOMODELO_MCP_WORKSPACE"] = d
         inside = str(Path(d) / "deck" / "config.json")
         assert ensure_in_workspace(inside, settings=load_settings()) is None
-    os.environ.pop("COBRE_MCP_WORKSPACE", None)
+    os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
 
 
 def test_outside_root_blocked():
     with tempfile.TemporaryDirectory() as d:
-        os.environ["COBRE_MCP_WORKSPACE"] = d
+        os.environ["NOVOMODELO_MCP_WORKSPACE"] = d
         err = ensure_in_workspace("/etc/passwd", settings=load_settings())
         assert err is not None and err["status"] == "error", err
-    os.environ.pop("COBRE_MCP_WORKSPACE", None)
+    os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
 
 
 def test_traversal_blocked():
     with tempfile.TemporaryDirectory() as d:
         ws = Path(d) / "ws"
         ws.mkdir()
-        os.environ["COBRE_MCP_WORKSPACE"] = str(ws)
+        os.environ["NOVOMODELO_MCP_WORKSPACE"] = str(ws)
         escape = str(ws / ".." / "secret.txt")
         err = ensure_in_workspace(escape, settings=load_settings())
         assert err is not None and err["status"] == "error", err
-    os.environ.pop("COBRE_MCP_WORKSPACE", None)
+    os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
 
 
 def main():

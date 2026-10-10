@@ -14,7 +14,7 @@ ferramentas padronizadas, sem que este servidor contenha qualquer regra de negó
 - Python **>= 3.12**
 - [`uv`](https://docs.astral.sh/uv/)
 - `cobre-bridge` no PATH (conversão / comparação / dashboard)
-- `cobre` no PATH ou em `COBRE_BIN` (validação de deck, `init` e execução de runs)
+- `cobre` no PATH ou em `NOVOMODELO_MCP_SOLVER_BIN` (validação de deck, `init` e execução de runs)
 
 ## Instalação e execução
 
@@ -45,8 +45,8 @@ robusto, sem rebuild):
       "env": {
         "PYTHONPATH": "/caminho/para/<repositório anterior>/src",
         "PATH": "/caminho/para/.cargo/bin:/caminho/para/.local/bin:/usr/bin:/bin",
-        "COBRE_BIN": "/caminho/para/.cargo/bin/cobre",
-        "COBRE_MCP_WORKSPACE": "/caminho/para/seus/estudos",
+        "NOVOMODELO_MCP_SOLVER_BIN": "/caminho/para/.cargo/bin/cobre",
+        "NOVOMODELO_MCP_WORKSPACE": "/caminho/para/seus/estudos",
         "UV_SYSTEM_CERTS": "1"
       }
     }
@@ -57,36 +57,36 @@ robusto, sem rebuild):
 ## Segurança
 
 As ferramentas de deck/resultado recebem caminhos controlados pelo agente. Defina
-**`COBRE_MCP_WORKSPACE`** com a(s) raiz(es) permitida(s) (separadas por `:`): qualquer
+**`NOVOMODELO_MCP_WORKSPACE`** com a(s) raiz(es) permitida(s) (separadas por `:`): qualquer
 caminho fora delas é **recusado** (fail-closed; `resolve()` neutraliza symlinks e `..`).
-Sem essa variável o servidor opera **irrestrito** — o `cobre_mcp_info` sinaliza o estado.
-Edições com `force=True` (gravar violando o schema) e `cobre_init(force=True)`
-(sobrescrever arquivos) exigem `COBRE_MCP_ALLOW_FORCE=1`.
+Sem essa variável o servidor opera **irrestrito** — o `server_info` sinaliza o estado.
+Edições com `force=True` (gravar violando o schema) e `case_init(force=True)`
+(sobrescrever arquivos) exigem `NOVOMODELO_MCP_ALLOW_FORCE=1`.
 
 ## Variáveis de ambiente
 
 | Variável | Default | Para quê |
 |---|---|---|
-| `COBRE_BRIDGE_BIN` | (PATH) | caminho do `cobre-bridge` |
-| `COBRE_BIN` | (PATH) | caminho do `cobre` |
-| `COBRE_SCHEMAS_DIR` | — | dir com `*.schema.json` (habilita validação por schema no `deck_edit_json`) |
-| `COBRE_DOCS_DIR` | — | mirror local do `cobre-docs` (habilita `docs_list`/`docs_read`) |
-| `COBRE_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando setada) |
-| `COBRE_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)` e `cobre_init(force=True)` |
-| `COBRE_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
-| `COBRE_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
-| `COBRE_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
-| `COBRE_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |
-| `COBRE_MCP_MAX_INLINE_ROWS` | `50` | teto de linhas de amostra (parquet) |
-| `COBRE_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes na leitura direta de JSON |
-| `COBRE_MCP_MAX_QUERY_ROWS` | `1000` | teto de linhas do `deck_sql` |
-| `COBRE_MCP_STATE_DIR` | por SO (ver abaixo) | estado persistente: runs assíncronos (`jobs/`) e registro de calibração (`calibration.json`) |
-| `COBRE_MCP_MAX_JOBS` | `1` | runs simultâneos permitidos pelo `cobre_run_start` |
+| `NOVOMODELO_MCP_BRIDGE_BIN` | (PATH) | caminho do `cobre-bridge` |
+| `NOVOMODELO_MCP_SOLVER_BIN` | (PATH) | caminho do `cobre` |
+| `NOVOMODELO_MCP_SCHEMAS_DIR` | — | dir com `*.schema.json` (habilita validação por schema no `deck_edit_json`) |
+| `NOVOMODELO_MCP_DOCS_DIR` | — | mirror local do `cobre-docs` (habilita `docs_list`/`docs_read`) |
+| `NOVOMODELO_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando setada) |
+| `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)` e `case_init(force=True)` |
+| `NOVOMODELO_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
+| `NOVOMODELO_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
+| `NOVOMODELO_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
+| `NOVOMODELO_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |
+| `NOVOMODELO_MCP_MAX_INLINE_ROWS` | `50` | teto de linhas de amostra (parquet) |
+| `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes na leitura direta de JSON |
+| `NOVOMODELO_MCP_MAX_QUERY_ROWS` | `1000` | teto de linhas do `deck_sql` |
+| `NOVOMODELO_MCP_STATE_DIR` | por SO (ver abaixo) | estado persistente: runs assíncronos (`jobs/`) e registro de calibração (`calibration.json`) |
+| `NOVOMODELO_MCP_MAX_JOBS` | `1` | runs simultâneos permitidos pelo `run_start` |
 
 ### Plataformas
 
 Windows, macOS e Linux (inclusive containers). O estado persistente fica em
-`COBRE_MCP_STATE_DIR` ou, por padrão, em `%LOCALAPPDATA%\cobre-mcp` (Windows),
+`NOVOMODELO_MCP_STATE_DIR` ou, por padrão, em `%LOCALAPPDATA%\cobre-mcp` (Windows),
 `~/Library/Application Support/cobre-mcp` (macOS) ou `$XDG_STATE_HOME/cobre-mcp`
 (Linux, padrão `~/.local/state/cobre-mcp`) — nunca no diretório temporário do SO.
 A detecção de máquina respeita afinidade de CPU e limites de cgroup (Docker/K8s).
@@ -99,7 +99,7 @@ processos nos três SOs.
 **Pré-rodada** (`tools/pre_run.py`)
 - `bridge_check_newave(src)` — pré-valida entradas NEWAVE (`cobre-bridge check newave`)
 - `bridge_convert_newave(src, dst, validate, force, dry_run)` — converte NEWAVE→Cobre
-- `cobre_validate_deck(case_dir)` — valida o deck (binding `cobre.io.validate`, estruturado; fallback texto)
+- `case_validate(case_dir)` — valida o deck (binding `cobre.io.validate`, estruturado; fallback texto)
 - `bridge_check_decomp(src)` / `bridge_convert_decomp(src, dst, ...)` — paridade DECOMP
 
 **Pós-rodada** (`tools/post_run.py`)
@@ -118,15 +118,15 @@ processos nos três SOs.
 - `deck_sql(query, max_rows)` — consulta SQL **read-only** (DuckDB) sobre parquet/csv/json do deck ou dos resultados; guard confina os caminhos ao workspace
 
 **Referência** (`tools/reference.py`)
-- `schema_list()` / `schema_get(tipo)` — JSON Schemas de entrada (via `cobre schema export` ou `COBRE_SCHEMAS_DIR`); também expostos no resource `cobre://schema/{tipo}`
-- `docs_list(section)` / `docs_read(page)` — documentação offline do `cobre-docs` (`COBRE_DOCS_DIR`)
+- `schema_list()` / `schema_get(tipo)` — JSON Schemas de entrada (via `cobre schema export` ou `NOVOMODELO_MCP_SCHEMAS_DIR`); também expostos no resource `cobre://schema/{tipo}`
+- `docs_list(section)` / `docs_read(page)` — documentação offline do `cobre-docs` (`NOVOMODELO_MCP_DOCS_DIR`)
 
 **Scaffold e execução** (`tools/run.py`)
-- `cobre_init(directory, template, list, force)` — cria caso a partir de template embutido (`cobre init`; ex.: `1dtoy`)
-- `cobre_run_plan(case_dir, time_budget_s=900, threads)` — **não executa, não grava**: estima tempo de
+- `case_init(directory, template, list, force)` — cria caso a partir de template embutido (`cobre init`; ex.: `1dtoy`)
+- `run_plan(case_dir, time_budget_s=900, threads)` — **não executa, não grava**: estima tempo de
   execução (custo **computacional**) e memória do run local. O tempo por solve é
   **medido nesta máquina**, separado para treino e simulação (`duração ÷ solves` dos `metadata.json`):
-  primeiro o registro de calibração do MCP (runs via `cobre_run_start`, indexados por `machine_id` —
+  primeiro o registro de calibração do MCP (runs via `run_start`, indexados por `machine_id` —
   independe de hostname), depois `training/metadata.json` no workspace com o mesmo hostname.
   Prefere runs com a **mesma modelagem** (dimensões + assinatura do `config.json`); `time.range` mostra a
   dispersão entre modelagens. Threads: núcleos de **performance** em CPU híbrida (Apple Silicon, Intel
@@ -134,14 +134,14 @@ processos nos três SOs.
   acima do maior **não assume ganho**. Modelo `solves ≈ iters × fwd × Σ(1+aberturas)`. Devolve máquina,
   pontos de referência, a conta, parâmetros atuais × sugeridos (`apply_overrides`), veredito (`cabe` |
   `cabe_com_ajustes` | `nao_cabe` | `indeterminado`) e o aviso de que run local pequeno **pode não convergir**
-- `cobre_run_apply(case_dir, overrides, dry_run)` — aplica knobs de **config.json** (`forward_passes`,
+- `run_apply(case_dir, overrides, dry_run)` — aplica knobs de **config.json** (`forward_passes`,
   `iteration_limit`, `simulation_scenarios`, `simulation_enabled`) via `deck_edit_json` (schema + backup + atômico).
   `num_openings` (stages.json) fica de fora
-- `cobre_run_start(case_dir, threads, output, time_budget_s, override)` — dispara `cobre run ... --comm-backend local
+- `run_start(case_dir, threads, output, time_budget_s, override)` — dispara `cobre run ... --comm-backend local
   --quiet` em background e devolve `job_id` na hora; recusa se o plano disser `nao_cabe` (salvo `override=True`)
-- `cobre_run_status(job_id)` · `cobre_run_logs(job_id, lines)` · `cobre_run_cancel(job_id)`
+- `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
-**Diagnóstico** — `cobre_mcp_info()` (binários, versões, workspace, settings)
+**Diagnóstico** — `server_info()` (binários, versões, workspace, settings)
 
 ## Estrutura
 
@@ -184,7 +184,7 @@ python3 tests/smoke.py && python3 tests/smoke_deck.py \
 ```
 
 A execução **real** do solver (`cobre init 1dtoy` + 1 iteração) fica fora do CI:
-`COBRE_MCP_REAL_SOLVER=1 python3 tests/smoke_run.py`.
+`NOVOMODELO_MCP_REAL_SOLVER=1 python3 tests/smoke_run.py`.
 
 Suite pytest (após `uv sync`):
 

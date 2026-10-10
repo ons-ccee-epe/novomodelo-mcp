@@ -1,7 +1,7 @@
 """Estado persistente do servidor (jobs, calibração): diretório por plataforma + escrita segura.
 
 Diretório (primeiro que valer):
-  COBRE_MCP_STATE_DIR
+  NOVOMODELO_MCP_STATE_DIR
   Windows: %LOCALAPPDATA%\\cobre-mcp
   macOS:   ~/Library/Application Support/cobre-mcp
   Linux:   $XDG_STATE_HOME/cobre-mcp  (padrão ~/.local/state/cobre-mcp)

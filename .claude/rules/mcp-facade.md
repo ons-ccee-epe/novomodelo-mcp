@@ -48,7 +48,7 @@ if (err := ensure_in_workspace(src, dst, settings=settings)):
     return err
 ```
 
-With `COBRE_MCP_WORKSPACE` set, a path outside the allowed roots is refused and
+With `NOVOMODELO_MCP_WORKSPACE` set, a path outside the allowed roots is refused and
 `resolve()` neutralises symlinks and `..`. Treat every agent-supplied path as
 untrusted. The wrong-but-compiling alternative is to resolve a path once and
 reuse it, or to guard only the "write" tools: a read tool that skips the guard
@@ -58,7 +58,7 @@ Never relax the guard to fail-open when roots are configured.
 ## 5. Force writes stay gated
 
 A schema-violating edit (`force=True` on a deck-edit tool) is honoured only when
-`COBRE_MCP_ALLOW_FORCE=1`. The gate is deliberate; do not remove it or default
+`NOVOMODELO_MCP_ALLOW_FORCE=1`. The gate is deliberate; do not remove it or default
 it on.
 
 ## 6. NEWAVE/DECOMP tool parity

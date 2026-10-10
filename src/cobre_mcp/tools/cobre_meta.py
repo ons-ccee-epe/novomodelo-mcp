@@ -15,7 +15,7 @@ def register_cobre_meta(mcp, settings: Settings) -> None:
     """Registra a Version_Tool (e a Schema_Export_Tool) no servidor `mcp`."""
 
     @mcp.tool()
-    def cobre_version() -> dict:
+    def solver_version() -> dict:
         """Versão do COBRE, backend do solver e info de build (envelopa `cobre version`).
 
         Sem parâmetros e sem caminho. `cobre version` emite texto (não aceita
@@ -30,7 +30,7 @@ def register_cobre_meta(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool()
-    def cobre_schema_export(output_dir: str | None = None) -> dict:
+    def schema_export(output_dir: str | None = None) -> dict:
         """Exporta os JSON Schemas de entrada do COBRE (envelopa `cobre schema export`).
 
         `output_dir` (opcional): pasta de destino, confinada ao workspace. Quando o

@@ -16,6 +16,7 @@ import subprocess
 from typing import Any
 
 from ..config import Settings, load_settings
+from ..names import BRIDGE_CLI
 from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_bridge
 from .obs import log
@@ -53,8 +54,8 @@ def run_bridge(argv: list[str], *, timeout: float | None = None,
     settings = settings or load_settings()
     binpath = find_bridge(settings)
     if binpath is None:
-        return _error(127, "cobre-bridge não encontrado. Instale-o "
-                           "(uv tool install cobre-bridge) ou defina COBRE_BRIDGE_BIN.")
+        return _error(127, f"{BRIDGE_CLI} não encontrado. Instale-o "
+                           f"(uv tool install {BRIDGE_CLI}) ou defina NOVOMODELO_MCP_BRIDGE_BIN.")
     log(settings, "bridge", argv=argv)
     cmd = [binpath, *argv, "--json", "--no-color"]
     try:

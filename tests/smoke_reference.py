@@ -17,20 +17,20 @@ def test_schema_list_and_get():
     with tempfile.TemporaryDirectory() as d:
         (Path(d) / "hydros.schema.json").write_text('{"type":"object"}')
         (Path(d) / "config.schema.json").write_text('{"type":"object"}')
-        os.environ["COBRE_SCHEMAS_DIR"] = d
+        os.environ["NOVOMODELO_MCP_SCHEMAS_DIR"] = d
         s = load_settings()
         assert REF.list_schema_types(s) == ["config", "hydros"]
         r = REF.read_schema(s, "hydros")
         assert r["status"] == "ok" and r["schema"] == {"type": "object"}, r
         assert REF.read_schema(s, "../secret")["status"] == "error"
-    os.environ.pop("COBRE_SCHEMAS_DIR", None)
+    os.environ.pop("NOVOMODELO_MCP_SCHEMAS_DIR", None)
 
 
 def test_docs_list_and_read():
     with tempfile.TemporaryDirectory() as d:
         (Path(d) / "reference").mkdir()
         (Path(d) / "reference" / "cli-reference.md").write_text("# CLI\nconteudo")
-        os.environ["COBRE_DOCS_DIR"] = d
+        os.environ["NOVOMODELO_MCP_DOCS_DIR"] = d
         s = load_settings()
         lst = REF.list_docs(s)
         assert "reference/cli-reference" in lst["pages"], lst
@@ -38,7 +38,7 @@ def test_docs_list_and_read():
         assert doc["status"] == "ok" and "conteudo" in doc["content"], doc
         # traversal deve falhar
         assert REF.read_doc(s, "../../etc/passwd", 10000)["status"] == "error"
-    os.environ.pop("COBRE_DOCS_DIR", None)
+    os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
 
 
 def test_discover_prefers_content_subpath():
@@ -67,12 +67,12 @@ def test_discover_none_when_absent():
 
 
 def test_docs_fallback_to_bundled_when_no_env_or_discovery():
-    """Sem COBRE_DOCS_DIR e sem clone descoberto, o fallback EMBUTIDO responde.
+    """Sem NOVOMODELO_MCP_DOCS_DIR e sem clone descoberto, o fallback EMBUTIDO responde.
 
     Contrato novo (docs embutidos no pacote): list_docs nunca fica indisponivel
     quando o snapshot embutido esta presente — retorna as paginas embutidas.
     """
-    os.environ.pop("COBRE_DOCS_DIR", None)
+    os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
     REF._DOCS_DISCOVER_CACHE.clear()
     with tempfile.TemporaryDirectory() as empty:
         # forca bases vazias para a auto-descoberta nao achar nada
@@ -93,10 +93,10 @@ def test_docs_unavailable_messages_when_bundled_missing():
     """Quando NAO ha env var, nem clone, nem embutido, a msg de erro orienta.
 
     Cenario de borda (build sem o snapshot embutido): a mensagem deve distinguir
-    o caso (COBRE_DOCS_DIR nao definido) e dar a dica do clone cobre-docs; e um
-    COBRE_DOCS_DIR invalido deve aparecer na mensagem do read_doc.
+    o caso (NOVOMODELO_MCP_DOCS_DIR nao definido) e dar a dica do clone cobre-docs; e um
+    NOVOMODELO_MCP_DOCS_DIR invalido deve aparecer na mensagem do read_doc.
     """
-    os.environ.pop("COBRE_DOCS_DIR", None)
+    os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
     REF._DOCS_DISCOVER_CACHE.clear()
     with tempfile.TemporaryDirectory() as empty:
         orig_bases = REF._candidate_bases
@@ -108,15 +108,15 @@ def test_docs_unavailable_messages_when_bundled_missing():
             und = REF.list_docs(s)
             assert und["status"] == "error", und
             assert "nao definido" in und["diagnostics"][0], und
-            assert "cobre-docs" in und["diagnostics"][1], und
-            os.environ["COBRE_DOCS_DIR"] = "/tmp/nao/existe/xyz"
+            assert "novomodelo-docs" in und["diagnostics"][1], und
+            os.environ["NOVOMODELO_MCP_DOCS_DIR"] = "/tmp/nao/existe/xyz"
             s2 = load_settings()
             bad = REF.read_doc(s2, "foo", 100)
             assert bad["status"] == "error" and "/tmp/nao/existe/xyz" in bad["diagnostics"][0], bad
         finally:
             REF._candidate_bases = orig_bases
             REF._bundled_dir = orig_bundled
-            os.environ.pop("COBRE_DOCS_DIR", None)
+            os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
             REF._DOCS_DISCOVER_CACHE.clear()
 
 

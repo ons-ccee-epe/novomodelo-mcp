@@ -39,8 +39,8 @@ async def main() -> None:
         print(f"  - {t.name}")
     print()
 
-    print("== cobre_mcp_info ==")
-    info = await srv.call_tool("cobre_mcp_info", {})
+    print("== server_info ==")
+    info = await srv.call_tool("server_info", {})
     print(_text(info))
     print()
 

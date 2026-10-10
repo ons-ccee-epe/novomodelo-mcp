@@ -1,6 +1,6 @@
 """Tools de referência (read-only): JSON Schemas de entrada e documentação.
 
-Também registra o resource `cobre://schema/{tipo}` como afordância para o agente
+Também registra o resource `novomodelo://schema/{tipo}` como afordância para o agente
 consultar sem uma chamada de tool. Sem regra de negócio.
 """
 from __future__ import annotations
@@ -9,6 +9,7 @@ import json
 
 from ..adapters import reference as REF
 from ..config import Settings
+from ..names import URI_SCHEME
 from .shaping import cap_envelope
 
 
@@ -38,7 +39,7 @@ def register_reference(mcp, settings: Settings) -> None:
     # Afordância de resource (best-effort: não derruba o servidor se o cliente/SDK
     # não suportar templates de resource).
     try:
-        @mcp.resource("cobre://schema/{tipo}")
+        @mcp.resource(f"{URI_SCHEME}://schema/{{tipo}}")
         def _schema_resource(tipo: str) -> str:  # pragma: no cover
             r = REF.read_schema(settings, tipo)
             return json.dumps(r.get("schema", r), ensure_ascii=False, indent=2)

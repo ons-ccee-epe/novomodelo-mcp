@@ -5,17 +5,19 @@ O flag global `--color never` vem ANTES do subcomando (contrato da CLI do cobre)
 """
 from __future__ import annotations
 
+import importlib
 import json
 import re
 import subprocess
 from typing import Any
 
 from ..config import Settings, load_settings
+from ..names import BINDING_DIST, BINDING_MODULE, SOLVER_CLI
 from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_cobre
 from .obs import log
 
-
+_NOT_FOUND = f"{SOLVER_CLI} não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN)."
 
 
 def run_cobre(subargv: list[str], *, timeout: float | None = None,
@@ -28,7 +30,7 @@ def run_cobre(subargv: list[str], *, timeout: float | None = None,
     settings = settings or load_settings()
     binpath = find_cobre(settings)
     if binpath is None:
-        return _error(127, "cobre não encontrado no PATH (defina COBRE_BIN).")
+        return _error(127, _NOT_FOUND)
     log(settings, "cobre", subargv=subargv)
     cmd = [binpath, "--color", "never", *subargv]
     try:
@@ -72,13 +74,9 @@ def validate_deck_binding(case_dir: str, *, settings: Settings | None = None) ->
     """
     log(settings, "validate_deck_binding", case_dir=case_dir)
     try:
-        import cobre.io as _cio
+        _cio = importlib.import_module(f"{BINDING_MODULE}.io")
     except ImportError:
-        try:
-            import cobre as _c
-            _cio = getattr(_c, "io", _c)
-        except ImportError:
-            return _error(127, "cobre-python ausente no venv; rode: uv sync --system-certs")
+        return _error(127, f"{BINDING_DIST} ausente no venv; rode: uv sync --system-certs")
     try:
         report = _cio.validate(case_dir)
     except FileNotFoundError as exc:
@@ -105,7 +103,7 @@ def validate_deck_cli(case_dir: str, *, settings: Settings | None = None) -> dic
     settings = settings or load_settings()
     binpath = find_cobre(settings)
     if binpath is None:
-        return _error(127, "cobre nao encontrado no PATH (defina COBRE_BIN).")
+        return _error(127, _NOT_FOUND)
     cmd = [binpath, "--color", "never", "validate", case_dir]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
@@ -148,7 +146,7 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
     settings = settings or load_settings()
     binpath = find_cobre(settings)
     if binpath is None:
-        return _error(127, "cobre nao encontrado no PATH (defina COBRE_BIN).")
+        return _error(127, _NOT_FOUND)
     cmd = [binpath, "--color", "never", "version"]
     # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout), nunca propagam ao stdio.
     try:
@@ -167,8 +165,11 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
     fields: dict[str, Any] = {}
     lines = stdout.splitlines()
     if lines:
+        # 1ª linha: "<programa>   v<versão>". Lê por posição, sem comparar o nome
+        # do programa, para não quebrar em renames do produto.
         first = lines[0].split()
-        if first and first[0] == "cobre" and len(first) > 1:
+        if len(first) > 1:
+            fields["program"] = first[0]
             fields["version"] = first[1]
     for line in lines[1:]:
         if ":" in line:

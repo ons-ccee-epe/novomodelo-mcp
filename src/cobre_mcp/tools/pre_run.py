@@ -57,7 +57,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool()
-    def cobre_validate_deck(case_dir: str) -> dict:
+    def case_validate(case_dir: str) -> dict:
         """Valida se um deck Cobre JÁ convertido está pronto para rodar (read-only).
 
         Envelopa `cobre validate <case_dir> --json` (pipeline de validação em 6

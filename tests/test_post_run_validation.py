@@ -24,7 +24,7 @@ def _build(monkeypatch):
                 "status": "ok", "summary": {}, "diagnostics": [], "exit_code": 0}
 
     monkeypatch.setattr(post_run_mod, "run_bridge", _spy)
-    monkeypatch.delenv("COBRE_MCP_WORKSPACE", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
 
     mcp = FastMCP("t")
     register_post_run(mcp, load_settings())
