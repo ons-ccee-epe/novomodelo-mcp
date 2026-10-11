@@ -1,6 +1,6 @@
 """Leitura de resultados de um `cobre run`, pelo contrato documentado.
 
-Fontes (docs): reference/output-format.mdx e running/interpreting-results.mdx.
+Fontes (docs): reference/output/ (index, training, simulation…) e running/interpreting-results.mdx.
 - metadados: training/metadata.json e simulation/metadata.json (JSON, stdlib)
 - séries: training/convergence.parquet e simulation/<entidade>/ (Parquet via Polars)
 

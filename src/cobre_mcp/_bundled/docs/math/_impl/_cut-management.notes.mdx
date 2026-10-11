@@ -1,35 +1,41 @@
-Non-normative software behavior for cut management — what Cobre does at
+Non-normative software behavior for cut management — what Novomodelo does at
 runtime, beyond the equations above. This tab references the methodology body
 for the derivations rather than restating them.
 
-### Reduced-cost unscaling divides by `col_scale`, not multiplies
+### Reduced-cost unscaling divides by the column scale
 
 Methodology §2 derives each cut coefficient from the reduced cost of a pinned
 incoming-state column, unscaled by that column's prescaler factor. In code
 terms the unscaling step is a **division**:
 `coefficient = reduced_cost / col_scale[col]` (empty `col_scale` ⇒ the raw
-reduced cost, unscaled). The cobre CHANGELOG's prose for this step says
-"multiply"; the shipped extraction code
-(`crates/cobre-sddp/src/training/backward/duals_extraction.rs`) divides. This
-tab — and the methodology body it supports — follows the code: **divide**.
+reduced cost, unscaled).
+
+### Storage-only cut projection
+
+With the inflow lags projected out of the cuts on a stage under a PAR(p > 0)
+model, $\underline{z}^k$ is not guaranteed to be a lower bound on the optimal
+value of the model as trained, and the gap is not a certificate
+([condition 4](/math/cut-management#4-cut-validity)). Projecting the cuts onto
+the inflow lags as well, with storage kept, on every stage satisfies
+condition 4; the remaining hypotheses are those of
+[Tier 1](/math/cut-management#tier-1-valid-lower-bound). The projection is
+chosen per stage: the key and its default are in
+[`stages[].state_variables`](#stagesstate_variables--cut-projection) of the
+Configure tab, and the components each selection projects onto are in
+[State Augmentation §7](/math/state-augmentation#7-cut-state-projection).
 
 ### Export writes canonical currency units
 
 Policy export multiplies every cut coefficient and intercept by the writing
 study's cost-scale factor, converting the in-memory scaled cost space into
-canonical currency units at rest
-(`crates/cobre-sddp/src/policy/policy_export.rs:238-266`,
-`scale_cut_records_for_export`: `intercept * cost_scale_factor`,
-`coefficients.iter().map(|c| c * cost_scale_factor)`). Every load path
-divides by the loading study's own factor
-(`crates/cobre-sddp/src/policy/policy_load.rs:64-108`,
-`rescale_cut_records_for_load`) to bring the values back into that study's
-scaled cost space. This is **orthogonal** to the `col_scale` reduced-cost
+canonical currency units at rest. Every load path divides by the loading
+study's own factor to bring the values back into that study's scaled cost
+space. This is **orthogonal** to the `col_scale` reduced-cost
 unscaling above: `col_scale` is a per-column LP prescaler applied inside a
 single solve, while the cost-scale factor is the global objective scaling
 applied once per study. See [Policy Management — Cost-Scale
 Canonicalization](/running/policy-management/#cost-scale-canonicalization)
-for the full compatibility matrix.
+for the load-time rule.
 
 ### Append-only pool, deterministic slots
 
@@ -39,9 +45,9 @@ generated it (methodology §5). The pool is never compacted, and nothing is
 ever deleted from it; "deactivation" always means something narrower than
 removal (below).
 
-### Deactivation is a bound sentinel, never a row removal
+### Deactivation excludes a cut from the template; the LB LP is append-only
 
-Cobre's row-management pipeline touches two different LPs, and "deactivating"
+Novomodelo's row-management pipeline touches two different LPs, and "deactivating"
 a cut means something slightly different in each:
 
 - In the **per-iteration forward/backward stage LP** — rebuilt from the stage
@@ -49,33 +55,41 @@ a cut means something slightly different in each:
   from that iteration's template rebake. Only active cuts are encoded as LP
   rows on each forward/backward solve; there is no row to toggle because the
   row was never emitted.
-- In the **persistent lower-bound LP** — where cut rows are never
-  structurally removed, so the training lower bound stays monotone — the same
-  deactivation instead toggles the cut row's bound to a trivially-satisfied
-  ±∞ sentinel. The row stays in place; it simply stops constraining the
-  solve.
+- In the **persistent lower-bound LP** the pool is **append-only**: only
+  active cuts are ever appended, and a cut already present is not re-appended;
+  appended rows are **never removed**, so the training
+  lower bound stays monotone and every appended row keeps constraining.
+  Deactivation touches no row here; it only changes which cuts the
+  forward/backward template rebake encodes. The only $+\infty$ on a cut row is
+  the ordinary upper bound of the one-sided `≥` cut, present on every
+  active row — not a deactivation sentinel.
 
 Both routes preserve the slot index, which is what makes reactivation exact:
-a cut that a later selection pass restores is re-baked into the template (or
-has its bound restored), at the same slot, with the same coefficients it was
-generated with.
+a cut that a later selection pass restores is re-baked into the template, at
+the same slot, with the same coefficients it was generated with.
 
-### Two-stage pipeline, run every iteration
+### Selection pass and budget pass, run every iteration
 
 The row-management pipeline runs after each iteration's backward pass and cut
-synchronization, in two stages:
+synchronization, in two passes:
 
-1. **Strategy-based selection** (`level1` / `lml1` / `domination`) — gated by
+1. **Selection pass** (`level1` / `lml1` / `domination`) — gated by
    `check_frequency`; runs only at iterations that are a multiple of it.
-   Stage 0 is always exempt from this pass, because stage 0's rows drive the
-   lower bound directly and are never a backward-pass successor. Selection
-   runs in parallel across stages. `dynamic` (DCS) never runs this stage at
-   all — it has no `check_frequency` gating and never deactivates pool cuts.
-2. **Budget enforcement** (`max_active_per_stage`) — runs **every** iteration,
+   The first stage's cuts and the terminal pool are always exempt from this
+   pass: the first stage's cuts are never a backward-pass successor, so their
+   activity is never updated, and the backward pass adds no cut to the
+   terminal pool. Selection runs **sequentially across stages**; within a
+   stage, trial points are evaluated in parallel blocks. `dynamic` (DCS) never
+   runs this pass — it has no `check_frequency` gating and never deactivates
+   pool cuts.
+2. **Budget pass** (`max_active_per_stage`) — runs **every** iteration,
    regardless of `check_frequency`, as a hard-cap safety net on top of
-   whatever Stage 1 (or DCS) leaves active.
+   whatever the selection pass (or DCS) leaves active.
+   [Stage 2: Budget Enforcement](/running/performance/#stage-2-budget-enforcement)
+   gives the eviction order and the cap's reach into a terminal pool that holds
+   a loaded boundary policy's cuts.
 
-### DCS is lazy-exact, not a deactivation pass
+### DCS is lazy, not a deactivation pass
 
 Dynamic Cut Selection (methodology §8) never deactivates a pool cut. Each
 stage solve instead starts from a small resident subset — seeded from cuts
@@ -85,8 +99,14 @@ candidates and adding the most-violated ones, up to the bounded inner-loop cap
 (50 rounds, not user-configurable). The loop stops as soon as no candidate is
 violated, at which point the resident-subset optimum already equals the
 full-pool optimum — no extra "final" solve is needed to confirm it. If the cap
-is hit first, all remaining violated candidates are added and one closing
-solve is performed, which still preserves exactness (methodology §8.3).
+is hit first, every candidate violated at the last solution is added and one
+closing solve is performed with no further scoring, so the closing solve is not
+checked for exactness (methodology §8.3).
+
+DCS is rejected at setup under an enumerated forward pass (methodology §8): the
+enumerated engine seeds each cut pool at its node-native cut stride, while DCS
+relies on the eviction keys of sampled selection, which the budget pass reads
+when it evicts cuts.
 
 A cut loaded into the pool via `policy.mode = "warm_start"` or `"resume"`
 (Inputs & Outputs tab) carries a reserved sentinel `iteration_generated` value
