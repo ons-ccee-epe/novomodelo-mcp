@@ -15,8 +15,6 @@ URI_SCHEME = "novomodelo"
 SOLVER_CLI = "novomodelo"
 #: Executável do conversor/comparador NEWAVE/DECOMP.
 BRIDGE_CLI = "novomodelo-bridge"
-#: Módulo importável dos bindings Python do solver.
-BINDING_MODULE = "novomodelo"
 #: Distribuição (PyPI) dos bindings — o que `importlib.metadata.version` consulta.
 BINDING_DIST = "novomodelo-python"
 #: Prefixo de todas as variáveis de ambiente do MCP.

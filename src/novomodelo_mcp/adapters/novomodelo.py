@@ -5,14 +5,13 @@ O flag global `--color never` vem ANTES do subcomando (contrato da CLI do novomo
 """
 from __future__ import annotations
 
-import importlib
 import json
 import re
 import subprocess
 from typing import Any
 
 from ..config import Settings, load_settings
-from ..names import BINDING_DIST, BINDING_MODULE, SOLVER_CLI
+from ..names import BINDING_DIST, SOLVER_CLI
 from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_novomodelo
 from .obs import log
@@ -74,7 +73,8 @@ def validate_deck_binding(case_dir: str, *, settings: Settings | None = None) ->
     """
     log(settings, "validate_deck_binding", case_dir=case_dir)
     try:
-        _cio = importlib.import_module(f"{BINDING_MODULE}.io")
+        # Import literal (não dinâmico): o nome do módulo é fixo e o rename o reescreve.
+        import novomodelo.io as _cio
     except ImportError:
         return _error(127, f"{BINDING_DIST} ausente no venv; rode: uv sync --system-certs")
     try:
