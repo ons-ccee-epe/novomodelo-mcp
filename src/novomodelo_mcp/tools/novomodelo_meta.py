@@ -9,12 +9,13 @@ from ..adapters.envelope import as_error
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
+from .annotations import READ_ONLY, WRITES
 
 
 def register_novomodelo_meta(mcp, settings: Settings) -> None:
     """Registra a Version_Tool (e a Schema_Export_Tool) no servidor `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def solver_version() -> dict:
         """Versão do NOVOMODELO, backend do solver e info de build (envelopa `novomodelo version`).
 
@@ -29,7 +30,7 @@ def register_novomodelo_meta(mcp, settings: Settings) -> None:
             return as_error(exc)
         return cap_envelope(env, settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITES)
     def schema_export(output_dir: str | None = None) -> dict:
         """Exporta os JSON Schemas de entrada do NOVOMODELO (envelopa `novomodelo schema export`).
 

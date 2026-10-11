@@ -21,6 +21,7 @@ from ..adapters.run_plan import CONFIG_KNOBS, build_plan, read_case_params
 from ..adapters.state import state_dir
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
+from .annotations import DESTRUCTIVE, READ_ONLY, WRITES
 
 
 def _calibration_file(settings: Settings) -> Path:
@@ -111,7 +112,7 @@ def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
 def register_run(mcp, settings: Settings) -> None:
     """Registra as tools de scaffold/execução no servidor `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITES)
     def case_init(directory: str | None = None, template: str | None = None,
                    list: bool = False, force: bool = False) -> dict:  # noqa: A002
         """Cria um caso a partir de um template embutido (`novomodelo init`).
@@ -147,7 +148,7 @@ def register_run(mcp, settings: Settings) -> None:
             attach_artifact(env, "case_dir", directory)
         return cap_envelope(env, settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def run_plan(case_dir: str, time_budget_s: float = 900,
                        threads: int | None = None) -> dict:
         """Planeja um run LOCAL do caso: estima tempo e memória. NÃO executa, NÃO grava.
@@ -172,7 +173,7 @@ def register_run(mcp, settings: Settings) -> None:
         except Exception as exc:  # noqa: BLE001 - repassa como erro, não derruba
             return as_error(exc)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE)
     def run_apply(case_dir: str, overrides: dict, dry_run: bool = False) -> dict:
         """Aplica knobs de execução no config.json do caso (só config; nada mais).
 
@@ -197,7 +198,7 @@ def register_run(mcp, settings: Settings) -> None:
         return deck_io.edit_json(path, changes, schemas_dir=schemas_root(settings),
                                  dry_run=dry_run)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE)
     def run_start(case_dir: str, threads: int | None = None,
                         output: str | None = None, time_budget_s: float = 900,
                         override: bool = False) -> dict:
@@ -249,7 +250,7 @@ def register_run(mcp, settings: Settings) -> None:
         log(settings, "run_start", job_id=meta["job_id"], cmd=cmd)
         return {"status": "ok", **meta, "warnings": plan.get("warnings", [])}
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def run_status(job_id: str) -> dict:
         """Estado de um run: running | succeeded | failed | cancelled | lost.
 
@@ -269,7 +270,7 @@ def register_run(mcp, settings: Settings) -> None:
             harvest_calibrations(settings)
         return {"status": "ok", **st}
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def run_logs(job_id: str, lines: int = 100) -> dict:
         """Últimas `lines` linhas de stdout/stderr do run (com teto de caracteres)."""
         logs = jobs.job_logs(settings, job_id, lines=max(1, lines),
@@ -278,7 +279,7 @@ def register_run(mcp, settings: Settings) -> None:
             return error(2, f"job inexistente: {job_id}")
         return {"status": "ok", "job_id": job_id, **logs}
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE)
     def run_cancel(job_id: str) -> dict:
         """Interrompe um run em andamento (encerra a árvore de processos; força se não sair).
 

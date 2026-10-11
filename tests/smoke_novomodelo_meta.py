@@ -23,7 +23,7 @@ class _CaptureMCP:
     def __init__(self):
         self.tools: dict[str, object] = {}
 
-    def tool(self):
+    def tool(self, *args, **kwargs):  # aceita annotations=… como o FastMCP
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn

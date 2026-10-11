@@ -17,6 +17,7 @@ from ..adapters.obs import log
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .shaping import cap_envelope
+from .annotations import DESTRUCTIVE, READ_ONLY
 
 
 def register_deck(mcp, settings: Settings) -> None:
@@ -25,7 +26,7 @@ def register_deck(mcp, settings: Settings) -> None:
     def _guard(*paths: str) -> dict | None:
         return ensure_in_workspace(*paths, settings=settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def deck_list(case_dir: str) -> dict:
         """Lista os arquivos de um deck Novomodelo (json/parquet) com tamanho."""
         if (err := _guard(case_dir)):
@@ -40,7 +41,7 @@ def register_deck(mcp, settings: Settings) -> None:
                               "kind": p.suffix.lstrip("."), "bytes": p.stat().st_size})
         return {"status": "ok", "case_dir": str(root), "count": len(files), "files": files}
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def deck_read_json(path: str) -> dict:
         """Lê um arquivo JSON do deck (com teto de tamanho).
 
@@ -61,7 +62,7 @@ def register_deck(mcp, settings: Settings) -> None:
             return error(1, f"falha ao ler JSON: {exc}")
         return {"status": "ok", "path": path, "bytes": size, "content": content}
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def deck_read_parquet(path: str, columns: list[str] | None = None,
                           limit: int | None = None) -> dict:
         """Lê um Parquet do deck: schema, nº de linhas e uma AMOSTRA (nunca tudo)."""
@@ -75,7 +76,7 @@ def register_deck(mcp, settings: Settings) -> None:
         out["status"] = "ok"
         return out
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def deck_describe_parquet(path: str) -> dict:
         """Estatísticas de um Parquet do deck (schema + describe por coluna)."""
         if (err := _guard(path)):
@@ -88,7 +89,7 @@ def register_deck(mcp, settings: Settings) -> None:
         return out
 
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def deck_sql(query: str, max_rows: int | None = None) -> dict:
         """Consulta SQL read-only (DuckDB) sobre Parquet/CSV/JSON do deck ou dos resultados.
 
@@ -112,7 +113,7 @@ def register_deck(mcp, settings: Settings) -> None:
         log(settings, "deck_sql", query=query, max_rows=max_rows)
         return run_readonly_sql(query, settings=settings, max_rows=max_rows)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE)
     def deck_edit_json(path: str, changes: list[dict], dry_run: bool = False,
                        ensure_valid: bool = False, force: bool = False) -> dict:
         """Edita valores de um JSON do deck por caminho, DENTRO do contrato.
@@ -150,7 +151,7 @@ def register_deck(mcp, settings: Settings) -> None:
             result["case_validation"] = "ok"
         return result
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE)
     def deck_edit_parquet(path: str, where: dict, set_values: dict,
                           dry_run: bool = False) -> dict:
         """Edita células de um Parquet do deck PRESERVANDO o schema (colunas/dtypes)."""

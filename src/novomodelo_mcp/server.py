@@ -16,6 +16,7 @@ from .tools.pre_run import register_pre_run
 from .tools.reference import register_reference
 from .tools.results import register_results
 from .tools.run import register_run
+from .tools.annotations import READ_ONLY
 
 
 def build_server() -> FastMCP:
@@ -31,7 +32,7 @@ def build_server() -> FastMCP:
     register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
     register_run(mcp, settings)         # init / plano / apply / run assíncrono
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def server_info() -> dict:
         """Diagnóstico do próprio MCP: binários descobertos e suas versões."""
         bridge = find_bridge(settings)

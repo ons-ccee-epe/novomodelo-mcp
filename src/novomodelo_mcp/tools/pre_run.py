@@ -10,12 +10,13 @@ from ..adapters.discovery import find_novomodelo
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
+from .annotations import READ_ONLY, WRITES
 
 
 def register_pre_run(mcp, settings: Settings) -> None:
     """Registra as tools de pré-rodada no servidor `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def bridge_check_newave(src: str) -> dict:
         """Pré-valida as ENTRADAS de um caso NEWAVE, sem converter (read-only).
 
@@ -27,7 +28,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         env = run_bridge(["check", "newave", src], settings=settings)
         return cap_envelope(env, settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITES)
     def bridge_convert_newave(
         src: str,
         dst: str,
@@ -56,7 +57,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
             attach_artifact(env, "deck", dst)
         return cap_envelope(env, settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def case_validate(case_dir: str) -> dict:
         """Valida se um deck Novomodelo JÁ convertido está pronto para rodar (read-only).
 
@@ -81,7 +82,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def bridge_check_decomp(src: str) -> dict:
         """Pré-valida as ENTRADAS de um caso DECOMP, sem converter (read-only).
 
@@ -93,7 +94,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         env = run_bridge(["check", "decomp", src], settings=settings)
         return cap_envelope(env, settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITES)
     def bridge_convert_decomp(
         src: str,
         dst: str,

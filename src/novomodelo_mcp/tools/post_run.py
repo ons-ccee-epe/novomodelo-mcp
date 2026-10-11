@@ -9,6 +9,7 @@ from ..adapters.paths import ensure_in_workspace
 from ..adapters.validate import validate_compare_inputs
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
+from .annotations import WRITES
 
 
 def _compare(kind: str, src_dir: str, output_dir: str, tolerance, fmt, out_dir,
@@ -30,7 +31,7 @@ def _compare(kind: str, src_dir: str, output_dir: str, tolerance, fmt, out_dir,
 def register_post_run(mcp, settings: Settings) -> None:
     """Registra as tools de pós-rodada no servidor `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITES)
     def bridge_compare_newave(
         newave_dir: str,
         output_dir: str,
@@ -55,7 +56,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         return _compare("newave", newave_dir, output_dir, tolerance, fmt, out_dir,
                         settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITES)
     def bridge_compare_decomp(
         decomp_dir: str,
         output_dir: str,
@@ -77,7 +78,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         return _compare("decomp", decomp_dir, output_dir, tolerance, fmt, out_dir,
                         settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITES)
     def bridge_dashboard(case_dir: str) -> dict:
         """Gera um dashboard HTML interativo a partir de resultados do Novomodelo.
 

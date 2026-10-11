@@ -61,7 +61,7 @@ class _StubMCP:
     def __init__(self):
         self.tools = {}
 
-    def tool(self):
+    def tool(self, *args, **kwargs):  # aceita annotations=… como o FastMCP
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn

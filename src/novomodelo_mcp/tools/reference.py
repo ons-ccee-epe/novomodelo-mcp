@@ -11,27 +11,28 @@ from ..adapters import reference as REF
 from ..config import Settings
 from ..names import URI_SCHEME
 from .shaping import cap_envelope
+from .annotations import READ_ONLY
 
 
 def register_reference(mcp, settings: Settings) -> None:
     """Registra as tools de referência e o resource de schema no servidor `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def schema_list() -> dict:
         """Lista os tipos de arquivo de deck que têm JSON Schema oficial disponível."""
         return {"status": "ok", "types": REF.list_schema_types(settings)}
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def schema_get(tipo: str) -> dict:
         """JSON Schema oficial de um tipo de arquivo do deck (ex.: hydros, config, penalties)."""
         return cap_envelope(REF.read_schema(settings, tipo), settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def docs_list(section: str | None = None) -> dict:
         """Lista páginas da documentação do Novomodelo (opcional: filtra por seção, ex.: 'reference')."""
         return cap_envelope(REF.list_docs(settings, section), settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def docs_read(page: str) -> dict:
         """Lê uma página da documentação, offline (ex.: 'reference/cli-reference')."""
         return cap_envelope(REF.read_doc(settings, page, settings.max_summary_chars), settings)

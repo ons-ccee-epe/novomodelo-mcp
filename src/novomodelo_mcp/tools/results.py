@@ -9,12 +9,13 @@ from ..adapters import results as R
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .shaping import cap_envelope
+from .annotations import READ_ONLY
 
 
 def register_results(mcp, settings: Settings) -> None:
     """Registra as tools de leitura de resultados no servidor `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def results_status(output_dir: str) -> dict:
         """Status, bounds e convergência de um run (o primeiro check pós-rodada).
 
@@ -47,7 +48,7 @@ def register_results(mcp, settings: Settings) -> None:
         }
         return cap_envelope(out, settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def results_convergence(output_dir: str, tail: int = 20) -> dict:
         """Trajetória de convergência: iteração final + últimas `tail` iterações.
 
@@ -57,14 +58,14 @@ def register_results(mcp, settings: Settings) -> None:
             return err
         return cap_envelope(R.convergence_summary(output_dir, tail=tail), settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def results_list_entities(output_dir: str) -> dict:
         """Lista as entidades de simulação disponíveis (hydros, costs, thermals, buses, ...)."""
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
         return {"status": "ok", "entities": R.list_entities(output_dir)}
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def results_query(output_dir: str, entity: str, columns: list[str] | None = None,
                       group_by: list[str] | None = None, agg: str | None = None,
                       scenario: int | None = None, limit: int | None = None) -> dict:

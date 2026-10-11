@@ -75,6 +75,58 @@ Depois de editar, feche o cliente por completo e abra de novo. Para conferir, pe
 agente a tool `server_info`: ela mostra os binários achados, as versões, o workspace e a
 pasta de docs em uso.
 
+## Leitura × escrita (aprovação no cliente)
+
+Cada tool declara, pelas anotações do MCP (`readOnlyHint`, `destructiveHint`,
+`openWorldHint`), se só lê ou se escreve. O cliente pode usar isso para não pedir
+aprovação nas tools de leitura. São **dicas**: quem decide é o cliente e a política
+da organização. A classificação fica em `src/novomodelo_mcp/tools/annotations.py`
+e é conferida por `tests/test_tool_annotations.py`.
+
+| Tipo | Tools |
+|---|---|
+| Só leitura (21) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `run_plan`, `run_status`, `run_logs` |
+| Escreve arquivos novos (7) | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
+| Altera ou interrompe (5) | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel` |
+
+Se o seu cliente não usar as anotações, libere as de leitura pela lista de
+permissões dele:
+
+- **Claude Code** (`~/.claude/settings.json`):
+  ```json
+  {
+    "permissions": {
+      "allow": [
+      "mcp__novomodelo__server_info",
+      "mcp__novomodelo__solver_version",
+      "mcp__novomodelo__schema_list",
+      "mcp__novomodelo__schema_get",
+      "mcp__novomodelo__docs_list",
+      "mcp__novomodelo__docs_read",
+      "mcp__novomodelo__deck_list",
+      "mcp__novomodelo__deck_read_json",
+      "mcp__novomodelo__deck_read_parquet",
+      "mcp__novomodelo__deck_describe_parquet",
+      "mcp__novomodelo__deck_sql",
+      "mcp__novomodelo__case_validate",
+      "mcp__novomodelo__bridge_check_newave",
+      "mcp__novomodelo__bridge_check_decomp",
+      "mcp__novomodelo__results_status",
+      "mcp__novomodelo__results_convergence",
+      "mcp__novomodelo__results_list_entities",
+      "mcp__novomodelo__results_query",
+      "mcp__novomodelo__run_plan",
+      "mcp__novomodelo__run_status",
+      "mcp__novomodelo__run_logs"
+      ]
+    }
+  }
+  ```
+- **Kiro** (na entrada do servidor no `mcp.json`):
+  ```json
+  "autoApprove": ["server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read", "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql", "case_validate", "bridge_check_newave", "bridge_check_decomp", "results_status", "results_convergence", "results_list_entities", "results_query", "run_plan", "run_status", "run_logs"]
+  ```
+
 ## Segurança
 
 As ferramentas de deck e resultado recebem caminhos controlados pelo agente. Defina
@@ -223,6 +275,7 @@ src/novomodelo_mcp/
 ├── tools/                 # o que o agente enxerga: registra as tools e molda a saída
 │   ├── pre_run.py · post_run.py · results.py · deck.py · reference.py
 │   ├── novomodelo_meta.py · run.py · shaping.py
+│   ├── annotations.py     # leitura × escrita de cada tool (anotações MCP)
 └── _bundled/              # cópia embutida de docs e schemas (ver acima)
 scripts/
 ├── sync_bundled.py        # atualiza _bundled/ a partir de um clone do novomodelo-docs
