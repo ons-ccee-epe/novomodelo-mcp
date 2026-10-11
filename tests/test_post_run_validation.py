@@ -57,3 +57,18 @@ def test_entrada_valida_chama_bridge(monkeypatch, tool):
     env = _fn(mcp, tool)("/tmp/src", "/tmp/novomodelo", tolerance=0.5, fmt="json")
     assert calls["n"] == 1, "run_bridge deve ser chamado quando a entrada e valida"
     assert env["status"] == "ok"
+
+
+@pytest.mark.parametrize("tool", ["bridge_compare_newave", "bridge_compare_decomp"])
+def test_segundo_argumento_e_a_pasta_de_saida(monkeypatch, tool):
+    """O bridge recebe a pasta de SAÍDA do run (`novomodelo_output_dir`), não a do caso.
+
+    Regressão: no rename o parâmetro virou `case_dir`, nome que induzia o agente a
+    passar a pasta do caso.
+    """
+    import inspect
+
+    mcp, _ = _build(monkeypatch)
+    params = list(inspect.signature(_fn(mcp, tool)).parameters)
+    assert params[1] == "output_dir"
+    assert "case_dir" not in params

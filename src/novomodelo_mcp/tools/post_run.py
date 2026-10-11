@@ -11,9 +11,9 @@ from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
 
 
-def _compare(kind: str, src_dir: str, case_dir: str, tolerance, fmt, out_dir,
+def _compare(kind: str, src_dir: str, output_dir: str, tolerance, fmt, out_dir,
              settings: Settings) -> dict:
-    argv = ["compare", kind, src_dir, case_dir]
+    argv = ["compare", kind, src_dir, output_dir]
     if tolerance is not None:
         argv += ["--tolerance", str(tolerance)]
     if fmt:
@@ -33,50 +33,56 @@ def register_post_run(mcp, settings: Settings) -> None:
     @mcp.tool()
     def bridge_compare_newave(
         newave_dir: str,
-        case_dir: str,
+        output_dir: str,
         tolerance: float | None = None,
         fmt: str = "json",
         out_dir: str | None = None,
     ) -> dict:
         """Compara resultados de uma rodada NEWAVE contra a saída Novomodelo convertida.
 
+        `newave_dir`: pasta do caso NEWAVE (com os resultados dele).
+        `output_dir`: pasta de SAÍDA do `novomodelo run` do caso convertido
+        (a que contém `training/` e `simulation/`), não a pasta do caso.
         `fmt="html"` + `out_dir` geram um relatório multi-aba (custo, sistema,
         balanço energético, rede, convergência, performance, plantas, FPHA);
         o caminho volta em `artifacts.report_dir`. O veredito de aderência está
         no envelope (`status`/`diagnostics`), não no código de saída.
         """
-        if (err := ensure_in_workspace(newave_dir, case_dir, out_dir, settings=settings)):
+        if (err := ensure_in_workspace(newave_dir, output_dir, out_dir, settings=settings)):
             return err
         if (err := validate_compare_inputs(tolerance, fmt)):
             return err
-        return _compare("newave", newave_dir, case_dir, tolerance, fmt, out_dir,
+        return _compare("newave", newave_dir, output_dir, tolerance, fmt, out_dir,
                         settings)
 
     @mcp.tool()
     def bridge_compare_decomp(
         decomp_dir: str,
-        case_dir: str,
+        output_dir: str,
         tolerance: float | None = None,
         fmt: str = "json",
         out_dir: str | None = None,
     ) -> dict:
         """Compara uma rodada DECOMP contra a saída Novomodelo convertida.
 
+        `decomp_dir`: pasta da revisão DECOMP (com os resultados dele).
+        `output_dir`: pasta de SAÍDA do `novomodelo run` do caso convertido.
         Como `bridge_compare_newave`; o relatório HTML acrescenta seções de REE,
         restrições e evaporação.
         """
-        if (err := ensure_in_workspace(decomp_dir, case_dir, out_dir, settings=settings)):
+        if (err := ensure_in_workspace(decomp_dir, output_dir, out_dir, settings=settings)):
             return err
         if (err := validate_compare_inputs(tolerance, fmt)):
             return err
-        return _compare("decomp", decomp_dir, case_dir, tolerance, fmt, out_dir,
+        return _compare("decomp", decomp_dir, output_dir, tolerance, fmt, out_dir,
                         settings)
 
     @mcp.tool()
     def bridge_dashboard(case_dir: str) -> dict:
         """Gera um dashboard HTML interativo a partir de resultados do Novomodelo.
 
-        `case_dir`: pasta de resultados de um `novomodelo run`. Devolve o envelope; o
+        `case_dir`: pasta do CASO (a que contém `output/`), como no bridge; o HTML
+        vai para `<case_dir>/dashboard.html`. Devolve o envelope; o
         caminho do HTML gerado aparece no `summary`/`diagnostics` do bridge.
         Nunca devolve o HTML inteiro — apenas metadados e caminho.
         """

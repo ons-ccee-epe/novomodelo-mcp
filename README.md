@@ -152,8 +152,8 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `case_validate(case_dir)`: valida o deck (binding `novomodelo.io.validate`, estruturado; fallback para o texto do CLI)
 
 **Pós-rodada** (`tools/post_run.py`)
-- `bridge_compare_newave(newave_dir, case_dir, tolerance, fmt, out_dir)` / `bridge_compare_decomp(decomp_dir, case_dir, ...)`: compara resultados. O `compare` sai com código 0 mesmo com divergência: o veredito está no envelope
-- `bridge_dashboard(case_dir)`: dashboard HTML (devolve o caminho)
+- `bridge_compare_newave(newave_dir, output_dir, tolerance, fmt, out_dir)` / `bridge_compare_decomp(decomp_dir, output_dir, ...)`: compara resultados. `output_dir` é a pasta de **saída** do `novomodelo run` do caso convertido, não a pasta do caso. O `compare` sai com código 0 mesmo com divergência: o veredito está no envelope
+- `bridge_dashboard(case_dir)`: dashboard HTML a partir da pasta do **caso** (grava `<case_dir>/dashboard.html` e devolve o caminho)
 
 **Resultados** (`tools/results.py`)
 - `results_status(output_dir)`: status, bounds, gap, iterações, custo e `software_version` (lê os `metadata.json`; em runs ≤ 0.17 usa o campo antigo `cobre_version`)
