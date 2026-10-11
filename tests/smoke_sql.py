@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cobre_mcp.adapters import sql as S  # noqa: E402
+from novomodelo_mcp.adapters import sql as S  # noqa: E402
 
 WS = [Path("/work").resolve()]
 
@@ -105,7 +105,7 @@ def _settings_for(ws: str, max_rows: int = 1000):
     os.environ["NOVOMODELO_MCP_WORKSPACE"] = ws
     os.environ["NOVOMODELO_MCP_MAX_QUERY_ROWS"] = str(max_rows)
     os.environ["NOVOMODELO_MCP_TIMEOUT"] = "30"
-    from cobre_mcp.config import load_settings
+    from novomodelo_mcp.config import load_settings
     return load_settings()
 
 

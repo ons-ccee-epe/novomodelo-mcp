@@ -1,15 +1,15 @@
-"""Ponto de entrada do servidor MCP do Cobre (transporte stdio, offline)."""
+"""Ponto de entrada do servidor MCP do Novomodelo (transporte stdio, offline)."""
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
-from .adapters.discovery import find_bridge, find_cobre, tool_version
+from .adapters.discovery import find_bridge, find_novomodelo, tool_version
 from .adapters.paths import allowed_roots
 from .adapters.reference import docs_root
 from .adapters.state import state_dir
 from .config import load_settings
 from .names import SERVER_NAME
-from .tools.cobre_meta import register_cobre_meta
+from .tools.novomodelo_meta import register_novomodelo_meta
 from .tools.deck import register_deck
 from .tools.post_run import register_post_run
 from .tools.pre_run import register_pre_run
@@ -28,20 +28,20 @@ def build_server() -> FastMCP:
     register_deck(mcp, settings)        # manipulador de decks (JSON/Parquet)
     register_results(mcp, settings)     # leitura/análise de resultados (pós-rodada)
     register_reference(mcp, settings)   # schemas + documentação (referência)
-    register_cobre_meta(mcp, settings)  # meta do cobre: version + schema export
+    register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
     register_run(mcp, settings)         # init / plano / apply / run assíncrono
 
     @mcp.tool()
     def server_info() -> dict:
         """Diagnóstico do próprio MCP: binários descobertos e suas versões."""
         bridge = find_bridge(settings)
-        cobre = find_cobre(settings)
+        novomodelo = find_novomodelo(settings)
         return {
             "server": f"{SERVER_NAME}-mcp",
             "bridge": {"path": bridge, "version": tool_version(bridge),
                        "available": bridge is not None},
-            "cobre": {"path": cobre, "version": tool_version(cobre),
-                      "available": cobre is not None},
+            "novomodelo": {"path": novomodelo, "version": tool_version(novomodelo),
+                      "available": novomodelo is not None},
             "schemas_dir": settings.schemas_dir,
             "docs_dir": docs_root(settings),
             "workspace": [str(r) for r in allowed_roots(settings)] or "irrestrito (defina NOVOMODELO_MCP_WORKSPACE)",
@@ -61,7 +61,7 @@ def build_server() -> FastMCP:
 
 
 def main() -> None:
-    """Executável `cobre-mcp`: sobe o servidor no transporte stdio."""
+    """Executável `novomodelo-mcp`: sobe o servidor no transporte stdio."""
     build_server().run()
 
 

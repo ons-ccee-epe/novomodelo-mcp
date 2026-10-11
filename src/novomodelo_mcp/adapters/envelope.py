@@ -1,6 +1,6 @@
 """Envelope de erro compartilhado por adaptadores e tools — fonte única.
 
-Elimina a duplicação de `_error` entre bridge.py/cobre.py e o número mágico
+Elimina a duplicação de `_error` entre bridge.py/novomodelo.py e o número mágico
 de truncagem de detalhe espalhado pelo código.
 """
 from __future__ import annotations

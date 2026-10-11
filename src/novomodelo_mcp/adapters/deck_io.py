@@ -1,6 +1,6 @@
 """Leitura e edição de arquivos de deck (JSON/Parquet) DENTRO do contrato de dados.
 
-Garantias de "não quebrar o Cobre":
+Garantias de "não quebrar o Novomodelo":
   - JSON: a edição é validada contra o JSON Schema oficial do tipo (quando
     disponível em NOVOMODELO_MCP_SCHEMAS_DIR); grava só se passar (ou com force=True).
   - Parquet: a edição preserva o schema (mesmas colunas e mesmos dtypes); se a
@@ -259,7 +259,7 @@ def edit_parquet(path: str, where: dict, set_values: dict, *,
             "schema_preserved": True, "artifacts": {"backup": backup_path(path)}}
 
 
-# ── Localizar a raiz do caso (para revalidar com `cobre validate`) ─────────────
+# ── Localizar a raiz do caso (para revalidar com `novomodelo validate`) ─────────────
 
 def find_case_dir(path: str) -> str | None:
     p = Path(path).resolve()

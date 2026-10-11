@@ -5,7 +5,7 @@ Uso:
     uv run python tests/try_tools.py <pasta_newave>  # também roda bridge_check_newave
 
 Não é um teste de CI (não usa pytest). É um "smoke" interativo para ver o
-servidor conversando com o cobre-bridge real.
+servidor conversando com o novomodelo-bridge real.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from pathlib import Path
 # torna o pacote em src/ importável sem instalar
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from cobre_mcp.server import build_server  # noqa: E402
+from novomodelo_mcp.server import build_server  # noqa: E402
 
 
 def _text(result) -> str:

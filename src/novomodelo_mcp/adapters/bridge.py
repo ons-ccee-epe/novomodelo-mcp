@@ -1,7 +1,7 @@
-"""Adaptador da CLI do cobre-bridge.
+"""Adaptador da CLI do novomodelo-bridge.
 
 `run_bridge` é a ÚNICA peça compartilhada por todas as ferramentas. Ela:
-  - monta `cobre-bridge <argv> --json --no-color`;
+  - monta `novomodelo-bridge <argv> --json --no-color`;
   - executa como subprocesso (isolamento de processo);
   - NUNCA levanta exceção para o chamador — toda falha vira um envelope de erro;
   - devolve o envelope do bridge {schema_version, command, status, summary,
@@ -50,7 +50,7 @@ def _parse_envelope(stdout: str, stderr: str) -> dict[str, Any]:
 
 def run_bridge(argv: list[str], *, timeout: float | None = None,
                settings: Settings | None = None) -> dict[str, Any]:
-    """Executa um subcomando do cobre-bridge e devolve o envelope + exit_code."""
+    """Executa um subcomando do novomodelo-bridge e devolve o envelope + exit_code."""
     settings = settings or load_settings()
     binpath = find_bridge(settings)
     if binpath is None:
@@ -68,7 +68,7 @@ def run_bridge(argv: list[str], *, timeout: float | None = None,
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
     except OSError as exc:  # pragma: no cover - defensivo
-        return _error(-1, f"erro ao executar cobre-bridge: {exc}")
+        return _error(-1, f"erro ao executar novomodelo-bridge: {exc}")
 
     envelope = _parse_envelope(proc.stdout, proc.stderr)
     envelope["exit_code"] = proc.returncode

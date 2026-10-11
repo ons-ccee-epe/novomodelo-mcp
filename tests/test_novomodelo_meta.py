@@ -1,10 +1,10 @@
-"""Testes por exemplo da Version_Tool (pytest). Usam o `cobre` falso.
+"""Testes por exemplo da Version_Tool (pytest). Usam o `novomodelo` falso.
 
-Toda a suíte é offline: a CLI `cobre` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN`
+Toda a suíte é offline: a CLI `novomodelo` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN`
 (`monkeypatch.setenv`), espelhando o padrão de `test_adapters.py`. Nenhum teste
 exige o binário real nem faz requisição de rede.
 
-O `cobre` falso (`fake_cobre.py`) é um script Python; `version_cli` o executa
+O `novomodelo` falso (`fake_novomodelo.py`) é um script Python; `version_cli` o executa
 diretamente como `NOVOMODELO_MCP_SOLVER_BIN`. Em POSIX o shebang basta; para rodar o mesmo
 script de forma portátil, cada teste aponta `NOVOMODELO_MCP_SOLVER_BIN` para um lançador gerado
 em diretório temporário que invoca o script com o interpretador corrente.
@@ -17,11 +17,11 @@ from pathlib import Path
 
 import pytest
 
-import cobre_mcp.tools.cobre_meta as cobre_meta
-from cobre_mcp.config import load_settings
-from cobre_mcp.tools.cobre_meta import register_cobre_meta
+import novomodelo_mcp.tools.novomodelo_meta as novomodelo_meta
+from novomodelo_mcp.config import load_settings
+from novomodelo_mcp.tools.novomodelo_meta import register_novomodelo_meta
 
-FAKE = Path(__file__).resolve().parent / "fake_cobre.py"
+FAKE = Path(__file__).resolve().parent / "fake_novomodelo.py"
 
 
 class _CaptureMCP:
@@ -44,63 +44,63 @@ class _CaptureMCP:
 
 def _version_tool(settings):
     mcp = _CaptureMCP()
-    register_cobre_meta(mcp, settings)
+    register_novomodelo_meta(mcp, settings)
     return mcp.tools["solver_version"]
 
 
 @pytest.fixture
-def fake_cobre_bin(tmp_path):
-    """Lançador executável do `cobre` falso, confinado a um diretório temporário.
+def fake_novomodelo_bin(tmp_path):
+    """Lançador executável do `novomodelo` falso, confinado a um diretório temporário.
 
     Devolve o caminho a apontar em `NOVOMODELO_MCP_SOLVER_BIN`. Portátil: em Windows gera um
     `.cmd`; em POSIX, um shell script. Ambos repassam o argv ao script falso via
     o interpretador corrente.
     """
     if os.name == "nt":
-        launcher = tmp_path / "cobre.cmd"
+        launcher = tmp_path / "novomodelo.cmd"
         launcher.write_text(f'@"{sys.executable}" "{FAKE}" %*\r\n', encoding="utf-8")
     else:
-        launcher = tmp_path / "cobre"
+        launcher = tmp_path / "novomodelo"
         launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{FAKE}" "$@"\n')
         launcher.chmod(launcher.stat().st_mode | stat.S_IEXEC)
     return str(launcher)
 
 
-def test_happy_path_parses_version_fields(monkeypatch, fake_cobre_bin):
-    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
+def test_happy_path_parses_version_fields(monkeypatch, fake_novomodelo_bin):
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_novomodelo_bin)
     env = _version_tool(load_settings())()
     assert env["status"] == "ok"
     assert env["exit_code"] == 0
     assert env["version"] == "v9.9.9"
     assert env["solver"] == "HiGHS 1.13.1"
-    assert "cobre" in env["raw"]
+    assert "novomodelo" in env["raw"]
     assert "v9.9.9" in env["raw"]
 
 
-def test_version_runs_without_json_flag(monkeypatch, fake_cobre_bin):
-    """`version_cli` roda `cobre version` SEM `--json` (que a CLI real rejeitaria).
+def test_version_runs_without_json_flag(monkeypatch, fake_novomodelo_bin):
+    """`version_cli` roda `novomodelo version` SEM `--json` (que a CLI real rejeitaria).
 
     A prova é indireta mas honesta: a CLI falsa só emite o texto parseável para
     `version` puro. Se `--json` (ou qualquer flag extra) fosse enviado, o ramo de
     texto não dispararia e `version`/`raw` não bateriam.
     """
-    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_novomodelo_bin)
     env = _version_tool(load_settings())()
     assert env["status"] == "ok"
     assert env["version"] == "v9.9.9"
-    assert env["raw"].splitlines()[0].split()[0] == "cobre"
+    assert env["raw"].splitlines()[0].split()[0] == "novomodelo"
 
 
 def test_missing_binary_returns_127(monkeypatch):
     monkeypatch.delenv("NOVOMODELO_MCP_SOLVER_BIN", raising=False)
-    monkeypatch.setattr("cobre_mcp.adapters.cobre.find_cobre", lambda settings: None)
+    monkeypatch.setattr("novomodelo_mcp.adapters.novomodelo.find_novomodelo", lambda settings: None)
     env = _version_tool(load_settings())()
     assert env["status"] == "error"
     assert env["exit_code"] == 127
 
 
 def test_timeout_returns_minus_one(monkeypatch):
-    monkeypatch.setattr(cobre_meta, "version_cli", _version_cli_envelope(-1))
+    monkeypatch.setattr(novomodelo_meta, "version_cli", _version_cli_envelope(-1))
     env = _version_tool(load_settings())()
     assert env["status"] == "error"
     assert env["exit_code"] == -1
@@ -109,7 +109,7 @@ def test_timeout_returns_minus_one(monkeypatch):
 def test_error_exit_carries_text(monkeypatch):
     """Saída de erro (exit != 0) vira Error_Envelope carregando o texto da CLI."""
     monkeypatch.setattr(
-        cobre_meta,
+        novomodelo_meta,
         "version_cli",
         _version_cli_envelope(2, detail="error: unexpected argument '--json'"),
     )
@@ -123,7 +123,7 @@ def test_never_raises_on_adapter_exception(monkeypatch):
     def boom(*args, **kwargs):
         raise RuntimeError("falha de transporte simulada")
 
-    monkeypatch.setattr(cobre_meta, "version_cli", boom)
+    monkeypatch.setattr(novomodelo_meta, "version_cli", boom)
     env = _version_tool(load_settings())()
     assert env["status"] == "error"
     assert "exit_code" in env
@@ -133,14 +133,14 @@ def test_never_raises_on_adapter_exception(monkeypatch):
 def _version_cli_envelope(exit_code, *, detail=""):
     """Substitui `version_cli` por um sentinela que devolve um Error_Envelope fixo.
 
-    `version_cli` não aceita `subargv` (roda sempre `cobre version` puro), logo os
+    `version_cli` não aceita `subargv` (roda sempre `novomodelo version` puro), logo os
     códigos de transporte (-1 timeout, erro != 0) são exercidos devolvendo o
     envelope diretamente, pelos construtores do owner.
     """
-    from cobre_mcp.adapters.envelope import error as _error
+    from novomodelo_mcp.adapters.envelope import error as _error
 
     def fake(*args, **kwargs):
-        return _error(exit_code, "cobre version encerrou com erro", detail)
+        return _error(exit_code, "novomodelo version encerrou com erro", detail)
 
     return fake
 
@@ -153,10 +153,10 @@ def test_version_parse_does_not_depend_on_program_name(monkeypatch):
     """
     import subprocess
 
-    from cobre_mcp.adapters import cobre as adapter
+    from novomodelo_mcp.adapters import novomodelo as adapter
 
     text = "qualquernome   v0.18.0\nsolver: HiGHS 1.13.1\narch:   aarch64-macos\n"
-    monkeypatch.setattr(adapter, "find_cobre", lambda settings: "/fake/bin")
+    monkeypatch.setattr(adapter, "find_novomodelo", lambda settings: "/fake/bin")
     monkeypatch.setattr(
         adapter.subprocess, "run",
         lambda *a, **k: subprocess.CompletedProcess(a[0], 0, stdout=text, stderr=""),

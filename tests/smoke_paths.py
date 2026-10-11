@@ -8,8 +8,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cobre_mcp.config import load_settings              # noqa: E402
-from cobre_mcp.adapters.paths import ensure_in_workspace  # noqa: E402
+from novomodelo_mcp.config import load_settings              # noqa: E402
+from novomodelo_mcp.adapters.paths import ensure_in_workspace  # noqa: E402
 
 
 def test_unrestricted():

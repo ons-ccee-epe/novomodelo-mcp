@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 from ..adapters import deck_io
-from ..adapters.cobre import validate_deck_binding
+from ..adapters.novomodelo import validate_deck_binding
 from ..adapters.envelope import error
 from ..adapters.obs import log
 from ..adapters.paths import ensure_in_workspace
@@ -27,7 +27,7 @@ def register_deck(mcp, settings: Settings) -> None:
 
     @mcp.tool()
     def deck_list(case_dir: str) -> dict:
-        """Lista os arquivos de um deck Cobre (json/parquet) com tamanho."""
+        """Lista os arquivos de um deck Novomodelo (json/parquet) com tamanho."""
         if (err := _guard(case_dir)):
             return err
         root = Path(case_dir)
@@ -139,7 +139,7 @@ def register_deck(mcp, settings: Settings) -> None:
                 return result
             v = validate_deck_binding(case, settings=settings)
             if v.get("exit_code") == 127:
-                result["case_validation"] = "pulada (cobre-python ausente)"
+                result["case_validation"] = "pulada (novomodelo-python ausente)"
                 return result
             if v.get("status") != "ok":
                 deck_io.restore_backup(path)

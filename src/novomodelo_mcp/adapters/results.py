@@ -1,4 +1,4 @@
-"""Leitura de resultados de um `cobre run`, pelo contrato documentado.
+"""Leitura de resultados de um `novomodelo run`, pelo contrato documentado.
 
 Fontes (docs): reference/output/ (index, training, simulation…) e running/interpreting-results.mdx.
 - metadados: training/metadata.json e simulation/metadata.json (JSON, stdlib)

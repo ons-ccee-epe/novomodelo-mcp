@@ -56,7 +56,7 @@ _SIG_EXCLUDE = (("$schema",), ("exports",), ("simulation",),
 
 LEVELS = {3: "mesma_modelagem", 2: "mesmas_dimensoes", 1: "outro_caso"}
 
-#: Pastas que nunca contêm runs do Cobre (poda da busca).
+#: Pastas que nunca contêm runs do Novomodelo (poda da busca).
 _SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".ruff_cache",
               ".pytest_cache", "scenarios", "system", "simulation", "policy"}
 

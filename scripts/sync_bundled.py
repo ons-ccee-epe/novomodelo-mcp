@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Atualiza o snapshot embutido (docs + schemas) em src/cobre_mcp/_bundled/.
+"""Atualiza o snapshot embutido (docs + schemas) em src/novomodelo_mcp/_bundled/.
 
 O snapshot é vendored no repositório para que as tools ``docs_*``/``schema_*``
 funcionem offline no primeiro uso. Este script re-sincroniza esse snapshot a
-partir de uma fonte local (um clone do repo do site cobre-docs, ou a pasta
+partir de uma fonte local (um clone do repo do site novomodelo-docs, ou a pasta
 ``docs/`` do site), de forma consciente e revisável — o diff resultante mostra
 exatamente o que mudou.
 
@@ -24,7 +24,7 @@ import shutil
 import sys
 from pathlib import Path
 
-_PKG_BUNDLED = Path(__file__).resolve().parents[1] / "src" / "cobre_mcp" / "_bundled"
+_PKG_BUNDLED = Path(__file__).resolve().parents[1] / "src" / "novomodelo_mcp" / "_bundled"
 _DOCS_SUBPATH = Path("src") / "content" / "docs"
 _SCHEMAS_SUBPATH = Path("public") / "schemas"
 

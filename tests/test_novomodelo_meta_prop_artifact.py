@@ -1,11 +1,11 @@
 """Teste de propriedade da Schema_Export_Tool: destino vira artefato, não conteúdo.
 
 Property 2 do design `schema-export-version-tools`. Toda a suíte é offline: a CLI
-`cobre` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN` (`monkeypatch.setenv`), espelhando o
-padrão de `test_cobre_meta.py`. Nenhum teste exige o binário real nem faz
+`novomodelo` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN` (`monkeypatch.setenv`), espelhando o
+padrão de `test_novomodelo_meta.py`. Nenhum teste exige o binário real nem faz
 requisição de rede.
 
-A CLI falsa (`fake_cobre.py`) ecoa um envelope `status=ok` com `exit_code` 0 e
+A CLI falsa (`fake_novomodelo.py`) ecoa um envelope `status=ok` com `exit_code` 0 e
 nunca embute o conteúdo dos schemas; isso é o que a propriedade exige para
 afirmar que o envelope carrega apenas o CAMINHO do destino, não os arquivos.
 """
@@ -19,10 +19,10 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from cobre_mcp.config import load_settings
-from cobre_mcp.tools.cobre_meta import register_cobre_meta
+from novomodelo_mcp.config import load_settings
+from novomodelo_mcp.tools.novomodelo_meta import register_novomodelo_meta
 
-FAKE = Path(__file__).resolve().parent / "fake_cobre.py"
+FAKE = Path(__file__).resolve().parent / "fake_novomodelo.py"
 
 # Chaves que, se presentes no envelope, denunciariam conteúdo de schema embutido
 # em vez do caminho do destino (o relé fino registra só o artefato).
@@ -53,22 +53,22 @@ class _CaptureMCP:
 
 def _schema_export_tool(settings):
     mcp = _CaptureMCP()
-    register_cobre_meta(mcp, settings)
+    register_novomodelo_meta(mcp, settings)
     return mcp.tools["schema_export"]
 
 
 @pytest.fixture
-def fake_cobre_bin(tmp_path):
-    """Lançador executável do `cobre` falso, confinado a um diretório temporário.
+def fake_novomodelo_bin(tmp_path):
+    """Lançador executável do `novomodelo` falso, confinado a um diretório temporário.
 
     Portátil: em Windows gera um `.cmd`; em POSIX, um shell script. Ambos
     repassam o argv ao script falso via o interpretador corrente.
     """
     if os.name == "nt":
-        launcher = tmp_path / "cobre.cmd"
+        launcher = tmp_path / "novomodelo.cmd"
         launcher.write_text(f'@"{sys.executable}" "{FAKE}" %*\r\n', encoding="utf-8")
     else:
-        launcher = tmp_path / "cobre"
+        launcher = tmp_path / "novomodelo"
         launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{FAKE}" "$@"\n')
         launcher.chmod(launcher.stat().st_mode | stat.S_IEXEC)
     return str(launcher)
@@ -84,10 +84,10 @@ def fake_cobre_bin(tmp_path):
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @given(segments=st.lists(_segment, min_size=1, max_size=4))
-def test_destination_is_artifact_not_content(monkeypatch, tmp_path, fake_cobre_bin, segments):
+def test_destination_is_artifact_not_content(monkeypatch, tmp_path, fake_novomodelo_bin, segments):
     root = tmp_path.resolve()
     monkeypatch.setenv("NOVOMODELO_MCP_WORKSPACE", str(root))
-    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_novomodelo_bin)
 
     output_dir = str(root.joinpath(*segments))
     env = _schema_export_tool(load_settings())(output_dir=output_dir)

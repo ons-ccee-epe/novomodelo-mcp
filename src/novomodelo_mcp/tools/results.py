@@ -1,4 +1,4 @@
-"""Leitura e análise de resultados de um `cobre run` (pós-rodada).
+"""Leitura e análise de resultados de um `novomodelo run` (pós-rodada).
 
 Cada tool lê os arquivos documentados (metadata.json / parquet) e devolve
 resultado moldado ao teto de saída. Sem regra de negócio.

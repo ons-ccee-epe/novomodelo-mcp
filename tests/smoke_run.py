@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke test de init / plano / apply / run assíncrono (stdlib puro, offline).
 
-Usa o `cobre` falso (tests/fake_cobre.py, via lançador portável em _fakes.py) e
+Usa o `novomodelo` falso (tests/fake_novomodelo.py, via lançador portável em _fakes.py) e
 uma máquina MOCKADA (machine_id, hostname, cores, RAM) com metadata/config
 sintéticos -> veredito determinístico em qualquer SO. Cada teste usa um state
 dir temporário (NOVOMODELO_MCP_STATE_DIR) — nunca o do usuário.
@@ -22,11 +22,11 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from _fakes import fake_bin                              # noqa: E402
-from cobre_mcp.adapters import jobs, machine, run_plan, runtime, state  # noqa: E402
-from cobre_mcp.config import load_settings              # noqa: E402
-from cobre_mcp.tools.run import make_plan, register_run  # noqa: E402
+from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state  # noqa: E402
+from novomodelo_mcp.config import load_settings              # noqa: E402
+from novomodelo_mcp.tools.run import make_plan, register_run  # noqa: E402
 
-FAKE = fake_bin("fake_cobre.py")
+FAKE = fake_bin("fake_novomodelo.py")
 HOST = "host-sintetico"
 MID = "0123456789abcdef"
 GIB = 1024 ** 3
@@ -159,7 +159,7 @@ def test_machine_cgroup_parsers_and_hostname():
 
 def test_state_dir_is_persistent_not_tmp():
     d = state.default_state_dir()
-    assert d.name == "cobre-mcp", d
+    assert d.name == "novomodelo-mcp", d
     assert not str(d).startswith(tempfile.gettempdir()), d
 
 
@@ -354,7 +354,7 @@ def test_init_list_and_guard():
 
 
 def test_cli_paths_are_absolute_even_for_dash_prefixed_input():
-    from cobre_mcp.tools.run import _cli_path
+    from novomodelo_mcp.tools.run import _cli_path
     cwd = os.getcwd()
     with tempfile.TemporaryDirectory() as d:
         os.chdir(d)
@@ -388,7 +388,7 @@ def test_run_apply_config_only():
 # ── tools: run assíncrono ─────────────────────────────────────────────────────
 
 def test_run_async_lifecycle():
-    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_COBRE_SLEEP="0.3") as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_SLEEP="0.3") as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
         t0 = time.time()
@@ -408,13 +408,13 @@ def test_run_async_lifecycle():
 
 
 def test_run_async_failure_and_cancel():
-    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_COBRE_RC="3") as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_RC="3") as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
         st = _wait(t, t["run_start"](str(case))["job_id"])
         assert st["state"] == "failed" and st["exit_code"] == 3, st
         assert "solver falhou" in st["stderr_tail"], st
-    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_COBRE_SLEEP="30") as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_SLEEP="30") as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
         job = t["run_start"](str(case))["job_id"]
@@ -439,7 +439,7 @@ def test_run_start_refuses_nao_cabe():
 
 def test_calibration_registry_by_machine_id():
     """Run via run_start alimenta o registro; o plano o usa mesmo se o hostname mudar."""
-    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_COBRE_META=json.dumps(REF_META)) as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_META=json.dumps(REF_META)) as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
         st = _wait(t, t["run_start"](str(case), override=True)["job_id"])
@@ -487,7 +487,7 @@ def test_job_lost_when_runner_dies():
 
 
 def test_real_solver_gated():
-    """Execução REAL (cobre init 1dtoy + 1 iteração). Só com NOVOMODELO_MCP_REAL_SOLVER=1."""
+    """Execução REAL (novomodelo init 1dtoy + 1 iteração). Só com NOVOMODELO_MCP_REAL_SOLVER=1."""
     if os.environ.get("NOVOMODELO_MCP_REAL_SOLVER") != "1":
         print("    (pulado: defina NOVOMODELO_MCP_REAL_SOLVER=1 para rodar o solver real)")
         return

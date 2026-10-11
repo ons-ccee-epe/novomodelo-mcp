@@ -1,27 +1,27 @@
 # <repositório anterior>
 
-Servidor **MCP** (Model Context Protocol) do Cobre — uma **fachada fina e offline**
-sobre as CLIs que já existem (`cobre-bridge` e `cobre`). Um agente de IA passa a
+Servidor **MCP** (Model Context Protocol) do Novomodelo — uma **fachada fina e offline**
+sobre as CLIs que já existem (`novomodelo-bridge` e `novomodelo`). Um agente de IA passa a
 poder validar, converter, comparar, visualizar e **ler resultados** de casos por
 ferramentas padronizadas, sem que este servidor contenha qualquer regra de negócio.
 
 > **Princípio:** cada ferramenta envelopa um subcomando de CLI (com `--json`) ou um
-> binding oficial (`cobre-python`), e repassa o resultado. Nada de reimplementar
+> binding oficial (`novomodelo-python`), e repassa o resultado. Nada de reimplementar
 > conversão, validação ou comparação.
 
 ## Requisitos
 
 - Python **>= 3.12**
 - [`uv`](https://docs.astral.sh/uv/)
-- `cobre-bridge` no PATH (conversão / comparação / dashboard)
-- `cobre` no PATH ou em `NOVOMODELO_MCP_SOLVER_BIN` (validação de deck, `init` e execução de runs)
+- `novomodelo-bridge` no PATH (conversão / comparação / dashboard)
+- `novomodelo` no PATH ou em `NOVOMODELO_MCP_SOLVER_BIN` (validação de deck, `init` e execução de runs)
 
 ## Instalação e execução
 
 ```bash
 cd <repositório anterior>
 uv sync --system-certs     # --system-certs: redes com proxy/CA corporativo (ex.: ONS)
-uv run cobre-mcp           # sobe o servidor no transporte stdio
+uv run novomodelo-mcp           # sobe o servidor no transporte stdio
 ```
 
 > **Rede corporativa:** sem `--system-certs` (ou `UV_SYSTEM_CERTS=1`), o `uv` pode
@@ -39,13 +39,13 @@ robusto, sem rebuild):
 ```json
 {
   "mcpServers": {
-    "cobre": {
+    "novomodelo": {
       "command": "/caminho/para/<repositório anterior>/.venv/bin/python",
-      "args": ["-m", "cobre_mcp"],
+      "args": ["-m", "novomodelo_mcp"],
       "env": {
         "PYTHONPATH": "/caminho/para/<repositório anterior>/src",
         "PATH": "/caminho/para/.cargo/bin:/caminho/para/.local/bin:/usr/bin:/bin",
-        "NOVOMODELO_MCP_SOLVER_BIN": "/caminho/para/.cargo/bin/cobre",
+        "NOVOMODELO_MCP_SOLVER_BIN": "/caminho/para/.cargo/bin/novomodelo",
         "NOVOMODELO_MCP_WORKSPACE": "/caminho/para/seus/estudos",
         "UV_SYSTEM_CERTS": "1"
       }
@@ -67,10 +67,10 @@ Edições com `force=True` (gravar violando o schema) e `case_init(force=True)`
 
 | Variável | Default | Para quê |
 |---|---|---|
-| `NOVOMODELO_MCP_BRIDGE_BIN` | (PATH) | caminho do `cobre-bridge` |
-| `NOVOMODELO_MCP_SOLVER_BIN` | (PATH) | caminho do `cobre` |
+| `NOVOMODELO_MCP_BRIDGE_BIN` | (PATH) | caminho do `novomodelo-bridge` |
+| `NOVOMODELO_MCP_SOLVER_BIN` | (PATH) | caminho do `novomodelo` |
 | `NOVOMODELO_MCP_SCHEMAS_DIR` | — | dir com `*.schema.json` (habilita validação por schema no `deck_edit_json`) |
-| `NOVOMODELO_MCP_DOCS_DIR` | — | mirror local do `cobre-docs` (habilita `docs_list`/`docs_read`) |
+| `NOVOMODELO_MCP_DOCS_DIR` | — | mirror local do `novomodelo-docs` (habilita `docs_list`/`docs_read`) |
 | `NOVOMODELO_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando setada) |
 | `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)` e `case_init(force=True)` |
 | `NOVOMODELO_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
@@ -86,9 +86,9 @@ Edições com `force=True` (gravar violando o schema) e `case_init(force=True)`
 ### Plataformas
 
 Windows, macOS e Linux (inclusive containers). O estado persistente fica em
-`NOVOMODELO_MCP_STATE_DIR` ou, por padrão, em `%LOCALAPPDATA%\cobre-mcp` (Windows),
-`~/Library/Application Support/cobre-mcp` (macOS) ou `$XDG_STATE_HOME/cobre-mcp`
-(Linux, padrão `~/.local/state/cobre-mcp`) — nunca no diretório temporário do SO.
+`NOVOMODELO_MCP_STATE_DIR` ou, por padrão, em `%LOCALAPPDATA%\novomodelo-mcp` (Windows),
+`~/Library/Application Support/novomodelo-mcp` (macOS) ou `$XDG_STATE_HOME/novomodelo-mcp`
+(Linux, padrão `~/.local/state/novomodelo-mcp`) — nunca no diretório temporário do SO.
 A detecção de máquina respeita afinidade de CPU e limites de cgroup (Docker/K8s).
 Os runs assíncronos são supervisionados por um runner destacado do servidor: o
 estado sobrevive a restart do servidor e o cancelamento encerra a árvore de
@@ -97,9 +97,9 @@ processos nos três SOs.
 ## Ferramentas
 
 **Pré-rodada** (`tools/pre_run.py`)
-- `bridge_check_newave(src)` — pré-valida entradas NEWAVE (`cobre-bridge check newave`)
-- `bridge_convert_newave(src, dst, validate, force, dry_run)` — converte NEWAVE→Cobre
-- `case_validate(case_dir)` — valida o deck (binding `cobre.io.validate`, estruturado; fallback texto)
+- `bridge_check_newave(src)` — pré-valida entradas NEWAVE (`novomodelo-bridge check newave`)
+- `bridge_convert_newave(src, dst, validate, force, dry_run)` — converte NEWAVE→Novomodelo
+- `case_validate(case_dir)` — valida o deck (binding `novomodelo.io.validate`, estruturado; fallback texto)
 - `bridge_check_decomp(src)` / `bridge_convert_decomp(src, dst, ...)` — paridade DECOMP
 
 **Pós-rodada** (`tools/post_run.py`)
@@ -118,11 +118,11 @@ processos nos três SOs.
 - `deck_sql(query, max_rows)` — consulta SQL **read-only** (DuckDB) sobre parquet/csv/json do deck ou dos resultados; guard confina os caminhos ao workspace
 
 **Referência** (`tools/reference.py`)
-- `schema_list()` / `schema_get(tipo)` — JSON Schemas de entrada (via `cobre schema export` ou `NOVOMODELO_MCP_SCHEMAS_DIR`); também expostos no resource `cobre://schema/{tipo}`
-- `docs_list(section)` / `docs_read(page)` — documentação offline do `cobre-docs` (`NOVOMODELO_MCP_DOCS_DIR`)
+- `schema_list()` / `schema_get(tipo)` — JSON Schemas de entrada (via `novomodelo schema export` ou `NOVOMODELO_MCP_SCHEMAS_DIR`); também expostos no resource `novomodelo://schema/{tipo}`
+- `docs_list(section)` / `docs_read(page)` — documentação offline do `novomodelo-docs` (`NOVOMODELO_MCP_DOCS_DIR`)
 
 **Scaffold e execução** (`tools/run.py`)
-- `case_init(directory, template, list, force)` — cria caso a partir de template embutido (`cobre init`; ex.: `1dtoy`)
+- `case_init(directory, template, list, force)` — cria caso a partir de template embutido (`novomodelo init`; ex.: `1dtoy`)
 - `run_plan(case_dir, time_budget_s=900, threads)` — **não executa, não grava**: estima tempo de
   execução (custo **computacional**) e memória do run local. O tempo por solve é
   **medido nesta máquina**, separado para treino e simulação (`duração ÷ solves` dos `metadata.json`):
@@ -137,7 +137,7 @@ processos nos três SOs.
 - `run_apply(case_dir, overrides, dry_run)` — aplica knobs de **config.json** (`forward_passes`,
   `iteration_limit`, `simulation_scenarios`, `simulation_enabled`) via `deck_edit_json` (schema + backup + atômico).
   `num_openings` (stages.json) fica de fora
-- `run_start(case_dir, threads, output, time_budget_s, override)` — dispara `cobre run ... --comm-backend local
+- `run_start(case_dir, threads, output, time_budget_s, override)` — dispara `novomodelo run ... --comm-backend local
   --quiet` em background e devolve `job_id` na hora; recusa se o plano disser `nao_cabe` (salvo `override=True`)
 - `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
@@ -146,12 +146,12 @@ processos nos três SOs.
 ## Estrutura
 
 ```
-src/cobre_mcp/
+src/novomodelo_mcp/
 ├── server.py            # sobe o FastMCP e registra as tools
 ├── config.py            # Settings via ambiente
 ├── adapters/
 │   ├── bridge.py        # run_bridge  (peça compartilhada)
-│   ├── cobre.py         # run_cobre + validação por binding
+│   ├── novomodelo.py         # run_novomodelo + validação por binding
 │   ├── discovery.py     # acha binários e versões
 │   ├── deck_io.py       # leitura/edição de deck (JSON/Parquet)
 │   ├── results.py       # leitura de resultados
@@ -169,7 +169,7 @@ src/cobre_mcp/
 tests/
 ├── smoke.py · smoke_deck.py · smoke_results.py · smoke_paths.py · smoke_sql.py · smoke_run.py   # stdlib, offline
 ├── test_adapters.py                                               # pytest
-├── fake_cobre_bridge.py · fake_cobre.py · _fakes.py               # binários falsos (lançador portável)
+├── fake_novomodelo_bridge.py · fake_novomodelo.py · _fakes.py               # binários falsos (lançador portável)
 └── try_tools.py                                                   # utilitário manual (não é CI)
 ```
 
@@ -183,7 +183,7 @@ python3 tests/smoke.py && python3 tests/smoke_deck.py \
   && python3 tests/smoke_run.py
 ```
 
-A execução **real** do solver (`cobre init 1dtoy` + 1 iteração) fica fora do CI:
+A execução **real** do solver (`novomodelo init 1dtoy` + 1 iteração) fica fora do CI:
 `NOVOMODELO_MCP_REAL_SOLVER=1 python3 tests/smoke_run.py`.
 
 Suite pytest (após `uv sync`):
@@ -201,4 +201,4 @@ uv run ruff format .
 
 ## Licença
 
-Apache-2.0 (ver arquivo `LICENSE`), alinhado ao ecossistema Cobre.
+Apache-2.0 (ver arquivo `LICENSE`), alinhado ao ecossistema Novomodelo.

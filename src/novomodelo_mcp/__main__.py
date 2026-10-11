@@ -1,4 +1,4 @@
-"""Permite `python -m cobre_mcp`.
+"""Permite `python -m novomodelo_mcp`.
 
 Arranque robusto: com o `src/` no PYTHONPATH, o servidor sobe sem depender do
 editable install do pacote (que se mostrou frágil no layout src/ + Python 3.14).

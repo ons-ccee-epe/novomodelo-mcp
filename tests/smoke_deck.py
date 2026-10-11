@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke test do manipulador de decks (stdlib puro; não usa polars/jsonschema).
 
-Cobre: caminhos de campo (get/set), edição de JSON com backup + escrita atômica,
+Novomodelo: caminhos de campo (get/set), edição de JSON com backup + escrita atômica,
 dry_run, resolução de schema e localização da raiz do caso.
 Roda com: python3 tests/smoke_deck.py
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cobre_mcp.adapters import deck_io  # noqa: E402
+from novomodelo_mcp.adapters import deck_io  # noqa: E402
 
 
 def test_path_get_set():

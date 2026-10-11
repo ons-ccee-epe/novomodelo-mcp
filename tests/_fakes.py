@@ -13,10 +13,10 @@ _HERE = Path(__file__).resolve().parent
 
 
 def fake_bin(script: str) -> str:
-    """Caminho executável para `tests/<script>` (ex.: 'fake_cobre.py')."""
+    """Caminho executável para `tests/<script>` (ex.: 'fake_novomodelo.py')."""
     path = _HERE / script
     if os.name != "nt":
         return str(path)
-    launcher = Path(tempfile.gettempdir()) / f"cobre-mcp-{path.stem}.cmd"
+    launcher = Path(tempfile.gettempdir()) / f"novomodelo-mcp-{path.stem}.cmd"
     launcher.write_text(f'@echo off\r\n"{sys.executable}" "{path}" %*\r\n')
     return str(launcher)

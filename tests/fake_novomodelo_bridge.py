@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Um cobre-bridge FALSO para testes: imita o contrato --json do bridge real.
+"""Um novomodelo-bridge FALSO para testes: imita o contrato --json do bridge real.
 
 Ecoa um envelope {schema_version, command, status, summary, diagnostics} e sai
 com código 0 (ou 3 se o primeiro arg for 'boom'). Não faz nada de verdade.

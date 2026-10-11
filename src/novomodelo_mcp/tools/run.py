@@ -1,6 +1,6 @@
-"""Ferramentas de scaffold e execução: `cobre init`, plano, ajuste de config e run assíncrono.
+"""Ferramentas de scaffold e execução: `novomodelo init`, plano, ajuste de config e run assíncrono.
 
-Fachada: `case_init` e `run_start` envelopam a CLI do cobre; o plano só
+Fachada: `case_init` e `run_start` envelopam a CLI do novomodelo; o plano só
 LÊ o caso e estima; `run_apply` só edita knobs de config.json via
 deck_io.edit_json (schema + backup + atômico). Zero regra de negócio.
 """
@@ -10,8 +10,8 @@ import re
 from pathlib import Path
 
 from ..adapters import deck_io, jobs, runtime
-from ..adapters.cobre import run_cobre
-from ..adapters.discovery import find_cobre
+from ..adapters.novomodelo import run_novomodelo
+from ..adapters.discovery import find_novomodelo
 from ..adapters.envelope import as_error, error
 from ..adapters.machine import detect_machine
 from ..adapters.obs import log
@@ -52,7 +52,7 @@ _TEMPLATE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 def _cli_path(path: str) -> str:
     """Caminho ABSOLUTO para a argv da CLI: um relativo iniciado por `-` seria lido
-    pelo cobre como opção (injeção de argumento)."""
+    pelo novomodelo como opção (injeção de argumento)."""
     return str(Path(path).resolve())
 
 
@@ -114,14 +114,14 @@ def register_run(mcp, settings: Settings) -> None:
     @mcp.tool()
     def case_init(directory: str | None = None, template: str | None = None,
                    list: bool = False, force: bool = False) -> dict:  # noqa: A002
-        """Cria um caso a partir de um template embutido (`cobre init`).
+        """Cria um caso a partir de um template embutido (`novomodelo init`).
 
         `list=True` lista os templates disponíveis (ex.: `1dtoy`) e sai.
         Senão, `directory` + `template` escrevem o caso. `force=True`
         (sobrescrever arquivos existentes) só é aceito com NOVOMODELO_MCP_ALLOW_FORCE=1.
         """
         if list:
-            env = run_cobre(["init", "--list"], settings=settings, parse_json=False)
+            env = run_novomodelo(["init", "--list"], settings=settings, parse_json=False)
             templates = []
             for line in (env.get("stdout") or "").splitlines():
                 name, _, desc = line.strip().partition(" ")
@@ -142,7 +142,7 @@ def register_run(mcp, settings: Settings) -> None:
         if force:
             argv.append("--force")
         argv.append(_cli_path(directory))
-        env = run_cobre(argv, settings=settings, parse_json=False)
+        env = run_novomodelo(argv, settings=settings, parse_json=False)
         if env.get("exit_code") == 0:
             attach_artifact(env, "case_dir", directory)
         return cap_envelope(env, settings)
@@ -201,9 +201,9 @@ def register_run(mcp, settings: Settings) -> None:
     def run_start(case_dir: str, threads: int | None = None,
                         output: str | None = None, time_budget_s: float = 900,
                         override: bool = False) -> dict:
-        """Dispara `cobre run` em BACKGROUND e devolve `job_id` na hora.
+        """Dispara `novomodelo run` em BACKGROUND e devolve `job_id` na hora.
 
-        Comando: `cobre run <case> --output <output> --threads N --comm-backend
+        Comando: `novomodelo run <case> --output <output> --threads N --comm-backend
         local --quiet`. `threads` default = o do plano (núcleos de performance em
         CPU híbrida, ou o nº medido mais rápido); `output` default =
         `<case_dir>/output`. Antes de lançar roda o run_plan: se o veredito
@@ -213,9 +213,9 @@ def register_run(mcp, settings: Settings) -> None:
         output = output or str(Path(case_dir) / "output")
         if (err := ensure_in_workspace(case_dir, output, settings=settings)):
             return err
-        binpath = find_cobre(settings)
+        binpath = find_novomodelo(settings)
         if binpath is None:
-            return error(127, "cobre não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN).")
+            return error(127, "novomodelo não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN).")
         if threads is not None and threads < 1:
             return error(22, "threads deve ser >= 1")
         machine = detect_machine()

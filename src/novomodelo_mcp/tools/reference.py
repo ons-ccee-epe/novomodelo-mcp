@@ -28,7 +28,7 @@ def register_reference(mcp, settings: Settings) -> None:
 
     @mcp.tool()
     def docs_list(section: str | None = None) -> dict:
-        """Lista páginas da documentação do Cobre (opcional: filtra por seção, ex.: 'reference')."""
+        """Lista páginas da documentação do Novomodelo (opcional: filtra por seção, ex.: 'reference')."""
         return cap_envelope(REF.list_docs(settings, section), settings)
 
     @mcp.tool()

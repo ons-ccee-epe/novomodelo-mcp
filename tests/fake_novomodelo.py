@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Um `cobre` FALSO para testes: imita o contrato da CLI real.
+"""Um `novomodelo` FALSO para testes: imita o contrato da CLI real.
 
-Alcançado via `NOVOMODELO_MCP_SOLVER_BIN` (ver `find_cobre`; no Windows via o lançador de
+Alcançado via `NOVOMODELO_MCP_SOLVER_BIN` (ver `find_novomodelo`; no Windows via o lançador de
 `_fakes.fake_bin`). O adaptador antepõe `--color never`; o primeiro argumento
 após o subcomando pode sinalizar um cenário de falha de transporte, para exercer
 os códigos estáveis sem binário real:
@@ -16,9 +16,9 @@ Subcomandos com comportamento próprio:
                               espaço, demais `label: valor`), sai com 0.
 - `init --list`             : lista de templates no stdout (texto).
 - `init --template T DIR`   : cria DIR/config.json (recusa se existir, salvo --force).
-- `run CASE --output OUT …` : dorme FAKE_COBRE_SLEEP s, cria OUT/training/_SUCCESS
-                              (+ metadata.json = FAKE_COBRE_META, se definido) e sai
-                              com FAKE_COBRE_RC (default 0).
+- `run CASE --output OUT …` : dorme FAKE_NOVOMODELO_SLEEP s, cria OUT/training/_SUCCESS
+                              (+ metadata.json = FAKE_NOVOMODELO_META, se definido) e sai
+                              com FAKE_NOVOMODELO_RC (default 0).
 
 Os demais (ex.: `schema export`) ecoam um envelope `status=ok` com o argv
 recebido (menos o `--color never`), para que o teste afirme o subcomando exato.
@@ -30,10 +30,10 @@ import sys
 import time
 from pathlib import Path
 
-# Texto real de `cobre version`: primeira linha separada por espaço, demais
+# Texto real de `novomodelo version`: primeira linha separada por espaço, demais
 # `label: valor`. A versão `v9.9.9` é um EXEMPLO de fixture, não um invariante.
 VERSION_TEXT = (
-    "cobre   v9.9.9\n"
+    "novomodelo   v9.9.9\n"
     "solver: HiGHS 1.13.1\n"
     "comm:   local\n"
     "zstd:   enabled\n"
@@ -86,13 +86,13 @@ if subargv[:1] == ["init"]:
 if subargv[:1] == ["run"]:
     out = Path(subargv[subargv.index("--output") + 1])
     print("fake run: start", flush=True)
-    time.sleep(float(os.environ.get("FAKE_COBRE_SLEEP", "0")))
-    rc = int(os.environ.get("FAKE_COBRE_RC", "0"))
+    time.sleep(float(os.environ.get("FAKE_NOVOMODELO_SLEEP", "0")))
+    rc = int(os.environ.get("FAKE_NOVOMODELO_RC", "0"))
     if rc == 0:
         (out / "training").mkdir(parents=True, exist_ok=True)
         (out / "training" / "_SUCCESS").write_text("")
-        if os.environ.get("FAKE_COBRE_META"):
-            (out / "training" / "metadata.json").write_text(os.environ["FAKE_COBRE_META"])
+        if os.environ.get("FAKE_NOVOMODELO_META"):
+            (out / "training" / "metadata.json").write_text(os.environ["FAKE_NOVOMODELO_META"])
         print("fake run: done", flush=True)
     else:
         print("fake run: solver falhou", file=sys.stderr, flush=True)

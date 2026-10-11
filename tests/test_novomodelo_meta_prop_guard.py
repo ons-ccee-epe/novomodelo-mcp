@@ -1,12 +1,12 @@
 """Teste de propriedade da guarda de workspace fail-closed na Schema_Export_Tool.
 
-Offline: a CLI `cobre` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN` (`monkeypatch.setenv`),
-espelhando `test_cobre_meta.py` e `test_adapters.py`. Nenhum teste exige o
+Offline: a CLI `novomodelo` falsa é alcançada via `NOVOMODELO_MCP_SOLVER_BIN` (`monkeypatch.setenv`),
+espelhando `test_novomodelo_meta.py` e `test_adapters.py`. Nenhum teste exige o
 binário real nem faz requisição de rede; todo acesso ao FS fica em diretórios
 temporários.
 
-Reutiliza o padrão `_CaptureMCP` e o lançador `fake_cobre_bin` de
-`test_cobre_meta.py`: a tool registrada é uma função Python comum, invocada como
+Reutiliza o padrão `_CaptureMCP` e o lançador `fake_novomodelo_bin` de
+`test_novomodelo_meta.py`: a tool registrada é uma função Python comum, invocada como
 o servidor faria após o despacho stdio.
 """
 
@@ -19,11 +19,11 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-import cobre_mcp.tools.cobre_meta as cobre_meta
-from cobre_mcp.config import load_settings
-from cobre_mcp.tools.cobre_meta import register_cobre_meta
+import novomodelo_mcp.tools.novomodelo_meta as novomodelo_meta
+from novomodelo_mcp.config import load_settings
+from novomodelo_mcp.tools.novomodelo_meta import register_novomodelo_meta
 
-FAKE = Path(__file__).resolve().parent / "fake_cobre.py"
+FAKE = Path(__file__).resolve().parent / "fake_novomodelo.py"
 
 # Segmentos de caminho sem separadores, `..`, `.` ou NUL: a propriedade exercita
 # a decisão da guarda sobre o caminho resolvido, não a travessia por `..` (o
@@ -52,25 +52,25 @@ class _CaptureMCP:
 
 def _schema_export_tool(settings):
     mcp = _CaptureMCP()
-    register_cobre_meta(mcp, settings)
+    register_novomodelo_meta(mcp, settings)
     return mcp.tools["schema_export"]
 
 
 def _write_launcher(tmp_path: Path) -> str:
-    """Lançador executável do `cobre` falso, confinado a um diretório temporário."""
+    """Lançador executável do `novomodelo` falso, confinado a um diretório temporário."""
     if os.name == "nt":
-        launcher = tmp_path / "cobre.cmd"
+        launcher = tmp_path / "novomodelo.cmd"
         launcher.write_text(f'@"{sys.executable}" "{FAKE}" %*\r\n', encoding="utf-8")
     else:
-        launcher = tmp_path / "cobre"
+        launcher = tmp_path / "novomodelo"
         launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{FAKE}" "$@"\n')
         launcher.chmod(launcher.stat().st_mode | stat.S_IEXEC)
     return str(launcher)
 
 
 @pytest.fixture
-def fake_cobre_bin(tmp_path):
-    """Lançador do `cobre` falso a apontar em `NOVOMODELO_MCP_SOLVER_BIN` (ver `test_cobre_meta.py`)."""
+def fake_novomodelo_bin(tmp_path):
+    """Lançador do `novomodelo` falso a apontar em `NOVOMODELO_MCP_SOLVER_BIN` (ver `test_novomodelo_meta.py`)."""
     return _write_launcher(tmp_path)
 
 
@@ -80,10 +80,10 @@ def fake_cobre_bin(tmp_path):
 def test_workspace_guard_is_fail_closed(monkeypatch, tmp_path_factory, inside, outside):
     """Dentro de R ⇒ aceito (prossegue à CLI); fora de R ⇒ recusa com 13 sem tocar o FS.
 
-    O transporte `run_cobre` é substituído por um sentinela que apenas registra
+    O transporte `run_novomodelo` é substituído por um sentinela que apenas registra
     que foi alcançado: prova "aceito = prossegue para a CLI" para 200 inputs sem
     pagar o custo de iniciar o interpretador por exemplo. O caminho fim-a-fim até
-    a CLI `cobre` falsa real é coberto por `test_guard_accept_reaches_fake_cli`.
+    a CLI `novomodelo` falsa real é coberto por `test_guard_accept_reaches_fake_cli`.
 
     Validates: Requirements 1.6, 5.2
     """
@@ -94,11 +94,11 @@ def test_workspace_guard_is_fail_closed(monkeypatch, tmp_path_factory, inside, o
 
     reached: list[list[str]] = []
 
-    def spy_run_cobre(subargv, **kwargs):
+    def spy_run_novomodelo(subargv, **kwargs):
         reached.append(subargv)
         return {"status": "ok", "exit_code": 0}
 
-    monkeypatch.setattr(cobre_meta, "run_cobre", spy_run_cobre)
+    monkeypatch.setattr(novomodelo_meta, "run_novomodelo", spy_run_novomodelo)
     tool = _schema_export_tool(load_settings())
 
     inside_dir = str(root.joinpath(*inside))
@@ -119,15 +119,15 @@ def test_workspace_guard_is_fail_closed(monkeypatch, tmp_path_factory, inside, o
     assert len(reached) == before
 
 
-def test_guard_accept_reaches_fake_cli(monkeypatch, tmp_path, fake_cobre_bin):
-    """Caminho dentro do workspace alcança a CLI `cobre` falsa real via `NOVOMODELO_MCP_SOLVER_BIN`.
+def test_guard_accept_reaches_fake_cli(monkeypatch, tmp_path, fake_novomodelo_bin):
+    """Caminho dentro do workspace alcança a CLI `novomodelo` falsa real via `NOVOMODELO_MCP_SOLVER_BIN`.
 
     Validates: Requirements 1.6, 5.2
     """
     root = tmp_path / "workspace"
     root.mkdir()
     monkeypatch.setenv("NOVOMODELO_MCP_WORKSPACE", str(root))
-    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_novomodelo_bin)
 
     inside_dir = str(root / "schemas")
     env = _schema_export_tool(load_settings())(output_dir=inside_dir)
@@ -138,7 +138,7 @@ def test_guard_accept_reaches_fake_cli(monkeypatch, tmp_path, fake_cobre_bin):
     assert non_flag[:2] == ["schema", "export"]
 
 
-def test_guard_refuses_outside_before_reaching_fake_cli(monkeypatch, tmp_path, fake_cobre_bin):
+def test_guard_refuses_outside_before_reaching_fake_cli(monkeypatch, tmp_path, fake_novomodelo_bin):
     """Caminho fora do workspace é recusado com 13 antes de alcançar a CLI falsa.
 
     Validates: Requirements 1.6, 5.2
@@ -146,7 +146,7 @@ def test_guard_refuses_outside_before_reaching_fake_cli(monkeypatch, tmp_path, f
     root = tmp_path / "workspace"
     root.mkdir()
     monkeypatch.setenv("NOVOMODELO_MCP_WORKSPACE", str(root))
-    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_cobre_bin)
+    monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_novomodelo_bin)
 
     outside_dir = str(tmp_path / "outside" / "schemas")
     assert not Path(outside_dir).exists()

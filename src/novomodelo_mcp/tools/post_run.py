@@ -38,7 +38,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         fmt: str = "json",
         out_dir: str | None = None,
     ) -> dict:
-        """Compara resultados de uma rodada NEWAVE contra a saída Cobre convertida.
+        """Compara resultados de uma rodada NEWAVE contra a saída Novomodelo convertida.
 
         `fmt="html"` + `out_dir` geram um relatório multi-aba (custo, sistema,
         balanço energético, rede, convergência, performance, plantas, FPHA);
@@ -60,7 +60,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         fmt: str = "json",
         out_dir: str | None = None,
     ) -> dict:
-        """Compara uma rodada DECOMP contra a saída Cobre convertida.
+        """Compara uma rodada DECOMP contra a saída Novomodelo convertida.
 
         Como `bridge_compare_newave`; o relatório HTML acrescenta seções de REE,
         restrições e evaporação.
@@ -74,9 +74,9 @@ def register_post_run(mcp, settings: Settings) -> None:
 
     @mcp.tool()
     def bridge_dashboard(case_dir: str) -> dict:
-        """Gera um dashboard HTML interativo a partir de resultados do Cobre.
+        """Gera um dashboard HTML interativo a partir de resultados do Novomodelo.
 
-        `case_dir`: pasta de resultados de um `cobre run`. Devolve o envelope; o
+        `case_dir`: pasta de resultados de um `novomodelo run`. Devolve o envelope; o
         caminho do HTML gerado aparece no `summary`/`diagnostics` do bridge.
         Nunca devolve o HTML inteiro — apenas metadados e caminho.
         """

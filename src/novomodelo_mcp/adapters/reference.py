@@ -1,10 +1,10 @@
 """Referência: JSON Schemas de entrada e páginas de documentação (offline).
 
 Fontes:
-- schemas: `NOVOMODELO_MCP_SCHEMAS_DIR`, ou exportados sob demanda via `cobre schema export`.
+- schemas: `NOVOMODELO_MCP_SCHEMAS_DIR`, ou exportados sob demanda via `novomodelo schema export`.
 - docs: `NOVOMODELO_MCP_DOCS_DIR`; se ausente/inválido, AUTO-DESCOBERTA de um clone
-  `cobre-docs` em locais previsíveis (ao lado do repo do MCP ou do diretório de
-  trabalho — ex.: .../codigo/<repositório anterior> + .../codigo/cobre-docs). Sem env var e
+  `novomodelo-docs` em locais previsíveis (ao lado do repo do MCP ou do diretório de
+  trabalho — ex.: .../codigo/<repositório anterior> + .../codigo/novomodelo-docs). Sem env var e
   sem caminho pessoal fixo: a mesma heurística vale para qualquer checkout.
 Leitura confinada à raiz; conteúdo com teto. Sem regra de negócio.
 """
@@ -17,14 +17,14 @@ from importlib import resources
 from pathlib import Path
 
 from ..config import Settings
-from .discovery import find_cobre
+from .discovery import find_novomodelo
 
 _SCHEMA_EXPORT_CACHE: dict[str, str] = {}
 _DOCS_DISCOVER_CACHE: dict[str, str] = {}
 _SUFFIX = ".schema.json"
 
 #: Subpacote que carrega o snapshot embutido (docs + schemas) no wheel.
-_BUNDLED_PKG = "cobre_mcp._bundled"
+_BUNDLED_PKG = "novomodelo_mcp._bundled"
 
 
 def _bundled_dir(name: str) -> str | None:
@@ -47,31 +47,31 @@ def _bundled_dir(name: str) -> str | None:
 
 
 def _export_schemas(settings: Settings) -> str | None:
-    """Exporta os schemas via `cobre schema export` para um cache temporário."""
-    cobre = find_cobre(settings)
-    if not cobre:
+    """Exporta os schemas via `novomodelo schema export` para um cache temporário."""
+    novomodelo = find_novomodelo(settings)
+    if not novomodelo:
         return None
-    cached = _SCHEMA_EXPORT_CACHE.get(cobre)
+    cached = _SCHEMA_EXPORT_CACHE.get(novomodelo)
     if cached and Path(cached).is_dir():
         return cached
-    out = Path(tempfile.gettempdir()) / "cobre_mcp_schemas"
+    out = Path(tempfile.gettempdir()) / "novomodelo_mcp_schemas"
     out.mkdir(parents=True, exist_ok=True)
     try:
         proc = subprocess.run(
-            [cobre, "--color", "never", "schema", "export", "--output-dir", str(out)],
+            [novomodelo, "--color", "never", "schema", "export", "--output-dir", str(out)],
             capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.SubprocessError):
         return None
     if proc.returncode != 0:
         return None
-    _SCHEMA_EXPORT_CACHE[cobre] = str(out)
+    _SCHEMA_EXPORT_CACHE[novomodelo] = str(out)
     return str(out)
 
 
 def schemas_root(settings: Settings) -> str | None:
     """Raiz efetiva dos schemas (cascata; primeiro que existir vence).
 
-    ``NOVOMODELO_MCP_SCHEMAS_DIR`` -> ``cobre schema export`` -> schemas EMBUTIDOS
+    ``NOVOMODELO_MCP_SCHEMAS_DIR`` -> ``novomodelo schema export`` -> schemas EMBUTIDOS
     (``_bundled/schemas``). O embutido garante o caminho feliz offline.
     """
     return (
@@ -116,7 +116,7 @@ def _within(path: Path, root: Path) -> bool:
 _CLONE_HINT = (
     "clone https://github.com/ons-ccee-epe/novomodelo-docs e defina NOVOMODELO_MCP_DOCS_DIR para a "
     "pasta de paginas .md/.mdx (no layout padrao do repo, src/content/docs), ou "
-    "deixe o clone ao lado do repo do cobre/<repositório anterior> para a descoberta automatica "
+    "deixe o clone ao lado do repo do novomodelo/<repositório anterior> para a descoberta automatica "
     "encontra-lo"
 )
 
@@ -133,24 +133,24 @@ def _has_docs(d: Path) -> bool:
 
 
 def _search_docs_in(bases: list[Path]) -> str | None:
-    """Procura, na ordem dada, um clone `cobre-docs` com conteúdo dentro das bases.
+    """Procura, na ordem dada, um clone `novomodelo-docs` com conteúdo dentro das bases.
 
     Puro e testável: recebe as bases já resolvidas. Prefere a subpasta de conteúdo
-    do layout padrão (`cobre-docs/src/content/docs`); aceita também a raiz do clone,
+    do layout padrão (`novomodelo-docs/src/content/docs`); aceita também a raiz do clone,
     caso o repo seja reorganizado.
     """
     for base in bases:
-        for cand in (base / "cobre-docs" / "src" / "content" / "docs",
-                     base / "cobre-docs"):
+        for cand in (base / "novomodelo-docs" / "src" / "content" / "docs",
+                     base / "novomodelo-docs"):
             if cand.is_dir() and _has_docs(cand):
                 return str(cand)
     return None
 
 
 def _candidate_bases() -> list[Path]:
-    """Bases previsíveis onde um clone `cobre-docs` costuma ficar (sem env var).
+    """Bases previsíveis onde um clone `novomodelo-docs` costuma ficar (sem env var).
 
-    Ancestrais do próprio pacote do MCP e do diretório de trabalho — cobre o
+    Ancestrais do próprio pacote do MCP e do diretório de trabalho — novomodelo o
     layout usual de checkouts lado a lado, sem depender de caminho pessoal.
     """
     bases: list[Path] = []
@@ -180,7 +180,7 @@ def _candidate_bases() -> list[Path]:
 
 
 def _discover_docs_dir() -> str | None:
-    """Auto-descoberta de um clone `cobre-docs` (com cache do acerto)."""
+    """Auto-descoberta de um clone `novomodelo-docs` (com cache do acerto)."""
     cached = _DOCS_DISCOVER_CACHE.get("root")
     if cached and Path(cached).is_dir():
         return cached
@@ -193,7 +193,7 @@ def _discover_docs_dir() -> str | None:
 def docs_root(settings: Settings) -> str | None:
     """Raiz efetiva das docs (cascata; primeiro que existir vence).
 
-    ``NOVOMODELO_MCP_DOCS_DIR`` (valido) -> auto-descoberta de um clone ``cobre-docs``
+    ``NOVOMODELO_MCP_DOCS_DIR`` (valido) -> auto-descoberta de um clone ``novomodelo-docs``
     -> docs EMBUTIDOS (``_bundled/docs``). O embutido garante o caminho feliz
     offline, sem clone nem env var.
     """
@@ -207,10 +207,10 @@ def _docs_unavailable(settings: Settings) -> dict:
     configured = settings.docs_dir
     if not configured:
         msg = ("docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR nao definido e nenhum clone "
-               "cobre-docs encontrado automaticamente")
+               "novomodelo-docs encontrado automaticamente")
     else:
         msg = ("docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR aponta para caminho inexistente "
-               f"ou que nao e diretorio ({configured}) e nenhum clone cobre-docs "
+               f"ou que nao e diretorio ({configured}) e nenhum clone novomodelo-docs "
                "encontrado automaticamente")
     return {"status": "error", "diagnostics": [msg, _CLONE_HINT]}
 

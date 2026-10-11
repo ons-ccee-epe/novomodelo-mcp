@@ -2,9 +2,9 @@
 
 Diretório (primeiro que valer):
   NOVOMODELO_MCP_STATE_DIR
-  Windows: %LOCALAPPDATA%\\cobre-mcp
-  macOS:   ~/Library/Application Support/cobre-mcp
-  Linux:   $XDG_STATE_HOME/cobre-mcp  (padrão ~/.local/state/cobre-mcp)
+  Windows: %LOCALAPPDATA%\\novomodelo-mcp
+  macOS:   ~/Library/Application Support/novomodelo-mcp
+  Linux:   $XDG_STATE_HOME/novomodelo-mcp  (padrão ~/.local/state/novomodelo-mcp)
 
 Nunca usa o diretório temporário do sistema: ele é limpo pelo SO e o estado dos
 runs precisa sobreviver a restarts. Stdlib pura.
@@ -20,7 +20,7 @@ from pathlib import Path
 
 from ..config import Settings
 
-APP = "cobre-mcp"
+APP = "novomodelo-mcp"
 
 
 def default_state_dir() -> Path:

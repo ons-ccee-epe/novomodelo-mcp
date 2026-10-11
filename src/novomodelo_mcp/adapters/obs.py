@@ -20,5 +20,5 @@ def log(settings: Settings, event: str, **fields: Any) -> None:
         if len(text) > 300:
             text = text[:300] + "…"
         parts.append(f"{key}={text}")
-    line = f"[cobre-mcp] {event}" + (" " + " ".join(parts) if parts else "")
+    line = f"[novomodelo-mcp] {event}" + (" " + " ".join(parts) if parts else "")
     print(line, file=sys.stderr, flush=True)

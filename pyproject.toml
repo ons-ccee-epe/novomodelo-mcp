@@ -1,7 +1,7 @@
 [project]
-name = "cobre-mcp"
+name = "novomodelo-mcp"
 version = "0.1.0"
-description = "Servidor MCP (fachada offline) sobre as CLIs do Cobre e do cobre-bridge"
+description = "Servidor MCP (fachada offline) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
@@ -16,21 +16,21 @@ dependencies = [
 ]
 
 [project.scripts]
-cobre-mcp = "cobre_mcp.server:main"
+novomodelo-mcp = "novomodelo_mcp.server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cobre_mcp"]
+packages = ["src/novomodelo_mcp"]
 # Garante que o snapshot embutido (docs .md/.mdx + schemas .json) entre no wheel.
 # Sem isto, o hatch empacota apenas .py e as tools de doc/schema ficariam sem
 # conteudo offline.
 artifacts = [
-    "src/cobre_mcp/_bundled/**/*.md",
-    "src/cobre_mcp/_bundled/**/*.mdx",
-    "src/cobre_mcp/_bundled/**/*.json",
+    "src/novomodelo_mcp/_bundled/**/*.md",
+    "src/novomodelo_mcp/_bundled/**/*.mdx",
+    "src/novomodelo_mcp/_bundled/**/*.json",
 ]
 
 [dependency-groups]

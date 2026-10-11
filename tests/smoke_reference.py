@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cobre_mcp.adapters import reference as REF   # noqa: E402
-from cobre_mcp.config import load_settings         # noqa: E402
+from novomodelo_mcp.adapters import reference as REF   # noqa: E402
+from novomodelo_mcp.config import load_settings         # noqa: E402
 
 
 def test_schema_list_and_get():
@@ -44,7 +44,7 @@ def test_docs_list_and_read():
 def test_discover_prefers_content_subpath():
     with tempfile.TemporaryDirectory() as d:
         base = Path(d)
-        content = base / "cobre-docs" / "src" / "content" / "docs"
+        content = base / "novomodelo-docs" / "src" / "content" / "docs"
         content.mkdir(parents=True)
         (content / "intro.md").write_text("# intro")
         found = REF._search_docs_in([base])
@@ -54,7 +54,7 @@ def test_discover_prefers_content_subpath():
 def test_discover_accepts_repo_root_layout():
     with tempfile.TemporaryDirectory() as d:
         base = Path(d)
-        root = base / "cobre-docs"
+        root = base / "novomodelo-docs"
         root.mkdir()
         (root / "guide.mdx").write_text("# guide")
         found = REF._search_docs_in([base])
@@ -93,7 +93,7 @@ def test_docs_unavailable_messages_when_bundled_missing():
     """Quando NAO ha env var, nem clone, nem embutido, a msg de erro orienta.
 
     Cenario de borda (build sem o snapshot embutido): a mensagem deve distinguir
-    o caso (NOVOMODELO_MCP_DOCS_DIR nao definido) e dar a dica do clone cobre-docs; e um
+    o caso (NOVOMODELO_MCP_DOCS_DIR nao definido) e dar a dica do clone novomodelo-docs; e um
     NOVOMODELO_MCP_DOCS_DIR invalido deve aparecer na mensagem do read_doc.
     """
     os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)

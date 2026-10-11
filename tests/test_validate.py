@@ -1,15 +1,15 @@
 """Testes de validacao de entrada das tools de comparacao (pytest).
 
-Cobrem as invariantes de :mod:`cobre_mcp.adapters.validate`:
+Cobrem as invariantes de :mod:`novomodelo_mcp.adapters.validate`:
 
 * ``tolerance`` valida no intervalo ``(0.0, 1.0]`` (limites: 0.0 invalido,
   1.0 valido, > 1.0 invalido);
 * token de ``format`` restrito ao conjunto aceito pela CLI;
-* a validacao NAO invoca o cobre-bridge (barra antes do subprocesso).
+* a validacao NAO invoca o novomodelo-bridge (barra antes do subprocesso).
 """
 import pytest
 
-from cobre_mcp.adapters.validate import (
+from novomodelo_mcp.adapters.validate import (
     VALID_FORMATS,
     validate_compare_inputs,
     validate_fmt,

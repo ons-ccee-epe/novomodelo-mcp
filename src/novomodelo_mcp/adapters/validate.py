@@ -1,9 +1,9 @@
 """Validacao leve de parametros das tools de comparacao (pre-bridge).
 
-Barra entradas invalidas ANTES de invocar o cobre-bridge, com uma mensagem de
+Barra entradas invalidas ANTES de invocar o novomodelo-bridge, com uma mensagem de
 erro clara para o agente, em vez de delegar a falha a CLI. Sao funcoes puras:
 recebem o valor cru do parametro e devolvem um envelope de erro (formato unico
-de :mod:`cobre_mcp.adapters.envelope`) ou ``None`` quando o valor e valido.
+de :mod:`novomodelo_mcp.adapters.envelope`) ou ``None`` quando o valor e valido.
 
 Escopo deliberadamente minimo (zero regra de negocio): apenas as invariantes
 que a CLI documenta e que sao baratas de checar aqui:
@@ -14,7 +14,7 @@ que a CLI documenta e que sao baratas de checar aqui:
   ``{console, html, csv, parquet, json, all}``.
 
 O codigo de saida dos envelopes de erro segue a convencao da CLI para entrada
-invalida (``2``), coerente com o ``compare``/``_parse_formats`` do cobre-bridge.
+invalida (``2``), coerente com o ``compare``/``_parse_formats`` do novomodelo-bridge.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from typing import Any
 
 from .envelope import error
 
-#: Tokens de ``--format`` aceitos pelo cobre-bridge (compare newave/decomp).
+#: Tokens de ``--format`` aceitos pelo novomodelo-bridge (compare newave/decomp).
 #: Espelha ``_VALID_CLI_FORMATS`` da CLI: console,html,csv,parquet,json,all.
 VALID_FORMATS: frozenset[str] = frozenset(
     {"console", "html", "csv", "parquet", "json", "all"}

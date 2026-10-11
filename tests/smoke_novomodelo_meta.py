@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Smoke test das tools de meta do cobre (version/schema export), stdlib puro.
+"""Smoke test das tools de meta do novomodelo (version/schema export), stdlib puro.
 
-Prova os contratos de transporte e de guarda sem binário `cobre` real e sem
+Prova os contratos de transporte e de guarda sem binário `novomodelo` real e sem
 rede: binário ausente -> 127; saída não-JSON -> envelope com texto bruto;
 output_dir fora do workspace -> recusa 13 pelo guard. Roda:
-python3 tests/smoke_cobre_meta.py"""
+python3 tests/smoke_novomodelo_meta.py"""
 import os
 import sys
 import tempfile
@@ -13,8 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cobre_mcp.config import load_settings            # noqa: E402
-from cobre_mcp.tools.cobre_meta import register_cobre_meta  # noqa: E402
+from novomodelo_mcp.config import load_settings            # noqa: E402
+from novomodelo_mcp.tools.novomodelo_meta import register_novomodelo_meta  # noqa: E402
 
 
 class _CaptureMCP:
@@ -32,13 +32,13 @@ class _CaptureMCP:
 
 def _tools():
     mcp = _CaptureMCP()
-    register_cobre_meta(mcp, load_settings())
+    register_novomodelo_meta(mcp, load_settings())
     return mcp.tools
 
 
-def _write_fake_cobre(dir_path: Path, body: str) -> str:
-    """Gera um `cobre` falso em stdlib puro que delega a este mesmo python."""
-    script = dir_path / "fake_cobre.py"
+def _write_fake_novomodelo(dir_path: Path, body: str) -> str:
+    """Gera um `novomodelo` falso em stdlib puro que delega a este mesmo python."""
+    script = dir_path / "fake_novomodelo.py"
     script.write_text(
         "import sys\n"
         "argv = sys.argv[1:]\n"
@@ -46,7 +46,7 @@ def _write_fake_cobre(dir_path: Path, body: str) -> str:
         "    argv = argv[2:]\n"
         + body
     )
-    launcher = dir_path / ("cobre.cmd" if os.name == "nt" else "cobre")
+    launcher = dir_path / ("novomodelo.cmd" if os.name == "nt" else "novomodelo")
     if os.name == "nt":
         launcher.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n')
     else:
@@ -58,7 +58,7 @@ def _write_fake_cobre(dir_path: Path, body: str) -> str:
 
 
 def test_missing_binary_is_127():
-    """find_cobre -> None (sem NOVOMODELO_MCP_SOLVER_BIN e PATH vazio) vira envelope 127, sem exceção."""
+    """find_novomodelo -> None (sem NOVOMODELO_MCP_SOLVER_BIN e PATH vazio) vira envelope 127, sem exceção."""
     old_bin = os.environ.pop("NOVOMODELO_MCP_SOLVER_BIN", None)
     old_path = os.environ.get("PATH")
     os.environ["PATH"] = ""
@@ -78,7 +78,7 @@ def test_missing_binary_is_127():
 def test_nonjson_output_lands_in_diagnostics():
     """Saída não-JSON da CLI vira Error_Envelope carregando o texto bruto."""
     with tempfile.TemporaryDirectory() as d:
-        binpath = _write_fake_cobre(
+        binpath = _write_fake_novomodelo(
             Path(d),
             "print('isto nao e json: falha simulada da CLI')\n"
             "sys.exit(1)\n",

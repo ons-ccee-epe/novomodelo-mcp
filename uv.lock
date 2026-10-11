@@ -141,7 +141,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cobre-mcp"
+name = "novomodelo-mcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

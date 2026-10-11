@@ -28,7 +28,7 @@ BANNER = (
     "     Regenerate: python scripts/gen/sync-kiro-steering.py -->\n"
 )
 
-# Overridable via --hard-rules-name because cobre-bridge calls this agent-guidelines.md.
+# Overridable via --hard-rules-name because novomodelo-bridge calls this agent-guidelines.md.
 DEFAULT_HARD_RULES_NAME = "00-hard-rules.md"
 
 
@@ -152,7 +152,7 @@ def main() -> int:
         default=DEFAULT_HARD_RULES_NAME,
         help=(
             "steering filename for the CLAUDE.md projection "
-            f"(default: {DEFAULT_HARD_RULES_NAME}; cobre-bridge uses "
+            f"(default: {DEFAULT_HARD_RULES_NAME}; novomodelo-bridge uses "
             "agent-guidelines.md)"
         ),
     )

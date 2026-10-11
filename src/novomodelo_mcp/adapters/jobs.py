@@ -1,4 +1,4 @@
-"""Execução assíncrona de comandos longos (ex.: `cobre run`): estado, logs, cancelamento.
+"""Execução assíncrona de comandos longos (ex.: `novomodelo run`): estado, logs, cancelamento.
 
 Multiplataforma (Windows, macOS, Linux) e independente do processo do servidor:
 cada job é supervisionado por `_job_runner.py`, lançado DESTACADO (nova sessão

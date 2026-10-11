@@ -217,7 +217,7 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
     if params.get("selection_method") not in (None, "sampled") or not fwd:
         plan.update(verdict="indeterminado", reference=None)
         warnings.append(f"seleção '{params.get('selection_method')}' sem forward_passes — "
-                        "modelo de tempo só cobre 'sampled'")
+                        "modelo de tempo só novomodelo 'sampled'")
         return plan
     if not iters:
         plan.update(verdict="indeterminado", reference=None)

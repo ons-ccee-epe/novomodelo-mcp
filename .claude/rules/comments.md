@@ -6,7 +6,7 @@ paths:
 # <repositório anterior> Comment & Docstring Rules
 
 Governs every `#` comment and docstring in any `.py` file in this repo. The
-Deletion Test and the Four Voices match the wider Cobre ecosystem's comment
+Deletion Test and the Four Voices match the wider Novomodelo ecosystem's comment
 discipline; the directives are adapted to this server's domain (an offline relay
 over external CLIs). Auto-loads on `**/*.py`.
 

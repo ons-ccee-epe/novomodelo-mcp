@@ -13,7 +13,7 @@ def find_bridge(settings: Settings) -> str | None:
     return settings.bridge_bin or shutil.which(BRIDGE_CLI)
 
 
-def find_cobre(settings: Settings) -> str | None:
+def find_novomodelo(settings: Settings) -> str | None:
     """Caminho do executável do solver (NOVOMODELO_MCP_SOLVER_BIN tem prioridade)."""
     return settings.solver_bin or shutil.which(SOLVER_CLI)
 

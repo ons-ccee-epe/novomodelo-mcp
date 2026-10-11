@@ -2,7 +2,7 @@
 """Smoke test offline: exercita o adaptador e o shaping sem dependências externas.
 
 Roda com: python3 tests/smoke.py   (a partir da raiz do projeto)
-Não importa `mcp`; valida a lógica compartilhada contra o cobre-bridge falso.
+Não importa `mcp`; valida a lógica compartilhada contra o novomodelo-bridge falso.
 """
 import os
 import sys
@@ -12,12 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from cobre_mcp.adapters.bridge import run_bridge          # noqa: E402
-from cobre_mcp.config import load_settings                # noqa: E402
-from cobre_mcp.tools.shaping import cap_envelope          # noqa: E402
+from novomodelo_mcp.adapters.bridge import run_bridge          # noqa: E402
+from novomodelo_mcp.config import load_settings                # noqa: E402
+from novomodelo_mcp.tools.shaping import cap_envelope          # noqa: E402
 from _fakes import fake_bin                                # noqa: E402
 
-FAKE = fake_bin("fake_cobre_bridge.py")
+FAKE = fake_bin("fake_novomodelo_bridge.py")
 
 
 def _settings():
@@ -44,7 +44,7 @@ def test_error_envelope():
 
 
 def test_missing_binary():
-    os.environ["NOVOMODELO_MCP_BRIDGE_BIN"] = "/nao/existe/cobre-bridge-xyz"
+    os.environ["NOVOMODELO_MCP_BRIDGE_BIN"] = "/nao/existe/novomodelo-bridge-xyz"
     env = run_bridge(["check", "newave", "x"], settings=load_settings())
     assert env["status"] == "error", env
     assert env["exit_code"] in (126, 127), env
