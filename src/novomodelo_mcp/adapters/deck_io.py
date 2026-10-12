@@ -267,3 +267,87 @@ def find_case_dir(path: str) -> str | None:
         if (anc / "config.json").exists():
             return str(anc)
     return None
+
+
+# ── Mapa do caso: entradas listadas, rodadas resumidas (deck_list) ─────────────
+
+#: Arquivos que contam como entrada do caso.
+_INPUT_SUFFIXES = (".json", ".parquet")
+
+
+def is_run_output(d: Path) -> bool:
+    """Uma pasta é saída de rodada quando tem `training/metadata.json`.
+
+    É o contrato de saída documentado do novomodelo (o mesmo que as tools
+    `results_*` usam), não um palpite pelo nome da pasta (`output/`, `output_2/`…).
+    """
+    return (d / "training" / "metadata.json").is_file()
+
+
+def _summarize_run(root: Path, d: Path) -> dict[str, Any]:
+    n_files = n_bytes = 0
+    for dirpath, _dirs, files in os.walk(d):
+        for f in files:
+            n_files += 1
+            try:
+                n_bytes += (Path(dirpath) / f).stat().st_size
+            except OSError:
+                pass
+    sim = d / "simulation"
+    entities = sorted(p.name for p in sim.iterdir() if p.is_dir()) if sim.is_dir() else []
+    rel = d.relative_to(root).as_posix() if d != root else "."
+    return {"path": str(d), "rel": rel, "files": n_files, "bytes": n_bytes,
+            "milestones": {"training": (d / "training" / "_SUCCESS").exists(),
+                           "simulation": (sim / "_SUCCESS").exists()},
+            "simulation_entities": entities,
+            "next": f"results_status(output_dir='{d}') para status; results_query para dados"}
+
+
+def case_map(case_dir: str, schema_types: set[str], max_files: int,
+             max_other: int = 50) -> dict[str, Any]:
+    """Mapa de um caso: o que é entrada, o que é rodada e o que é outra coisa.
+
+    - entradas: `.json`/`.parquet` fora das rodadas, um a um (caminho, tamanho e o
+      tipo de schema quando o nome do arquivo corresponde a um; ex. hydros.json →
+      `hydros`), com teto `max_files`;
+    - rodadas: cada pasta de saída numa linha (nº de arquivos, bytes, marcos);
+      o conteúdo NÃO é listado, porque as `results_*` já conhecem o formato;
+    - outros: demais arquivos (backups, dashboard…), só o nome, com teto.
+    """
+    root = Path(case_dir)
+    inputs: list[dict[str, Any]] = []
+    runs: list[dict[str, Any]] = []
+    others: list[str] = []
+    n_inputs = n_others = 0
+    for dirpath, dirs, files in os.walk(root):
+        here = Path(dirpath)
+        if is_run_output(here):
+            runs.append(_summarize_run(root, here))
+            dirs[:] = []          # não desce na rodada
+            continue
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        for f in sorted(files):
+            if f.startswith("."):
+                continue
+            p = here / f
+            rel = p.relative_to(root).as_posix()
+            if p.suffix in _INPUT_SUFFIXES:
+                n_inputs += 1
+                if len(inputs) < max_files:
+                    item = {"path": str(p), "rel": rel, "kind": p.suffix.lstrip("."),
+                            "bytes": p.stat().st_size}
+                    if p.stem in schema_types:
+                        item["schema"] = p.stem
+                    inputs.append(item)
+            else:
+                n_others += 1
+                if len(others) < max_other:
+                    others.append(rel)
+    out: dict[str, Any] = {"status": "ok", "case_dir": str(root),
+                           "count": n_inputs, "files": inputs,
+                           "runs": runs, "others": others}
+    if n_inputs > len(inputs):
+        out["files_truncated"] = True
+    if n_others > len(others):
+        out["others_total"] = n_others
+    return out

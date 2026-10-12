@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from ..adapters import deck_io
+from ..adapters import reference as REF
 from ..adapters.novomodelo import validate_deck_binding
 from ..adapters.envelope import error
 from ..adapters.obs import log
@@ -27,19 +28,26 @@ def register_deck(mcp, settings: Settings) -> None:
         return ensure_in_workspace(*paths, settings=settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def deck_list(case_dir: str) -> dict:
-        """Lista os arquivos de um deck Novomodelo (json/parquet) com tamanho."""
+    def deck_list(case_dir: str, max_files: int = 500) -> dict:
+        """Mapa do caso: entradas (o deck), rodadas e outros arquivos.
+
+        `files`: cada arquivo de ENTRADA (.json/.parquet) com caminho, tamanho e,
+        quando houver, o tipo de schema (`schema`, use em schema_get). São os
+        caminhos que deck_read_*, deck_sql e deck_edit_* recebem.
+        `runs`: cada pasta de SAÍDA de rodada (tem training/metadata.json) numa linha
+        (nº de arquivos, tamanho, marcos). Para os dados, use results_status /
+        results_query com `output_dir` = essa pasta; o conteúdo não é listado.
+        `others`: demais arquivos (backups, dashboard…), só o nome.
+        Teto: `max_files` entradas (`files_truncated` avisa).
+        """
         if (err := _guard(case_dir)):
             return err
         root = Path(case_dir)
         if not root.is_dir():
             return error(2, f"nao e uma pasta: {case_dir}")
-        files = []
-        for p in sorted(root.rglob("*")):
-            if p.is_file() and p.suffix in (".json", ".parquet"):
-                files.append({"path": str(p), "rel": p.relative_to(root).as_posix(),
-                              "kind": p.suffix.lstrip("."), "bytes": p.stat().st_size})
-        return {"status": "ok", "case_dir": str(root), "count": len(files), "files": files}
+        types = set(REF.list_schema_types(settings))
+        return cap_envelope(deck_io.case_map(case_dir, types, max(1, int(max_files))),
+                            settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def deck_read_json(path: str) -> dict:
