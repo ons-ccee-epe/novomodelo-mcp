@@ -30,3 +30,27 @@ jobs:
 
       - name: Testes (pytest)
         run: uv run pytest -q
+
+  rename-guard:
+    # TEMPORÁRIO: existe só enquanto o MCP vive fora do repo do novomodelo.
+    # Na migração para o monorepo, apagar este job: o CI do novomodelo já roda o
+    # mesmo check sobre o repositório inteiro.
+    # Falha se o nome antigo do produto reaparecer fora das exceções do mapa.
+    # Usa a ferramenta do upstream (fonte única), fixada numa tag: atualizar o
+    # `ref` junto com o pin do novomodelo-python.
+    name: Trava de nome (rebrand check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Ferramenta de rename do novomodelo (fixada na tag)
+        uses: actions/checkout@v5
+        with:
+          repository: ons-ccee-epe/novomodelo
+          ref: v0.18.0
+          path: _upstream
+          sparse-checkout: scripts/rebrand
+          persist-credentials: false
+
+      - name: rebrand.py check
+        run: python3 _upstream/scripts/rebrand/rebrand.py check --root . --map scripts/rebrand/map.toml

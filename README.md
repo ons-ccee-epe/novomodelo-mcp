@@ -30,7 +30,7 @@ gravada pela mesma versão do binding.
 
 ```bash
 cd <repositório anterior>
-uv sync --system-certs     # --system-certs: redes com proxy/CA corporativo (ex.: ONS)
+uv sync --system-certs     # --system-certs: redes com proxy que reassina certificados
 uv run novomodelo-mcp      # sobe o servidor no transporte stdio
 ```
 
@@ -325,6 +325,15 @@ uv run --no-sync python $R check  --root . --map $M   # 0 ocorrências = pronto
 
 Para o próximo nome, crie um mapa com `from = "novomodelo"`. As exceções atuais
 (`<repositório anterior>`, `cobre_version`, `cobrem`) estão comentadas no próprio mapa.
+
+**Temporário, enquanto o MCP vive fora do repo do novomodelo:** o CI roda o `check` em todo push e PR (job `rename-guard`), com a ferramenta baixada do
+novomodelo na mesma tag do pin do `novomodelo-python`. Se o nome antigo reaparecer, o CI falha.
+
+## Atualizar para uma versão nova do novomodelo
+
+**Temporário, enquanto o MCP vive fora do repo do novomodelo:** o Dependabot abre um PR para a `develop` quando sai uma `novomodelo-python` nova. Ao
+aceitar, suba junto o `ref` do job `rename-guard` em `.github/workflows/ci.yml` para a
+mesma tag, e atualize o novomodelo e o bridge na máquina para a mesma versão.
 
 ## Licença
 
