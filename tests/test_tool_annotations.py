@@ -29,7 +29,7 @@ def test_toda_tool_tem_anotacao():
     assert not sem, f"tools sem anotação: {sem}"
 
 
-def test_classificacao_cobre_todas_as_tools():
+def test_classificacao_abrange_todas_as_tools():
     assert set(_tools()) == READ_ONLY | WRITES | DESTRUCTIVE
 
 
