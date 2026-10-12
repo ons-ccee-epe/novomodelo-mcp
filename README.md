@@ -294,6 +294,17 @@ uv run pytest -q              # suíte completa (test_* e smoke_*), offline, com
 uv run ruff check src tests
 ```
 
+**Bateria de ponta a ponta** contra os programas reais (fora do CI): sobe o servidor como um
+cliente MCP, confere as anotações que ele anuncia e chama as 33 tools num rascunho dentro do
+workspace (`<workspace>/_e2e/<data-hora>/`). As tools do bridge usam os decks mínimos públicos do
+`novomodelo-bridge` (`tests/decks/newave_mini` e `decomp_mini`); sem `--bridge-repo`, elas ficam como PULADAS:
+
+```bash
+uv run python scripts/e2e_live.py --workspace /caminho/para/estudos \
+    --bridge-repo /caminho/para/novomodelo-bridge     # decks mínimos públicos do bridge
+uv run python scripts/e2e_live.py --workspace … --bridge-repo … --claude-code   # + aprovação no Claude Code
+```
+
 A execução **real** do solver (`novomodelo init 1dtoy` + 1 iteração) fica fora do CI:
 `NOVOMODELO_MCP_REAL_SOLVER=1 uv run python tests/smoke_run.py`.
 

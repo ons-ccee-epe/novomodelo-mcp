@@ -292,7 +292,10 @@ def estimate(points: list[dict[str, Any]], threads: int, train_solves: int,
             "training_wall_per_solve": round(tr[0], 5), "training_method": tr[1],
             "simulation_wall_per_solve": round(sim[0], 5), "simulation_method": sim[1],
             "training_seconds": round(t_tr, 1), "simulation_seconds": round(t_sim, 1),
-            "total_seconds": round(t_tr + t_sim, 1), "notes": notes}
+            "total_seconds": round(t_tr + t_sim, 1), "notes": notes,
+            # valor sem arredondar, só para contas internas do plano (sai antes da resposta):
+            # o arredondado vira 0.0 em casos minúsculos e quebrava divisões.
+            "_exact_training_seconds": t_tr}
 
 
 def training_solves(iters: int, forward_passes: int, openings: list[int]) -> int:
