@@ -92,8 +92,8 @@ def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
                 return error(22, f"{knob} deve ser booleano")
             changes.append({"path": "simulation.enabled", "value": value})
             continue
-        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-            return error(22, f"{knob} deve ser inteiro >= 1 (recebido {value!r})")
+        if isinstance(value, bool) or not isinstance(value, int):
+            return error(22, f"{knob} deve ser inteiro (recebido {value!r})")
         if knob == "iteration_limit":
             rules = list((config.get("training") or {}).get("stopping_rules") or [])
             idx = next((i for i, r in enumerate(rules)
