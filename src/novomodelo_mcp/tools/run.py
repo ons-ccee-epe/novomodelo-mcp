@@ -205,7 +205,7 @@ def register_run(mcp, settings: Settings) -> None:
         """Dispara `novomodelo run` em BACKGROUND e devolve `job_id` na hora.
 
         Comando: `novomodelo run <case> --output <output> --threads N --comm-backend
-        local --quiet`. `threads` default = o do plano (núcleos de performance em
+        local`. `threads` default = o do plano (núcleos de performance em
         CPU híbrida, ou o nº medido mais rápido); `output` default =
         `<case_dir>/output`. Antes de lançar roda o run_plan: se o veredito
         for `nao_cabe`, RECUSA (salvo `override=True`). Acompanhe com
@@ -233,7 +233,7 @@ def register_run(mcp, settings: Settings) -> None:
                                     "ajuste com run_apply ou passe override=True"]}
         n = threads or plan.get("target_threads") or 1
         cmd = [binpath, "--color", "never", "run", _cli_path(case_dir), "--output", _cli_path(output),
-               "--threads", str(n), "--comm-backend", "local", "--quiet"]
+               "--threads", str(n), "--comm-backend", "local"]
         jobs.prune_jobs(settings)
         try:
             meta = jobs.start_job(settings, cmd, max_running=settings.max_jobs, info={
@@ -272,7 +272,11 @@ def register_run(mcp, settings: Settings) -> None:
 
     @mcp.tool(annotations=READ_ONLY)
     def run_logs(job_id: str, lines: int = 100) -> dict:
-        """Últimas `lines` linhas de stdout/stderr do run (com teto de caracteres)."""
+        """Últimas `lines` linhas de stdout/stderr do run (com teto de caracteres).
+
+        Durante o run, o `stderr` traz as linhas de progresso do novomodelo
+        (iteração, limites, gap), cortadas pelo teto.
+        """
         logs = jobs.job_logs(settings, job_id, lines=max(1, lines),
                              max_chars=settings.max_summary_chars)
         if logs is None:

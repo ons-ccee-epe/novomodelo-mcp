@@ -399,8 +399,8 @@ def test_run_async_lifecycle():
         r = t["run_start"](str(case), threads=2)
         assert r["status"] == "ok" and r["job_id"], r
         assert time.time() - t0 < 5, "start deveria voltar na hora"
-        assert r["cmd"][-7:] == ["--output", str((case / "output").resolve()), "--threads", "2",
-                                 "--comm-backend", "local", "--quiet"], r["cmd"]
+        assert r["cmd"][-6:] == ["--output", str((case / "output").resolve()), "--threads", "2",
+                                 "--comm-backend", "local"], r["cmd"]
         busy = t["run_start"](str(case), threads=2)
         assert busy["status"] == "error" and busy["exit_code"] == 16, busy
         st = _wait(t, r["job_id"])
