@@ -26,26 +26,39 @@ ADAPTER = {"novomodelo": SRC / "adapters" / "novomodelo.py", "bridge": SRC / "ad
 _META_KEYS = {"raiz", "ignorados"}
 
 # clap indenta a opção em até 6 espaços (a descrição vem mais funda); o Typer abre a
-# linha com "│ ". Formas curtas (`-o`) são ignoradas: só a longa conta.
-_OPTION_LINE = re.compile(r"^(?:│ |\s{2,6})(?:-[A-Za-z],\s*)?(--[a-z][a-z0-9-]*)")
-_COMMANDS_HEADER = re.compile(r"^(?:Commands:|╭─ Commands)")
+# linha com "│ ", ou "| " quando o console não é UTF-8. Formas curtas (`-o`) são
+# ignoradas: só a longa conta.
+_BORDERS = "│|"
+_OPTION_LINE = re.compile(r"^(?:[│|] |\s{2,6})(?:-[A-Za-z],\s*)?(--[a-z][a-z0-9-]*)")
+_COMMANDS_HEADER = re.compile(r"^(?:Commands:|[╭+][─-] Commands)")
 
 
 def parse_options(help_text: str) -> set[str]:
     return {m.group(1) for line in help_text.splitlines() if (m := _OPTION_LINE.match(line))}
 
 
+def _row(line: str) -> str:
+    row = line.rstrip()
+    row = row[1:] if row[:1] in _BORDERS else row
+    return row[:-1].rstrip() if row[-1:] in _BORDERS else row
+
+
 def parse_commands(help_text: str) -> set[str]:
-    names, inside = set(), False
+    # Uma linha mais indentada que a primeira do bloco continua a descrição anterior:
+    # o runner do CI quebra a ajuda em 80 colunas e ignora `COLUMNS`.
+    names, inside, indent = set(), False, None
     for line in help_text.splitlines():
         if _COMMANDS_HEADER.match(line.strip()):
             inside = True
             continue
         if inside:
-            row = line.strip().strip("│").strip()
-            if not row or line.strip().startswith(("╰", "Options:")):
+            row = _row(line)
+            if not row.strip() or line.strip().startswith(("╰", "+", "Options:")):
                 break
-            names.add(row.split()[0])
+            depth = len(row) - len(row.lstrip())
+            indent = depth if indent is None else indent
+            if depth == indent:
+                names.add(row.split()[0])
     return names
 
 
@@ -63,7 +76,8 @@ def _binary(program: str) -> str | None:
 
 
 def _help(binary: str, words: list[str]) -> str:
-    env = {**os.environ, "NO_COLOR": "1", "COLUMNS": "200", "TERM": "dumb"}
+    env = {**os.environ, "NO_COLOR": "1", "COLUMNS": "200", "TERM": "dumb",
+           "PYTHONIOENCODING": "utf-8"}
     proc = subprocess.run([binary, *words, "--help"], capture_output=True, text=True,
                           timeout=60, env=env)
     return proc.stdout + proc.stderr
@@ -221,6 +235,41 @@ TYPER_HELP = """ Usage: novomodelo-bridge convert decomp [OPTIONS] {src} {dst}
 """
 
 
+TYPER_HELP_80_COLUNAS = """ Usage: novomodelo-bridge [OPTIONS] COMMAND [ARGS]...
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --show-completion             Show completion for the current shell, to copy │
+│                               it or customize the installation.              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ dashboard  Generate an interactive HTML dashboard from Novomodelo simulation │
+│            results.                                                          │
+│ convert    Convert data from a source format to Novomodelo JSON.             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+"""
+TYPER_HELP_ASCII = """ Usage: novomodelo-bridge [OPTIONS] COMMAND [ARGS]...
++- Options --------------------------------------------------------------------+
+| --version                     Show the version and exit.                     |
+| --show-completion             Show completion for the current shell, to copy |
+|                               it or customize the installation.              |
++------------------------------------------------------------------------------+
++- Commands -------------------------------------------------------------------+
+| dashboard  Generate an interactive HTML dashboard from Novomodelo simulation |
+|            results.                                                          |
+| convert    Convert data from a source format to Novomodelo JSON.             |
++------------------------------------------------------------------------------+
+"""
+CLAP_HELP_80_COLUNAS = """Usage: novomodelo [OPTIONS] <COMMAND>
+
+Commands:
+  validate  Validate a case directory and print a structured diagnostic
+            report
+  version   Print version, solver backend, and build information
+
+Options:
+  -h, --help
+"""
+
+
 def test_parse_das_opcoes_clap_e_typer():
     assert parse_options(CLAP_HELP) == {"--color", "--output", "--help"}
     assert parse_options(TYPER_HELP) == {"--force", "--no-fcf", "--verbose"}
@@ -229,6 +278,17 @@ def test_parse_das_opcoes_clap_e_typer():
 def test_parse_dos_subcomandos_clap_e_typer():
     assert parse_commands(CLAP_HELP) == {"export", "help"}
     assert parse_commands(TYPER_HELP) == {"newave", "decomp"}
+
+
+def test_parse_ignora_continuacao_da_descricao_quebrada_em_80_colunas():
+    assert parse_commands(TYPER_HELP_80_COLUNAS) == {"dashboard", "convert"}
+    assert parse_commands(CLAP_HELP_80_COLUNAS) == {"validate", "version"}
+    assert parse_options(TYPER_HELP_80_COLUNAS) == {"--show-completion"}
+
+
+def test_parse_aceita_borda_ascii():
+    assert parse_commands(TYPER_HELP_ASCII) == {"dashboard", "convert"}
+    assert parse_options(TYPER_HELP_ASCII) == {"--version", "--show-completion"}
 
 
 def test_detector_acusa_opcao_nova_e_opcao_sumida():
