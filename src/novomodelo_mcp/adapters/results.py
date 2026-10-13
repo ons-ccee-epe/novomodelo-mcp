@@ -10,10 +10,16 @@ de forma preguiçosa (o módulo carrega mesmo sem ele).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
+from ..config import Settings
 from .envelope import error
+from .paths import ensure_in_workspace
+
+#: `entity` é o NOME de uma pasta de `simulation/`, nunca um caminho.
+_ENTITY_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 _AGGS = {"mean", "min", "max", "sum", "median", "std", "p10", "p90"}
 
@@ -125,7 +131,8 @@ def _agg_exprs(pl, agg: str, cols: list[str]):
     return [one(c) for c in cols]
 
 
-def simulation_query(output_dir: str, entity: str, *, columns: list[str] | None = None,
+def simulation_query(output_dir: str, entity: str, *, settings: Settings,
+                     columns: list[str] | None = None,
                      group_by: list[str] | None = None, agg: str | None = None,
                      scenario: int | None = None, limit: int = 50,
                      max_rows: int = 200) -> dict[str, Any]:
@@ -135,7 +142,17 @@ def simulation_query(output_dir: str, entity: str, *, columns: list[str] | None 
     Sem group_by: primeiras `limit` linhas (com filtro opcional por `scenario`).
     Nunca devolve o dataset inteiro — sempre com teto de linhas.
     """
-    base = Path(output_dir) / "simulation" / entity
+    if not _ENTITY_NAME.match(entity or ""):
+        return error(13, f"entidade inválida: {entity!r}",
+                     "use um nome de results_list_entities (letras, números, _ e -)")
+    # resolve() antes de comparar: um nome válido pode ser link simbólico para fora
+    # de simulation/, e o guard de output_dir não alcança o que vem depois dele.
+    sim = (Path(output_dir) / "simulation").resolve()
+    base = (sim / entity).resolve()
+    if not base.is_relative_to(sim):
+        return error(13, f"entidade fora da pasta de resultados: {entity!r}")
+    if (err := ensure_in_workspace(str(base), settings=settings)):
+        return err
     if not base.exists():
         return error(2, f"entidade inexistente: simulation/{entity}",
                      f"disponiveis: {list_entities(output_dir)}")

@@ -44,6 +44,17 @@ def test_traversal_blocked():
     os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
 
 
+def test_results_query_entity_traversal_blocked():
+    from novomodelo_mcp.adapters.results import simulation_query
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d) / "ws"
+        (ws / "output" / "simulation").mkdir(parents=True)
+        os.environ["NOVOMODELO_MCP_WORKSPACE"] = str(ws)
+        err = simulation_query(str(ws / "output"), "../x", settings=load_settings())
+        assert err["status"] == "error" and err["exit_code"] == 13, err
+    os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
+
+
 def main():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

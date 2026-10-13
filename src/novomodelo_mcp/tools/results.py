@@ -85,7 +85,7 @@ def register_results(mcp, settings: Settings) -> None:
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
         n = limit or settings.max_inline_rows
-        out = R.simulation_query(output_dir, entity, columns=columns,
+        out = R.simulation_query(output_dir, entity, settings=settings, columns=columns,
                                  group_by=group_by, agg=agg, scenario=scenario,
                                  limit=n, max_rows=settings.max_inline_rows)
         return cap_envelope(out, settings)
