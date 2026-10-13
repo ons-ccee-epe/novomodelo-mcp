@@ -4,6 +4,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sysconfig
+from pathlib import Path
 
 from ..config import Settings
 from ..names import BRIDGE_CLI, SOLVER_CLI
@@ -29,8 +30,13 @@ def find_bridge(settings: Settings) -> str | None:
 
 
 def find_novomodelo(settings: Settings) -> str | None:
-    """Caminho do executável do solver (NOVOMODELO_MCP_SOLVER_BIN tem prioridade)."""
-    return settings.solver_bin or shutil.which(SOLVER_CLI)
+    """Caminho do executável do solver: NOVOMODELO_MCP_SOLVER_BIN, PATH, `~/.cargo/bin`.
+
+    `~/.cargo/bin` é o destino padrão do instalador oficial: sem ele, o executável
+    recém-instalado só seria achado depois de reiniciar o cliente com o PATH novo.
+    """
+    return (settings.solver_bin or shutil.which(SOLVER_CLI)
+            or shutil.which(SOLVER_CLI, path=str(Path.home() / ".cargo" / "bin")))
 
 
 def tool_version(binpath: str | None) -> str | None:

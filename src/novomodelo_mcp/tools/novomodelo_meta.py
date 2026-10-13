@@ -4,12 +4,13 @@ Cada função envelopa exatamente um subcomando `novomodelo`. Zero regra de neg�
 """
 from __future__ import annotations
 
+from ..adapters import installer
 from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.envelope import as_error
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
-from .annotations import READ_ONLY, WRITES
+from .annotations import DESTRUCTIVE_NET, READ_ONLY, WRITES
 
 
 def register_novomodelo_meta(mcp, settings: Settings) -> None:
@@ -29,6 +30,23 @@ def register_novomodelo_meta(mcp, settings: Settings) -> None:
         except Exception as exc:  # noqa: BLE001 - never-raise: exceção vira Error_Envelope, não derruba o stdio
             return as_error(exc)
         return cap_envelope(env, settings)
+
+    @mcp.tool(annotations=DESTRUCTIVE_NET)
+    def instalar_novomodelo(confirmar: bool = False, pasta: str | None = None) -> dict:
+        """Instala o executável `novomodelo` oficial, na versão que este MCP espera.
+
+        Sem `confirmar=True`, só mostra o plano: URL do instalador do release
+        oficial, SHA-256 esperado, pasta de destino e o comando manual; nada é
+        baixado. Com `confirmar=True`, baixa o instalador, confere o SHA-256,
+        executa e confirma com `novomodelo version`. `pasta` (absoluta, opcional):
+        raiz da instalação (o binário fica em `<pasta>/bin`); padrão `~/.cargo`.
+        O instalador oficial acrescenta a pasta ao PATH do perfil do shell. Sem
+        rede, devolve `aviso_rede` com o comando manual.
+        """
+        try:
+            return cap_envelope(installer.install(confirmar=confirmar, pasta=pasta), settings)
+        except Exception as exc:  # noqa: BLE001 - never-raise: exceção vira Error_Envelope, não derruba o stdio
+            return as_error(exc)
 
     @mcp.tool(annotations=WRITES)
     def schema_export(output_dir: str | None = None) -> dict:

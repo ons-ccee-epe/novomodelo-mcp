@@ -60,8 +60,11 @@ def _write_fake_novomodelo(dir_path: Path, body: str) -> str:
 def test_missing_binary_is_127():
     """find_novomodelo -> None (sem NOVOMODELO_MCP_SOLVER_BIN e PATH vazio) vira envelope 127, sem exceção."""
     old_bin = os.environ.pop("NOVOMODELO_MCP_SOLVER_BIN", None)
-    old_path = os.environ.get("PATH")
+    saved = {k: os.environ.get(k) for k in ("PATH", "HOME", "USERPROFILE")}
+    empty_home = tempfile.mkdtemp()
     os.environ["PATH"] = ""
+    # HOME vazio também: a descoberta procura em ~/.cargo/bin, onde a máquina pode ter um real
+    os.environ["HOME"] = os.environ["USERPROFILE"] = empty_home
     try:
         env = _tools()["solver_version"]()
         assert env["status"] == "error", env
@@ -69,10 +72,12 @@ def test_missing_binary_is_127():
     finally:
         if old_bin is not None:
             os.environ["NOVOMODELO_MCP_SOLVER_BIN"] = old_bin
-        if old_path is not None:
-            os.environ["PATH"] = old_path
-        else:
-            os.environ.pop("PATH", None)
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        os.rmdir(empty_home)
 
 
 def test_nonjson_output_lands_in_diagnostics():

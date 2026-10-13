@@ -86,7 +86,7 @@ e é conferida por `tests/test_tool_annotations.py`.
 |---|---|
 | Só leitura (21) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `run_plan`, `run_status`, `run_logs` |
 | Escreve arquivos novos (7) | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
-| Altera ou interrompe (5) | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel` |
+| Altera ou interrompe (6) | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
 
 Se o seu cliente não usar as anotações, libere as de leitura pela lista de
 permissões dele:
@@ -143,7 +143,8 @@ versão, ou faltar, **toda** resposta traz `avisos_de_versao` com o comando para
 corrigir; a chamada continua.
 
 A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo e do
-bridge (uma vez por sessão, em poucos segundos), e apenas nestes domínios:
+bridge (uma vez por sessão, em poucos segundos), e pelo `instalar_novomodelo`, e
+apenas nestes domínios:
 `github.com/ons-ccee-epe/*`, `api.github.com/repos/ons-ccee-epe/*`,
 `pypi.org/pypi/novomodelo-bridge/*` e, como destino de download,
 `release-assets.githubusercontent.com`. A versão nova do MCP é inferida pela do
@@ -242,6 +243,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 **Solver** (`tools/novomodelo_meta.py`)
 - `solver_version()`: versão, backend e build do `novomodelo` (texto do CLI parseado + `raw`)
 - `schema_export(output_dir)`: exporta os JSON Schemas (`novomodelo schema export`)
+- `instalar_novomodelo(confirmar, pasta)`: instala o executável oficial da versão esperada pelo instalador do release, com o SHA-256 conferido; sem `confirmar=True`, só mostra o plano (URL, hash, destino, comando manual). Usa a rede. No Windows, o instalador oficial `.ps1` não confere o hash do pacote que ele baixa
 
 **Scaffold e execução** (`tools/run.py`)
 - `case_init(directory, template, list, force)`: cria um caso a partir de template embutido (`novomodelo init`; ex.: `1dtoy`)

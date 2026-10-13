@@ -25,7 +25,7 @@ READ_ONLY_NET = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 
 #: Tools que usam a rede: o teste de anotações confere que são exatamente as de
 #: `openWorldHint=True`.
-NETWORK_TOOLS = frozenset({"server_info"})
+NETWORK_TOOLS = frozenset({"server_info", "instalar_novomodelo"})
 
 #: Grava arquivos novos (deck convertido, relatório, dashboard, caso de template)
 #: sem apagar dados existentes; sobrescrever exige `force`, que é controlado.
@@ -34,3 +34,6 @@ WRITES = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHin
 #: Altera ou substitui dados existentes, ou interrompe processos (edição de deck
 #: com backup, run que grava sobre `output/`, cancelamento de run).
 DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False)
+
+#: Destrutiva e com rede: baixa e executa o instalador oficial.
+DESTRUCTIVE_NET = ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=True)

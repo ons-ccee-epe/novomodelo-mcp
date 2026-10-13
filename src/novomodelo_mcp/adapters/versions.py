@@ -116,7 +116,8 @@ def version_warnings(settings) -> list[str]:
     pieces = local_versions(settings)
     lines = []
     texts = {
-        "executavel": ("executável novomodelo", cli_install_command(expected)),
+        "executavel": ("executável novomodelo",
+                       f"{cli_install_command(expected)} (ou a tool instalar_novomodelo)"),
         "biblioteca": ("biblioteca novomodelo-python",
                        f"reinstale o MCP {expected} (a biblioteca vem junto)"),
         "bridge": (BRIDGE_CLI, _bridge_command(expected, pieces["bridge"].get("origem"))),
