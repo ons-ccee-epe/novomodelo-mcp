@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 from ..adapters import deck_io, jobs, runtime
-from ..adapters.results import read_metadata, termination_fields
+from ..adapters.results import numeric_diagnosis, read_metadata, termination_fields
 from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.envelope import as_error, error
@@ -266,7 +266,9 @@ def register_run(mcp, settings: Settings) -> None:
         Inclui tempo decorrido, estimativa do plano e marcos de saída
         (`training/_SUCCESS`, `simulation/_SUCCESS`). `_SUCCESS` só indica que a
         saída foi gravada; veja `treino.termination_reason` e `treino.converged_at`
-        para saber se convergiu. Com o run concluído, use results_status /
+        para saber se convergiu. Se o run falhou, `escalonamento` repassa a razão de
+        coeficientes do executável e, se for extrema, `diagnostico_heuristico`
+        sugere a causa provável (heurística). Com o run concluído, use results_status /
         results_convergence no `output`.
         """
         st = jobs.job_state(settings, job_id)
@@ -282,6 +284,8 @@ def register_run(mcp, settings: Settings) -> None:
                 meta = {}
             if meta.get("status") == "ok":
                 st.update(termination_fields(meta["training"], meta.get("simulation")))
+        if st["state"] == "failed" or (st.get("treino") or {}).get("termination_reason") == "error":
+            st.update(numeric_diagnosis(str(out)))
         if st["state"] in ("failed", "lost"):
             st["stderr_tail"] = (jobs.job_logs(settings, job_id, lines=20) or {}).get("stderr")
         if st["state"] == "succeeded":

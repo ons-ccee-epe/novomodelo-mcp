@@ -23,7 +23,8 @@ def register_results(mcp, settings: Settings) -> None:
         Devolve run_status, bounds (lower/upper), gap final, iterações, duração,
         dimensões do problema e o custo esperado da simulação (quando rodou).
         `_SUCCESS` só indica que a saída foi gravada; veja `treino.termination_reason`
-        e `treino.converged_at` para saber se convergiu.
+        e `treino.converged_at` para saber se convergiu. Se o run falhou,
+        `escalonamento` e, se for o caso, `diagnostico_heuristico` (ver run_status).
         """
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
@@ -51,6 +52,8 @@ def register_results(mcp, settings: Settings) -> None:
         }
         if env.get("warnings"):
             out["warnings"] = env["warnings"]
+        if out["treino"].get("termination_reason") == "error":
+            out.update(R.numeric_diagnosis(output_dir))
         return cap_envelope(out, settings)
 
     @mcp.tool(annotations=READ_ONLY)

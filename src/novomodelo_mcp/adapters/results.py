@@ -92,6 +92,42 @@ def termination_fields(training: dict[str, Any] | None,
     return out
 
 
+#: Acima desta razão entre o maior e o menor coeficiente da matriz (antes do
+#: escalonamento), a nota heurística sugere problema numérico. Rótulo de heurística,
+#: não regra: o executável não decide nada com esse número.
+HEURISTIC_RATIO = 1e12
+
+_HEURISTIC_NOTE = (
+    "Heurística: a faixa de coeficientes da matriz é muito larga e costuma levar o solver "
+    "a falhar. Coeficientes muito pequenos na FPHA são a origem mais comum. Tente planos "
+    "FPHA prontos (source: \"precomputed\") ou rodar em outra máquina. Não é a causa "
+    "confirmada da falha.")
+
+
+def numeric_diagnosis(output_dir: str) -> dict[str, Any]:
+    """`escalonamento` (copiado de training/scaling_report.json) e, acima de
+    `HEURISTIC_RATIO`, `diagnostico_heuristico`. Relatório ausente ou ilegível → {}."""
+    report = _read_object(Path(output_dir) / "training" / "scaling_report.json")
+    if isinstance(report, str):
+        return {}
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    worst = summary.get("worst_pre_scaling_matrix_ratio")
+    if not isinstance(worst, (int, float)):
+        return {}
+    stages = report.get("stages") if isinstance(report.get("stages"), list) else []
+    stage = next((s for s in stages if isinstance(s, dict)
+                  and (s.get("pre_scaling") or {}).get("matrix_coeff_ratio") == worst), {})
+    faixa = (stage.get("pre_scaling") or {}).get("matrix_coeff_range")
+    out: dict[str, Any] = {"escalonamento": {
+        "razao_pre": worst, "razao_pos": summary.get("worst_post_scaling_matrix_ratio"),
+        "estagio": stage.get("stage_id"), "faixa": faixa}}
+    if worst > HEURISTIC_RATIO:
+        out["diagnostico_heuristico"] = {"razao": worst, "faixa": faixa,
+                                         "estagio": stage.get("stage_id"),
+                                         "nota": _HEURISTIC_NOTE}
+    return out
+
+
 def _pl():
     import polars as pl
     return pl
