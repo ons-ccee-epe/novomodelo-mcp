@@ -382,3 +382,67 @@ def bundled_manifest() -> dict | None:
     except (OSError, ValueError):
         return None
 
+
+# ---------------------------------------------------------------- busca
+
+_SEARCH_MAX_K = 20
+_SNIPPET_CHARS = 300
+#: Palavras de consulta em português que não ajudam a achar nada nas docs (em inglês).
+_PT_STOPWORDS = frozenset(
+    "o a os as que e é de do da dos das em no na um uma como qual quais por para com se "
+    "ao à sobre isso este esta".split())
+_MEMORY_INDEX: dict[str, sqlite3.Connection] = {}
+
+
+def _index_connection(settings: Settings) -> sqlite3.Connection | None:
+    """O índice embutido (só leitura) ou, com a pasta de desenvolvimento, um em memória."""
+    if dev := _dev_docs_dir(settings):
+        if dev not in _MEMORY_INDEX:
+            _MEMORY_INDEX[dev] = build_docs_index(Path(dev), ":memory:")
+        return _MEMORY_INDEX[dev]
+    root = _bundled_dir("docs")
+    index = Path(root).parent / INDEX_FILE if root else None
+    if index is None or not index.is_file():
+        return None
+    return sqlite3.connect(f"{index.resolve().as_uri()}?mode=ro", uri=True,
+                           check_same_thread=False)
+
+
+def _glossary_terms(con: sqlite3.Connection, normalized: str) -> list[str]:
+    found: list[str] = []
+    for pt, en in con.execute("SELECT pt, en FROM glossario ORDER BY length(pt) DESC"):
+        if re.search(rf"(?<!\w){re.escape(pt)}(?!\w)", normalized) and en not in found:
+            found.append(en)
+    return found
+
+
+def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
+    """Seções mais relevantes para `query` (BM25, título com peso maior).
+
+    Os termos em português do glossário das docs ganham o equivalente em inglês; os
+    termos entram entre aspas e unidos por OR, o que neutraliza a sintaxe do FTS5.
+    """
+    con = _index_connection(settings)
+    if con is None:
+        return _docs_unavailable(settings)
+    normalized = normalize_text(query or "")
+    glossary = _glossary_terms(con, normalized)
+    words = [w for w in re.findall(r"\w+", normalized) if w not in _PT_STOPWORDS]
+    words += [w for term in glossary for w in re.findall(r"\w+", normalize_text(term))]
+    terms = list(dict.fromkeys(words))
+    if not terms:
+        return error(22, "consulta vazia: informe termos da documentação (de preferência em inglês)")
+    match = " OR ".join(f'"{t}"' for t in terms)
+    limit = max(1, min(int(k), _SEARCH_MAX_K))
+    try:
+        rows = con.execute(
+            "SELECT pagina, titulo, ancora, snippet(secoes, 3, '', '', '…', 48), "
+            "bm25(secoes, 0.0, 5.0, 0.0, 1.0) AS r FROM secoes WHERE secoes MATCH ? "
+            "ORDER BY r LIMIT ?", (match, limit)).fetchall()
+    except sqlite3.Error as exc:
+        return error(2, "falha na busca do índice de docs", str(exc))
+    return {"status": "ok", "consulta_usada": match, "termos_do_glossario": glossary,
+            "resultados": [{"pagina": p, "secao": a, "titulo": t,
+                            "trecho": (snip or "")[:_SNIPPET_CHARS], "score": round(-r, 3)}
+                           for p, t, a, snip, r in rows]}
+

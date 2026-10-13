@@ -83,7 +83,7 @@ e é conferida por `tests/test_tool_annotations.py`.
 
 | Tipo | Tools |
 |---|---|
-| Só leitura (24) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
+| Só leitura (25) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `docs_search`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
 | Escreve arquivos novos (7) | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
 | Altera ou interrompe (6) | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
 
@@ -101,6 +101,7 @@ permissões dele:
       "mcp__novomodelo__schema_get",
       "mcp__novomodelo__docs_list",
       "mcp__novomodelo__docs_read",
+      "mcp__novomodelo__docs_search",
       "mcp__novomodelo__deck_list",
       "mcp__novomodelo__deck_read_json",
       "mcp__novomodelo__deck_read_parquet",
@@ -125,7 +126,7 @@ permissões dele:
   ```
 - **Kiro** (na entrada do servidor no `mcp.json`):
   ```json
-  "autoApprove": ["server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read", "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql", "case_validate", "case_summary", "bridge_check_newave", "bridge_check_decomp", "results_status", "results_convergence", "results_list_entities", "results_query", "results_stochastic", "results_policy", "run_plan", "run_status", "run_logs"]
+  "autoApprove": ["server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read", "docs_search", "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql", "case_validate", "case_summary", "bridge_check_newave", "bridge_check_decomp", "results_status", "results_convergence", "results_list_entities", "results_query", "results_stochastic", "results_policy", "run_plan", "run_status", "run_logs"]
   ```
 
 ## Segurança
@@ -249,6 +250,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 **Referência** (`tools/reference.py`)
 - `schema_list()` / `schema_get(tipo)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{tipo}`
 - `docs_list(section)` / `docs_read(page)`: documentação embutida (sem rede)
+- `docs_search(consulta, k)`: busca por palavra nas docs embutidas (de preferência em inglês; os termos em português do glossário das docs são traduzidos); devolve página, seção e trecho
 
 **Solver** (`tools/novomodelo_meta.py`)
 - `solver_version()`: versão, backend e build do `novomodelo` (texto do CLI parseado + `raw`)

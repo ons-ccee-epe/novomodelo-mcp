@@ -33,6 +33,17 @@ def register_reference(mcp, settings: Settings) -> None:
         return cap_envelope(REF.list_docs(settings, section), settings)
 
     @mcp.tool(annotations=READ_ONLY)
+    def docs_search(consulta: str, k: int = 5) -> dict:
+        """Busca nas docs embutidas do novomodelo (as da versão instalada) por palavra.
+
+        Busque em inglês: as docs estão em inglês, e os termos em português que estão
+        no glossário das docs são traduzidos (ex.: afluência → inflow). Devolve as `k`
+        seções mais relevantes (até 20): `pagina`, `secao` (âncora), `titulo`, `trecho`
+        e `score`. Abra a seção com `docs_read(pagina, secao)`.
+        """
+        return cap_envelope(REF.search_docs(settings, consulta, k), settings)
+
+    @mcp.tool(annotations=READ_ONLY)
     def docs_read(page: str) -> dict:
         """Lê uma página da documentação, offline (ex.: 'reference/cli-reference')."""
         return cap_envelope(REF.read_doc(settings, page, settings.max_summary_chars), settings)
