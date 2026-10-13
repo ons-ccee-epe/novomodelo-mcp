@@ -10,7 +10,7 @@ from novomodelo_mcp.tools.annotations import NETWORK_TOOLS
 READ_ONLY = {
     "server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read",
     "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql",
-    "case_validate", "bridge_check_newave", "bridge_check_decomp",
+    "case_validate", "case_summary", "bridge_check_newave", "bridge_check_decomp",
     "results_status", "results_convergence", "results_list_entities", "results_query",
     "results_stochastic", "results_policy",
     "run_plan", "run_status", "run_logs",

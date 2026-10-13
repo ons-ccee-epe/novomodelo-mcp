@@ -95,6 +95,42 @@ def validate_deck_binding(case_dir: str, *, output_dir: str | None = None,
             "valid": valid, "n_errors": len(errors), "n_warnings": len(warnings),
             "errors": errors, "warnings": warnings}
 
+#: Nome na resposta → (atributo de contagem do `model.System`, lista de itens).
+_SYSTEM_KINDS = {
+    "barras": ("n_buses", "buses"), "linhas": ("n_lines", "lines"),
+    "hidros": ("n_hydros", "hydros"), "termicas": ("n_thermals", "thermals"),
+    "contratos": (None, "contracts"), "bombeamento": (None, "pumping_stations"),
+    "fontes_nao_controlaveis": (None, "non_controllable_sources"),
+}
+
+
+def case_summary_binding(case_dir: str, *, max_items: int,
+                         settings: Settings | None = None) -> dict[str, Any]:
+    """O caso lido por `novomodelo.io.load_case`: contagens e `{id, name}` por tipo.
+
+    Só `load_case`, nunca `Study`: o `Study` grava arquivos na pasta de saída do caso.
+    """
+    settings = settings or load_settings()
+    log(settings, "case_summary_binding", case_dir=case_dir)
+    try:
+        import novomodelo.io as _cio
+    except ImportError:
+        return _error(127, f"{BINDING_DIST} ausente no venv; rode: uv sync --system-certs")
+    try:
+        system = _cio.load_case(case_dir)
+    except Exception as exc:  # noqa: BLE001 - caso inválido (ValueError/OSError) vira envelope
+        return _error(1, "o novomodelo não conseguiu ler o caso", f"{type(exc).__name__}: {exc}")
+    counts: dict[str, Any] = {}
+    items: dict[str, Any] = {}
+    for kind, (count_attr, list_attr) in _SYSTEM_KINDS.items():
+        entries = list(getattr(system, list_attr, None) or [])
+        counts[kind] = getattr(system, count_attr) if count_attr else len(entries)
+        items[kind] = {"lista": [{"id": e.id, "name": e.name} for e in entries[:max_items]],
+                       "truncado": len(entries) > max_items}
+    counts["estagios"] = getattr(system, "n_stages", None)
+    return {"status": "ok", "exit_code": 0, "contagens": counts, "itens": items}
+
+
 def validate_deck_cli(case_dir: str, *, output_dir: str | None = None,
                       settings: Settings | None = None) -> dict[str, Any]:
     """Valida um deck rodando `novomodelo validate` em modo TEXTO (relatorio completo).

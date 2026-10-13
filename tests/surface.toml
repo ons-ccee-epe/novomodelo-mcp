@@ -89,7 +89,7 @@ ignoradas = { "--open" = "abriria um navegador na máquina do servidor, sem o ag
 
 [biblioteca]
 "io.validate" = { tool = "case_validate" }
-"io.load_case" = { pendente = "o caso carregado como objeto; aguarda decisão sobre tool nova" }
+"io.load_case" = { tool = "case_summary" }
 "results.load_convergence" = { tool = "results_convergence", nota = "o MCP lê o mesmo training/convergence.parquet" }
 "results.load_convergence_arrow" = { tool = "results_convergence", nota = "o mesmo dado, em Arrow" }
 "results.load_simulation" = { tool = "results_query", nota = "o MCP lê os mesmos Parquet de simulation/" }
@@ -101,7 +101,7 @@ ignoradas = { "--open" = "abriria um navegador na máquina do servidor, sem o ag
 "run.run" = { tool = "run_start", nota = "via CLI, como job assíncrono" }
 "schema.export" = { tool = "schema_export", nota = "via CLI" }
 "version_info" = { tool = "solver_version", nota = "via CLI (novomodelo version, mesmo conteúdo)" }
-"Study" = { pendente = "estudo em processo Python (treino e simulação na sessão); aguarda decisão sobre tool nova" }
+"Study" = { nao_exposto = "grava arquivos na saída e treina na sessão; o MCP roda pelo executável, como job" }
 "Policy" = { nao_exposto = "tipo de dado; coberto pelo results_policy" }
 "write_policy_checkpoint" = { pendente = "grava arquivo de checkpoint da política (seria tool de escrita); aguarda decisão" }
 "model.Bus" = { nao_exposto = "tipo de dado" }

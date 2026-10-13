@@ -84,7 +84,7 @@ e é conferida por `tests/test_tool_annotations.py`.
 
 | Tipo | Tools |
 |---|---|
-| Só leitura (23) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
+| Só leitura (24) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
 | Escreve arquivos novos (7) | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
 | Altera ou interrompe (6) | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
 
@@ -108,6 +108,7 @@ permissões dele:
       "mcp__novomodelo__deck_describe_parquet",
       "mcp__novomodelo__deck_sql",
       "mcp__novomodelo__case_validate",
+      "mcp__novomodelo__case_summary",
       "mcp__novomodelo__bridge_check_newave",
       "mcp__novomodelo__bridge_check_decomp",
       "mcp__novomodelo__results_status",
@@ -125,7 +126,7 @@ permissões dele:
   ```
 - **Kiro** (na entrada do servidor no `mcp.json`):
   ```json
-  "autoApprove": ["server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read", "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql", "case_validate", "bridge_check_newave", "bridge_check_decomp", "results_status", "results_convergence", "results_list_entities", "results_query", "results_stochastic", "results_policy", "run_plan", "run_status", "run_logs"]
+  "autoApprove": ["server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read", "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql", "case_validate", "case_summary", "bridge_check_newave", "bridge_check_decomp", "results_status", "results_convergence", "results_list_entities", "results_query", "results_stochastic", "results_policy", "run_plan", "run_status", "run_logs"]
   ```
 
 ## Segurança
@@ -220,7 +221,8 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `bridge_check_newave(src)`: pré-valida entradas NEWAVE (`novomodelo-bridge check newave`)
 - `bridge_convert_newave(src, dst, validate, force, dry_run)`: converte NEWAVE → Novomodelo
 - `bridge_check_decomp(src)` / `bridge_convert_decomp(src, dst, validate, force, dry_run)`: paridade DECOMP
-- `case_validate(case_dir)`: valida o deck (binding `novomodelo.io.validate`, estruturado; fallback para o texto do CLI)
+- `case_validate(case_dir, output_dir)`: valida o deck (binding `novomodelo.io.validate`, estruturado; fallback para o texto do CLI); com `output_dir`, confere também a saída de uma rodada anterior (retomada)
+- `case_summary(case_dir)`: o caso como o novomodelo o lê (`novomodelo.io.load_case`): contagens por tipo e `{id, name}` de cada item, com teto
 
 **Pós-rodada** (`tools/post_run.py`)
 - `bridge_compare_newave(newave_dir, output_dir, tolerance, fmt, out_dir)` / `bridge_compare_decomp(decomp_dir, output_dir, ...)`: compara resultados. `output_dir` é a pasta de **saída** do `novomodelo run` do caso convertido, não a pasta do caso. O `compare` sai com código 0 mesmo com divergência: o veredito está no envelope

@@ -5,7 +5,7 @@ Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 from __future__ import annotations
 
 from ..adapters.bridge import run_bridge
-from ..adapters.novomodelo import validate_deck_binding, validate_deck_cli
+from ..adapters.novomodelo import case_summary_binding, validate_deck_binding, validate_deck_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
@@ -90,6 +90,21 @@ def register_pre_run(mcp, settings: Settings) -> None:
             env["warnings_agrupados"] = True
         return cap_envelope(env, settings)
 
+
+    @mcp.tool(annotations=READ_ONLY)
+    def case_summary(case_dir: str) -> dict:
+        """O caso como o novomodelo o lê e interpreta (`novomodelo.io.load_case`).
+
+        Diferente do `deck_list` (os arquivos), mostra o caso já validado:
+        `contagens` por tipo (barras, linhas, hidros, térmicas, contratos,
+        bombeamento, fontes não controláveis, estágios) e `itens` com
+        `{id, name}` de cada tipo, com teto. Caso inválido → erro com a mensagem
+        do novomodelo. Não grava nada.
+        """
+        if (err := ensure_in_workspace(case_dir, settings=settings)):
+            return err
+        return cap_envelope(case_summary_binding(case_dir, max_items=settings.max_inline_rows,
+                                                 settings=settings), settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def bridge_check_decomp(src: str) -> dict:
