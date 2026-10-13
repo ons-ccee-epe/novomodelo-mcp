@@ -27,8 +27,6 @@ Alternatively, copy the repository's [examples/1dtoy](https://github.com/ons-cce
 
 `novomodelo.run.run()` loads the case, trains an SDDP policy, simulates 100 scenarios and writes the results to `my_study/output`. It returns a dict:
 
-{/* capture: python run | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy (novomodelo init --template 1dtoy) as my_study; snippets run in page order */}
-
 ```python
 import novomodelo
 
@@ -57,8 +55,6 @@ The printed keys are part of the result dict; see [`RunResult`](/reference/pytho
 ## Read the Results
 
 Read the convergence record and the simulation costs back from the output directory:
-
-{/* capture: python read | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy (novomodelo init --template 1dtoy) as my_study; snippets run in page order */}
 
 ```python
 import novomodelo
@@ -106,8 +102,6 @@ The two [`novomodelo.results`](/reference/python-api/#novomodeloresults) loaders
 
 Plot both bounds against the iteration:
 
-{/* capture: python plot | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy (novomodelo init --template 1dtoy) as my_study; snippets run in page order */}
-
 ```python
 import novomodelo
 import matplotlib
@@ -137,8 +131,6 @@ The saved `convergence.png` uses a log axis. The lower bound rises from about 5.
 
 `config_overrides` changes `config.json` settings for one call without editing the file. This call reruns the study with another seed:
 
-{/* capture: python seed | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy (novomodelo init --template 1dtoy) as my_study; snippets run in page order */}
-
 ```python
 import novomodelo
 
@@ -157,8 +149,6 @@ lower_bound: 9.7055e+06
 The keys are dotted `config.json` paths. `training.tree_seed` seeds the opening tree and the in-sample draws (default 42), so another seed gives another tree and another lower bound: 9.7055e+06 here, against 1.55955e+07 for the first run. Pass nested settings as dotted keys: a dict under a non-dotted key replaces that whole object. `output_dir` keeps this run apart from the first. [Seed resolution](/running/configuration/#seed-resolution) describes the seeds.
 
 A run with training disabled simulates the policy already in the output directory, here the one the first run wrote:
-
-{/* capture: python simonly | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy (novomodelo init --template 1dtoy) as my_study; snippets run in page order */}
 
 ```python
 import novomodelo
@@ -181,8 +171,6 @@ With training disabled and simulation enabled, `iterations` is `0`, `gap_percent
 
 `novomodelo.io.validate` checks a case directory without running it:
 
-{/* capture: python validate | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy (novomodelo init --template 1dtoy) as my_study; snippets run in page order */}
-
 ```python
 import novomodelo
 
@@ -198,8 +186,6 @@ The dict has the keys `valid`, `errors` and `warnings`; each entry of `errors` i
 ## Error Handling
 
 A setting that fails validation raises a typed exception. This call misspells a config key:
-
-{/* capture: python errors | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy (novomodelo init --template 1dtoy) as my_study; snippets run in page order */}
 
 ```python
 import novomodelo

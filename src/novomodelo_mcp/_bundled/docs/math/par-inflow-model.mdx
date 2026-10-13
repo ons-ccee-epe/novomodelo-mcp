@@ -3,12 +3,6 @@ title: PAR(p) Inflow Model
 description: Periodic Autoregressive model for inflow time series — parameter semantics, stored vs. derived quantities, LP form, Yule-Walker fitting and order selection, innovation-scale closure, validation invariants, spatial correlation factorisation, and the PAR(p)-A annual extension.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Content as ParConfigure } from './_impl/_par.configure.mdx';
-import { Content as ParIO } from './_impl/_par.io.mdx';
-import { Content as ParNotes } from './_impl/_par.notes.mdx';
-import AcfPacfPlot from "../../../components/AcfPacfPlot.astro";
-
 ## Purpose
 
 This chapter defines the Periodic Autoregressive model of order $p$ (PAR(p)) used to capture temporal correlation in inflow time series. It states the model, its parameters and the quantities stored for it (§1); the form the LP stage subproblem consumes (§2); the estimation of the parameters from historical inflow data, including order selection (§3); the closure that derives the innovation scale from the AR coefficients (§4); the validation invariants (§5); the estimation and factorisation of the spatial correlation across hydros (§6); and the optional PAR(p)-A extension, which adds a single annual coefficient on top of the periodic AR structure to capture multi-year hydrological persistence (§7).
@@ -467,8 +461,6 @@ The classical rule computes the **periodic PACF** (periodic partial autocorrelat
 
 The figure below applies the rule to a synthetic series: a twelve-season PAR(1) process with unit marginal variance in every season, simulated with a fixed random seed for $N_m = 60$ years and shown for season 6. The upper panel compares the sample periodic autocorrelation $\hat{\rho}_6(\ell)$ of §3.4 with the model's implied autocorrelation of §4.1, which for a PAR(1) is $\rho_m(\ell) = \prod_{j=0}^{\ell-1} \psi^*_{m-j,1}$ with season indices taken modulo $M$. The lower panel shows the periodic PACF of step 1, for the sample and for the model, against the band $\pm z_{0.975}/\sqrt{N_m}$, which is the significance threshold of step 2: a lag is significant when its sample PACF lies outside the band. The model's PACF is $\psi^*_{m,1}$ at lag 1 and zero beyond, so the autocorrelation decays over all six lags while the PACF cuts off after lag 1. Here the sample PACF at lag 1 lies outside the band and the sample PACF at lags 2 to 6 lies inside it, so, with $p_{max} = 6$, the rule selects $p_6 = 1$.
 
-<AcfPacfPlot />
-
 **Post-selection validation — iterative order reduction ([Maceira & Damázio, 2006](/reference/bibliography/#inflow-modelling))**: After PACF selection, the composed influence of each lag on the current inflow through the periodic chain is computed for every season, holding the inflows before $t-\ell$ and the innovations fixed:
 
 $$
@@ -785,11 +777,428 @@ Like $r_m$, the annual seasonal std $\sigma^A_m$ is a functional of the process'
 
 The methodology above defines the PAR(p) inflow model; the tabs below cover how Novomodelo's software surface configures, feeds, and reports on it.
 
-<Tabs>
-  <TabItem label="Configure"><ParConfigure /></TabItem>
-  <TabItem label="Inputs & Outputs"><ParIO /></TabItem>
-  <TabItem label="Implementation notes"><ParNotes /></TabItem>
-</Tabs>
+**Configure**
+
+Novomodelo's `config.json` top-level `estimation` block, the `scenarios/` PAR(p)
+input files, and `scenarios/correlation.json` configure the estimation and
+correlation pipeline the methodology above describes. This tab shows which PAR
+inputs to supply and how the estimation and correlation are configured; the
+equations these fields feed are in the sections above.
+
+### `config.json` — `estimation` Block
+
+The `estimation` block is a top-level key of `config.json` (a sibling of
+`training`), and controls the PAR(p) fitting pipeline on the estimation paths
+(rows 4–6 of the table in the next section):
+
+```json
+{
+  "estimation": {
+    "max_order": 6,
+    "order_selection": "pacf",
+    "min_observations_per_season": 30,
+    "max_coefficient_magnitude": null
+  }
+}
+```
+
+The [`estimation`](/running/configuration/#estimation) section of the
+configuration reference lists every field and its default, and states the
+`min_observations_per_season` behaviour.
+
+Setting `"order_selection": "pacf_annual"` activates the PAR(p)-A annual
+component (methodology §7): the periodic Yule-Walker system is extended with
+the annual cross-correlation term, per-season sample statistics of the
+rolling 12-month average are computed, and the fitted triple
+($\psi^{A*}_m$, annual mean, annual std) is written to `inflow_annual_component.parquet`
+— see the Inputs & Outputs tab. When absent (or set to `"pacf"`), only the
+classical PAR(p) path runs and no annual triple is produced.
+
+### Inflow Source Resolution — Choosing Which Files to Provide
+
+The PAR(p) inflow model is built from up to five files in `scenarios/`. Three
+of them drive **path resolution** — their presence or absence selects which
+of seven estimation paths Novomodelo executes:
+
+| Symbol | File                                        | Role                                    |
+| :----: | ------------------------------------------- | ---------------------------------------- |
+| **H**  | `scenarios/inflow_history.parquet`          | Windowed historical observations for fitting |
+| **S**  | `scenarios/inflow_seasonal_stats.parquet`   | User-supplied seasonal mean/std         |
+| **R**  | `scenarios/inflow_ar_coefficients.parquet`  | User-supplied AR coefficients           |
+
+The other two files layer **orthogonally** on top of the resolved path:
+`scenarios/correlation.json` wins on every path when present (identity
+correlation otherwise, unless a path estimates it from residuals); and
+`scenarios/inflow_annual_component.parquet` is honored only on the
+pass-through paths (rows 2, 3, 7 below) — the estimation paths (4, 5, 6)
+always overwrite it with fitted values.
+
+| # | H | S | R | Path | Seasonal stats | AR coefficients | Correlation |
+| - | - | - | - | ---- | --------------- | ----------------- | ------------ |
+| 1 | 0 | 0 | 0 | `Deterministic` | no PAR model | none | identity, unless `correlation.json` provided |
+| 2 | 0 | 1 | 0 | `UserStatsWhiteNoise` | user file | order-0 (white noise) | identity, unless `correlation.json` provided |
+| 3 | 0 | 1 | 1 | `UserProvidedNoHistory` | user file | user file | identity, unless `correlation.json` provided |
+| 4 | 1 | 0 | 0 | `FullEstimation` | fitted from H | fitted from H (PACF + Yule-Walker + Maceira & Damázio) | estimated from H residuals, unless `correlation.json` provided |
+| 5 | 1 | 0 | 1 | `UserArHistoryStats` | fitted from H | user file | estimated from H residuals using user coefficients, unless `correlation.json` provided |
+| 6 | 1 | 1 | 0 | `PartialEstimation` | user file (the fit uses statistics estimated from H) | fitted from H | estimated from H residuals, unless `correlation.json` provided |
+| 7 | 1 | 1 | 1 | `UserProvidedAll` | user file | user file | identity, unless `correlation.json` provided (history is not re-consumed) |
+
+Cases with `R = 1` but `H = 0` and `S = 0` collapse to row 1 — AR coefficients
+alone cannot drive estimation.
+
+An estimated correlation (rows 4–6, when no `correlation.json` is provided)
+holds a pooled `"default"` profile. In a cycle of more than one season it also
+holds one `season_<id>` profile for each season whose every hydro pair has
+at least 30 residual pairs — the season `id` zero-padded to the width of the
+largest id, as in `season_03` for a twelve-season cycle — and a schedule that
+maps each stage of such a season to its profile. Every other stage uses the
+pooled profile (methodology §6.1).
+
+**Practical recipes:**
+
+| Goal                                                       | Files to provide                                                    | Path |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- | ---- |
+| Smoke-test the LP without stochasticity                     | _(no scenarios files)_                                                | 1    |
+| Deterministic seasonal levels, no autoregression             | `inflow_seasonal_stats.parquet`                                       | 2    |
+| Fully user-specified PAR(p) without a history file           | `inflow_seasonal_stats.parquet`, `inflow_ar_coefficients.parquet`, and, for an AR order above 0, `recent_observations` covering the lag slots | 3    |
+| Hands-off: fit everything from raw observations              | `inflow_history.parquet`                                              | 4    |
+| Fit stats from history, override the AR structure            | `inflow_history.parquet`, `inflow_ar_coefficients.parquet`            | 5    |
+| Override the levels (mean/std) but let Novomodelo fit the AR       | `inflow_history.parquet`, `inflow_seasonal_stats.parquet`             | 6    |
+| Provide every parameter, including the PAR(p)-A annual term   | All three of H, S, R (and optionally the annual file)                | 7    |
+| Pin a custom spatial correlation on any path                  | Add `correlation.json`                                                | any  |
+
+### `scenarios/inflow_history.parquet` — Windowed Historical Observations
+
+The windowed record is required to drive any of the estimation paths (H = 1
+above) and, whenever present, is the base layer the derived inflow-lag seed
+casts from (see "Lag and accumulator seeding" below).
+
+Every hydro plant in `hydros.json` must have at least one observation window
+in this file when estimation is active. The columns, window rules and roles of
+the file are in
+[`scenarios/inflow_history.parquet`](/reference/case-format/scenarios/#scenariosinflow_historyparquet).
+
+### Lag and accumulator seeding — `recent_observations`
+
+Independently of which estimation path (if any) `inflow_history.parquet`
+drives, its windowed record is the seed for the opening study stage's PAR lag
+slots and mid-period inflow accumulator. `initial_conditions.json`'s optional
+`recent_observations` array conditions that seed: entries carry the same
+`hydro_id` / `start_date` / `end_date` / `value_m3s` shape as
+`inflow_history.parquet` and shadow it **day-wise** wherever the two overlap
+(the two series are never blended). `value_m3s` accepts negative values in
+both files: the quantity is incremental inflow, so a negative window is real
+hydrology (see [Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity)).
+
+When `scenarios/inflow_ar_coefficients.parquet` is supplied, the record must
+fully cover each lag slot up to the maximum AR order and, with an annual
+component, each slot of the twelve-period annual window that the study's own
+completed periods do not replace; otherwise the case is refused at load
+([`BusinessRuleViolation`](/reference/error-codes/#businessruleviolation)). A
+gap in a deeper slot, which the study's own completed periods push out of the
+lag window before the study ends, only draws a warning.
+
+When the coefficients are estimated, this coverage check does not run: a lag
+period the record covers only in part seeds from the mean over its covered
+days, and a period with no covered day seeds to zero.
+
+On either path, a first-stage period already in progress at the study start
+that the record covers only in part is accepted, with a warning; with no
+covered day, its accumulator seeds to zero.
+
+### `scenarios/correlation.json` — Spatial Correlation Configuration
+
+Named profiles of correlation groups, with an optional stage-to-profile
+schedule:
+
+```json
+{
+  "method": "spectral",
+  "profiles": {
+    "default": {
+      "correlation_groups": [
+        {
+          "name": "basin_south",
+          "entities": [
+            { "type": "inflow", "id": 0 },
+            { "type": "inflow", "id": 1 }
+          ],
+          "matrix": [
+            [1.0, 0.7],
+            [0.7, 1.0]
+          ]
+        }
+      ]
+    },
+    "wet_season": {
+      "correlation_groups": [
+        {
+          "name": "basin_south",
+          "entities": [
+            { "type": "inflow", "id": 0 },
+            { "type": "inflow", "id": 1 }
+          ],
+          "matrix": [
+            [1.0, 0.85],
+            [0.85, 1.0]
+          ]
+        }
+      ]
+    }
+  },
+  "schedule": [{ "stage_id": 0, "profile_name": "wet_season" }]
+}
+```
+
+Correlation is modelled **independently per entity class** — inflow, load, and
+NCS each carry their own spatial correlation structure, and there is **no**
+cross-class correlation term (see
+[Scenario Generation §2.1](/math/scenario-generation/#21-correlated-noise-generation)).
+
+Every field and load rule of the file is in
+[`scenarios/correlation.json`](/reference/case-format/scenarios/#scenarioscorrelationjson).
+
+### Out-of-sample fallback
+
+Under the `out_of_sample` forward scheme, a stage whose `sampling_method` is
+`historical_residuals` or `selective` draws plain Monte Carlo noise, and the run
+logs a warning that names the entity class and the affected stage ids. For the
+message, see
+[Scenario Generation — Implementation notes tab, Warnings](/math/scenario-generation/#implementation-in-novomodelo).
+
+**Inputs & Outputs**
+
+This is a topic-scoped index of the files PAR(p) estimation touches — it
+names each file and its role, it does not repeat their field-by-field
+schemas beyond what the Configure tab already shows for the config-authoring
+surface. The exhaustive, field-by-field case-directory and output reference
+is owned by the Reference corpus ([Case Format](/reference/case-format/)
+and [Output Format](/reference/output/) pages).
+
+### Inputs
+
+| File | Role |
+| ---- | ---- |
+| `scenarios/inflow_history.parquet` | Windowed historical inflow observations per (hydro, `[start_date, end_date)`). It has four roles, from estimation to the historical-residual openings (listed below the table). |
+| `scenarios/inflow_seasonal_stats.parquet` | User-supplied or fitted seasonal statistics per (hydro, stage). The `std_m3s` column is the **stored sample standard deviation** of the historical series — not the innovation standard deviation used for noise scaling (see Implementation notes). |
+| `scenarios/inflow_ar_coefficients.parquet` | User-supplied or fitted standardized AR coefficients, one row per (hydro, stage, lag) — schema `[hydro_id, stage_id, lag, coefficient]`. The AR order is derived from the row count, not stored explicitly. |
+| `scenarios/inflow_annual_component.parquet` | Optional user-supplied PAR(p)-A annual triple (coefficient, mean, std of the rolling 12-month average). Honored only on the pass-through paths — the estimation paths overwrite it with fitted values (see the Configure tab). |
+| `scenarios/correlation.json` | Named spatial-correlation profiles and optional stage schedule. Wins over estimated or identity correlation on every inflow-source path when present. |
+| `initial_conditions.json` (`recent_observations` rows) | Conditioning layer over the windowed `inflow_history` record: observed inflow for partial periods before the study start, shadowing `inflow_history` day-wise wherever the two overlap. Feeds the derived inflow-lag seed consumed by the opening study stages' lag terms and mid-period accumulator (methodology §2.5, and the Configure tab). |
+
+`scenarios/inflow_history.parquet` has four roles:
+
+1. It drives the estimation path (H) when present.
+2. It is the base layer for the derived inflow-lag seed on every path (see the Configure tab).
+3. It supplies the historical replay windows of the `historical` forward scheme.
+4. It supplies the historical-residual openings of the stages whose `sampling_method` is `historical_residuals`.
+
+The last two are described in [Scenario Generation](/math/scenario-generation).
+
+For the complete field-by-field schema of each file above, see the
+[Case Format](/reference/case-format/) reference page in
+the Reference corpus.
+
+### Externally-fitted PAR models
+
+Novomodelo accepts fully user-supplied parameters — you may fit a PAR($p$) model with
+**any** method outside Novomodelo and hand it the two parquet files (the
+`UserProvidedNoHistory` and `UserProvidedAll` paths on the Configure tab).
+Novomodelo then skips fitting, validates the inputs, and derives the innovation
+scale $r_m$ from your supplied $\psi^*$ via the periodic-ACF closure (see
+[Deriving the innovation scale](/math/par-inflow-model#41-deriving-the-innovation-scale)). The fields do **not**
+encode Novomodelo's fitting method — they encode the [two-plane
+representation](/math/par-inflow-model) — so any fit maps onto them by the table
+below. Let $s_m$ be your series' seasonal sample std and $\psi_{m,\ell}$ your
+original-unit AR coefficients.
+
+| Column (file)                                   | Fill with                                  | Meaning                                                   |
+| ----------------------------------------------- | ------------------------------------------ | --------------------------------------------------------- |
+| `mean_m3s` (`inflow_seasonal_stats`)            | $\mu_m$                                     | Seasonal mean of the series (m³/s)                        |
+| `std_m3s` (`inflow_seasonal_stats`)             | $s_m$                                       | Seasonal **sample** std of the series (m³/s)              |
+| `coefficient` (`inflow_ar_coefficients`)        | $\psi^*_{m,\ell} = \psi_{m,\ell}\,s_{m-\ell}/s_m$ | AR coefficient **standardized by the seasonal std**       |
+
+There is no column for your model's own innovation std $\sigma_m$: Novomodelo
+always **derives** $r_m = \sigma_m/s_m$ from the $\psi^*_{m,\ell}$ you supply,
+the same way it derives $r_m$ for an internally-fitted model (see
+[Deriving the innovation scale](/math/par-inflow-model#41-deriving-the-innovation-scale)). If your own fit's
+$\hat\sigma_m$ is not exactly consistent with your supplied $\psi^*$ under the
+periodic-ACF closure, Novomodelo's derived $\sigma_m$ differs from your original
+fit's — the closure derives the noise scale so the seasonal std $s_m$ you
+supply is honored exactly.
+
+Rules Novomodelo enforces (or that silently mis-scale the model if broken):
+
+- **Standardize by the seasonal std, consistently.** The coefficients are those
+  of the series standardized by its seasonal sample std — the classical
+  standardization — and the $s_m$ you divide by must be exactly the `std_m3s`
+  you store: Novomodelo reconstructs $\psi_{m,\ell}$ and $\sigma_m$ from the stored `std_m3s`,
+  so a mismatch is silent.
+- **Novomodelo hard-rejects a coefficient set that fails its stationarity gate.**
+  The gate runs the [periodic-ACF closure](/math/par-inflow-model) on your
+  supplied $\psi^*$ and rejects the whole load when the closure system is
+  singular, the implied innovation variance is at or below a numerical floor for any
+  season, any implied autocorrelation magnitude exceeds 1, or a conservative
+  spectral-radius estimate of the periodic monodromy reaches 1. The gate runs
+  only on directly-supplied coefficients; internally-fitted coefficients are
+  not tested for stationarity but, like every load path, are guarded by
+  the closure derivation's own backstop — a non-finite derived $r_m$ is a hard
+  load error naming the hydro and season.
+- Lags must be contiguous $1, 2, \ldots, p$; the **AR order $p$ is implicit** in
+  the row count (there is no order column). White noise = no coefficient rows
+  for that (hydro, stage), i.e. order 0, for which the closure gives $r_m = 1$.
+- **Resolvable season context is required whenever any AR order is $>0$.**
+  Every (hydro, stage) group with at least one coefficient row must resolve to
+  a season via `season_definitions` or a per-stage `season_id` (see
+  [Case Format](/reference/case-format/) and
+  [Configuration](/running/configuration/)) — this applies on
+  every load path, including a plain file-load with no fitting.
+- **The lags advance only under `season_definitions`.** A per-stage
+  `season_id` satisfies the rule above, but without `season_definitions` no
+  stage completes a lag period and the derived inflow-lag seed is all zero,
+  whatever `inflow_history` and `recent_observations` hold: the load succeeds
+  (with a warning that the initial inflow lags seed to 0), and every stage
+  receives those zero lags.
+
+### Outputs
+
+The entire `output/stochastic/` directory is written **only when the case sets `exports.stochastic: true`** (in the `exports` config block); it is **off by default**, so a default run produces no `stochastic/` directory at all. The per-file conditions in the table below are **secondary** — they decide which artifacts appear *inside* the directory once stochastic export is enabled.
+
+| File | Role |
+| ---- | ---- |
+| `output/stochastic/inflow_seasonal_stats.parquet` | The seasonal statistics the run used, fitted or read from `scenarios/`, same schema as the input file — written on every stochastic export. |
+| `output/stochastic/inflow_ar_coefficients.parquet` | The AR coefficients the run used, fitted or read from `scenarios/`, same schema as the input file — written on every stochastic export. |
+| `output/stochastic/inflow_annual_component.parquet` | The PAR(p)-A annual triple the run used, fitted or read from `scenarios/` — written on every stochastic export; it carries rows only for the stage models with an annual term (a classical PAR(p) model has none), so it can hold no rows. |
+| `output/stochastic/fitting_report.json` | Per-hydro summary of the selected AR order and coefficients, a human-readable complement to the parquet outputs above — written only when Novomodelo estimated part or all of the inflow model (its seasonal statistics, its AR coefficients or both) from `inflow_history.parquet`. |
+| `output/stochastic/correlation.json` | Round-trip export of the resolved correlation model, in the same schema as the `scenarios/correlation.json` input. |
+| `output/stochastic/noise_openings.parquet` | The backward-pass opening tree actually used during training, exported when `exports.stochastic: true`. To replay it on a subsequent run, follow [Running Studies — Round-trip workflow](/running/running-studies/#round-trip-workflow), which covers the copy into `scenarios/noise_openings.parquet` and the `openings` declaration; the copy loads only when the case's declared stage ids are 0, 1, 2, … (the export numbers stages by 0-based position, and the load refuses other ids) — see [Scenario Generation](/math/scenario-generation) for the opening-tree mechanics themselves (out of scope here). |
+
+For the complete output schema (columns, types, file layout), see the
+[Output Format](/reference/output/) reference page in the Reference
+corpus.
+
+**Implementation notes**
+
+Non-normative software behavior for PAR(p) estimation — what Novomodelo does at
+runtime, beyond the equations above. This tab references the methodology
+body for the derivations rather than restating them.
+
+### `std_m3s` vs `sigma_m`
+
+The two files in the Inputs & Outputs tab store two different standard
+deviations, and the software surface never conflates them: `std_m3s` (column
+in `inflow_seasonal_stats.parquet`) is the **stored sample standard
+deviation** of the historical series for a (hydro, season) — a fixed,
+on-disk number. `sigma_m`, the innovation standard deviation that scales the
+stochastic innovation term, is never stored; it is **derived at load** from
+`std_m3s` and the innovation scale `r_m`, which Novomodelo always derives from the
+AR coefficients via the periodic-ACF closure (methodology §4). Reading
+`std_m3s` as if it were `sigma_m` — or vice versa — silently rescales every
+noise draw.
+
+### Where the closure runs relative to the fit
+
+The closure derivation of `r_m` is a **load step, not a fitting step**: it
+runs after model assembly on every input path — pure file-load and all
+estimation paths alike — so a fitted model and a user-supplied model with the
+same coefficients get the same innovation scale. When per-season AR orders
+differ across the periodic cycle, the closure-derived value can differ
+slightly from the single-season Yule-Walker identity evaluated on the sample
+autocorrelations (§4.1 of the methodology) — the closure solves for the model's own
+implied ACF jointly across all seasons, which is what makes the generated
+seasonal marginal std match `std_m3s` exactly. When every season shares the
+same order, the two coincide to double precision.
+
+### Residual-variance rejection (`r_squared`)
+
+The closure sets $r_m^2 = 1 - \sum_\ell \psi^*_{m,\ell}\rho_m(\ell)$, the standardized residual (innovation) variance of season $m$ implied by $\psi^*$ (§4.1 of the methodology), and treats it as an admissibility test, not a quality score. Two guards act on it at load, the checks of methodology §5 invariant 2: each rejects the case with an error that names the hydro, and neither is a score on an accepted model. Braces in the quoted messages mark values the run fills in.
+
+**Supplied coefficients: the stationarity gate.** A case that supplies `inflow_ar_coefficients.parquet` is checked by the PAR stationarity gate, which rejects a season whose $r_m^2$ is at or below `1e-12` (its other checks are listed in the Inputs & Outputs tab):
+
+```text
+Hydro {hydro_id} season {season}: PAR stationarity gate rejected inflow_ar_coefficients.parquet -- implied residual variance r² = {r_squared} is at or below the numerical floor
+```
+
+**Every load path: the derivation guard.** After the model is assembled, the closure derivation of $r_m$ runs whatever the origin of the coefficients. It rejects the load when the closure system is singular, and when a derived $r_m$ is non-finite, which a negative implied variance $r_m^2$ produces:
+
+```text
+residual_std_ratio closure is singular for hydro_id={hydro_id}
+```
+
+```text
+derived residual_std_ratio is non-finite for hydro_id={hydro_id} season={season}: the coefficients imply a non-stationary process (implied residual variance 1 - sum(psi*rho) is negative)
+```
+
+In the gate and non-finite messages `season` counts from 0: on a single-resolution season map it is the season's position in calendar order; on a map that layers resolutions, or without a map, it is the rank of the season's id among the season ids of the case. It equals the season `id` when the ids run $0, 1, 2, \ldots$ in calendar order.
+
+A model fitted from the history is not gated and has no floor: only the derivation guard applies to it, so a fitted season whose $r_m^2$ is small but positive is accepted.
+
+Novomodelo surfaces `r_squared` only inside the gate message: there is no separate CLI field or Python attribute for it, and no standalone variance signal on an accepted fit.
+
+### Order-selection behavior
+
+The classical PACF order-selection rule (methodology §3.6) and the
+Maceira & Damázio iterative reduction it triggers are applied automatically
+whenever Novomodelo estimates from `inflow_history.parquet`. Three runtime details
+sit alongside that rule but are not part of the derivation:
+
+- **`min_observations_per_season`**: a recommended minimum that only draws a
+  warning, never an error; see
+  [Configuration — `estimation`](/running/configuration/#estimation) for how
+  groups are counted and when the warning is drawn.
+- **A season with a single observation rejects the case.** Whenever Novomodelo
+  estimates from `inflow_history.parquet`, it first estimates the seasonal
+  statistics from the history, even when the case also supplies
+  `inflow_seasonal_stats.parquet` (the supplied statistics then feed only the
+  assembled model, not the fit). A (hydro, season) group with exactly one
+  observation stops estimation with an insufficient-data error ("… need at
+  least 2 for std estimation"), whatever `min_observations_per_season` is set
+  to. A season with no observation has no statistics and is fitted at order 0.
+- **Automatic order reduction is logged per season in `fitting_report.json`** (`contribution_reductions[].reason`), with three distinct reasons:
+  - `magnitude_bound` — a prepass check: if any fitted coefficient exceeds `max_coefficient_magnitude` in absolute value, the season is reset to white noise (order 0, $r_m = 1$), independently of the contribution check.
+  - `phi1_negative` — a prepass check, repeated after each re-fit: if the first fitted coefficient $\psi^*_{m,1}$ is negative, the season is likewise reset to white noise (order 0).
+  - `negative_contribution` — the iterative Maceira–Damázio contribution check (methodology §3.6): the season's order ceiling (initially `max_order`) drops by one, and PACF selection and the Yule-Walker fit re-run at the new ceiling, repeating until no season fails (a season whose ceiling reaches 0 takes order 0). The `reduced_order` recorded for the event is the largest order with no negative composed influence.
+
+### History classification runs before any order selection
+
+Before PACF selection sees a (hydro, season) bucket, the history
+classification pipeline (methodology §3.3) runs automatically: constant,
+saturated, and negative-dominated series are detected and, for the first two,
+routed to a degenerate order-0 fit rather than left to over-fit a
+structurally uninformative bucket. This classification is unconditional —
+it always runs when estimating from history, on both the classical PAR(p)
+and PAR(p)-A paths.
+
+### PAR(p)-A annual-component runtime behavior
+
+Setting `order_selection: "pacf_annual"` (Configure tab) extends the
+estimation pipeline with the steps of methodology §7. At runtime this adds
+one requirement not visible in the equations: a hydro needs **at least 13
+chronological observations** to participate in PAR(p)-A — the minimum to
+form one rolling 12-month average (§7.3). A hydro with fewer observations on
+the PAR(p)-A path is a **hard estimation failure**; there is no silent
+fallback to the classical path (methodology §7.7).
+
+### Inflow lags outside every cut
+
+Whether a stage's cuts carry the inflow-lag dimensions is the per-stage
+`stages[].state_variables` field. Its default, its validation warning, and
+whether that warning applies to supplied AR coefficients or to a model
+estimated from the inflow history are documented in
+[Cut Management](/math/cut-management/#stagesstate_variables--cut-projection),
+the key's single home.
+
+### Determinism guarantee
+
+PAR(p) fitting is one of the model families covered by Novomodelo's
+order-stable parallel fitting guarantee: coefficients are fit independently
+per hydro and reassembled into a canonical per-hydro slot, so the fitted
+model is a function of the inputs alone — independent of how many threads
+run or how hydros are distributed across them. See
+[Determinism & Provenance §3](/math/determinism-guarantees#3-methodology-mechanisms) for the full
+mechanism, which this chapter's estimation pipeline shares with the
+computed-FPHA fitting pipeline described in
+[Hydro Production Function Models](/math/hydro-production-models).
 
 ## Cross-References
 

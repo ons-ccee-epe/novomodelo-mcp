@@ -3,12 +3,6 @@ title: Hydro Production Function Models
 description: Constant productivity, FPHA (piecewise-linear convex hull fit), and linearized head models for hydro generation constraints — with fitting pipeline, LP integration, and energy-conversion scalars.
 ---
 
-import FphaPlot from "../../../components/FphaPlot.astro";
-import { Tabs, TabItem } from "@astrojs/starlight/components";
-import { Content as HydroConfigure } from "./_impl/_hydro.configure.mdx";
-import { Content as HydroIO } from "./_impl/_hydro.io.mdx";
-import { Content as HydroNotes } from "./_impl/_hydro.notes.mdx";
-
 ## Purpose
 
 This chapter defines the hydro generation constraint models supported by Novomodelo, which relate turbined flow and reservoir storage to electrical output. Two production functions shape dispatch: constant productivity and FPHA. A third model name — linearized head — is a reserved alias for constant productivity (see §3). The choice between constant productivity and FPHA trades off accuracy vs. computational cost, and can vary by stage per hydro.
@@ -209,8 +203,6 @@ Key properties:
 **Precomputed input**: precomputed planes may carry an intercept factor $\kappa \in (0, 1]$ (Configure tab) that scales each plane's intercept only ($\gamma_0^m \leftarrow \gamma_0^m \cdot \kappa$), unlike the whole-affine $k_{FPHA}$. The computed path does not use $\kappa$; its $k_{FPHA}$ correction plays that role.
 
 The figure below shows a synthetic plant with normalized axes: storage, flow and generation are fractions of $v_{max}$, $q_{max}$ and $\bar{G}_h$. It slices the fit at one grid volume, which the example takes as the reference volume $V^{ref}$ of §5.1, and plots five series against turbined flow: the cloud points at that volume; the exact production $\phi$ capped at $\bar{G}_h$; the raw hull $FPHA_0$, the minimum over the hull planes, which lies on or above every cloud point; the corrected envelope $k_{FPHA} \cdot FPHA_0$, which rescales the hull by the single scalar of this section; and the dashed line $\rho_{eq}\,q$ of §5.1, which, as the example sets $\rho_{esp}$ to $9.81\,\eta_h/1000$, meets the uncapped $\phi$ at $q_{max}$, above the capped curve where the capacity binds.
-
-<FphaPlot />
 
 ### 2.7 Lateral-Flow Secant
 
@@ -476,17 +468,614 @@ The full FPHA production function (section 2) is multi-dimensional and concave; 
 
 The methodology above defines the hydro production models; the tabs below cover how Novomodelo's software surface configures, feeds, and reports on them.
 
-<Tabs>
-  <TabItem label="Configure">
-    <HydroConfigure />
-  </TabItem>
-  <TabItem label="Inputs & Outputs">
-    <HydroIO />
-  </TabItem>
-  <TabItem label="Implementation notes">
-    <HydroNotes />
-  </TabItem>
-</Tabs>
+**Configure**
+
+Novomodelo's `system/hydro_production_models.json` file authors the production-model
+selection the methodology above describes, and the `generation` block of
+`system/hydros.json` supplies each plant's default model and its turbine and
+generation bounds. The equations these fields feed are in the sections above ([Hydro Production Function Models §1](/math/hydro-production-models#1-constant-productivity-model)–[§5](/math/hydro-production-models#5-energy-conversion-quantities)).
+The rest of the plant registry is on
+[System Element Modeling Overview — Configure](/math/system-elements#implementation-in-novomodelo).
+
+### `system/hydros.json` — `generation` block
+
+The `generation` block configures the turbine model for dispatch purposes and
+provides the default production function used when no
+`hydro_production_models.json` entry lists this plant. All variants share
+turbine bounds (`min_turbined_m3s`, `max_turbined_m3s`) and generation bounds
+(`min_generation_mw`, `max_generation_mw`); the `model` key selects the
+production function.
+
+```json
+"generation": {
+  "model": "constant_productivity",
+  "min_turbined_m3s": 0.0,
+  "max_turbined_m3s": 50.0,
+  "min_generation_mw": 0.0,
+  "max_generation_mw": 50.0
+}
+```
+
+| Field               | Type   | Description |
+| ------------------- | ------ | ----------- |
+| `model`             | string | Production function variant. See the model table below. |
+| `min_turbined_m3s`  | number | Minimum turbined flow [m³/s]. Non-zero values model a minimum stable turbine operation. |
+| `max_turbined_m3s`  | number | Maximum turbined flow (installed turbine capacity) [m³/s]. |
+| `min_generation_mw` | number | Minimum electrical generation [MW]. |
+| `max_generation_mw` | number | Maximum electrical generation (installed capacity) [MW]. |
+
+**Available production function models**:
+
+| Model                 | `model` value             | Description |
+| --------------------- | ------------------------- | ----------- |
+| Constant productivity | `"constant_productivity"` | `power = productivity * turbined_flow`. Independent of reservoir head. Productivity is supplied per stage range or season in `system/hydro_production_models.json`. |
+| FPHA                  | `"fpha"`                  | Piecewise-linear envelope of the nonlinear production function. Head-dependent. Configured via `hydro_production_models.json` — see below. |
+| Linearized head       | `"linearized_head"`       | Reserved model name; it resolves to the same constant-productivity source as `constant_productivity` (see methodology §3). Requires the plant's productivity input. |
+
+Every model applies in training and in simulation.
+
+For most initial studies, `constant_productivity` is the natural choice. The
+productivity coefficient encodes the plant's average efficiency and net head:
+for a plant with 80 m net head and 90% efficiency, the theoretical
+productivity is approximately `9.81 × 80 × 0.90 / 1000 ≈ 0.706` MW/(m³/s).
+
+### `system/hydro_production_models.json` — Production Model Selection
+
+This optional file maps each hydro plant to a production-model selection
+strategy, overriding `generation.model` from `hydros.json` for the stages or
+seasons it lists. Two selection strategies are supported.
+
+**`stage_ranges`** — assigns a model to each contiguous stage interval:
+
+```json
+{
+  "production_models": [
+    {
+      "hydro_id": 1,
+      "selection_mode": "stage_ranges",
+      "stage_ranges": [
+        {
+          "start_stage_id": 0,
+          "end_stage_id": null,
+          "model": "fpha",
+          "fpha_config": { "source": "precomputed" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+**`seasonal`** — assigns a model by season index, with a fallback for seasons
+not listed:
+
+```json
+{
+  "production_models": [
+    {
+      "hydro_id": 1,
+      "selection_mode": "seasonal",
+      "default_model": "constant_productivity",
+      "seasons": [
+        {
+          "season_id": 0,
+          "model": "fpha",
+          "fpha_config": {
+            "source": "computed",
+            "volume_discretization_points": 7,
+            "turbine_discretization_points": 7
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+Season indices are 0-based and match the season map in `stages.json`.
+
+#### `reference_volume`
+
+Each stage range or season entry may carry an optional `reference_volume`
+sibling of `fpha_config` (not nested inside it), declaring the reference
+operating volume the equivalent-productivity derivation and the computed-FPHA
+tailrace backwater interpolation consume. Set exactly one of:
+
+- `volume_hm3` — an absolute value in hm³ (finite, `> 0.0`).
+- `percentile` — a fraction in `[0.0, 1.0]` of the plant's operating range.
+
+When `reference_volume` is omitted entirely, the reference volume defaults to
+`0.65` of the operating band (equivalent to `{ "percentile": 0.65 }`).
+
+```json
+"reference_volume": { "percentile": 0.65 }
+```
+
+#### Hyperplane Sources
+
+When a plant is configured with `model: "fpha"`, `fpha_config.source` selects
+where the hyperplane coefficients come from.
+
+**`source: "precomputed"`** — hyperplanes are loaded directly from
+`system/fpha_hyperplanes.parquet`:
+
+```json
+"fpha_config": { "source": "precomputed" }
+```
+
+No additional `fpha_config` fields are needed; discretization and fitting
+options are ignored. The parquet schema:
+
+| Column            | Type    | Required | Description |
+| ----------------- | ------- | -------- | ----------- |
+| `hydro_id`        | Int32   | Yes      | Hydro plant identifier |
+| `stage_id`        | Int32   | No       | Stage the plane applies to (`null` = all stages; an absent column means the same) |
+| `plane_id`        | Int32   | Yes      | Plane index within this hydro |
+| `gamma_0`         | Float64 | Yes      | Intercept coefficient (MW) |
+| `gamma_v`         | Float64 | Yes      | Volume coefficient (MW/hm³). Must be non-negative (`>= 0`); run-of-river plants have `gamma_v = 0`. |
+| `gamma_q`         | Float64 | Yes      | Turbined flow coefficient (MW per m³/s). Must be non-negative (`>= 0`); each stage a plant runs on precomputed planes needs at least one plane with `gamma_q > 0`, checked when the study is set up. |
+| `gamma_s`         | Float64 | Yes      | Spillage coefficient (MW per m³/s). Must be `<= 0`. |
+| `kappa`           | Float64 | No       | Intercept-only correction factor, defaulting to `1.0`; validated in `(0, 1]`. Applies only to precomputed planes — the computed path does not use `kappa` (see Implementation notes). |
+| `valid_v_min_hm3` | Float64 | No       | Minimum volume where this plane is valid (hm³) |
+| `valid_v_max_hm3` | Float64 | No       | Maximum volume where this plane is valid (hm³) |
+| `valid_q_max_m3s` | Float64 | No       | Maximum turbined flow where this plane is valid (m³/s) |
+
+**`source: "computed"`** — hyperplanes are fitted at runtime from the plant's
+physical geometry. Novomodelo evaluates the exact production function on a
+(volume, turbined-flow) grid at spillage `= 0` — the flow axis starts at
+`q = 0`, whose zero-flow column anchors the lower closure, so there is no
+synthetic closing point and no spillage axis in the cloud — takes the 3-D
+convex hull of the resulting cloud with vendored qhull, applies a
+least-squares $k_{FPHA}$ correction that scales the **whole affine plane**
+(intercept and slopes together, not just the intercept), and fits a per-plane
+lateral-flow secant. Fits are resolved independently per stage range or
+season. Run-of-river plants (a single fitting volume) are supported: the
+fitter synthesizes two nearby volume samples to keep the hull non-degenerate,
+then snaps the resulting `gamma_v` to exactly `0`. See Implementation notes
+for the full fitting-pipeline summary and methodology §2.6–§2.7 for the
+derivation.
+
+This source requires `tailrace`, `hydraulic_losses`, and `efficiency` models
+in `hydros.json`, plus geometry rows in `system/hydro_geometry.parquet` for the
+plant. An FPHA-configured plant needs at least 1 row — a single row is valid for
+run-of-river plants (a constant forebay, so `gamma_v = 0`). A plant configured
+with `linearized_head` needs at least 2 rows when the file holds any row; that higher minimum is a load-time
+validation rule keyed on the configured model name, not a runtime head fit —
+`linearized_head` resolves to constant productivity (methodology §3).
+
+```json
+"fpha_config": {
+  "source": "computed",
+  "volume_discretization_points": 5,
+  "turbine_discretization_points": 5,
+  "spillage_discretization_points": 5,
+  "max_planes_per_hydro": 10,
+  "fitting_window": null
+}
+```
+
+All fields except `source` are optional:
+
+| Field                            | Default | Description |
+| -------------------------------- | ------- | ----------- |
+| `volume_discretization_points`   | 5       | Number of volume grid points for fitting. `1` selects the single-volume fit of a run-of-river plant; otherwise it must be `>= 2`. With a single fitting volume the fitter synthesizes two nearby volume samples and snaps `gamma_v` to exactly `0` (see Implementation notes). |
+| `turbine_discretization_points`  | 5       | Number of turbined-flow grid points. Must be `>= 2`. |
+| `spillage_discretization_points` | 5       | Validated (must be `>= 2`) but does **not** add a spillage axis to the fitting grid — the cloud and the $k_{FPHA}$ regression fix spillage at `0`, and the lateral-flow secant sweeps its own sample range independently (§2.7). The field is retained for input round-tripping. |
+| `max_planes_per_hydro`           | 10      | Accepted and validated (`>= 1`) but does not trim the plane set — the hull fitter emits exactly the upper-envelope facets. |
+| `fitting_window`                 | null    | Optional volume range for fitting; absent uses the full forebay range of the plant's `system/hydro_geometry.parquet` volume-height curve. |
+
+`fitting_window` restricts which portion of the operating range builds the
+grid — useful when the plant rarely operates near one extreme:
+
+```json
+"fitting_window": { "volume_min_hm3": 1000.0, "volume_max_hm3": 40000.0 }
+```
+
+```json
+"fitting_window": { "volume_min_percentile": 0.05, "volume_max_percentile": 0.95 }
+```
+
+Absolute (`_hm3`) and percentile (`_percentile`) bounds are mutually
+exclusive per bound (min and max may use different modes). For the 5%
+fit-quality warning emitted after fitting, and for the round-trip parquet
+export of computed planes, see Implementation notes.
+
+#### Plane Reduction (`fpha_plane_reduction`)
+
+The optional file-level `fpha_plane_reduction` block merges near-parallel or
+near-coincident FPHA planes after fitting. Off by default (absent = no
+reduction); applied uniformly to every plant in the file.
+
+**Angle method** — merges planes whose normal vectors are within
+`tolerance_deg` degrees:
+
+```json
+"fpha_plane_reduction": { "method": "angle", "tolerance_deg": 2.0 }
+```
+
+| Field           | Required | Description |
+| --------------- | -------- | ----------- |
+| `method`        | Yes      | Must be `"angle"`. |
+| `tolerance_deg` | Yes      | Maximum angle between plane normals to merge them. Finite, in `[0.0, 90.0]`. |
+
+**Distance method** — merges planes whose sampled mean-squared distance stays
+within `tolerance_pct`, using `n_samples` sample points:
+
+```json
+"fpha_plane_reduction": { "method": "distance", "tolerance_pct": 0.01, "n_samples": 200 }
+```
+
+| Field           | Required | Description |
+| --------------- | -------- | ----------- |
+| `method`        | Yes      | Must be `"distance"`. |
+| `tolerance_pct` | Yes      | Tolerance, in percent, on the normalised mean-squared generation difference: two planes merge when that difference, as a fraction, is below `tolerance_pct / 100`. Finite, `>= 0.0`. |
+| `n_samples`     | Yes      | Number of sample points used to estimate the distance. Must be `>= 1`. |
+
+Supplying a field belonging to the other method is a load-time error. The
+origin plane (zero generation at zero turbining) is never merged. The
+distance method's sample draws are deterministically seeded — bit-identical
+across input ordering and rank count.
+
+#### Per-Range and Per-Season Productivity
+
+For `constant_productivity` and `linearized_head` hydros, the equivalent
+productivity for each `(hydro, stage)` pair is supplied by exactly one of two
+sources:
+
+- **`system/hydro_production_models.json`** — an inline
+  `productivity_mw_per_m3s` field on the matching `stage_range` or `seasonal`
+  entry. Natural for "this productivity is constant for the next five
+  stages."
+- **`system/hydro_energy_productivity.parquet`** — a row in the
+  `equivalent_productivity_mw_per_m3s` column; a row with `stage_id` refines a
+  single stage, a row with `stage_id = null` is a per-hydro default. Natural
+  for per-stage numerical refinement.
+
+As with the [generic-constraint inputs](/reference/generic-constraints/), the
+JSON file owns model selection and range-level values, and the parquet file
+owns per-stage numerical refinement.
+
+Resolution order at load time:
+
+1. Parquet stage-specific row (exact `stage_id` match).
+2. Parquet per-hydro default row (`stage_id = null`).
+3. JSON `productivity_mw_per_m3s` on the matching stage range or season.
+
+Supplying a value from both sources for the same `(hydro, stage)` is a
+load-time error; supplying neither is also a load-time error. The conflict
+error names both files and the offending `(hydro_id, stage_id)` and asks for
+the value from exactly one source; the coverage error names the pair and both
+files.
+
+A hydro whose `generation.model` is `fpha` is outside both checks: its
+equivalent productivity is derived from the VHA geometry and the specific
+productivity (methodology §5.1). An `equivalent_productivity_mw_per_m3s` row
+for such a hydro (stage-specific, else the per-hydro default) is an override that
+replaces the derived value for both evaluators — the reference-point value
+(§5.1) and the useful-range mean value (§5.3).
+
+In `system/hydro_energy_productivity.parquet`,
+`equivalent_productivity_mw_per_m3s` and
+`specific_productivity_mw_per_m3s_per_m` must each be finite and non-negative
+when set: `0` is accepted and a negative value is rejected at load. A `0`
+equivalent productivity at a stage that does not use the `"fpha"` model marks a
+planned-outage stage, as
+`0.0` does in the JSON field below. A `0` specific productivity zeroes the head-derived equivalent productivity and does not stop generation.
+
+```json
+{
+  "start_stage_id": 12,
+  "end_stage_id": 24,
+  "model": "constant_productivity",
+  "productivity_mw_per_m3s": 0.72
+}
+```
+
+| Field                     | Type   | Required            | Description |
+| ------------------------- | ------ | ------------------- | ----------- |
+| `productivity_mw_per_m3s` | number | Optional (non-FPHA) | Finite and non-negative (`>= 0.0`) when present; `0.0` marks a planned-outage stage. Rejected on FPHA — FPHA derives productivity from VHA geometry, not a scalar coefficient. |
+
+### Load-Time Validation Rules
+
+| Rule                            | Error Class          | Description |
+| -------------------------------- | --------------------- | ----------- |
+| FPHA geometry coverage            | Dimensional error      | When `system/hydro_geometry.parquet` holds any row, every `fpha` plant must have at least 1 row of its own (a single row is valid for run-of-river plants) and every `linearized_head` plant at least 2 rows; with no row in the file this rule does not run. |
+| FPHA plane coverage               | Dimensional error      | Every `(hydro_id, stage_id)` group in `system/fpha_hyperplanes.parquet` must have at least 1 plane. |
+| FPHA coefficient signs            | Semantic error         | `gamma_v` must be non-negative (`>= 0`; run-of-river plants have `gamma_v = 0`); `gamma_s` must be non-positive. |
+| Geometry monotonicity             | Semantic error         | `volume_hm3` must be strictly increasing; `height_m` and `area_km2` must be non-decreasing. |
+
+**Inputs & Outputs**
+
+This is a topic-scoped index of the files hydro production touches and of the fields the methodology reads from them — it names each file and its role and maps fields to the quantities they feed; it does not repeat their field-by-field schemas. The
+exhaustive, field-by-field case-directory and output reference is owned by
+the Reference corpus ([Case Format](/reference/case-format/)
+and [Output Format](/reference/output/) pages).
+
+### Inputs
+
+| File | Role |
+| ---- | ---- |
+| `system/hydros.json` | Hydro plant registry — core fields, reservoir, outflow, generation model, the required `unit_groups` bus partition, and the advanced blocks (see the [System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo) Configure tab). |
+| `system/hydro_production_models.json` | Optional per-hydro production-model selection (`stage_ranges` / `seasonal`), FPHA fitting configuration, and plane reduction. |
+| `system/hydro_geometry.parquet` | Volume-Height-Area (VHA) curves — required for any hydro using computed FPHA and for the evaporation area-volume conversion; when the file holds any row, every FPHA plant needs at least 1 row of its own and every `linearized_head` plant at least 2; also read, for any plant with a specific productivity, by the useful-range mean evaluator ([Hydro Production Function Models §5.3](/math/hydro-production-models#53-useful-range-mean-productivity)). |
+| `system/hydro_energy_productivity.parquet` | Per-`(hydro, stage)` overrides: equivalent productivity (both evaluators), specific productivity (both evaluators' head term and the `specific_productivity` tag), reference turbined flow (the `reference_turbine` tag only) — the tabular authoring source of the Configure tab's resolution order, and the FPHA override. |
+| `system/tailrace_curves.parquet` | Optional piecewise-quartic tailrace-level curves — `tailrace_level(outflow)` per `(hydro_id, family_id, segment_id)` — feeding the computed-FPHA fit. A hydro with no curve uses its entity-level `tailrace` model. |
+| `system/fpha_hyperplanes.parquet` | Pre-fitted FPHA hyperplane coefficients, read when a plant's `fpha_config.source` is `"precomputed"`. |
+| `constraints/hydro_unit_group_bounds.parquet` | Optional stage-varying, optionally per-block overrides of a unit group's four declared bounds (see the [System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo) Configure tab). Rows are keyed by `(hydro_id, hydro_unit_group_id, stage_id, block_id?)`, where `hydro_unit_group_id` matches a group's own `id` in `hydros.json`; a group with no override row reads its declared value. |
+| `constraints/hydro_bounds.parquet` | Optional stage-varying (and optionally per-block) overrides of a hydro **plant's** own bounds (maximum turbined flow, storage, outflow, maximum generation, diversion, spillage, filling rate, withdrawal). Its `min_turbined_m3s` and `min_generation_mw` columns reach no LP row: the minimum turbined-flow and minimum-generation rows read the unit groups' resolved minima. Keyed by `(hydro_id, stage_id)` with an optional `block_id`; an absent/null cell falls back to the declared base value. **Distinct** from the per-unit-group `hydro_unit_group_bounds.parquet` above — a separate, plant-level file (see the [System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo) Configure tab). |
+| `initial_conditions.json` (hydro rows) | Per-hydro initial state: `storage` or `filling_storage` (exactly one), and optional `past_defluences` seeding the pre-study releases in transit on a declared travel-time arc. AR-lag seeding for the PAR inflow model derives from `scenarios/inflow_history.parquet` and `recent_observations` instead — see the [PAR(p) Inflow Model](/math/par-inflow-model#implementation-in-novomodelo) Inputs & Outputs tab. |
+
+For the complete field-by-field schema of each file above, see the
+[Case Format](/reference/case-format/) reference page in
+the Reference corpus.
+
+### Data requirements by quantity
+
+Each row names a data source, the fields the methodology above reads from it, and the quantity those fields feed:
+
+| Data source | Fields | Used for |
+| ---- | ---- | ---- |
+| Hydro plant entity | `tailrace` (polynomial or piecewise) | $h_{tail}(q_{out})$ computation |
+| Hydro plant entity | `hydraulic_losses` (factor or constant) | $h_{loss}$ computation |
+| Hydro plant entity | `efficiency` (constant) | Turbine efficiency $\eta$ |
+| Hydro plant entity | `specific_productivity_mw_per_m3s_per_m` (FPHA, and the useful-range mean evaluator for any model) | $\rho_{esp}$ for $\rho_{eq}$ derivation (§5.1) and $\bar\rho_{eq}$ (§5.3) |
+| Hydro plant entity | Cascade topology (downstream pointer) | $\rho_{acum}$ topological sum (§5.2) |
+| Hydro production models input | Range-level productivity per `stage_range` / `seasonal` entry (non-FPHA, optional) | $\rho_{h,t}$ for §1 and §3 (§5.1) |
+| Hydro production models input | `reference_volume` per `stage_range` / `seasonal` entry (absolute or percentile) | $V^{ref}$ for the energy-conversion reduction (§5.1) and the tailrace backwater reference level (§2.3.1) |
+| Hydro production models input | FPHA `fitting_window` per `stage_range` / `seasonal` entry (absolute or percentile bounds, optional) | Computed-FPHA volume grid $[v_{min}, v_{max}]$ (§2.6.1) |
+| Hydro production models input | FPHA fitting configuration and optional `fpha_plane_reduction` block | Grid sizes, plane reduction method (§2.6–§2.8) |
+| Hydro energy productivity input | Per-(hydro, stage) `equivalent_productivity_mw_per_m3s` and specific productivity | $\rho_{eq,h,t}$ for both evaluators: the authoring source of a non-FPHA plant, the override of an FPHA plant (§5.1); $\rho_{esp,h,t}$ for both evaluators' head-derived value (§5.1, §5.3) |
+| Hydro geometry | `volume_hm3`, `height_m` | $h_{fore}(v)$ interpolation (§2.3); mean forebay level $\bar h_{fore,h}$ (§5.3) |
+| Pre-fitted FPHA planes | `gamma_0`, `gamma_v`, `gamma_q`, `gamma_s` (plus the optional `kappa` intercept factor, default 1.0) | Optional alternative to in-process fitting |
+
+### Outputs
+
+| File | Role |
+| ---- | ---- |
+| `hydro_models/fpha_hyperplanes.parquet` | Fitted hyperplane coefficients when `fpha_config.source` is `"computed"`, written only when at least one plant has fitted planes (for example, a computed-FPHA plant with no turbine capacity has none) — the same schema as the `system/fpha_hyperplanes.parquet` input, so it round-trips: copy it into `system/` and switch `source` to `"precomputed"` to reuse a prior fit without refitting. See the Implementation notes tab, "Round-trip parquet export", for the workflow. |
+| `hydro_models/evaporation_models.parquet` | Fitted per-hydro evaporation-model coefficients — written whenever **any** evaporation model was built (not gated on an exports flag; absent when no plant declares evaporation). |
+| `hydro_models/fpha_deviation_points.parquet` | Per-plane FPHA fit-deviation sample points — a fitting diagnostic. Written **only** when the `exports.fpha_deviation_points` flag is enabled (**default off**) **and** at least one deviation point exists; absent otherwise. |
+| Hydro generation and storage output columns | Per-(stage, block, hydro) dispatch results (turbined flow, spillage, generation, storage) written alongside every other entity's output rows — the plant total, unchanged by bus-partitioning. |
+| Energy-conversion columns of `simulation/hydros/` | The reference-point (`equivalent_productivity_mw_per_m3s`, `accumulated_productivity_mw_per_m3s`) and useful-range mean (`integrated_*`) productivities, `incremental_inflow_energy_mw`, and stored energy in MWh and MW (`stored_energy_{initial,final}_{mwh,mw}`) — see §5 above and the Output Format reference. |
+| `simulation/hydro_bus_generation/` | Per-(stage, block, hydro, bus) cell dispatch results — `turbined_m3s`, `generation_mw`, `generation_mwh`; `bus_id` always non-null. See Implementation notes for the exact-sum caveat on the `generation_mw` column. |
+| `simulation/in_transit/` | Per-(stage, downstream hydro, maturity lag) in-transit water volumes on declared travel-time arcs, including the delayed arrival that enters the receiving plant's water balance; written only when a travel-time arc is declared (schema: [Simulation Output](/reference/output/simulation/#simulationin_transit)). |
+| `simulation/transit_seed/` | Scenario-level rolling release-window seed for a declared travel-time arc — five columns (`scenario_id`, `hydro_id`, `start_date`, `end_date`, `value_m3s`), carrying no stage/node prefix. Written only when a travel-time arc is declared; absent otherwise. Feeds a continuing run's own `initial_conditions.past_defluences` (study chaining). |
+
+For the complete output schema (columns, types, file layout), see the
+[Output Format](/reference/output/) reference page in the Reference
+corpus.
+
+**Implementation notes**
+
+Non-normative software behavior for the hydro production models — what Novomodelo
+does at runtime, beyond the equations above. This tab references the
+methodology body for the derivations rather than restating them.
+
+### Computed-FPHA fitting behavior
+
+The computed path (§2.6–§2.7 above) evaluates the exact production function
+on a (volume, turbined-flow) grid at spillage fixed to `0`. The flow axis
+starts at `q = 0`; that zero-flow column is generation-zero by construction
+and anchors the lower closure of the cloud, so the fitter needs neither a
+synthetic closing point nor a spillage axis in the cloud itself — spillage
+sensitivity is captured separately by the per-plane lateral-flow secant
+(§2.7), not by adding a third grid dimension. That secant uses
+nine evenly spaced samples of the lateral flow.
+
+The 3-D convex hull's upper-envelope facets are corrected by a single
+least-squares $k_{FPHA}$ scalar. That correction scales the **whole affine
+plane** — intercept and both slopes together — not just the intercept, unlike
+the `kappa` factor of precomputed planes, which scales the intercept only
+(validated in `(0, 1]`).
+
+Lateral-flow slopes above `-1e-10` — a near-zero negative residual or any
+positive one — are set to exactly `0`, so no near-zero coefficient reaches
+the spillage column.
+
+When any plant uses computed FPHA, the families of `system/tailrace_curves.parquet` are checked as the
+production models are built: consecutive segments of a family must meet (the previous
+`outflow_max_m3s` and the next `outflow_min_m3s` differ by at most `1e-6` m³/s) and give the same
+level at the shared boundary, to within the larger of `0.001` m and `1e-4` of the larger of the two
+levels. A gap, an overlap or a level mismatch beyond these bounds is an error that names the plant by
+id and the boundary.
+
+### Run-of-river support
+
+A plant whose fitting volume range collapses to a single point (constant
+forebay) is fit by synthesizing two nearby volume samples so the 3-D hull
+stays non-degenerate, then snapping the resulting `gamma_v` residual to
+exactly `0` when its magnitude is at most `1e-6` MW per hm³. This enforces the correct
+run-of-river semantics — generation on
+these planes does not vary with storage — and is why run-of-river plants are
+supported on the computed path rather than rejected.
+
+The two samples sit either side of that single volume, each offset by the
+larger of half a percent of the plant's useful storage and `1` hm³, so a
+plant with no useful storage still gets two distinct samples; when the
+volume-height curve spans a range of volumes, both samples are clamped into
+it.
+
+### FPHA without turbine capacity
+
+A plant that requests FPHA, computed (`fpha_config.source: "computed"` in
+any of its production-model entries) or precomputed with no row in
+`system/fpha_hyperplanes.parquet`, and declares `max_turbined_m3s` at or below
+`1e-9` is not fitted; it is modelled with zero productivity at every stage
+([§2.6.1](#261-grid-and-cloud) above). The computed-FPHA prerequisites apply
+to a computed plant: `tailrace`, `hydraulic_losses` and `efficiency` in `hydros.json` and
+geometry rows in `system/hydro_geometry.parquet`; a missing one is a load-time
+error.
+
+A warning names the plant; `novomodelo validate` and `novomodelo run` both print it:
+
+```text
+ WARN hydro UHE1 (id=0) requests FPHA but has no turbine capacity (max_turbined_m3s = 0); modeling it with zero productivity
+```
+
+Every MPI rank prepares the production models, so a multi-rank run prints the
+warning once per rank.
+
+The plant counts as constant productivity: in `n_constant` of
+`training/hydro_models.json`, in its `no_turbine_capacity` list, in
+`n_constant` of the Python `hydro_models` summary, and in
+the `constant` count of the CLI `Production:` line. It is absent from
+`n_fpha`, `total_planes` and `fpha_details`, from
+`n_fpha_computed_from_geometry` and `n_fpha_precomputed_hyperplanes` in
+`training/model_provenance.json`, and from
+`hydro_models/fpha_hyperplanes.parquet`.
+
+### Fit-quality warning
+
+After the full pipeline, Novomodelo compares the fitted min-envelope against the
+exact production function on the spillage-`0` grid and computes their
+relative mean-absolute deviation. When it exceeds 5%, a warning is logged
+naming the plant and stage:
+
+```
+FPHA fit for hydro UHE Example (stage 3) deviates 6.2% from the exact production function (mean |Δ| 4.1 MW, max 9.7 MW); the convex-hull approximation is poor here — typically a strongly non-concave production surface that no single α correction can track
+```
+
+The warning is informational — the run continues with the fitted planes. A
+high deviation typically indicates a strongly non-concave production surface
+that no single $k_{FPHA}$ scalar can track well; narrowing `fitting_window`
+or raising the discretization point counts are the usual remedies.
+
+### Determinism guarantees
+
+The fitting cloud points and the hull output are canonically sorted, so
+fitted hyperplanes are bit-identical regardless of input ordering and MPI
+rank count. The `fpha_plane_reduction` distance method's sampled draws are
+seeded from stable plant/stage/plane-pair identity — never wall clock or MPI
+rank — so its merges are equally reproducible.
+
+### Evaporation: disabled on zero area, rejected on missing geometry
+
+A hydro that declares `evaporation.coefficients_mm` needs an area-volume
+curve — the rows in `system/hydro_geometry.parquet` — to linearize its
+evaporative flux, and the two ways that curve can be absent are handled
+differently:
+
+- **No geometry rows at all** is a **hard load-time error**. A hydro that
+  declares `evaporation.coefficients_mm` but contributes no rows to
+  `system/hydro_geometry.parquet` is rejected at load, naming the plant: the
+  evaporation linearization requires area-volume curve data and none is
+  present.
+- **Rows present but every `area_km2` is zero** is **disabled with a
+  warning**. The curve exists but describes zero surface area throughout, so
+  evaporative flux is identically zero regardless of the authored
+  coefficients. Novomodelo disables evaporation (zero flux) for that hydro and
+  logs a warning naming the plant rather than failing the run.
+
+Two conditions raised while building the per-stage linearization remain hard
+load-time errors: a stage whose total block duration is not positive, and a
+computed evaporation coefficient — volume slope or intercept — that is not
+finite (the signature of a degenerate area-volume curve). The calendar month
+that selects each stage's monthly evaporation coefficient is taken from that
+stage's start date. See
+[Penalty System — Signed Net Evaporation](/math/penalty-system#signed-net-evaporation)
+for the water-balance treatment of the resulting flux.
+
+### Commissioning: the PreFilling state
+
+A hydro's `entry_stage_id`/`exit_stage_id` commissioning window is honored even for a **non-filling** hydro (one with no `filling` block). At any stage outside its window — before `entry_stage_id`, or from `exit_stage_id` onward — the plant is **PreFilling**: the site is not in service, so its turbine, spillage, and diversion columns are pinned to zero, its storage is frozen by the identity $v_h = v^{in}_h$, and its local inflow, the upstream releases, the flows diverted in and the in-transit water maturing into it are routed past the site to the first downstream plant that is not PreFilling (or leaves the modelled system if there is none). Unlike the generic outside-window zero-pin used for the other entity types, the river is never trapped or duplicated at a site that is not in service. See [LP Formulation — Lifecycle Phases](/math/lp-formulation#lifecycle-phases) for every phase and [Penalty System](/math/penalty-system) for the spillage-frozen-versus-costed distinction.
+
+### Water travel time: in-transit seed and validation
+
+When a plant declares a travel-time arc, the releases already in transit at the
+study start must be supplied so the first stages' delayed-arrival buckets are
+seeded rather than starting empty. This history lives in
+`initial_conditions.past_defluences`: windowed pre-study release records (a
+`hydro_id`, a release window, and an average rate in m³/s) for the plants whose
+outflow feeds a declared arc.
+
+Load-time validation of a declared arc:
+
+- **History depth.** The `past_defluences` windows must cover the arc's
+  in-transit span at study start — the interval `[start_0 − travel_time, start_0)`
+  ending at the study start. A gap, or no windows at all, is a load-time error,
+  and no window may be future-dated past the study start — there is no proxy
+  or fallback seed from any other source.
+- **Downstream must be operating.** A release at a stage before the downstream
+  plant's `entry_stage_id` — while it is PreFilling or Filling — is rejected;
+  the check covers each in-study release stage, the first included, so the
+  downstream plant must have entered service by the first study stage.
+- **Heterogeneous travel time under chronological blocks.** When two or more
+  declared arcs feed the _same_ downstream plant with _differing_
+  `travel_time_hours` and at least one study stage runs in chronological block
+  mode, the case is rejected at load with a `NotImplemented` error, whose message reads "unsupported in v1", naming
+  the downstream plant and the conflicting arcs; align the arcs'
+  `travel_time_hours`, or keep every study stage in parallel block mode. Equal
+  travel times into a confluence, or a study with no chronological stage, are
+  unaffected. See [Error Codes — `NotImplemented`](/reference/error-codes/#notimplemented).
+- **Zero, absent, or invalid travel time.** A zero or absent `travel_time_hours`
+  is treated as undeclared — an instantaneous transfer that creates no
+  cross-stage arc, adds no in-transit bucket, and needs no `past_defluences`
+  seed. An **explicit** `0.0` additionally logs a **model-quality warning** that
+  it is being read as undeclared, so a deliberate zero is flagged while an
+  omitted field stays silent. A **negative or non-finite** `travel_time_hours`
+  is a hard load-time error. See [Error Codes](/reference/error-codes).
+- **Model-quality warnings (non-blocking).** Two further conditions on a
+  declared arc are reported as `warning:` lines after `Valid case: …`; the case
+  still loads and runs. See
+  [Error Codes — `ModelQuality`](/reference/error-codes/#modelquality).
+  - **Negligible travel time.** When `travel_time_hours` is below 1 % of every
+    study stage's length (`travel_time_hours / stage hours < 0.01` on every
+    stage), the arc carries a negligible cross-stage fraction; the warning
+    suggests not declaring it.
+  - **Longer than the remaining study horizon.** When `travel_time_hours`
+    exceeds the remaining study horizon from some stage, releases from that
+    stage onward never arrive within the study, and the warning names the
+    first such stage as the point from which the arc is economically inert.
+    The in-transit sizing stays safe.
+
+In-transit water that matures into a plant at a stage where the plant is
+PreFilling enters the row of the first non-PreFilling plant downstream, and
+leaves the modelled system only when no such plant exists.
+
+**Horizon limitation.** Without a loaded terminal boundary, in-transit water
+that would mature after the last stage is dropped; with one, it is carried to
+the terminal stage and priced there ([State Augmentation — Horizon
+limitation](/math/state-augmentation#horizon-limitation), [Post-Study
+Boundary & Chained Studies](/math/post-study-boundary)).
+
+### Bus-partitioned hydro: cell collapse and the generation-sum caveat
+
+A plant's `unit_groups` partition it into one **cell** per distinct `bus_id`:
+the LP carries one turbine column and one FPHA-generation column per cell.
+When every group shares one bus, the plant collapses to a single cell — the
+same LP shape, byte-identical, as a plant declaring no groups beyond the
+required one. Same-bus groups sharing a cell's turbine and generation
+columns is exact for the box constraints (each group's own bounds fold
+independently before summing into the cell), because every group on a plant
+shares the same production model and productivity coefficients — there is no
+per-group productivity field.
+
+The `simulation/hydro_bus_generation/` output sums bit-exactly to the plant's
+own `turbined_m3s` on every model, since both are a plain sum of the same
+per-cell turbine columns. `generation_mw` sums exactly only for FPHA plants
+and single-cell plants: for `ConstantProductivity`/`LinearizedHead`, the
+plant-level row computes `(Σ_c turbined_c) × ρ` — sum the cells' turbined
+flow first, then multiply once — while each bus-cell row computes
+`turbined_c × ρ` independently. The two expressions are equal in exact
+arithmetic, but floating-point multiplication does not distribute over
+addition bit-for-bit, so the plant total need not equal the sum of the
+cell rows to the last bit once a plant spans more than one cell. FPHA
+plants are exempt because both the plant row and the cell rows sum the
+same underlying per-cell FPHA generation columns the same way; a
+single-cell plant is exempt because there is only one term either way.
+
+### Round-trip parquet export
+
+When hyperplanes are fitted at runtime (`source: "computed"`), the fitted
+coefficients are automatically written to
+`output/hydro_models/fpha_hyperplanes.parquet` using the same schema as the
+`system/fpha_hyperplanes.parquet` input. To reuse a prior fit without
+refitting on a subsequent run, copy this output file into `system/` and
+change `source` to `"precomputed"` in `hydro_production_models.json`.
+
+A plant with no turbine capacity has no rows in the exported file and needs
+none: copied to `system/`, the file loads unedited, and the plant stays at
+zero productivity.
 
 ## Cross-References
 

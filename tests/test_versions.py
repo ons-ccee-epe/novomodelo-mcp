@@ -258,3 +258,18 @@ def test_verificacao_de_versao_nova_uma_vez_por_processo(pecas, monkeypatch):
     V.update_check(object())
     V.update_check(object())
     assert len(chamadas) == 2   # novomodelo + bridge, uma vez só
+
+
+def test_docs_de_outra_versao_avisam_e_sem_manifesto_nao(pecas, monkeypatch):
+    estado, _ = pecas
+    ler = V._read_local
+    monkeypatch.setattr(V, "_read_local", lambda s: ler(s) | {"docs": {"versao": "0.17.0"}})
+    assert any("docs embutidas na versão 0.17.0" in a for a in V.version_warnings(object()))
+    V.reset_caches()
+    monkeypatch.setattr(V, "_read_local", ler)
+    assert V.version_warnings(object()) == []
+
+
+def test_docs_embutidas_reais_tem_a_versao_do_manifesto():
+    piece = V._docs_piece()
+    assert piece["versao"] and piece["commit"]

@@ -3,10 +3,6 @@ title: The SDDP Framework in One Page
 description: Minimum context for the SDDP idea — forward pass, backward pass, bounds, convergence, and risk measures in one page.
 ---
 
-import ValueFunctionPlot from "../../../components/ValueFunctionPlot.astro";
-import ConvergencePlot from "../../../components/ConvergencePlot.astro";
-import CvarPlot from "../../../components/CvarPlot.astro";
-
 ## Purpose
 
 This chapter gives a reader new to stochastic dynamic programming the minimum context needed to follow the rest of this site. It covers the SDDP idea in one page; the chapters it links, starting with [SDDP Algorithm](/math/sddp-algorithm), develop each claim in detail.
@@ -61,8 +57,6 @@ _One SDDP iteration: draw a batch of scenario paths (sampled, or every path when
 
 As iterations accumulate, the piecewise-linear approximation covers more of the state space and the lower bound never decreases:
 
-<ValueFunctionPlot />
-
 _The convex cost-to-go $V(x)$ approximated from below by Benders cuts. Each cut is a tangent at a trial state — its slope is the analytic derivative — and the upper envelope of the cuts tightens toward the true function as cuts are added._
 
 ## 2. Bounds and Convergence
@@ -76,8 +70,6 @@ SDDP maintains two bounds on the optimal (risk-adjusted) cost:
 The **optimality gap** is the upper bound minus the lower bound; its percent form normalises that difference by the magnitude of the lower bound, floored at one currency unit (see [Optimality gap](/math/stopping-rules#optimality-gap)).
 
 Training stops when its stopping rules are met: an iteration or time limit, a stalled lower bound, or, with an exact upper bound, a gap within tolerance ([Stopping Rules](/math/stopping-rules)).
-
-<ConvergencePlot />
 
 _A non-decreasing lower bound and a sampled upper-bound estimate with its 95% confidence band approach each other across iterations. The band describes the sampled cost and certifies nothing; the gap rule compares the lower bound with an exact upper bound._
 
@@ -98,8 +90,6 @@ $$
 $$
 
 with risk-aversion weight $\lambda \in [0, 1]$ ($\lambda = 0$ recovers the risk-neutral mean, $\lambda = 1$ is pure CVaR). The measure is applied inside the backward pass: cut coefficients are aggregated using risk-weighted averages rather than simple expectations. See [Risk Measures](/math/risk-measures) for the formulation.
-
-<CvarPlot />
 
 _Cost distribution with the mean, $\mathrm{VaR}_\alpha$ and $\mathrm{CVaR}_\alpha$ marked and the worst $\alpha$ tail shaded; raising $\lambda$ moves the policy from the mean toward the tail._
 

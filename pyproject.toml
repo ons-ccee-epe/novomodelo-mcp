@@ -33,6 +33,7 @@ artifacts = [
     "src/novomodelo_mcp/_bundled/**/*.md",
     "src/novomodelo_mcp/_bundled/**/*.mdx",
     "src/novomodelo_mcp/_bundled/**/*.json",
+    "src/novomodelo_mcp/_bundled/**/*.sqlite",
 ]
 
 [dependency-groups]

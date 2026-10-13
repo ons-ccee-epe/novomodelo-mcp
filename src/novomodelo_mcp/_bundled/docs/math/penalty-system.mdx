@@ -3,10 +3,6 @@ title: Penalty System
 description: Unified penalty taxonomy for LP feasibility, constraint violations, and regularization — cascade resolution, penalty priority ordering, and bidirectional slack variables.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Content as PenaltiesConfigure } from './_impl/_penalties.configure.mdx';
-import { Content as PenaltiesIO } from './_impl/_penalties.io.mdx';
-
 ## Purpose
 
 This chapter defines the unified penalty system that ensures LP feasibility across all scenarios while correctly pricing operational costs and constraint violations. Each penalty enters the stage objective as [LP Formulation §2](/math/lp-formulation#2-objective-function) and [§9](/math/lp-formulation#9-constraint-violation-penalty-terms) state it.
@@ -215,10 +211,296 @@ Filling is governed by a **minimum accumulation rate** rather than a single end-
 
 The methodology above defines the penalty taxonomy and priority ordering; the tabs below cover how Novomodelo's software surface configures and reports the penalty costs that implement it.
 
-<Tabs>
-  <TabItem label="Configure"><PenaltiesConfigure /></TabItem>
-  <TabItem label="Inputs & Outputs"><PenaltiesIO /></TabItem>
-</Tabs>
+**Configure**
+
+Novomodelo's `penalties.json` file supplies the case-wide penalty defaults that the
+methodology above prices into the objective. Entity-level and stage-level
+overrides layer on top of these defaults through the resolution cascade
+described in [§1 Cascade Resolution](#1-cascade-resolution) and
+[§3 Penalty Defaults and Overrides](#3-penalty-defaults-and-overrides). This
+tab covers how the defaults are supplied, how overrides resolve and the checks
+Novomodelo runs on the configured costs; the penalty-priority ordering itself is in
+[Penalty Priority Ordering](#penalty-priority-ordering) above.
+
+### `penalties.json` — Global Penalty Defaults
+
+[Penalty Files](/reference/case-format/penalties/#penaltiesjson) owns
+the field table for `penalties.json` (every field, its type and the load rules).
+The example below sets the required costs only; the optional ones (the four
+directional costs and `inflow_nonnegativity_cost`) are omitted.
+
+```json
+{
+  "$schema": "https://docs.novomodelo.invalid/schemas/penalties.schema.json",
+  "bus": {
+    "deficit_segments": [
+      { "depth_mw": 500.0, "cost": 7000.0 },
+      { "depth_mw": null, "cost": 7500.0 }
+    ],
+    "excess_cost": 100.0
+  },
+  "line": { "exchange_cost": 2.0 },
+  "hydro": {
+    "spillage_cost": 0.01,
+    "turbined_cost": 0.05,
+    "diversion_cost": 0.1,
+    "storage_violation_below_cost": 10000.0,
+    "filling_target_violation_cost": 6000.0,
+    "turbined_violation_below_cost": 500.0,
+    "outflow_violation_below_cost": 500.0,
+    "outflow_violation_above_cost": 500.0,
+    "generation_violation_below_cost": 1000.0,
+    "evaporation_violation_cost": 5000.0,
+    "water_withdrawal_violation_cost": 1000.0
+  },
+  "non_controllable_source": { "curtailment_cost": 0.005 }
+}
+```
+
+Bus (`deficit_segments[].cost`, `excess_cost`), line (`exchange_cost`) and
+non-controllable-source (`curtailment_cost`) costs are in \$ per MWh. Hydro
+costs are in \$ per hm³ for `storage_violation_below_cost` and
+`filling_target_violation_cost`, in \$ per MWh for
+`generation_violation_below_cost`, and in \$ per (m³/s)·h for every other hydro
+cost.
+
+A parallel stage prices its one evaporation slack pair over the stage hours,
+and a chronological stage each block's pair over the block hours
+([Signed Net Evaporation](#signed-net-evaporation)).
+
+The entity-level `hydros[].penalties` block that overrides these defaults per
+plant is documented in the
+[System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo) Configure tab;
+the directional-cost fallback is described under
+[Directional evaporation and withdrawal costs](#directional-evaporation-and-withdrawal-costs).
+
+### Bus `deficit_segments` — Two-Tier Resolution
+
+Deficit is priced through a piecewise-linear cost curve rather than a single
+flat value. Each segment is a `{ depth_mw, cost }` pair; segments are
+cumulative — the first `depth_mw` MW of unmet demand cost the first segment's
+`cost`, the next `depth_mw` MW cost the second segment's `cost`, and so on:
+
+```json
+"deficit_segments": [
+  { "depth_mw": 500.0, "cost": 1000.0 },
+  { "depth_mw": null, "cost": 5000.0 }
+]
+```
+
+The last segment is unbounded, so the LP is always feasible whatever the
+shortfall. The field rules (a non-empty list, positive and strictly increasing
+costs, and a last `depth_mw` of `null`) are under
+[`penalties.json`](/reference/case-format/penalties/#penaltiesjson) and
+[`system/buses.json`](/reference/case-format/system/#systembusesjson).
+
+`deficit_segments` resolves from exactly two sources and does **not** support
+stage-level overrides:
+
+1. **Bus-level override** — the `deficit_segments` array on the bus object in
+   `system/buses.json`.
+2. **Global default** — the `bus.deficit_segments` array in `penalties.json`.
+
+`excess_cost` resolves through a different pair of tiers: there is no
+bus-level `excess_cost` override, but the global default may be refined per
+stage via `constraints/penalty_overrides_bus.parquet` (see the Inputs &
+Outputs tab).
+
+### Line and Non-Controllable-Source Overrides
+
+`exchange_cost` (line) and `curtailment_cost` (non-controllable source) each
+fall back to their `penalties.json` global default when no override applies
+at a more specific tier:
+
+| Field                                        | Entity-level override                      | Stage-level override                            |
+| --------------------------------------------- | -------------------------------------------- | -------------------------------------------------- |
+| `line.exchange_cost`                          | `lines[].exchange_cost` in `system/lines.json` | `constraints/penalty_overrides_line.parquet`       |
+| `non_controllable_source.curtailment_cost`    | `non_controllable_sources[].curtailment_cost` in `system/non_controllable_sources.json`                                | `constraints/penalty_overrides_ncs.parquet`        |
+
+The global `exchange_cost` applies to every line without an override, in both
+flow directions.
+
+### Resolution Cascade at a Glance
+
+The table below consolidates the tiers each penalty field supports — the
+tiers differ per field, so this is a lookup table, not a single uniform rule:
+
+| Penalty field                                | Stage-level override                          | Entity-level override                                                          | Global default                                              |
+| ----------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `bus.deficit_segments`                          | not supported                                     | `buses[].deficit_segments`                                                          | `penalties.json` → `bus.deficit_segments`                     |
+| `bus.excess_cost`                                | `penalty_overrides_bus.parquet`                   | not supported                                                                       | `penalties.json` → `bus.excess_cost`                          |
+| `line.exchange_cost`                             | `penalty_overrides_line.parquet`                  | `lines[].exchange_cost`                                                             | `penalties.json` → `line.exchange_cost`                       |
+| `hydro.*`                       | `penalty_overrides_hydro.parquet`        | `hydros[].penalties` — see the [System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo) Configure tab | `penalties.json` → `hydro.*`                                  |
+| `non_controllable_source.curtailment_cost`      | `penalty_overrides_ncs.parquet`                   | `non_controllable_sources[].curtailment_cost`                                                                       | `penalties.json` → `non_controllable_source.curtailment_cost` |
+
+#### Resolution example
+
+Take `spillage_cost` with a global default of 0.01, an entity override of 0.005
+on Hydro 0 and a stage override of 0.02 on Hydro 0 at stage 60. The most
+specific value present wins:
+
+| Query                       | Stage Override? | Entity Override? | Result                |
+| --------------------------- | --------------- | ---------------- | --------------------- |
+| Hydro 0, Stage 30, spillage | No              | Yes (0.005)      | 0.005 (entity)        |
+| Hydro 0, Stage 60, spillage | Yes (0.02)      | Yes (0.005)      | 0.02 (stage)          |
+| Hydro 1, Stage 30, spillage | No              | No               | 0.01 (global default) |
+
+### Directional evaporation and withdrawal costs
+
+The LP prices the evaporation and withdrawal slacks with four directional
+costs: `evaporation_violation_pos_cost` above the target,
+`evaporation_violation_neg_cost` below it,
+`water_withdrawal_violation_pos_cost` for over-delivery and
+`water_withdrawal_violation_neg_cost` for under-delivery. The symmetric costs
+`evaporation_violation_cost` and `water_withdrawal_violation_cost` supply their
+defaults only; no slack is priced at a symmetric cost.
+
+- In `penalties.json`, an absent directional cost takes that file's symmetric
+  cost.
+- A plant with no `penalties` block takes every `penalties.json` value,
+  directional costs included.
+- A plant's `penalties` block has no directional keys. With the block present,
+  each directional cost takes the block's matching symmetric cost when the block
+  sets it, else the `penalties.json` directional cost. A `penalties.json`
+  directional cost therefore reaches every plant whose block does not set the matching symmetric key.
+- A `penalty_overrides_hydro.parquet` row's directional column sets that
+  direction at its stage; its symmetric column sets the stage's symmetric value and each matching direction the row leaves unset.
+
+### Hydro variable bounds
+
+| Variable                   | Lower Bound                                                                                                | Upper Bound            | Lower Slack                                    | Upper Slack  |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------- | ------------ |
+| `storage`                  | `min_storage_hm3`; `0` for a filling hydro in every phase and for a hydro outside its commissioning window | `max_storage_hm3`      | Hard (soft for a filling hydro once operating) | Spillage     |
+| `turbined_flow`            | `0`; the `min_turbined_m3s` minimum, summed over a (hydro, bus) cell's unit groups, is a soft row          | `max_turbined_m3s`     | With penalty, when that minimum is `> 0`       | Hard         |
+| `spillage`                 | `min_spillage_m3s` (default `0`)                                                                           | `max_spillage_m3s` (default unbounded) | Hard                                           | Hard         |
+| `outflow`                  | `min_outflow_m3s`                                                                                          | `max_outflow_m3s` (optional) | With penalty, when that minimum is `> 0`       | With penalty, when that maximum is set |
+| `generation`               | `0`; the `min_generation_mw` minimum, summed over a (hydro, bus) cell's unit groups, is a soft row         | `max_generation_mw`    | With penalty, when that minimum is `> 0`       | Hard         |
+| `evaporation`              | minus the per-stage bound of [Signed Net Evaporation](#signed-net-evaporation)                             | plus that bound        | With penalty                                   | With penalty |
+| `withdrawal` (stage-level) | `water_withdrawal_m3s`                                                                                     | `water_withdrawal_m3s` | With penalty                                   | With penalty |
+
+The spillage bounds come from `constraints/hydro_bounds.parquet`; a PreFilling
+hydro's spillage is fixed at `0`.
+
+:::note[Generation bounds]
+The user explicitly sets `min_generation_mw` and `max_generation_mw`. These are
+not derived from turbined flow bounds, because the production function is not
+always constant productivity. When a complete hydro model is available, the
+installed capacity provides a natural hard upper bound. A positive cell minimum is
+enforced by a soft row whose slack is priced at `generation_violation_below_cost`;
+a zero cell minimum leaves that slack fixed at `0`.
+:::
+
+Relationship: `outflow = turbined_flow + spillage`,
+`generation = f(turbined_flow, storage)` (depends on production model)
+
+### Load-time penalty checks
+
+Novomodelo checks the configured costs when the case loads. The checks read each
+hydro's entity-level costs: the `penalties.json` defaults with the plant's
+`penalties` block applied. Stage overrides are not checked. The deficit side of
+the first comparison is the largest deficit-segment cost of any bus, and 0 when the
+case has no bus. The comparisons use the configured values as given, without
+converting them to energy, so a case that passes them can still invert the
+energy-equivalent ordering of the methodology above.
+
+Each check issues at most one warning, a `ModelQuality` warning on
+`penalties.json` that does not stop the run. The warning names a hydro count
+and a worst-case hydro.
+
+| Check                                      | Warns when                                                                                                            | Hydros reported                                                                          |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Deficit above generation violation | a hydro's `generation_violation_below_cost` is at least the largest deficit cost | every hydro that meets the condition; the worst case has the largest generation-violation cost |
+| Flow violations above resource costs | a hydro's smallest flow-violation cost is at most the largest resource cost over all hydros | every hydro that meets the condition; the worst case has the smallest flow-violation cost |
+| Resource costs positive                    | a hydro's smaller resource cost is at most 0                                                                          | every hydro that meets the condition; the worst case has the smallest of those costs     |
+
+The flow-violation costs of a hydro are `turbined_violation_below_cost`,
+`outflow_violation_below_cost`, `outflow_violation_above_cost` and the four
+directional evaporation and withdrawal costs. "Resource costs" means the hydro
+`spillage_cost` and `diversion_cost`. Each check compares only costs of one unit.
+These three checks read no thermal, contract, excess, exchange or curtailment
+cost, and neither `turbined_cost` nor `inflow_nonnegativity_cost`.
+
+Each warning text is fixed apart from its numbers and hydro ids, written `{…}`
+here, and begins `Penalty ordering violation:`:
+
+- Deficit above generation violation:
+  `Penalty ordering violation: max(deficit_segment_costs) ({…}) should be > generation_violation_below_cost ({…}) (both $/MWh) -- {…} hydro(s) affected, worst case: Hydro {…}`
+- Flow violations above resource costs:
+  `Penalty ordering violation: min(flow_violation_costs) ({…}) should be > max(resource_costs) ({…}) (both $/(m³/s·h)) -- {…} hydro(s) affected, worst case: Hydro {…}`
+- Resource costs positive:
+  `Penalty ordering violation: min(resource_costs) ({…}) should be > 0 (regularization costs must be positive to prevent LP degeneracy) -- {…} hydro(s) affected, worst case: Hydro {…}`
+
+To clear a warning, change the costs in `penalties.json` or in the plant's
+`penalties` block until the comparison in the message holds: for `should be >`,
+raise the cost on the left or lower the one on the right. A warning names `penalties.json` even when a plant's
+`penalties` block supplies the cost, and the `Hydro {…}` in it is the plant's
+numeric `id`.
+
+Two rules reject the case as a `BusinessRuleViolation` error (see
+[Error Codes — `BusinessRuleViolation`](/reference/error-codes/#businessruleviolation)):
+
+- **Negative turbined cost on an FPHA hydro.** A hydro whose `generation.model`
+  is `fpha` and whose `turbined_cost` is negative is rejected on
+  `penalties.json`; zero is accepted. The message reads
+  `Hydro {…}: turbined_cost ({…}) must be non-negative (>= 0) for FPHA hydros; negative values distort LP dispatch`.
+  To fix it, set `turbined_cost` to 0 or more in `penalties.json` or in the
+  plant's `penalties` block.
+- **Filling schedule that cannot reach the dead volume (the filling-sufficiency
+  check).** For each hydro with a `filling` block and an `entry_stage_id`, the
+  sum over the stages from `start_stage_id` up to, not including,
+  `entry_stage_id` of the stage's total hours times 3600 / 1,000,000 times the
+  stage's minimum accumulation rate must reach `min_storage_hm3` less the seed
+  storage. The rate is the `filling_min_rate_m3s` of the stage's `hydro_bounds`
+  row when it has one, else the plant's `filling_min_rate_m3s`; the seed is the
+  hydro's `filling_storage` entry in `initial_conditions.json`, or 0 when it has
+  none. The case is rejected on `system/hydros.json` when the sum falls short by
+  more than a relative tolerance of `1e-9`, applied to the larger of |`min_storage_hm3` − seed| and 1 hm³. The message reads
+  `Hydro {…}: filling schedule is insufficient to reach the dead volume before stage {…}; cumulative minimum-rate capacity over stages [{…}, {…}) is {…} hm3 but {…} hm3 (min_storage {…} - seed {…}) is required`.
+  To fix it, raise the plant's `filling_min_rate_m3s` (or a stage's
+  `hydro_bounds` rate), start filling at an earlier stage, move
+  `entry_stage_id` later, or declare a larger `filling_storage` seed in
+  `initial_conditions.json`.
+
+Setting `turbined_cost` above `spillage_cost` is advised for every hydro and is
+not checked.
+
+**Inputs & Outputs**
+
+This is a topic-scoped index of the files the penalty system ([Penalty System §1](/math/penalty-system#1-cascade-resolution)–[§3](/math/penalty-system#3-penalty-defaults-and-overrides)) touches — it
+names each file and its role, it does not repeat their field-by-field
+schemas. The exhaustive, field-by-field case-directory and output reference
+is owned by the Reference corpus ([Case Format](/reference/case-format/)
+and [Output Format](/reference/output/) pages).
+
+### Inputs
+
+| File                                        | Role                                                                                                                                                                    |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `penalties.json`                             | Case-wide penalty defaults — required in every case; the four sections (`bus`, `line`, `hydro`, `non_controllable_source`) are listed under [`penalties.json`](/reference/case-format/penalties/#penaltiesjson) in Case Format; the Configure tab covers the example, the resolution cascade and the load-time checks. |
+| `constraints/penalty_overrides_bus.parquet`  | Sparse per-`(bus_id, stage_id)` override of `excess_cost`. Deficit segments are not stage-varying, so they have no row here.                                          |
+| `constraints/penalty_overrides_line.parquet` | Sparse per-`(line_id, stage_id)` override of `exchange_cost`.                                                                                                          |
+| `constraints/penalty_overrides_hydro.parquet` | Sparse per-`(hydro_id, stage_id)` override of the hydro penalty fields — a **superset** of the entity-level `penalties` block: the same twelve symmetric costs (including `inflow_nonnegativity_cost`) **plus** the four directional variants (water-withdrawal above/below, evaporation above/below) that the entity `penalties` block does not accept. Every column is optional and sparse. |
+| `constraints/penalty_overrides_ncs.parquet`  | Sparse per-`(ncs_id, stage_id)` override of `curtailment_cost`.                                                                                                        |
+| `system/buses.json` (`deficit_segments`)    | Bus entity registry; only its `deficit_segments` field is penalty configuration (covered in the Configure tab) — the rest of the bus schema belongs to the network topology chapter. |
+| `system/lines.json` (`exchange_cost`)       | Transmission line registry; only its `exchange_cost` field is penalty configuration (covered in the Configure tab) — the rest of the line schema belongs to the network topology chapter. |
+| `system/hydros.json` (`penalties` block)    | Hydro plant registry; the entity-level `penalties` block is documented in the [System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo) Configure tab, not repeated here. |
+
+All penalty-override parquet files use **sparse storage**: only rows for
+`(entity_id, stage_id)` pairs where a cost differs from the entity-level or
+global default are required, and every value present must be strictly
+positive and finite.
+
+### Outputs
+
+| File / column group                  | Role                                                                                                                                          |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `simulation/costs/`                     | Per-stage monetary cost breakdown, including one column per penalty category — `deficit_cost`, `excess_cost`, `storage_violation_cost`, `filling_target_cost`, `hydro_violation_cost`, the outflow/turbined/generation/evaporation/withdrawal violation costs, `inflow_penalty_cost`, and `generic_violation_cost` — alongside the thermal, anticipated-thermal and contract cost columns. `storage_violation_cost` and `filling_target_cost` are always `0`: the storage-floor and filling-target slack costs are included in `immediate_cost`. |
+| `simulation/violations/generic/`        | One row per active generic-constraint row at each stage, whether or not its slack fired (`0` where it did not). The reported `slack_value` is the **signed net** `s⁺−s⁻` of the two slack columns; its monetary cost charges **both** (`s⁺+s⁻`). |
+| Per-hydro violation columns            | Slack magnitudes (e.g. `storage_violation_below_hm3`, `filling_target_violation_hm3`, the evaporation and water-withdrawal directional slacks) reported alongside every other hydro dispatch column — see the [Hydro Production Function Models](/math/hydro-production-models#implementation-in-novomodelo) Inputs & Outputs tab for the hydro output file this belongs to. |
+
+For the complete output schema (columns, types, file layout), see the
+[Output Format](/reference/output/) reference page in the Reference
+corpus.
 
 ## Cross-References
 

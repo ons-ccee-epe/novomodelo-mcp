@@ -85,8 +85,17 @@ def _read_local(settings) -> dict[str, dict[str, Any]]:
         "biblioteca": _piece(lib, "não encontrada no ambiente do MCP"),
         "bridge": _piece(bridge.split()[-1] if bridge else None, "não encontrado")
         | {"origem": origin},
-        "docs": {"versao": None, "motivo": "sem manifesto"},
+        "docs": _docs_piece(),
     }
+
+
+def _docs_piece() -> dict[str, Any]:
+    from .reference import bundled_manifest
+    manifest = bundled_manifest()
+    if not manifest:
+        return {"versao": None, "motivo": "sem manifesto"}
+    return _piece(manifest.get("docs_versao"), "manifesto sem versão") | {
+        "commit": manifest.get("docs_commit")}
 
 
 @functools.lru_cache(maxsize=8)
@@ -121,9 +130,12 @@ def version_warnings(settings) -> list[str]:
         "biblioteca": ("biblioteca novomodelo-python",
                        f"reinstale o MCP {expected} (a biblioteca vem junto)"),
         "bridge": (BRIDGE_CLI, _bridge_command(expected, pieces["bridge"].get("origem"))),
+        "docs": ("docs embutidas", f"reinstale o MCP {expected} (as docs vêm junto)"),
     }
     for key, (label, command) in texts.items():
         found = normalize_version(pieces[key]["versao"])
+        if found is None and key == "docs":
+            continue
         if found is None:
             lines.append(f"{label} {pieces[key]['motivo']}. Instale: {command}")
         elif found != expected:

@@ -3,10 +3,6 @@ title: Stopping Rules
 description: Available stopping rules for the Novomodelo SDDP solver — iteration limits, time limits, bound stalling, gap-based stopping, graceful shutdown, and how rules combine.
 ---
 
-import ConvergencePanelsPlot from "../../../components/ConvergencePanelsPlot.astro";
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Content as StoppingConfigure } from './_impl/_stopping.configure.mdx';
-
 ## Purpose
 
 This chapter defines the available stopping rules for the Novomodelo SDDP solver and how they combine. It covers iteration limits, time limits, bound stalling, and the recommended gap-based stopping criterion.
@@ -66,8 +62,6 @@ Under a risk-averse measure, the lower bound $\underline{z}^k$ is a valid lower 
 :::
 
 ## 5 Gap-Based Stopping (Recommended)
-
-<ConvergencePanelsPlot />
 
 _Illustrative bound evolution across iterations $k$. In both panels the lower bound $\underline{z}^k$ rises monotonically (the append-only cut pool). Left, a sampled forward pass: the upper bound $\bar{z}^k$ is an estimate, and its confidence band reflects a sampling error that persists as the gap closes, so late in the run the band straddles the lower bound and certifies nothing. Right, an enumerated forward pass: the exact upper bound carries no band, stays above the lower bound and closes on it — the comparison the gap rule tests._
 
@@ -181,9 +175,92 @@ the training loop regardless of whether any or all of the configured rules have 
 
 The methodology above defines when each rule stops training; the tab below links the configuration entries for the rules, states which interfaces can issue a shutdown request, and lists what a stopped run records.
 
-<Tabs>
-  <TabItem label="Configure"><StoppingConfigure /></TabItem>
-</Tabs>
+**Configure**
+
+Novomodelo's stopping settings are two keys of the `training` object of
+`config.json`: `stopping_rules`, the list of rules a run can stop on, and
+`stopping_mode`, how they combine. This tab gives one combined set and links
+the configuration entries that list every field and default; each rule's stop
+condition stays in the methodology sections above
+([§2 Iteration Limit](/math/stopping-rules#2-iteration-limit),
+[§3 Time Limit](/math/stopping-rules#3-time-limit),
+[§4 Bound Stalling](/math/stopping-rules#4-bound-stalling) and
+[§5 Gap-Based Stopping](/math/stopping-rules#5-gap-based-stopping-recommended)).
+
+### `training.stopping_rules` — Rules
+
+The configuration reference lists the fields of each rule
+([`iteration_limit`](/running/configuration/#iteration_limit),
+[`time_limit`](/running/configuration/#time_limit),
+[`bound_stalling`](/running/configuration/#bound_stalling) and
+[`gap`](/running/configuration/#gap)), and the values and default of
+[`training.stopping_mode`](/running/configuration/#trainingstopping_mode).
+
+### `training.stopping_mode` — Combination
+
+The following set stops when the gap closes or at 500 iterations, whichever
+comes first:
+
+```json
+{
+  "training": {
+    "stopping_rules": [
+      { "type": "iteration_limit", "limit": 500 },
+      { "type": "gap", "tolerance": 1.0, "relative_tolerance": 0.1 }
+    ],
+    "stopping_mode": "any"
+  }
+}
+```
+
+Its `gap` rule needs an enumerated training forward pass; a sampled run stops
+as described in [Sampled runs](#sampled-runs).
+
+### Shutdown Requests
+
+A shutdown request is not an entry of `stopping_rules`, and `stopping_mode`
+does not apply to it. During training, `novomodelo run` turns a SIGTERM or SIGINT
+into one, which training reads
+once per iteration, after the lower bound, before the stop decision: training
+stops at the end of the iteration that reads it, writes the training outputs
+and the policy checkpoint, skips the configured simulation, and exits `5`
+([CLI Reference — Exit Codes](/reference/cli-reference/#exit-codes)). A signal
+that reaches any rank of a multi-rank run stops every rank at the same
+iteration, and a second SIGINT ends a single-process run at once. Before
+training starts and while the simulation runs, both signals take their default
+action. The Python API requests one when the `on_iteration`
+callback returns a truthy value or raises
+([Python API](/reference/python-api/)); the stop is asynchronous, so the run ends
+at a later iteration boundary that is not fixed; a run ended this way
+records `graceful_shutdown` unless the stopping rules or the iteration budget also ended it
+at that iteration
+([What a stopped run records](#what-a-stopped-run-records)).
+
+### What a stopped run records
+
+The `convergence`, `bounds` and `iterations` blocks of
+[`training/metadata.json`](/reference/output/metadata/#trainingmetadatajson)
+record how the run stopped:
+
+- `convergence.termination_reason` names the first triggered rule, in the
+  order `stopping_rules` lists them (under `"all"`, among the rules other than
+  `iteration_limit`), when the stopping rules ended the run; otherwise it is `iteration_limit`
+  when the run reached its iteration budget, and otherwise `graceful_shutdown`
+  when a shutdown request ended it. It is `error` after a training that failed.
+- `convergence.achieved` is `true` when the stopping rules ended the run and
+  a `gap` or `bound_stalling` rule triggered at that iteration.
+- `convergence.final_gap_percent` is `null` when the final lower bound is not
+  positive.
+- `bounds.final_lower_bound` and `bounds.final_upper_bound` are the bounds at
+  the last iteration, and `iterations.completed` is the iteration count at which
+  the run ended, earlier runs included.
+
+**Lower bound and gap under projected cuts.** Under a PAR(p > 0) model with the
+inflow lags projected out of the cuts, the lower bound and the gap carry the
+caveat of
+[Storage-only cut projection](/math/cut-management/#storage-only-cut-projection);
+the key and its default are in
+[`stages[].state_variables`](/math/cut-management/#stagesstate_variables--cut-projection).
 
 ## Cross-References
 

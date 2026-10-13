@@ -3,11 +3,6 @@ title: Cut Management
 description: Complete Benders cut lifecycle — cut definition, reduced-cost extraction, single-cut aggregation, validity conditions, cut pool growth, periodic-pruning strategies, and Dynamic Cut Selection (DCS).
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Content as CutConfigure } from './_impl/_cut-management.configure.mdx';
-import { Content as CutIO } from './_impl/_cut-management.io.mdx';
-import { Content as CutNotes } from './_impl/_cut-management.notes.mdx';
-
 ## Purpose
 
 This chapter defines the complete Benders cut lifecycle in Novomodelo: what cuts represent mathematically, how cut coefficients relate to LP dual variables, how per-scenario cuts are aggregated into a single cut, under what conditions cuts are valid, and what selection strategies are available to control cut pool growth.
@@ -313,11 +308,249 @@ The table maps each key of the `training.cut_selection` object to its symbol on 
 
 The methodology above defines the complete Benders cut lifecycle; the tabs below cover how Novomodelo's software surface configures, persists, and manages cuts at runtime.
 
-<Tabs>
-  <TabItem label="Configure"><CutConfigure /></TabItem>
-  <TabItem label="Inputs & Outputs"><CutIO /></TabItem>
-  <TabItem label="Implementation notes"><CutNotes /></TabItem>
-</Tabs>
+**Configure**
+
+Novomodelo's cut-management settings live in two places: the
+`training.cut_selection` block of `config.json` (row management) and the
+per-stage `state_variables` field of `stages.json` (cut projection). The cut
+pool itself is generated during training, not authored by the case. This tab
+shows how each is configured; the selection algorithms themselves stay in the
+methodology sections above (§6–§9).
+
+### `training.cut_selection` — Row Management Configuration
+
+Row management combines a selection pass, configured by the `selection` object
+and off by default, with a per-stage budget pass set by `max_active_per_stage`.
+The example runs Level-1 periodic pruning (`level1`) with a budget of 500 active rows per
+stage:
+
+```json
+{
+  "training": {
+    "cut_selection": {
+      "row_activity_tolerance": 1e-6,
+      "max_active_per_stage": 500,
+      "selection": {
+        "method": "level1",
+        "tie_tolerance": 1e-10,
+        "check_frequency": 5
+      }
+    }
+  }
+}
+```
+
+[`training.cut_selection`](/running/configuration/#trainingcut_selection) lists
+every field, default and method parameter. [Cut Management Pipeline](/running/performance/#cut-management-pipeline) describes the budget pass.
+
+### `stages[].state_variables` — Cut Projection
+
+Each study stage selects which incoming-state dimensions its cuts project onto —
+the cut-state projection of
+[State Augmentation §7](/math/state-augmentation#7-cut-state-projection).
+
+| Field         | Type    | Default | Description |
+| ------------- | ------- | ------- | ----------- |
+| `storage`     | boolean | `true`  | Project the cuts onto the storage dimensions. |
+| `inflow_lags` | boolean | `false` | Project the cuts onto the inflow-lag dimensions. |
+
+With `inflow_lags` set to `true` on a stage, the cuts that stage generates also
+carry the inflow-lag coefficients; with `false`, they carry no inflow-lag coefficients.
+
+An absent `state_variables` gives the storage-only default,
+`{ "storage": true, "inflow_lags": false }`; an unknown field is rejected at
+load. In-transit buckets and commitment-ring slots are always projected in and
+have no field.
+
+A study that supplies AR coefficients of order above zero
+(`scenarios/inflow_ar_coefficients.parquet`) but has `inflow_lags` set to
+`false` on every study stage, explicitly or by default, draws a
+[`ModelQuality`](/reference/error-codes/#modelquality) validation warning that
+does not block the run; a PAR model estimated from the inflow history never
+draws it, because the check runs on the supplied table before estimation. With
+the lags projected out, the lag columns are still pinned for the AR dynamics,
+but no cut generated in training carries their coefficients (cuts imported from
+a boundary policy can).
+
+To keep the inflow lags in the cuts a stage generates, set both fields on that
+stage:
+
+```json
+"state_variables": { "storage": true, "inflow_lags": true }
+```
+
+The full `stages[]` entry is listed under
+[`stages.json`](/reference/case-format/stages/#stagesjson).
+
+**Inputs & Outputs**
+
+This is a topic-scoped index of the files cut management touches. Cuts have
+no case-directory input file of their own — the only configuration surface is
+`training.cut_selection` in `config.json` (see [its configuration entry](/running/configuration/#trainingcut_selection)). The topic's
+I/O surface is the **policy checkpoint**: the FlatBuffers `.bin` files that
+persist the cut pool between runs. This tab names that surface and its role;
+it does not repeat the field-by-field record layout, which is owned by the
+Reference corpus ([Case Format](/reference/case-format/)
+and [Output Format](/reference/output/) pages).
+
+### Inputs
+
+There is no case-directory input file for cuts. Two input paths re-read a
+**previous run's output** as cuts:
+
+- **Warm-start, resume, and simulation-only** — when the run's policy mode is
+  `"warm_start"` or `"resume"`, or training is disabled for a simulation-only
+  run, Novomodelo loads `policy/cuts/NNN.bin` from the checkpoint at `policy.path`
+  and repopulates the cut pool before training or simulation begins. The load
+  applies the
+  [Policy Load Contract](/running/policy-management/#policy-load-contract),
+  which requires the running novomodelo version to have written the checkpoint
+  ([version gate](/running/policy-management/#version-gate)) and leaves out any stored basis that does not fit its stage LP
+  ([stored-basis gate](/running/policy-management/#stored-basis-gate)).
+  See Implementation notes for how a warm-started cut is tracked once it is back
+  in the pool.
+- **Boundary source** — when `policy.boundary.path` is set, Novomodelo loads a
+  second checkpoint and injects its terminal cuts as a fixed boundary condition
+  at the study's terminal stage. The source pool is selected by the study's
+  terminal boundary date and reconciled onto the current state — lenient by
+  default (surplus source slots dropped and reported), strict-rejectable. The
+  boundary checkpoint must also come from the running novomodelo version
+  ([Compatibility requirements](/running/policy-management/#compatibility-requirements)
+  lists the check order).
+  See [Post-Study Boundary & Chained Studies](/math/post-study-boundary) and
+  [Policy Management — Boundary Cuts](/running/policy-management/#boundary-cuts).
+
+### Outputs
+
+| File                          | Role |
+| ----------------------------- | ---- |
+| `policy/cuts/NNN.bin`   | One FlatBuffers binary per **pool** (`NNN` is the pool id — on a plain stage chain the 0-based stage position, which is not the declared stage id; on a branching graph the pool id differs from the stage position), root table `StageCuts`: every cut's intercept, coefficient vector, and active flag. The coefficient vector is a bare `float64[]`; each position maps to a state variable via the per-slot entity manifest embedded in the same file (see the [Output Format](/reference/output/) reference). Written every training run and re-read on the next warm-start, resume, or simulation-only run (see Inputs above). |
+
+For the complete field-by-field record layout (`AffinePiece`, `StageCuts`) and the
+checkpoint-wide `policy/manifest.bin` summary, see the
+[Output Format](/reference/output/) reference page in the Reference
+corpus. For the schema file itself and per-language `flatc` codegen
+recipes (Python, C++, TypeScript, …) to read a checkpoint outside Novomodelo, see
+the [FlatBuffers Policy Schema](/reference/flatbuffers-schema/) reference page.
+
+**Implementation notes**
+
+Non-normative software behavior for cut management — what Novomodelo does at
+runtime, beyond the equations above. This tab references the methodology body
+for the derivations rather than restating them.
+
+### Reduced-cost unscaling divides by the column scale
+
+Methodology §2 derives each cut coefficient from the reduced cost of a pinned
+incoming-state column, unscaled by that column's prescaler factor. In code
+terms the unscaling step is a **division**:
+`coefficient = reduced_cost / col_scale[col]` (empty `col_scale` ⇒ the raw
+reduced cost, unscaled).
+
+### Storage-only cut projection
+
+With the inflow lags projected out of the cuts on a stage under a PAR(p > 0)
+model, $\underline{z}^k$ is not guaranteed to be a lower bound on the optimal
+value of the model as trained, and the gap is not a certificate
+([condition 4](/math/cut-management#4-cut-validity)). Projecting the cuts onto
+the inflow lags as well, with storage kept, on every stage satisfies
+condition 4; the remaining hypotheses are those of
+[Tier 1](/math/cut-management#tier-1-valid-lower-bound). The projection is
+chosen per stage: the key and its default are in
+[`stages[].state_variables`](#stagesstate_variables--cut-projection) of the
+Configure tab, and the components each selection projects onto are in
+[State Augmentation §7](/math/state-augmentation#7-cut-state-projection).
+
+### Export writes canonical currency units
+
+Policy export multiplies every cut coefficient and intercept by the writing
+study's cost-scale factor, converting the in-memory scaled cost space into
+canonical currency units at rest. Every load path divides by the loading
+study's own factor to bring the values back into that study's scaled cost
+space. This is **orthogonal** to the `col_scale` reduced-cost
+unscaling above: `col_scale` is a per-column LP prescaler applied inside a
+single solve, while the cost-scale factor is the global objective scaling
+applied once per study. See [Policy Management — Cost-Scale
+Canonicalization](/running/policy-management/#cost-scale-canonicalization)
+for the load-time rule.
+
+### Append-only pool, deterministic slots
+
+Every cut ever generated is retained for the lifetime of the run at a stable
+slot index — a fixed function of the iteration and forward-pass index that
+generated it (methodology §5). The pool is never compacted, and nothing is
+ever deleted from it; "deactivation" always means something narrower than
+removal (below).
+
+### Deactivation excludes a cut from the template; the LB LP is append-only
+
+Novomodelo's row-management pipeline touches two different LPs, and "deactivating"
+a cut means something slightly different in each:
+
+- In the **per-iteration forward/backward stage LP** — rebuilt from the stage
+  template at the start of each solve — a deactivated cut is simply omitted
+  from that iteration's template rebake. Only active cuts are encoded as LP
+  rows on each forward/backward solve; there is no row to toggle because the
+  row was never emitted.
+- In the **persistent lower-bound LP** the pool is **append-only**: only
+  active cuts are ever appended, and a cut already present is not re-appended;
+  appended rows are **never removed**, so the training
+  lower bound stays monotone and every appended row keeps constraining.
+  Deactivation touches no row here; it only changes which cuts the
+  forward/backward template rebake encodes. The only $+\infty$ on a cut row is
+  the ordinary upper bound of the one-sided `≥` cut, present on every
+  active row — not a deactivation sentinel.
+
+Both routes preserve the slot index, which is what makes reactivation exact:
+a cut that a later selection pass restores is re-baked into the template, at
+the same slot, with the same coefficients it was generated with.
+
+### Selection pass and budget pass, run every iteration
+
+The row-management pipeline runs after each iteration's backward pass and cut
+synchronization, in two passes:
+
+1. **Selection pass** (`level1` / `lml1` / `domination`) — gated by
+   `check_frequency`; runs only at iterations that are a multiple of it.
+   The first stage's cuts and the terminal pool are always exempt from this
+   pass: the first stage's cuts are never a backward-pass successor, so their
+   activity is never updated, and the backward pass adds no cut to the
+   terminal pool. Selection runs **sequentially across stages**; within a
+   stage, trial points are evaluated in parallel blocks. `dynamic` (DCS) never
+   runs this pass — it has no `check_frequency` gating and never deactivates
+   pool cuts.
+2. **Budget pass** (`max_active_per_stage`) — runs **every** iteration,
+   regardless of `check_frequency`, as a hard-cap safety net on top of
+   whatever the selection pass (or DCS) leaves active.
+   [Stage 2: Budget Enforcement](/running/performance/#stage-2-budget-enforcement)
+   gives the eviction order and the cap's reach into a terminal pool that holds
+   a loaded boundary policy's cuts.
+
+### DCS is lazy, not a deactivation pass
+
+Dynamic Cut Selection (methodology §8) never deactivates a pool cut. Each
+stage solve instead starts from a small resident subset — seeded from cuts
+active at this stage within the last `seed_window` iterations plus every cut
+generated this iteration — and grows it by repeatedly scoring the omitted
+candidates and adding the most-violated ones, up to the bounded inner-loop cap
+(50 rounds, not user-configurable). The loop stops as soon as no candidate is
+violated, at which point the resident-subset optimum already equals the
+full-pool optimum — no extra "final" solve is needed to confirm it. If the cap
+is hit first, every candidate violated at the last solution is added and one
+closing solve is performed with no further scoring, so the closing solve is not
+checked for exactness (methodology §8.3).
+
+DCS is rejected at setup under an enumerated forward pass (methodology §8): the
+enumerated engine seeds each cut pool at its node-native cut stride, while DCS
+relies on the eviction keys of sampled selection, which the budget pass reads
+when it evicts cuts.
+
+A cut loaded into the pool via `policy.mode = "warm_start"` or `"resume"`
+(Inputs & Outputs tab) carries a reserved sentinel `iteration_generated` value
+rather than a real iteration number. Under DCS's `candidate_recency` window
+this sentinel saturates to age zero, so a warm-started cut is always inside
+any finite `candidate_recency` window — only cuts generated during the
+current run's own iterations can age out of it.
 
 ## Cross-References
 
