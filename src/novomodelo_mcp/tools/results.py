@@ -49,6 +49,8 @@ def register_results(mcp, settings: Settings) -> None:
             "simulation_cost": s.get("cost"),
             **R.termination_fields(t, env.get("simulation")),
         }
+        if env.get("warnings"):
+            out["warnings"] = env["warnings"]
         return cap_envelope(out, settings)
 
     @mcp.tool(annotations=READ_ONLY)

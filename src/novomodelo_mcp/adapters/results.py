@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .envelope import error
+
 _AGGS = {"mean", "min", "max", "sum", "median", "std", "p10", "p90"}
 
 
@@ -21,19 +23,46 @@ def _read_json(path: Path) -> Any:
         return json.load(fh)
 
 
+def _first_line(exc: BaseException) -> str:
+    text = str(exc).strip()
+    return text.splitlines()[0] if text else type(exc).__name__
+
+
+def _read_object(path: Path) -> dict[str, Any] | str:
+    """O objeto JSON do arquivo, ou o motivo de não conseguir lê-lo."""
+    try:
+        obj = _read_json(path)
+    except (OSError, ValueError) as exc:
+        return _first_line(exc)
+    return obj if isinstance(obj, dict) else "não é um objeto JSON"
+
+
 def read_metadata(output_dir: str) -> dict[str, Any]:
-    """Lê training/metadata.json (obrigatório) e simulation/metadata.json (opcional)."""
+    """Lê training/metadata.json (obrigatório) e simulation/metadata.json (opcional).
+
+    Treino ilegível é erro; simulação ilegível vira `simulation: None` + aviso.
+    """
     root = Path(output_dir)
     tmeta = root / "training" / "metadata.json"
     if not tmeta.exists():
-        return {"status": "error",
-                "diagnostics": [f"nao parece pasta de resultados (falta "
-                                f"training/metadata.json): {output_dir}"]}
-    training = _read_json(tmeta)
+        return error(2, f"nao parece pasta de resultados (falta training/metadata.json): "
+                        f"{output_dir}")
+    training = _read_object(tmeta)
+    if isinstance(training, str):
+        return error(2, f"não foi possível ler {tmeta}", training)
     smeta = root / "simulation" / "metadata.json"
-    simulation = _read_json(smeta) if smeta.exists() else None
-    return {"status": "ok", "training": training, "simulation": simulation,
-            "simulation_ran": simulation is not None}
+    simulation, warnings = None, []
+    if smeta.exists():
+        simulation = _read_object(smeta)
+        if isinstance(simulation, str):
+            warnings.append(f"simulation/metadata.json ilegível ({simulation}); "
+                            "simulação ignorada")
+            simulation = None
+    env = {"status": "ok", "training": training, "simulation": simulation,
+           "simulation_ran": simulation is not None}
+    if warnings:
+        env["warnings"] = warnings
+    return env
 
 
 def termination_fields(training: dict[str, Any] | None,
@@ -66,9 +95,12 @@ def convergence_summary(output_dir: str, tail: int = 20) -> dict[str, Any]:
     """Resumo de training/convergence.parquet: iteração final + cauda da trajetória."""
     p = Path(output_dir) / "training" / "convergence.parquet"
     if not p.exists():
-        return {"status": "error", "diagnostics": [f"arquivo ausente: {p}"]}
+        return error(2, f"arquivo ausente: {p}")
     pl = _pl()
-    df = pl.read_parquet(p)
+    try:
+        df = pl.read_parquet(p)
+    except (OSError, pl.exceptions.PolarsError) as exc:
+        return error(2, f"não foi possível ler {p}", _first_line(exc))
     last = df.tail(1).to_dicts()
     return {"status": "ok", "columns": df.columns, "n_iterations": df.height,
             "final": last[0] if last else None,
@@ -105,28 +137,25 @@ def simulation_query(output_dir: str, entity: str, *, columns: list[str] | None 
     """
     base = Path(output_dir) / "simulation" / entity
     if not base.exists():
-        return {"status": "error",
-                "diagnostics": [f"entidade inexistente: simulation/{entity}",
-                                f"disponiveis: {list_entities(output_dir)}"]}
+        return error(2, f"entidade inexistente: simulation/{entity}",
+                     f"disponiveis: {list_entities(output_dir)}")
+    if group_by and agg not in _AGGS:
+        return error(22, f"agg invalido: {agg!r}", f"use um de {sorted(_AGGS)}")
+    if group_by and not columns:
+        return error(22, "com group_by, informe 'columns' (colunas a agregar)")
     pl = _pl()
-    lf = pl.scan_parquet(str(base / "**" / "*.parquet"))
-    if scenario is not None:
-        lf = lf.filter(pl.col("scenario_id") == scenario)
-
     cap = max(1, min(limit, max_rows))
-    if group_by:
-        if agg not in _AGGS:
-            return {"status": "error",
-                    "diagnostics": [f"agg invalido: {agg!r}", f"use um de {sorted(_AGGS)}"]}
-        if not columns:
-            return {"status": "error",
-                    "diagnostics": ["com group_by, informe 'columns' (colunas a agregar)"]}
-        out = lf.group_by(group_by).agg(_agg_exprs(pl, agg, columns)).sort(group_by)
-        df = out.limit(cap).collect()
-    else:
-        if columns:
+    try:
+        lf = pl.scan_parquet(str(base / "**" / "*.parquet"))
+        if scenario is not None:
+            lf = lf.filter(pl.col("scenario_id") == scenario)
+        if group_by:
+            lf = lf.group_by(group_by).agg(_agg_exprs(pl, agg, columns)).sort(group_by)
+        elif columns:
             lf = lf.select(columns)
         df = lf.limit(cap).collect()
+    except (OSError, pl.exceptions.PolarsError) as exc:
+        return error(2, f"não foi possível ler simulation/{entity}", _first_line(exc))
 
     return {"status": "ok", "entity": entity, "columns": df.columns,
             "row_count": df.height, "truncated": df.height >= cap,
