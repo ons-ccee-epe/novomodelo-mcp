@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from ..config import Settings
@@ -38,3 +39,30 @@ def cap_envelope(envelope: dict[str, Any], settings: Settings) -> dict[str, Any]
                 f"({settings.max_summary_chars}); consulte os artefatos gerados."
             )
     return envelope
+
+
+_VARIABLE_PARTS = re.compile(r"'[^']*'|\"[^\"]*\"|`[^`]*`|\d+(?:\.\d+)?")
+
+
+def group_diagnostics(items: list[Any], max_groups: int,
+                      max_examples: int = 3) -> dict[str, Any]:
+    """Agrupa diagnósticos por `kind` + mensagem sem números e trechos entre aspas.
+
+    Só conta, nada some: somados todos os grupos (antes do teto `max_groups`), os
+    `count` dão `total`.
+    """
+    groups: dict[tuple[Any, str], dict[str, Any]] = {}
+    for item in items:
+        if isinstance(item, dict):
+            kind, message = item.get("kind"), str(item.get("message", ""))
+        else:
+            kind, message = None, str(item)
+        template = _VARIABLE_PARTS.sub("…", message)
+        group = groups.setdefault((kind, template), {
+            "kind": kind, "mensagem_modelo": template, "count": 0, "exemplos": []})
+        group["count"] += 1
+        if len(group["exemplos"]) < max_examples:
+            group["exemplos"].append(item)
+    ordered = sorted(groups.values(), key=lambda g: (-g["count"], str(g["kind"])))
+    return {"grupos": ordered[:max_groups], "total": len(items),
+            "grupos_total": len(ordered), "grupos_truncados": len(ordered) > max_groups}

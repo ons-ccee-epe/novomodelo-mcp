@@ -9,7 +9,7 @@ from ..adapters.novomodelo import validate_deck_binding, validate_deck_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
-from .shaping import attach_artifact, cap_envelope
+from .shaping import attach_artifact, cap_envelope, group_diagnostics
 from .annotations import READ_ONLY, WRITES
 
 
@@ -63,7 +63,8 @@ def register_pre_run(mcp, settings: Settings) -> None:
 
         Envelopa `novomodelo validate <case_dir> --json` (pipeline de validação em 6
         camadas + fases de pré-solver). É o portão de prontidão quando o deck já
-        existe e você quer revalidar sem reconverter.
+        existe e você quer revalidar sem reconverter. Os avisos vêm agrupados por
+        tipo e mensagem, com a contagem e até 3 exemplos de cada grupo.
         """
         if (err := ensure_in_workspace(case_dir, settings=settings)):
             return err
@@ -73,12 +74,18 @@ def register_pre_run(mcp, settings: Settings) -> None:
         if env.get("exit_code") == 127 and find_novomodelo(settings) is not None:
             env = validate_deck_cli(case_dir, settings=settings)
             env["degraded"] = "novomodelo-python ausente; relatorio em modo texto"
-        for _k in ("errors", "warnings"):
-            _lst = env.get(_k)
-            if isinstance(_lst, list) and len(_lst) > settings.max_diagnostics:
-                env[f"{_k}_total"] = len(_lst)
-                env[f"{_k}_truncated"] = True
-                env[_k] = _lst[: settings.max_diagnostics]
+        errors = env.get("errors")
+        if isinstance(errors, list) and len(errors) > settings.max_diagnostics:
+            env["errors_total"] = len(errors)
+            env["errors_truncated"] = True
+            env["errors"] = errors[: settings.max_diagnostics]
+        warnings = env.get("warnings")
+        if isinstance(warnings, list):
+            grouped = group_diagnostics(warnings, settings.max_diagnostics)
+            env["warnings"] = grouped["grupos"]
+            env["warnings_total"] = grouped["total"]
+            env["warnings_grupos_total"] = grouped["grupos_total"]
+            env["warnings_agrupados"] = True
         return cap_envelope(env, settings)
 
 
