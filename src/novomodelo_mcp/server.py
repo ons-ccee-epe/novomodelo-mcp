@@ -7,7 +7,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .adapters import versions
 
-from .adapters.discovery import find_bridge, find_novomodelo, tool_version
+from .adapters.discovery import bridge_origin, find_novomodelo, tool_version
 from .adapters.paths import allowed_roots
 from .adapters.reference import docs_root
 from .adapters.state import state_dir
@@ -78,7 +78,7 @@ def build_server() -> FastMCP:
         releases do novomodelo e do bridge (domínios oficiais); sem rede, diz que
         não foi possível verificar e mostra onde conferir.
         """
-        bridge = find_bridge(settings)
+        bridge, bridge_from = bridge_origin(settings)
         novomodelo = find_novomodelo(settings)
         try:
             pieces = versions.local_versions(settings)
@@ -90,7 +90,7 @@ def build_server() -> FastMCP:
             "versoes": {**pieces, "esperada": versions.expected_version()},
             "versao_nova": newer,
             "bridge": {"path": bridge, "version": tool_version(bridge),
-                       "available": bridge is not None},
+                       "available": bridge is not None, "origem": bridge_from},
             "novomodelo": {"path": novomodelo, "version": tool_version(novomodelo),
                       "available": novomodelo is not None},
             "schemas_dir": settings.schemas_dir,

@@ -9,9 +9,10 @@ dependencies = [
     "mcp>=1.2.0,<2",  # mcp 2.x renomeou FastMCP->MCPServer e quebra o import; manter <2
     "polars>=1.0",
     "jsonschema>=4.0",
-    # Pin exato, como o novomodelo-bridge faz: o solver só carrega uma política
-    # gravada pela mesma versão do binding. Sobe junto com o release do novomodelo.
+    # Pins exatos, como o novomodelo-bridge faz: o solver só carrega uma política
+    # gravada pela mesma versão do binding. Sobem juntos com o release do novomodelo.
     "novomodelo-python==0.18.0",
+    "novomodelo-bridge==0.18.0",
     "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
     "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
 ]

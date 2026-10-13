@@ -19,11 +19,11 @@ pacote já se chamam `novomodelo-mcp`.
 | Python | >= 3.12 | — |
 | [`uv`](https://docs.astral.sh/uv/) | — | — |
 | `novomodelo` (CLI Rust) | **0.18.0** | instalador do release: `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ons-ccee-epe/novomodelo/releases/download/v0.18.0/novomodelo-cli-installer.sh \| sh` |
-| `novomodelo-bridge` | **0.18.0** | `uv tool install --system-certs novomodelo-bridge==0.18.0` |
+| `novomodelo-bridge` | **0.18.0** | vem com o `uv sync` deste repo |
 | `novomodelo-python` | **0.18.0** | vem com o `uv sync` deste repo |
 
-As três peças do novomodelo andam juntas: use a mesma versão em todas. O pin é exato
-(`novomodelo-python==0.18.0`), como no bridge, porque o solver só carrega uma política
+As três peças do novomodelo andam juntas: use a mesma versão em todas. Os pins são exatos
+(`novomodelo-python==0.18.0` e `novomodelo-bridge==0.18.0`), porque o solver só carrega uma política
 gravada pela mesma versão do binding.
 
 ## Instalação e execução
@@ -37,8 +37,8 @@ uv run novomodelo-mcp      # sobe o servidor no transporte stdio
 > **Rede corporativa:** sem `--system-certs` (ou `UV_SYSTEM_CERTS=1`), o `uv` pode
 > falhar no PyPI com `UnknownIssuer` por causa do proxy que reassina certificados.
 
-O servidor fala **stdio**: não abre porta nem faz requisição externa; é iniciado pelo
-cliente MCP como subprocesso.
+O servidor fala **stdio**: não abre porta e é iniciado pelo cliente MCP como
+subprocesso. A única requisição externa é a do `server_info` (ver *Versões e rede*).
 
 ### Configurar num cliente MCP (Claude Desktop, Claude Code, Kiro)
 
@@ -59,9 +59,8 @@ Exemplo chamando o Python do venv direto (arranque rápido, sem rebuild):
       "args": ["-m", "novomodelo_mcp"],
       "env": {
         "PYTHONPATH": "/caminho/para/<repositório anterior>/src",
-        "PATH": "/caminho/para/.cargo/bin:/caminho/para/.local/bin:/usr/bin:/bin",
+        "PATH": "/caminho/para/.cargo/bin:/usr/bin:/bin",
         "NOVOMODELO_MCP_SOLVER_BIN": "/caminho/para/.cargo/bin/novomodelo",
-        "NOVOMODELO_MCP_BRIDGE_BIN": "/caminho/para/.local/bin/novomodelo-bridge",
         "NOVOMODELO_MCP_WORKSPACE": "/caminho/para/seus/estudos",
         "NOVOMODELO_MCP_DOCS_DIR": "/caminho/para/novomodelo-docs/src/content/docs",
         "UV_SYSTEM_CERTS": "1"
@@ -159,7 +158,7 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | Variável | Default | Para quê |
 |---|---|---|
 | `NOVOMODELO_MCP_SOLVER_BIN` | (PATH) | caminho do `novomodelo` |
-| `NOVOMODELO_MCP_BRIDGE_BIN` | (PATH) | caminho do `novomodelo-bridge` |
+| `NOVOMODELO_MCP_BRIDGE_BIN` | (o do pacote, senão PATH) | opcional: outro `novomodelo-bridge`; tem prioridade sobre o do pacote |
 | `NOVOMODELO_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando definida) |
 | `NOVOMODELO_MCP_DOCS_DIR` | — | pasta de páginas `.md`/`.mdx` (ver [Documentação e schemas](#documentação-e-schemas)) |
 | `NOVOMODELO_MCP_SCHEMAS_DIR` | — | pasta com `*.schema.json` (ver [Documentação e schemas](#documentação-e-schemas)) |

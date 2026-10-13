@@ -3,14 +3,29 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sysconfig
 
 from ..config import Settings
 from ..names import BRIDGE_CLI, SOLVER_CLI
 
 
+def bridge_origin(settings: Settings) -> tuple[str | None, str | None]:
+    """(caminho, origem) do bridge: `variavel`, depois `pacote`, depois `path`.
+
+    A variável vem antes do pacote: é o jeito de apontar outro bridge (e o falso
+    dos testes) mesmo com o do pacote instalado.
+    """
+    if settings.bridge_bin:
+        return settings.bridge_bin, "variavel"
+    if packaged := shutil.which(BRIDGE_CLI, path=sysconfig.get_path("scripts")):
+        return packaged, "pacote"
+    on_path = shutil.which(BRIDGE_CLI)
+    return on_path, "path" if on_path else None
+
+
 def find_bridge(settings: Settings) -> str | None:
-    """Caminho do executável do bridge (NOVOMODELO_MCP_BRIDGE_BIN tem prioridade)."""
-    return settings.bridge_bin or shutil.which(BRIDGE_CLI)
+    """Caminho do executável do bridge (ver `bridge_origin`)."""
+    return bridge_origin(settings)[0]
 
 
 def find_novomodelo(settings: Settings) -> str | None:

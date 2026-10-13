@@ -20,7 +20,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from ..names import BINDING_DIST, BRIDGE_CLI, MCP_DIST, MCP_RELEASE_TAG_URL
-from .discovery import find_bridge, tool_version
+from .discovery import bridge_origin, tool_version
 
 CLI_RELEASES = "https://github.com/ons-ccee-epe/novomodelo/releases"
 NOVOMODELO_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo/releases/latest"
@@ -74,12 +74,17 @@ def _read_local(settings) -> dict[str, dict[str, Any]]:
         lib = metadata.version(BINDING_DIST)
     except metadata.PackageNotFoundError:
         lib = None
-    bridge = tool_version(find_bridge(settings))
+    bridge_path, origin = bridge_origin(settings)
+    if origin == "pacote":
+        bridge = metadata.version(BRIDGE_CLI)
+    else:
+        bridge = tool_version(bridge_path)
     return {
         "executavel": _piece(cli.get("version") if cli.get("status") == "ok" else None,
                              "não encontrado"),
         "biblioteca": _piece(lib, "não encontrada no ambiente do MCP"),
-        "bridge": _piece(bridge.split()[-1] if bridge else None, "não encontrado"),
+        "bridge": _piece(bridge.split()[-1] if bridge else None, "não encontrado")
+        | {"origem": origin},
         "docs": {"versao": None, "motivo": "sem manifesto"},
     }
 
@@ -97,7 +102,9 @@ def cli_install_command(version: str) -> str:
     return f"curl --proto '=https' --tlsv1.2 -LsSf {base}/novomodelo-cli-installer.sh | sh"
 
 
-def _bridge_command(version: str) -> str:
+def _bridge_command(version: str, origin: str | None = None) -> str:
+    if origin == "pacote":
+        return f"reinstale o MCP {version} (o bridge vem junto)"
     return f"uv tool install --force {BRIDGE_CLI}=={version}"
 
 
@@ -112,7 +119,7 @@ def version_warnings(settings) -> list[str]:
         "executavel": ("executável novomodelo", cli_install_command(expected)),
         "biblioteca": ("biblioteca novomodelo-python",
                        f"reinstale o MCP {expected} (a biblioteca vem junto)"),
-        "bridge": (BRIDGE_CLI, _bridge_command(expected)),
+        "bridge": (BRIDGE_CLI, _bridge_command(expected, pieces["bridge"].get("origem"))),
     }
     for key, (label, command) in texts.items():
         found = normalize_version(pieces[key]["versao"])
@@ -234,7 +241,9 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     """
     if "resultado" in _UPDATE:
         return _UPDATE["resultado"]
-    current = expected_version() or local_versions(settings)["executavel"]["versao"]
+    pieces = local_versions(settings)
+    current = expected_version() or pieces["executavel"]["versao"]
+    origin = pieces["bridge"].get("origem")
     pool = ThreadPoolExecutor(max_workers=2)
     futures = {"novomodelo": pool.submit(fetch_json, NOVOMODELO_LATEST, timeout=budget_s),
                "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s)}
@@ -245,7 +254,7 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     cli = _newer(current, got["novomodelo"], lambda d: d["tag_name"], CLI_RELEASES,
                  cli_install_command)
     bridge = _newer(current, got["bridge"], lambda d: d["info"]["version"], BRIDGE_PAGE,
-                    _bridge_command)
+                    lambda v: _bridge_command(v, origin))
     if cli["status"] == "nova":
         mcp = {"status": "nova", "mais_recente": cli["mais_recente"],
                "link": f"{MCP_RELEASE_TAG_URL}v{cli['mais_recente']}",
