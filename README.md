@@ -249,7 +249,8 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 
 **Referência** (`tools/reference.py`)
 - `schema_list()` / `schema_get(tipo)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{tipo}`
-- `docs_list(section)` / `docs_read(page)`: documentação embutida (sem rede)
+- `docs_list(section)`: páginas das docs embutidas, com título e descrição
+- `docs_read(page, secao)`: uma página das docs embutidas; com `secao` (âncora devolvida pelo `docs_search`, ou título), só aquela seção
 - `docs_search(consulta, k)`: busca por palavra nas docs embutidas (de preferência em inglês; os termos em português do glossário das docs são traduzidos); devolve página, seção e trecho
 
 **Solver** (`tools/novomodelo_meta.py`)

@@ -29,7 +29,8 @@ def register_reference(mcp, settings: Settings) -> None:
 
     @mcp.tool(annotations=READ_ONLY)
     def docs_list(section: str | None = None) -> dict:
-        """Lista páginas da documentação do Novomodelo (opcional: filtra por seção, ex.: 'reference')."""
+        """Páginas das docs embutidas, com título e descrição (opcional: filtra por prefixo,
+        ex.: 'reference')."""
         return cap_envelope(REF.list_docs(settings, section), settings)
 
     @mcp.tool(annotations=READ_ONLY)
@@ -44,9 +45,14 @@ def register_reference(mcp, settings: Settings) -> None:
         return cap_envelope(REF.search_docs(settings, consulta, k), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def docs_read(page: str) -> dict:
-        """Lê uma página da documentação, offline (ex.: 'reference/cli-reference')."""
-        return cap_envelope(REF.read_doc(settings, page, settings.max_summary_chars), settings)
+    def docs_read(page: str, secao: str | None = None) -> dict:
+        """Lê uma página das docs embutidas (ex.: 'reference/cli-reference').
+
+        `secao`: âncora (a `secao` que o docs_search devolve) ou título; devolve só a
+        seção, com as subseções. Seção inexistente → erro com a lista de seções.
+        """
+        return cap_envelope(REF.read_doc(settings, page, settings.max_summary_chars, secao),
+                            settings)
 
     # Afordância de resource (best-effort: não derruba o servidor se o cliente/SDK
     # não suportar templates de resource).

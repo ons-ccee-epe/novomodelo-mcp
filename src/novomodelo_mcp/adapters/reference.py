@@ -157,11 +157,18 @@ def list_docs(settings: Settings, section: str | None = None) -> dict:
     if root is None:
         return _docs_unavailable(settings)
     base = Path(root)
-    pages = [rel for rel, _ in iter_doc_pages(base) if not section or rel.startswith(section)]
-    return {"status": "ok", "docs_dir": str(base), "count": len(pages), "pages": pages}
+    items = []
+    for rel, path in iter_doc_pages(base):
+        if section and not rel.startswith(section):
+            continue
+        fields = frontmatter_fields(path.read_text(encoding="utf-8", errors="replace"))
+        items.append({"pagina": rel, "titulo": fields["title"], "descricao": fields["description"]})
+    return {"status": "ok", "docs_dir": str(base), "count": len(items),
+            "pages": [i["pagina"] for i in items], "itens": items}
 
 
-def read_doc(settings: Settings, page: str, max_chars: int) -> dict:
+def read_doc(settings: Settings, page: str, max_chars: int,
+             section: str | None = None) -> dict:
     root = docs_root(settings)
     if root is None:
         return _docs_unavailable(settings)
@@ -174,9 +181,17 @@ def read_doc(settings: Settings, page: str, max_chars: int) -> dict:
     tr = next((c for c in candidates if c.is_file()), None)
     if tr is None:
         return {"status": "error", "diagnostics": [f"pagina inexistente: {page}"]}
-    text = tr.read_text(encoding="utf-8", errors="replace")
+    text = resolve_mdx(tr)
+    extra = {}
+    if section:
+        found = find_section(text, section)
+        if found is None:
+            return {**error(2, f"seção inexistente em {page}: {section!r}",
+                            "use uma das `secoes` (âncora ou título)"),
+                    "secoes": section_list(text)[:200]}
+        text, extra = found["texto"], {"secao": found["ancora"], "titulo": found["titulo"]}
     truncated = len(text) > max_chars
-    return {"status": "ok", "page": page, "path": str(tr), "truncated": truncated,
+    return {"status": "ok", "page": page, **extra, "path": str(tr), "truncated": truncated,
             "content": text[:max_chars] + ("\n... [truncado]" if truncated else "")}
 
 
@@ -293,32 +308,63 @@ def slugify(title: str) -> str:
     return re.sub(r"\s", "-", text)
 
 
+def _headings(lines: list[str]) -> list[tuple[int, int, str, str]]:
+    """`(linha, nível, título, âncora)` dos títulos fora de blocos de código.
+
+    Âncora repetida ganha `-1`, `-2`… como no site; é a mesma no índice e no docs_read.
+    """
+    found, seen, in_code = [], {}, False
+    for i, line in enumerate(lines):
+        if _FENCE.match(line):
+            in_code = not in_code
+            continue
+        if in_code or not (m := _HEADING.match(line)):
+            continue
+        anchor = slugify(m.group(2))
+        n = seen.get(anchor, 0)
+        seen[anchor] = n + 1
+        found.append((i, len(m.group(1)), m.group(2).strip(),
+                      anchor if n == 0 else f"{anchor}-{n}"))
+    return found
+
+
 def split_sections(page: str, text: str) -> list[dict[str, str]]:
-    """Uma entrada por seção: do título até o próximo, fora de blocos de código.
+    """Uma entrada por seção: do título até o próximo (de qualquer nível).
 
     O trecho antes do primeiro título leva o título da página e a âncora vazia.
     """
     _, body = split_frontmatter(text)
+    lines = body.split("\n")
+    heads = _headings(lines)
     title = frontmatter_fields(text)["title"] or page
-    sections, seen = [], {}
-    current = {"pagina": page, "titulo": title, "ancora": "", "linhas": []}
-    for code, chunk in _blocks(body):
-        for line in chunk.split("\n"):
-            m = None if code else _HEADING.match(line)
-            if not m:
-                current["linhas"].append(line)
-                continue
-            if "\n".join(current["linhas"]).strip():
-                sections.append(current)
-            anchor = slugify(m.group(2))
-            n = seen.get(anchor, 0)
-            seen[anchor] = n + 1
-            current = {"pagina": page, "titulo": m.group(2).strip(),
-                       "ancora": anchor if n == 0 else f"{anchor}-{n}", "linhas": []}
-    if "\n".join(current["linhas"]).strip():
-        sections.append(current)
-    return [{"pagina": s["pagina"], "titulo": s["titulo"], "ancora": s["ancora"],
-             "texto": "\n".join(s["linhas"]).strip()} for s in sections]
+    bounds = [(0, title, "")] + [(i + 1, t, a) for i, _, t, a in heads]
+    ends = [i for i, *_ in heads] + [len(lines)]
+    sections = []
+    for (start, sec_title, anchor), stop in zip(bounds, ends, strict=True):
+        body_text = "\n".join(lines[start:stop]).strip()
+        if body_text:
+            sections.append({"pagina": page, "titulo": sec_title, "ancora": anchor,
+                             "texto": body_text})
+    return sections
+
+
+def find_section(text: str, wanted: str) -> dict | None:
+    """A seção cuja âncora (ou título, sem caixa nem acento) é `wanted`, com as subseções:
+    do título até o próximo de mesmo nível ou acima. None se não houver."""
+    _, body = split_frontmatter(text)
+    lines = body.split("\n")
+    heads = _headings(lines)
+    key = normalize_text(wanted.strip())
+    for pos, (i, level, title, anchor) in enumerate(heads):
+        if anchor == wanted.strip() or normalize_text(title.replace("`", "")) == key:
+            stop = next((j for j, lv, *_ in heads[pos + 1:] if lv <= level), len(lines))
+            return {"titulo": title, "ancora": anchor, "texto": "\n".join(lines[i:stop]).strip()}
+    return None
+
+
+def section_list(text: str) -> list[dict[str, str]]:
+    _, body = split_frontmatter(text)
+    return [{"titulo": t, "ancora": a} for _, _, t, a in _headings(body.split("\n"))]
 
 
 def normalize_text(text: str) -> str:
