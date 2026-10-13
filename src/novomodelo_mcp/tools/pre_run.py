@@ -58,21 +58,23 @@ def register_pre_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def case_validate(case_dir: str) -> dict:
+    def case_validate(case_dir: str, output_dir: str | None = None) -> dict:
         """Valida se um deck Novomodelo JÁ convertido está pronto para rodar (read-only).
 
         Envelopa `novomodelo validate <case_dir> --json` (pipeline de validação em 6
         camadas + fases de pré-solver). É o portão de prontidão quando o deck já
         existe e você quer revalidar sem reconverter. Os avisos vêm agrupados por
         tipo e mensagem, com a contagem e até 3 exemplos de cada grupo.
+        `output_dir`: pasta de saída de uma rodada anterior, para validar também a
+        retomada (equivale a `novomodelo validate --output`).
         """
-        if (err := ensure_in_workspace(case_dir, settings=settings)):
+        if (err := ensure_in_workspace(case_dir, output_dir, settings=settings)):
             return err
         # Caminho limpo: binding novomodelo.io.validate (saida ESTRUTURADA).
         # Se novomodelo-python nao estiver no venv, degrada para o CLI em modo texto.
-        env = validate_deck_binding(case_dir, settings=settings)
+        env = validate_deck_binding(case_dir, output_dir=output_dir, settings=settings)
         if env.get("exit_code") == 127 and find_novomodelo(settings) is not None:
-            env = validate_deck_cli(case_dir, settings=settings)
+            env = validate_deck_cli(case_dir, output_dir=output_dir, settings=settings)
             env["degraded"] = "novomodelo-python ausente; relatorio em modo texto"
         errors = env.get("errors")
         if isinstance(errors, list) and len(errors) > settings.max_diagnostics:

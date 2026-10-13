@@ -65,20 +65,22 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
     return env
 
 
-def validate_deck_binding(case_dir: str, *, settings: Settings | None = None) -> dict[str, Any]:
+def validate_deck_binding(case_dir: str, *, output_dir: str | None = None,
+                          settings: Settings | None = None) -> dict[str, Any]:
     """Valida um deck pelo binding `novomodelo.io.validate` — saida ESTRUTURADA.
 
     Retorna {"valid": bool, "errors": [{kind,message,file,entity}], "warnings": [...]}.
     Sem parsing de texto e sem depender do binario Rust. Transporte puro.
     """
-    log(settings, "validate_deck_binding", case_dir=case_dir)
+    settings = settings or load_settings()
+    log(settings, "validate_deck_binding", case_dir=case_dir, output_dir=output_dir)
     try:
         # Import literal (não dinâmico): o nome do módulo é fixo e o rename o reescreve.
         import novomodelo.io as _cio
     except ImportError:
         return _error(127, f"{BINDING_DIST} ausente no venv; rode: uv sync --system-certs")
     try:
-        report = _cio.validate(case_dir)
+        report = _cio.validate(case_dir, **({"output_dir": output_dir} if output_dir else {}))
     except FileNotFoundError as exc:
         return _error(2, f"caso nao encontrado: {exc}")
     except Exception as exc:  # noqa: BLE001 - repassa como erro, nao derruba o servidor
@@ -93,7 +95,8 @@ def validate_deck_binding(case_dir: str, *, settings: Settings | None = None) ->
             "valid": valid, "n_errors": len(errors), "n_warnings": len(warnings),
             "errors": errors, "warnings": warnings}
 
-def validate_deck_cli(case_dir: str, *, settings: Settings | None = None) -> dict[str, Any]:
+def validate_deck_cli(case_dir: str, *, output_dir: str | None = None,
+                      settings: Settings | None = None) -> dict[str, Any]:
     """Valida um deck rodando `novomodelo validate` em modo TEXTO (relatorio completo).
 
     O `--json` do novomodelo devolve apenas a reconciliacao de boundary; o relatorio
@@ -105,6 +108,8 @@ def validate_deck_cli(case_dir: str, *, settings: Settings | None = None) -> dic
     if binpath is None:
         return _error(127, _NOT_FOUND)
     cmd = [binpath, "--color", "never", "validate", case_dir]
+    if output_dir:
+        cmd += ["--output", output_dir]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
                               timeout=settings.default_timeout)

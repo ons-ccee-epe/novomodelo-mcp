@@ -60,7 +60,7 @@ def test_case_validate_agrupa_avisos_e_mantem_erros_um_a_um(tmp_path, monkeypatc
     monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
     settings = dataclasses.replace(load_settings(), max_diagnostics=50)
     erros = [{"kind": "hydro", "message": f"erro {i}"} for i in range(60)]
-    monkeypatch.setattr(pre_run, "validate_deck_binding", lambda case, settings: {
+    monkeypatch.setattr(pre_run, "validate_deck_binding", lambda case, settings, output_dir=None: {
         "status": "error", "exit_code": 1, "diagnostics": [], "valid": False,
         "errors": erros, "warnings": _repetidos()})
     mcp = _CaptureMCP()
