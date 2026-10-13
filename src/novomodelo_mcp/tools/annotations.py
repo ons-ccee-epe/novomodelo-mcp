@@ -9,7 +9,11 @@ Toda tool nova precisa usar uma das três constantes; o teste
 """
 from __future__ import annotations
 
-from mcp.types import ToolAnnotations
+try:
+    from mcp.types import ToolAnnotations
+except ImportError:  # smoke com Python puro (sem o pacote mcp): as dicas viram dict simples
+    def ToolAnnotations(**hints):
+        return hints
 
 #: Só lê: não altera nenhum arquivo do usuário. Pode gravar cache ou estado
 #: interno do próprio MCP (ex.: calibração em state_dir, schemas em /tmp).
