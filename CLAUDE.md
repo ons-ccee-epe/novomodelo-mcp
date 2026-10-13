@@ -17,7 +17,7 @@ out; this file adds only what an agent working in this checkout needs beyond it.
 ## Quick commands
 
 ```bash
-uv sync --extra dev                 # install (use --system-certs behind a corporate CA)
+uv sync                             # install, dev group included (use --system-certs behind a corporate CA)
 uv run novomodelo-mcp                     # start the server on stdio
 python3 tests/smoke.py               # stdlib smoke tests (offline, no deps)
 python3 tests/smoke_deck.py && python3 tests/smoke_results.py && python3 tests/smoke_paths.py
