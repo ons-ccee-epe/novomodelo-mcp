@@ -1,0 +1,122 @@
+# Superfície do novomodelo, do novomodelo-bridge e da novomodelo-python, item por item.
+# `tests/test_surface_parity.py` compara com o `--help` real e com a biblioteca instalada:
+# um subcomando, opção ou função pública fora deste arquivo faz o teste falhar.
+#
+# Subcomando: `tool` que o envelopa; `expostas` = opções que o MCP passa (na tool ou no
+# adaptador); `ignoradas` = opção -> motivo de não expor.
+# Biblioteca: cada nome público tem `tool`, `nao_exposto` (motivo) ou `pendente` (motivo).
+
+# ── novomodelo (CLI) ──────────────────────────────────────────────────────────
+
+[novomodelo]
+ignorados = { help = "ajuda do próprio CLI" }
+
+[novomodelo.raiz]
+expostas = ["--color"]
+ignoradas = { "--help" = "ajuda" }
+
+[novomodelo.init]
+tool = "case_init"
+expostas = ["--color", "--template", "--list", "--force"]
+ignoradas = { "--help" = "ajuda" }
+
+[novomodelo.run]
+tool = "run_start"
+expostas = ["--color", "--output", "--threads", "--comm-backend"]
+ignoradas = { "--quiet" = "suprime as linhas de progresso que o run_logs mostra", "--help" = "ajuda" }
+
+[novomodelo.validate]
+tool = "case_validate"
+expostas = ["--color", "--output"]
+ignoradas = { "--json" = "só traz a reconciliação de boundary; o relatório completo vem da biblioteca ou do modo texto", "--help" = "ajuda" }
+
+[novomodelo."schema export"]
+tool = "schema_export"
+expostas = ["--color", "--output-dir"]
+ignoradas = { "--help" = "ajuda" }
+
+[novomodelo.version]
+tool = "solver_version"
+expostas = ["--color"]
+ignoradas = { "--help" = "ajuda" }
+
+# ── novomodelo-bridge (CLI) ───────────────────────────────────────────────────
+
+[bridge]
+ignorados = {}
+
+[bridge.raiz]
+expostas = ["--version"]
+ignoradas = { "--install-completion" = "instala completion de shell na máquina", "--show-completion" = "completion de shell", "--help" = "ajuda" }
+
+[bridge."check newave"]
+tool = "bridge_check_newave"
+expostas = ["--json", "--no-color"]
+ignoradas = { "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+
+[bridge."check decomp"]
+tool = "bridge_check_decomp"
+expostas = ["--json", "--no-color"]
+ignoradas = { "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+
+[bridge."convert newave"]
+tool = "bridge_convert_newave"
+expostas = ["--json", "--no-color", "--validate", "--force", "--dry-run"]
+ignoradas = { "--diagnostics-json" = "o envelope --json já traz os diagnósticos", "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+assimetria = "sem --no-fcf: o convert newave do bridge não tem essa opção (só o convert decomp)"
+
+[bridge."convert decomp"]
+tool = "bridge_convert_decomp"
+expostas = ["--json", "--no-color", "--validate", "--force", "--dry-run", "--no-fcf"]
+ignoradas = { "--diagnostics-json" = "o envelope --json já traz os diagnósticos", "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+
+[bridge."compare newave"]
+tool = "bridge_compare_newave"
+expostas = ["--json", "--no-color", "--format", "--tolerance", "--out-dir"]
+ignoradas = { "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+
+[bridge."compare decomp"]
+tool = "bridge_compare_decomp"
+expostas = ["--json", "--no-color", "--format", "--tolerance", "--out-dir"]
+ignoradas = { "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+
+[bridge.dashboard]
+tool = "bridge_dashboard"
+expostas = ["--json", "--no-color", "--output"]
+ignoradas = { "--open" = "abriria um navegador na máquina do servidor, sem o agente ver", "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+
+# ── novomodelo-python (biblioteca) ────────────────────────────────────────────
+
+[biblioteca]
+"io.validate" = { tool = "case_validate" }
+"io.load_case" = { pendente = "o caso carregado como objeto; aguarda decisão sobre tool nova" }
+"results.load_convergence" = { tool = "results_convergence", nota = "o MCP lê o mesmo training/convergence.parquet" }
+"results.load_convergence_arrow" = { tool = "results_convergence", nota = "o mesmo dado, em Arrow" }
+"results.load_simulation" = { tool = "results_query", nota = "o MCP lê os mesmos Parquet de simulation/" }
+"results.load_simulation_arrow" = { tool = "results_query", nota = "o mesmo dado, em Arrow" }
+"results.load_results" = { tool = "results_status", nota = "metadados e saídas do run; o MCP lê os mesmos arquivos" }
+"results.load_policy" = { pendente = "cortes da política; aguarda decisão sobre tool nova" }
+"results.load_stochastic" = { pendente = "coeficientes do PAR e árvore de aberturas; aguarda decisão sobre tool nova" }
+"results.Stochastic" = { nao_exposto = "tipo de retorno de load_stochastic" }
+"run.run" = { tool = "run_start", nota = "via CLI, como job assíncrono" }
+"schema.export" = { tool = "schema_export", nota = "via CLI" }
+"version_info" = { tool = "solver_version", nota = "via CLI (novomodelo version, mesmo conteúdo)" }
+"Study" = { pendente = "estudo em processo Python (treino e simulação na sessão); aguarda decisão sobre tool nova" }
+"Policy" = { pendente = "política carregada como objeto; aguarda decisão sobre tool nova" }
+"write_policy_checkpoint" = { pendente = "grava arquivo de checkpoint da política (seria tool de escrita); aguarda decisão" }
+"model.Bus" = { nao_exposto = "tipo de dado" }
+"model.EnergyContract" = { nao_exposto = "tipo de dado" }
+"model.Hydro" = { nao_exposto = "tipo de dado" }
+"model.Line" = { nao_exposto = "tipo de dado" }
+"model.NonControllableSource" = { nao_exposto = "tipo de dado" }
+"model.PumpingStation" = { nao_exposto = "tipo de dado" }
+"model.System" = { nao_exposto = "tipo de dado" }
+"model.Thermal" = { nao_exposto = "tipo de dado" }
+"errors.CaseIoError" = { nao_exposto = "tipo de exceção" }
+"errors.InternalError" = { nao_exposto = "tipo de exceção" }
+"errors.NovomodeloError" = { nao_exposto = "tipo de exceção" }
+"errors.OutputError" = { nao_exposto = "tipo de exceção" }
+"errors.PolicyIncompatibleError" = { nao_exposto = "tipo de exceção" }
+"errors.SimulationError" = { nao_exposto = "tipo de exceção" }
+"errors.SolverError" = { nao_exposto = "tipo de exceção" }
+"errors.ValidationError" = { nao_exposto = "tipo de exceção" }
