@@ -242,7 +242,8 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
                         "dimensões — o tempo por solve pode diferir (ver `time.range`)")
     elif ref["level"] == 1:
         warnings.append("nenhum run com as mesmas dimensões; referência é OUTRO caso — "
-                        "estimativa grosseira")
+                        f"estimativa grosseira (o de tamanho mais parecido: "
+                        f"{ref.get('size_ratio', '?')}× de diferença no tamanho do LP)")
 
     now = _times(params, points, target, fwd, iters, openings)
     sim0 = params["simulation_scenarios"] or 0
@@ -288,13 +289,24 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
     sug = t(s_fwd, s_iters, s_open)
     mem = estimate_memory(params, machine, target, s_fwd, s_iters)
     fits_time = sug["total_seconds"] <= budget
-    if not fits_time or mem["level"] == "nao_cabe":
+    too_different = ref["level"] == 1 and \
+        (ref.get("size_ratio") or 1) > runtime.MAX_SIZE_RATIO
+    if too_different:
+        warnings.append(f"a referência mais parecida tem tamanho {ref['size_ratio']}× "
+                        f"diferente (> {runtime.MAX_SIZE_RATIO:.0f}×): o tempo não é "
+                        "estimável. Rode o caso uma vez com poucas iterações "
+                        "(run_apply iteration_limit=2) e replaneje.")
+    if mem["level"] == "nao_cabe":
+        verdict = "nao_cabe"
+    elif too_different:            # tempo não estimável: não afirmar cabe nem não cabe
+        verdict = "indeterminado"
+    elif not fits_time:
         verdict = "nao_cabe"
     elif reduced:
         verdict = "cabe_com_ajustes"
     else:
         verdict = "cabe"
-    if not fits_time:
+    if not fits_time and not too_different:
         warnings.append(f"nem com os pisos (fwd={MIN_FORWARD_PASSES}, iters={MIN_ITERATIONS}, "
                         f"aberturas={MIN_OPENINGS}, simulação ≤ {SIM_MAX_SHARE:.0%} do "
                         "orçamento) cabe; aumente time_budget_s")

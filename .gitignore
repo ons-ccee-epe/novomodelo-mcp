@@ -25,3 +25,6 @@ REVISAO_NOVOMODELO_MCP.md
 
 # scratch local
 _scratch_ignore/
+
+# Planos de trabalho (specs, intake, épicos): locais, fora do git
+plans/
