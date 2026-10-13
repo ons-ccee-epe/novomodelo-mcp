@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 from ..adapters import deck_io, jobs, runtime
-from ..adapters.novomodelo import run_novomodelo
+from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.envelope import as_error, error
 from ..adapters.machine import detect_machine
@@ -73,9 +73,17 @@ def make_plan(case_dir: str, settings: Settings, *, time_budget_s: float = 900,
     known = {p.get("source") for p in points}
     points += [p for p in runtime.find_reference_runs(roots, machine["hostname"])
                if p.get("source") not in known]
+    installed = version_cli(settings=settings)
+    version = runtime.normalize_version(installed.get("version")) \
+        if installed.get("status") == "ok" else None
     ref = runtime.select_reference(points, params["dimensions"], params["config_sig"],
-                                   case_dir) or runtime.calibration_probe()
+                                   case_dir, version=version) or runtime.calibration_probe()
     plan = build_plan(params, machine, ref, time_budget_s, threads)
+    if ref and ref.get("version_mismatch"):
+        plan.setdefault("warnings", []).append(
+            "estimativa baseada em runs de outra versão do novomodelo "
+            f"({', '.join(ref['versions_used'])}); pode não refletir a versão "
+            f"instalada ({version})")
     plan["case_dir"] = case_dir
     plan["reference_candidates"] = len(points)
     return plan

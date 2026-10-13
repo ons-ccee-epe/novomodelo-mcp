@@ -116,6 +116,9 @@ def point_from_run(train_meta: dict[str, Any], sim_meta: dict[str, Any] | None =
         "threads": dist.get("threads_per_rank") or stats.get("parallelism") or 1,
         "ranks": dist.get("world_size") or 1,
         "completed_at": train_meta.get("completed_at"),
+        # runs ≤ 0.17 gravaram `cobre_version`: é dado já escrito em disco
+        "software_version": train_meta.get("software_version")
+        or train_meta.get("cobre_version"),
         "dims": dims_of(train_meta.get("problem_dimensions")),
         "config_sig": config_sig or config_signature(config),
         "train": train,
@@ -251,13 +254,29 @@ def _is_own(point: dict[str, Any], case_dir: str | None) -> bool:
         Path(point["source"]).is_relative_to(Path(case_dir).resolve())
 
 
+def normalize_version(version: Any) -> str | None:
+    """`"v0.18.0"` → `"0.18.0"`; vazio ou None → None."""
+    text = str(version or "").strip().lstrip("vV")
+    return text or None
+
+
 def select_reference(points: list[dict[str, Any]], case_dims: dict[str, Any],
-                     case_sig: str | None, case_dir: str | None = None
-                     ) -> dict[str, Any] | None:
+                     case_sig: str | None, case_dir: str | None = None, *,
+                     version: str | None = None) -> dict[str, Any] | None:
     """Melhor nível disponível; dentro dele, UM ponto por nº de threads
-    (próprio caso > mais recente). Devolve também os candidatos p/ a faixa."""
+    (próprio caso > mais recente). Devolve também os candidatos p/ a faixa.
+
+    Com `version` (a do novomodelo instalado), só os pontos dessa versão entram;
+    sem nenhum, entram todos e o resultado traz `version_mismatch`.
+    """
     if not points:
         return None
+    mismatch = False
+    if version:
+        same = [p for p in points if normalize_version(p.get("software_version"))
+                == normalize_version(version)]
+        mismatch = not same
+        points = same or points
     scored = [(match_level(p, case_dims, case_sig, case_dir), p) for p in points]
     level = max(s for s, _ in scored)
     pool = [p for s, p in scored if s == level]
@@ -270,9 +289,14 @@ def select_reference(points: list[dict[str, Any]], case_dims: dict[str, Any],
     for p in sorted(pool, key=lambda p: (_is_own(p, case_dir), p.get("completed_at") or "")):
         by_threads[int(p["threads"])] = p  # o último (melhor) vence
     chosen = [by_threads[t] for t in sorted(by_threads)]
-    return {"level": level, "level_name": LEVELS[level], "points": chosen,
-            "size_ratio": round(max(size_ratio(p, case_dims) for p in chosen), 2),
-            "candidates": [p for s, p in scored if s >= 2] or [p for _, p in scored]}
+    ref = {"level": level, "level_name": LEVELS[level], "points": chosen,
+           "size_ratio": round(max(size_ratio(p, case_dims) for p in chosen), 2),
+           "candidates": [p for s, p in scored if s >= 2] or [p for _, p in scored]}
+    if mismatch:
+        ref["version_mismatch"] = True
+        ref["versions_used"] = sorted({normalize_version(p.get("software_version"))
+                                       or "desconhecida" for p in chosen})
+    return ref
 
 
 # ── estimativa ────────────────────────────────────────────────────────────────
