@@ -37,10 +37,13 @@ def register_reference(mcp, settings: Settings) -> None:
     def docs_search(consulta: str, k: int = 5) -> dict:
         """Busca nas docs embutidas do novomodelo (as da versão instalada) por palavra.
 
-        Busque em inglês: as docs estão em inglês, e os termos em português que estão
+        Use sempre que a pergunta for sobre como o novomodelo modela, calcula ou
+        configura algo: a definição dele pode diferir da literatura e do NEWAVE.
+        Ex.: CVaR, PAR(p), FPHA, SDDP, cortes de Benders, FCF, afluência,
+        árvore de aberturas, valor da água, EARM. Busque em inglês: as docs estão em inglês, e os termos em português que estão
         no glossário das docs são traduzidos (ex.: afluência → inflow). Devolve as `k`
         seções mais relevantes (até 20): `pagina`, `secao` (âncora), `titulo`, `trecho`
-        e `score`. Abra a seção com `docs_read(pagina, secao)`.
+        e `score`. Abra a seção com `docs_read(page, secao)`.
         """
         return cap_envelope(REF.search_docs(settings, consulta, k), settings)
 

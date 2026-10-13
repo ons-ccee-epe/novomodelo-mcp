@@ -138,6 +138,20 @@ symlinks e `..`). Sem essa variável o servidor opera **irrestrito**, e o `serve
 sinaliza o estado. Edições com `force=True` (gravar violando o schema) e
 `case_init(force=True)` (sobrescrever arquivos) exigem `NOVOMODELO_MCP_ALLOW_FORCE=1`.
 
+## Prompt `metodologia`
+
+O servidor oferece o prompt MCP `metodologia(tema)`: uma conversa sobre a metodologia do
+novomodelo ancorada nas docs embutidas (busca em inglês com `docs_search`, leitura da
+seção com `docs_read` e resposta em português citando `pagina#secao`; quando as docs não
+cobrem o assunto, a resposta diz isso). `tema` é opcional e de uma palavra; sem ele, a
+pergunta vem na mensagem seguinte.
+
+| Cliente | Onde aparece |
+|---|---|
+| Claude Code | `/novomodelo:metodologia CVaR` (ou `/mcp__novomodelo__metodologia CVaR`); os argumentos são separados por espaço |
+| Kiro | `#` no chat abre o menu de contexto; o prompt tem o ícone MCP e um formulário para `tema` |
+| Claude Desktop | menu **+** abaixo da caixa de mensagem, em "novomodelo" |
+
 ## Versões e rede
 
 O MCP conversa com o executável, a biblioteca (`novomodelo-python`) e o bridge da

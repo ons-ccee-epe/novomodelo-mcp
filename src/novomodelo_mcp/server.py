@@ -16,6 +16,7 @@ from .names import SERVER_NAME
 from .tools.novomodelo_meta import register_novomodelo_meta
 from .tools.deck import register_deck
 from .tools.post_run import register_post_run
+from .tools.prompts import register_prompts
 from .tools.pre_run import register_pre_run
 from .tools.reference import register_reference
 from .tools.results import register_results
@@ -85,6 +86,7 @@ def build_server() -> FastMCP:
     register_reference(mcp, settings)   # schemas + documentação (referência)
     register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
     register_run(mcp, settings)         # init / plano / apply / run assíncrono
+    register_prompts(mcp, settings)     # prompts: metodologia
 
     @mcp.tool(annotations=READ_ONLY_NET)
     def server_info() -> dict:
