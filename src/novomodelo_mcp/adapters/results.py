@@ -36,6 +36,27 @@ def read_metadata(output_dir: str) -> dict[str, Any]:
             "simulation_ran": simulation is not None}
 
 
+def termination_fields(training: dict[str, Any] | None,
+                       simulation: dict[str, Any] | None) -> dict[str, Any]:
+    """`treino`/`simulacao`: como a rodada terminou, copiado do metadata sem interpretar.
+
+    Nomes da 0.18: `convergence.termination_reason`, `iterations.converged_at` e
+    `iterations.completed`; campo ausente (runs ≤ 0.17) vira None.
+    """
+    t = training if isinstance(training, dict) else {}
+    conv = t.get("convergence") if isinstance(t.get("convergence"), dict) else {}
+    its = t.get("iterations")
+    out: dict[str, Any] = {"treino": {
+        "status": t.get("status"),
+        "termination_reason": conv.get("termination_reason"),
+        "converged_at": its.get("converged_at") if isinstance(its, dict) else None,
+        "iterations": its.get("completed") if isinstance(its, dict) else its,
+    }}
+    if isinstance(simulation, dict):
+        out["simulacao"] = {"status": simulation.get("status")}
+    return out
+
+
 def _pl():
     import polars as pl
     return pl

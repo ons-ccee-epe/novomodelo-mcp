@@ -22,6 +22,8 @@ def register_results(mcp, settings: Settings) -> None:
         Lê `training/metadata.json` e, se houver, `simulation/metadata.json`.
         Devolve run_status, bounds (lower/upper), gap final, iterações, duração,
         dimensões do problema e o custo esperado da simulação (quando rodou).
+        `_SUCCESS` só indica que a saída foi gravada; veja `treino.termination_reason`
+        e `treino.converged_at` para saber se convergiu.
         """
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
@@ -45,6 +47,7 @@ def register_results(mcp, settings: Settings) -> None:
             "software_version": t.get("software_version") or t.get("cobre_version"),
             "simulation_ran": env["simulation_ran"],
             "simulation_cost": s.get("cost"),
+            **R.termination_fields(t, env.get("simulation")),
         }
         return cap_envelope(out, settings)
 

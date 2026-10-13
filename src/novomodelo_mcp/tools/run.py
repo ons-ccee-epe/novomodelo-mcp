@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 from ..adapters import deck_io, jobs, runtime
+from ..adapters.results import read_metadata, termination_fields
 from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.envelope import as_error, error
@@ -263,8 +264,10 @@ def register_run(mcp, settings: Settings) -> None:
         """Estado de um run: running | succeeded | failed | cancelled | lost.
 
         Inclui tempo decorrido, estimativa do plano e marcos de saída
-        (`training/_SUCCESS`, `simulation/_SUCCESS`). Com o run concluído, use
-        results_status / results_convergence no `output`.
+        (`training/_SUCCESS`, `simulation/_SUCCESS`). `_SUCCESS` só indica que a
+        saída foi gravada; veja `treino.termination_reason` e `treino.converged_at`
+        para saber se convergiu. Com o run concluído, use results_status /
+        results_convergence no `output`.
         """
         st = jobs.job_state(settings, job_id)
         if st is None:
@@ -272,6 +275,13 @@ def register_run(mcp, settings: Settings) -> None:
         out = Path(st.get("output") or "")
         st["milestones"] = {phase: (out / phase / "_SUCCESS").exists()
                             for phase in ("training", "simulation")}
+        if (out / "training" / "metadata.json").is_file():
+            try:
+                meta = read_metadata(str(out))
+            except (OSError, ValueError):  # metadata ainda sendo gravado: tenta na próxima
+                meta = {}
+            if meta.get("status") == "ok":
+                st.update(termination_fields(meta["training"], meta.get("simulation")))
         if st["state"] in ("failed", "lost"):
             st["stderr_tail"] = (jobs.job_logs(settings, job_id, lines=20) or {}).get("stderr")
         if st["state"] == "succeeded":
