@@ -84,7 +84,7 @@ e é conferida por `tests/test_tool_annotations.py`.
 
 | Tipo | Tools |
 |---|---|
-| Só leitura (21) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `run_plan`, `run_status`, `run_logs` |
+| Só leitura (22) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `run_plan`, `run_status`, `run_logs` |
 | Escreve arquivos novos (7) | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
 | Altera ou interrompe (6) | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
 
@@ -114,6 +114,7 @@ permissões dele:
       "mcp__novomodelo__results_convergence",
       "mcp__novomodelo__results_list_entities",
       "mcp__novomodelo__results_query",
+      "mcp__novomodelo__results_stochastic",
       "mcp__novomodelo__run_plan",
       "mcp__novomodelo__run_status",
       "mcp__novomodelo__run_logs"
@@ -123,7 +124,7 @@ permissões dele:
   ```
 - **Kiro** (na entrada do servidor no `mcp.json`):
   ```json
-  "autoApprove": ["server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read", "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql", "case_validate", "bridge_check_newave", "bridge_check_decomp", "results_status", "results_convergence", "results_list_entities", "results_query", "run_plan", "run_status", "run_logs"]
+  "autoApprove": ["server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read", "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql", "case_validate", "bridge_check_newave", "bridge_check_decomp", "results_status", "results_convergence", "results_list_entities", "results_query", "results_stochastic", "run_plan", "run_status", "run_logs"]
   ```
 
 ## Segurança
@@ -228,6 +229,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `results_convergence(output_dir, tail)`: trajetória de convergência (`convergence.parquet`)
 - `results_list_entities(output_dir)`: entidades de simulação disponíveis
 - `results_query(output_dir, entity, columns, group_by, agg, scenario, limit)`: consulta agregada da simulação
+- `results_stochastic(output_dir, hydro_id, stage, aberturas_do_estagio)`: coeficientes do PAR(p) e árvore de aberturas do run (exige `exports.stochastic: true` no config.json do run)
 
 **Manipulador de decks** (`tools/deck.py`)
 - `deck_list(case_dir, max_files)`: **mapa do caso**. Lista as entradas (.json/.parquet) com caminho, tamanho e o tipo de schema; resume cada rodada (pasta com `training/metadata.json`) numa linha, sem listar a saída; cita os demais arquivos só pelo nome

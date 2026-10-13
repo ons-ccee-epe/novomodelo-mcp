@@ -67,6 +67,25 @@ def register_results(mcp, settings: Settings) -> None:
         return cap_envelope(R.convergence_summary(output_dir, tail=tail), settings)
 
     @mcp.tool(annotations=READ_ONLY)
+    def results_stochastic(output_dir: str, hydro_id: int | None = None,
+                           stage: int | None = None,
+                           aberturas_do_estagio: int | None = None) -> dict:
+        """Modelo estocástico ajustado no run: coeficientes do PAR(p) e árvore de aberturas.
+
+        Lê pela biblioteca (`novomodelo.results.load_stochastic`) a pasta
+        `stochastic/` da saída, que o run só grava com `exports.stochastic: true`
+        no config.json. `par.linhas`: {hydro_id, stage_id, lag, coefficient}
+        (lag a partir de 1), filtráveis por `hydro_id` e `stage`.
+        `aberturas_do_estagio`: devolve também a árvore desse estágio (linha k =
+        vetor de ruído da abertura k). Com teto de linhas.
+        """
+        if (err := ensure_in_workspace(output_dir, settings=settings)):
+            return err
+        return cap_envelope(R.stochastic_query(output_dir, hydro_id=hydro_id, stage=stage,
+                                               openings_stage=aberturas_do_estagio,
+                                               max_rows=settings.max_inline_rows), settings)
+
+    @mcp.tool(annotations=READ_ONLY)
     def results_list_entities(output_dir: str) -> dict:
         """Lista as entidades de simulação disponíveis (hydros, costs, thermals, buses, ...)."""
         if (err := ensure_in_workspace(output_dir, settings=settings)):

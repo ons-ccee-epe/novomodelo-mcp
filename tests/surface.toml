@@ -96,7 +96,7 @@ ignoradas = { "--open" = "abriria um navegador na máquina do servidor, sem o ag
 "results.load_simulation_arrow" = { tool = "results_query", nota = "o mesmo dado, em Arrow" }
 "results.load_results" = { tool = "results_status", nota = "metadados e saídas do run; o MCP lê os mesmos arquivos" }
 "results.load_policy" = { pendente = "cortes da política; aguarda decisão sobre tool nova" }
-"results.load_stochastic" = { pendente = "coeficientes do PAR e árvore de aberturas; aguarda decisão sobre tool nova" }
+"results.load_stochastic" = { tool = "results_stochastic" }
 "results.Stochastic" = { nao_exposto = "tipo de retorno de load_stochastic" }
 "run.run" = { tool = "run_start", nota = "via CLI, como job assíncrono" }
 "schema.export" = { tool = "schema_export", nota = "via CLI" }

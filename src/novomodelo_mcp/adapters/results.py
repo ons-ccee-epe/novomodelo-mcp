@@ -128,6 +128,40 @@ def numeric_diagnosis(output_dir: str) -> dict[str, Any]:
     return out
 
 
+_PAR_COLUMNS = ("hydro_id", "stage_id", "lag", "coefficient")
+
+
+def stochastic_query(output_dir: str, *, hydro_id: int | None = None, stage: int | None = None,
+                     openings_stage: int | None = None, max_rows: int = 50) -> dict[str, Any]:
+    """PAR(p) e árvore de aberturas por `novomodelo.results.load_stochastic`, com teto."""
+    try:
+        from novomodelo import results as nm_results
+    except ImportError:
+        return error(127, "novomodelo-python (com numpy) ausente no ambiente do MCP")
+    try:
+        stoch = nm_results.load_stochastic(output_dir)
+        rows = [dict(zip(_PAR_COLUMNS, (int(h), int(s), int(lag), float(c)), strict=True))
+                for h, s, lag, c in stoch.par_coefficients().tolist()
+                if (hydro_id is None or int(h) == hydro_id) and (stage is None or int(s) == stage)]
+        out: dict[str, Any] = {"status": "ok", "par": {
+            "linhas": rows[:max_rows], "total": len(rows), "truncado": len(rows) > max_rows}}
+        if openings_stage is not None:
+            tree = stoch.opening_tree(openings_stage)
+            n, dim = (tree.shape + (1,))[:2]
+            out["aberturas"] = {"estagio": openings_stage, "n_aberturas": int(n), "dim": int(dim),
+                                "linhas": tree[:max_rows].tolist(), "truncado": n > max_rows}
+        return out
+    except FileNotFoundError as exc:
+        return error(2, "o run não gravou o modelo estocástico: ligue exports.stochastic no "
+                        "config.json e rode de novo", _first_line(exc))
+    except IndexError as exc:
+        return error(22, f"estágio inexistente na árvore de aberturas: {openings_stage}",
+                     _first_line(exc))
+    except (OSError, ValueError) as exc:
+        return error(2, f"não foi possível ler o modelo estocástico de {output_dir}",
+                     _first_line(exc))
+
+
 def _pl():
     import polars as pl
     return pl
