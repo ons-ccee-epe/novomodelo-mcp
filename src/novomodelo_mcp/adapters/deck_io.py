@@ -261,9 +261,17 @@ def edit_parquet(path: str, where: dict, set_values: dict, *,
 
 # ── Localizar a raiz do caso (para revalidar com `novomodelo validate`) ─────────────
 
-def find_case_dir(path: str) -> str | None:
+def find_case_dir(path: str, stop_at: list[Path] | None = None) -> str | None:
+    """Pasta com `config.json` mais próxima acima de `path`.
+
+    Com `stop_at` (as raízes do workspace), não sobe além da raiz que contém
+    `path`: sem o limite, um `config.json` acima do workspace seria o caso.
+    """
     p = Path(path).resolve()
+    limit = next((r for r in stop_at or [] if p.is_relative_to(r)), None)
     for anc in [p if p.is_dir() else p.parent, *p.parents]:
+        if limit is not None and not anc.is_relative_to(limit):
+            return None
         if (anc / "config.json").exists():
             return str(anc)
     return None

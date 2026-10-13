@@ -11,6 +11,7 @@ Leitura confinada à raiz; conteúdo com teto. Sem regra de negócio.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
 from importlib import resources
@@ -22,6 +23,10 @@ from .discovery import find_novomodelo
 _SCHEMA_EXPORT_CACHE: dict[str, str] = {}
 _DOCS_DISCOVER_CACHE: dict[str, str] = {}
 _SUFFIX = ".schema.json"
+
+#: `tipo` é o NOME de um schema, nunca um caminho: "D:x" passaria por uma checagem de
+#: `/`, `\` e `..`, e no Windows a junção com a raiz iria para outro disco.
+_SCHEMA_NAME = re.compile(r"^[A-Za-z0-9_]+$")
 
 #: Subpacote que carrega o snapshot embutido (docs + schemas) no wheel.
 _BUNDLED_PKG = "novomodelo_mcp._bundled"
@@ -89,13 +94,15 @@ def list_schema_types(settings: Settings) -> list[str]:
 
 
 def read_schema(settings: Settings, tipo: str) -> dict:
-    if "/" in tipo or ".." in tipo or "\\" in tipo:
-        return {"status": "error", "diagnostics": [f"tipo invalido: {tipo}"]}
+    if not _SCHEMA_NAME.match(tipo or ""):
+        return {"status": "error", "diagnostics": [f"tipo invalido: {tipo!r}"]}
     root = schemas_root(settings)
     if not root:
         return {"status": "error",
                 "diagnostics": ["schemas indisponiveis; defina NOVOMODELO_MCP_SCHEMAS_DIR ou NOVOMODELO_MCP_SOLVER_BIN"]}
-    f = Path(root) / f"{tipo}{_SUFFIX}"
+    f = (Path(root) / f"{tipo}{_SUFFIX}").resolve()
+    if not _within(f, Path(root).resolve()):
+        return {"status": "error", "diagnostics": [f"tipo invalido: {tipo!r}"]}
     if not f.exists():
         return {"status": "error",
                 "diagnostics": [f"schema inexistente: {tipo}",
@@ -235,13 +242,14 @@ def read_doc(settings: Settings, page: str, max_chars: int) -> dict:
     if root is None:
         return _docs_unavailable(settings)
     base = Path(root).resolve()
-    candidates = [base / page, base / f"{page}.md", base / f"{page}.mdx"]
-    target = next((c for c in candidates if c.exists() and c.is_file()), None)
-    if target is None:
-        return {"status": "error", "diagnostics": [f"pagina inexistente: {page}"]}
-    tr = target.resolve()
-    if not _within(tr, base):
+    # conter antes de testar a existência: a ordem inversa revela se um arquivo
+    # existe fora da raiz (respostas diferentes para "fora" e "inexistente").
+    candidates = [c.resolve() for c in (base / page, base / f"{page}.md", base / f"{page}.mdx")]
+    if not all(_within(c, base) for c in candidates):
         return {"status": "error", "diagnostics": [f"pagina fora do docs root: {page}"]}
+    tr = next((c for c in candidates if c.is_file()), None)
+    if tr is None:
+        return {"status": "error", "diagnostics": [f"pagina inexistente: {page}"]}
     text = tr.read_text(encoding="utf-8", errors="replace")
     truncated = len(text) > max_chars
     return {"status": "ok", "page": page, "path": str(tr), "truncated": truncated,

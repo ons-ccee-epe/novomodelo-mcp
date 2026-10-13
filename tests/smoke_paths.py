@@ -55,6 +55,26 @@ def test_results_query_entity_traversal_blocked():
     os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
 
 
+def test_find_case_dir_stops_at_workspace_root():
+    from novomodelo_mcp.adapters.deck_io import find_case_dir
+    from novomodelo_mcp.adapters.paths import allowed_roots
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "config.json").write_text("{}")
+        ws = Path(d) / "ws"
+        ws.mkdir()
+        (ws / "x.json").write_text("{}")
+        os.environ["NOVOMODELO_MCP_WORKSPACE"] = str(ws)
+        roots = allowed_roots(load_settings())
+        assert find_case_dir(str(ws / "x.json"), stop_at=roots) is None
+    os.environ.pop("NOVOMODELO_MCP_WORKSPACE", None)
+
+
+def test_schema_tipo_must_be_a_plain_name():
+    from novomodelo_mcp.adapters.reference import read_schema
+    for tipo in ("D:segredo", "../config", "a.b"):
+        assert read_schema(load_settings(), tipo)["status"] == "error", tipo
+
+
 def main():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

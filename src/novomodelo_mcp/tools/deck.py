@@ -15,7 +15,7 @@ from ..adapters import reference as REF
 from ..adapters.novomodelo import validate_deck_binding
 from ..adapters.envelope import error
 from ..adapters.obs import log
-from ..adapters.paths import ensure_in_workspace
+from ..adapters.paths import allowed_roots, ensure_in_workspace
 from ..config import Settings
 from .shaping import cap_envelope
 from .annotations import DESTRUCTIVE, READ_ONLY
@@ -143,9 +143,9 @@ def register_deck(mcp, settings: Settings) -> None:
         if result.get("status") != "ok" or not result.get("written"):
             return result
         if ensure_valid:
-            case = deck_io.find_case_dir(path)
-            if case is None:
-                result["case_validation"] = "pulada (raiz do caso nao encontrada)"
+            case = deck_io.find_case_dir(path, stop_at=allowed_roots(settings))
+            if case is None or ensure_in_workspace(case, settings=settings):
+                result["case_validation"] = "pulada (raiz do caso nao encontrada no workspace)"
                 return result
             v = validate_deck_binding(case, settings=settings)
             if v.get("exit_code") == 127:
