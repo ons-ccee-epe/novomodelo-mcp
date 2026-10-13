@@ -127,8 +127,9 @@ def register_deck(mcp, settings: Settings) -> None:
         """Edita valores de um JSON do deck por caminho, DENTRO do contrato.
 
         `changes`: lista de {"path": "training.stopping_rules[0].limit", "value": 80}.
-        Valida contra o JSON Schema oficial (se NOVOMODELO_MCP_SCHEMAS_DIR estiver definido);
-        backup em `<arquivo>.bak` + escrita atômica. `dry_run` não grava.
+        Valida contra o JSON Schema oficial da versão instalada (variável
+        `NOVOMODELO_MCP_SCHEMAS_DIR`, senão `novomodelo schema export`, senão os schemas
+        embutidos); backup em `<arquivo>.bak` + escrita atômica. `dry_run` não grava.
         `ensure_valid=True` revalida o caso (estruturado) e REVERTE se reprovar.
         `force=True` só é aceito com NOVOMODELO_MCP_ALLOW_FORCE=1.
         """
@@ -137,7 +138,7 @@ def register_deck(mcp, settings: Settings) -> None:
         if force and not settings.allow_force:
             return error(13, "force=True desabilitado",
                          "defina NOVOMODELO_MCP_ALLOW_FORCE=1 para gravar violando o schema")
-        result = deck_io.edit_json(path, changes, schemas_dir=settings.schemas_dir,
+        result = deck_io.edit_json(path, changes, schemas_dir=REF.schemas_root(settings),
                                    dry_run=dry_run, force=force)
         if result.get("status") != "ok" or not result.get("written"):
             return result
