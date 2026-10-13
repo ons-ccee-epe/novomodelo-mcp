@@ -4,6 +4,7 @@ Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from ..adapters.bridge import run_bridge
@@ -94,15 +95,20 @@ def register_post_run(mcp, settings: Settings) -> None:
                         settings)
 
     @mcp.tool(annotations=WRITES)
-    def bridge_dashboard(case_dir: str) -> dict:
+    def bridge_dashboard(case_dir: str, output: str | None = None) -> dict:
         """Gera um dashboard HTML interativo a partir de resultados do Novomodelo.
 
-        `case_dir`: pasta do CASO (a que contém `output/`), como no bridge; o HTML
-        vai para `<case_dir>/dashboard.html`. Devolve o envelope; o
-        caminho do HTML gerado aparece no `summary`/`diagnostics` do bridge.
+        `case_dir`: pasta do CASO (a que contém `output/`), como no bridge.
+        `output`: caminho do ARQUIVO HTML (padrão `<case_dir>/dashboard.html`); a
+        pasta precisa existir. O caminho volta em `artifacts.dashboard`.
         Nunca devolve o HTML inteiro — apenas metadados e caminho.
         """
-        if (err := ensure_in_workspace(case_dir, settings=settings)):
+        if (err := ensure_in_workspace(case_dir, output, settings=settings)):
             return err
-        env = run_bridge(["dashboard", case_dir], settings=settings)
+        argv = ["dashboard", case_dir]
+        if output:
+            argv += ["--output", output]
+        env = run_bridge(argv, settings=settings)
+        if env.get("exit_code") == 0:
+            attach_artifact(env, "dashboard", output or str(Path(case_dir) / "dashboard.html"))
         return cap_envelope(env, settings)
