@@ -1,0 +1,356 @@
+---
+title: CLI Reference
+description: Complete reference for every `novomodelo` subcommand, flag, and exit code.
+---
+
+## Synopsis
+
+```
+novomodelo [--color <WHEN>] <SUBCOMMAND> [OPTIONS]
+```
+
+## Global Options
+
+| Option           | Type                          | Default | Description                                                                                                                                                   |
+| ---------------- | ----------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--color <WHEN>` | `auto` \| `always` \| `never` | `auto`  | Control ANSI color output on stderr. `auto` colors only when stderr is a terminal; `always` forces color on — useful under `mpiexec` which pipes stderr through a non-TTY. |
+
+## Subcommands
+
+| Subcommand | Synopsis                           | Description                                                    |
+| ---------- | ---------------------------------- | -------------------------------------------------------------- |
+| `init`     | `novomodelo init [OPTIONS] [DIRECTORY]` | Scaffold a new case directory from an embedded template        |
+| `run`      | `novomodelo run <CASE_DIR> [OPTIONS]`   | Load, train, simulate, and write results                       |
+| `validate` | `novomodelo validate <CASE_DIR>`        | Validate a case directory and print a diagnostic report        |
+| `schema`   | `novomodelo schema <COMMAND>`           | Manage JSON Schema files for case directory input types        |
+| `version`  | `novomodelo version`                    | Print version, solver backend, and build information           |
+
+---
+
+## `novomodelo init`
+
+Scaffolds a new case directory from an embedded template. Creates all required
+input files (`config.json`, `penalties.json`, `stages.json`, system files, etc.)
+so a new user can start from a working example.
+
+### Arguments
+
+| Argument      | Type | Description                                           |
+| ------------- | ---- | ----------------------------------------------------- |
+| `[DIRECTORY]` | Path | Target directory where template files will be written. Required unless `--list` is given; not accepted with `--list` |
+
+### Options
+
+| Option              | Type   | Default | Description                                      |
+| ------------------- | ------ | ------- | ------------------------------------------------ |
+| `--template <NAME>` | string | —       | Template name to scaffold (e.g., `1dtoy`). Required unless `--list` is given; not accepted with `--list` |
+| `--list`            | flag   | off     | List all available templates and exit. Not accepted with `--template` or a directory |
+| `--force`           | flag   | off     | Overwrite existing files in the target directory |
+
+Without `--list`, both `--template` and the directory are required.
+
+### Examples
+
+```bash
+# List available templates
+novomodelo init --list
+
+# Scaffold the 1dtoy example in a new directory
+novomodelo init --template 1dtoy my_study
+
+# Overwrite files in an existing directory
+novomodelo init --template 1dtoy --force my_study
+```
+
+---
+
+## `novomodelo run`
+
+Executes the full solve lifecycle for a case directory:
+
+1. **Load** — reads all input files and runs the layered validation pipeline
+2. **Train** — trains an SDDP policy using the configured stopping rules
+3. **Simulate** — (optional) evaluates the trained policy over simulation scenarios
+4. **Write** — writes all output files to the results directory
+
+Whether simulation runs is controlled by `simulation.enabled` in `config.json`.
+Stochastic artifact export is controlled by `exports.stochastic` in `config.json`.
+
+### Arguments
+
+| Argument     | Type | Description                                                              |
+| ------------ | ---- | ------------------------------------------------------------------------ |
+| `<CASE_DIR>` | Path | Path to the case directory containing input data files and `config.json` |
+
+### Options
+
+| Option           | Type    | Default              | Description                                                                                                                                                            |
+| ---------------- | ------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--output <DIR>` | Path    | `<CASE_DIR>/output/` | Output directory for results                                                                                                                                           |
+| `--threads <N>`  | integer | `1`                  | Number of worker threads per MPI rank. Each thread solves its own LP instances; scenarios are distributed across threads. Must be `1` or more. |
+| `--comm-backend <WHICH>` | `auto` \| `local` \| `mpi` | `auto` | Communication backend. `auto` selects the MPI backend when a binary built with MPI support (the `novomodelo-mpi` release asset) is launched under an MPI launcher (`mpiexec`/`mpirun`/`srun`), and the local backend otherwise; `local` forces a single process; `mpi` forces the MPI backend and fails with a clear message on a binary built without MPI support. |
+| `--quiet`        | flag    | off                  | Suppress the banner and progress bars. Errors still go to stderr                                                                                                       |
+
+### Config-First Principle
+
+The CLI follows a **config-first** design: `config.json` defines _what_ to compute,
+CLI flags define _how_ to run it. A study is fully specified by its case directory —
+the same case produces the same results regardless of which CLI flags are used.
+
+| Concern                    | Controlled by                                     |
+| -------------------------- | ------------------------------------------------- |
+| Simulation on/off          | `simulation.enabled` in `config.json`             |
+| Stochastic export on/off   | `exports.stochastic` in `config.json`             |
+| Forward passes, iterations | `training.*` in `config.json`                     |
+| Cut selection              | `training.cut_selection` in `config.json`         |
+| Inflow method              | `modeling.inflow_non_negativity` in `config.json` |
+
+### Examples
+
+```bash
+# Run a study with default output location
+novomodelo run /data/cases/hydro_study
+
+# Write results to a custom directory
+novomodelo run /data/cases/hydro_study --output /data/results/run_001
+
+# Use 4 worker threads per MPI rank
+novomodelo run /data/cases/hydro_study --threads 4
+
+# Run without any terminal decorations (useful in scripts)
+novomodelo run /data/cases/hydro_study --quiet
+
+# Force color output when running under mpiexec
+novomodelo --color always run /data/cases/hydro_study
+
+# Run across 4 MPI ranks (requires the MPI build; see HPC & Cluster Deployment)
+mpiexec -np 4 novomodelo-mpi run /data/cases/hydro_study
+```
+
+### Output format
+
+`novomodelo run` prints this summary to stderr once the study finishes. It carries
+the convergence, policy-rows, and LP-solve lines, plus a `Time split` block
+that decomposes the total training wall time into `Forward` / `Backward` /
+`Serial` phases (see the arithmetic notes below).
+
+```
+Training complete in 4m 12s (42 iterations, converged at iter 38)
+  Lower bound:  4.85000e4 $/stage
+  Upper bound:  4.90000e4 +/- 2.50000e2 $/stage
+  Gap:          1.0%
+  Policy rows:  980000 active / 1250000 generated
+  LP solves:    84000 (81900 first-try, 2000 retried, 100 failed)
+  Avg iter:     6000ms
+  Time split:   Forward  2m 51s (68%)   solve 2m 40s · wait 14.0s (8% of phase)
+                Backward 1m 9s (27%)   solve 58.0s · wait 7.0s (10% of phase)
+                Serial   12.0s (5%)   bound 4.0s · selection 2.0s · allreduce 1.0s · sync 500ms · other 4.5s
+```
+
+The three walls in the `Time split` block sum to the total training time
+(`Serial = total − Forward − Backward`, clamped at zero). For `Forward`/
+`Backward`, `solve` is the per-worker mean LP-solve wall time for that phase
+(cumulative solve time across all workers divided by parallelism, capped at
+the phase wall); `wait` is that phase's worker wait from load imbalance,
+shown as a percentage of the phase wall. In the `Serial` line, `bound` is
+lower-bound evaluation time and `selection` is row-selection time;
+`allreduce` (MPI forward-bound synchronization) and `sync` (per-stage
+row-sync `allgatherv`) appear **only** on MPI runs, inserted only when
+nonzero; `other` absorbs rayon scheduling overhead plus any unaccounted
+residual. The whole `Time split` block is **omitted** when per-iteration
+phase-wall timing is unavailable.
+
+This printout is for reading, not parsing. The machine-readable record of the
+same run is the metadata `novomodelo run` writes into the output directory —
+`training/metadata.json` when training ran, and `simulation/metadata.json` when
+simulation ran — which you can query directly with `jq`:
+
+```bash
+# Run status and final bounds
+jq '{status, bounds}' /data/cases/hydro_study/output/training/metadata.json
+
+# Extract the training termination reason
+jq -r '.convergence.termination_reason' /data/cases/hydro_study/output/training/metadata.json
+
+# When simulation ran, fail a CI job if a scenario's output could not be written
+[ "$(jq -r '.scenarios.failed' /data/cases/hydro_study/output/simulation/metadata.json)" = "0" ] || exit 1
+```
+
+From Python, `novomodelo.results.load_results(output_dir)` returns both metadata
+files as dicts. Every field is documented in
+[Metadata Files](/reference/output/metadata/).
+
+### SLURM clusters
+
+Launching Novomodelo under SLURM (`srun`/`sbatch`), the hybrid MPI + threads
+mapping, the key SLURM flags, and PMI selection are covered in full on the
+[HPC & Cluster Deployment](/running/hpc-deployment/#running-under-slurm) page,
+alongside how to obtain or build the MPI-enabled binary and a worked AWS
+ParallelCluster reference architecture.
+
+---
+
+## `novomodelo validate`
+
+Runs the layered validation pipeline, then study construction, the policy load
+the run would apply, and the boundary reconciliation, as `novomodelo run` does before
+training, without solving. It prints a diagnostic report to stdout.
+
+On success, prints a single line of entity counts:
+
+```
+Valid case: 3 buses, 12 hydros, 8 thermals, 4 lines
+```
+
+A warning-free case prints nothing else. When the pipeline raises warnings, a
+`Validation: 0 errors, N warnings in <dir>` summary follows the `Valid case:`
+line (with `<dir>` exactly as passed on the command line), then one `warning:`
+line per finding, the policy load's included (`warning: <output dir>/<policy.path>: …`).
+When `config.json` configures a boundary policy, a
+`boundary policy priced at <date>` line and a one-line reconciliation summary
+follow.
+
+On failure, novomodelo prints a `Validation: N errors, 0 warnings in <dir>` summary
+followed by each error as an `error:`-prefixed line, and exits as
+[Exit Codes](#exit-codes) gives: `1` for a refused case or policy,
+`2` for a policy checkpoint the operating system refuses to read or a stochastic input it cannot read,
+which also prints the I/O error on stderr. A case directory that does not
+exist is reported on stderr without the summary.
+
+When `config.json` configures `policy.boundary`, `novomodelo validate` loads and
+reconciles that boundary policy, including the
+[version gate](/running/policy-management/#version-gate). A refusal exits `1`,
+as does a boundary checkpoint that cannot be read. Under `--json`, a refusal
+and an unreadable checkpoint both report phase `BoundaryReconciliationError`;
+see
+[Policy-load errors](/reference/error-codes/#policy-load-errors).
+
+When the run would load a policy (`policy.mode` `warm_start` or `resume` with
+training enabled, or training disabled with simulation enabled), `novomodelo validate`
+reads it from `<output dir>/<policy.path>` and applies the same checks: a refusal
+exits `1` (phase `WarmStartIncompatible` or `ResumeIncompatible`), and so does a
+case whose policy does not exist yet. `--output` names the output directory.
+
+### Arguments
+
+| Argument     | Type | Description                            |
+| ------------ | ---- | -------------------------------------- |
+| `<CASE_DIR>` | Path | Path to the case directory to validate |
+
+### Options
+
+| Option   | Type | Default | Description                                                                                                                                                                                                                                                                                                   |
+| -------- | ---- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--json` | flag | off     | Replace the human-readable report with exactly one JSON object on stdout. On success it carries the boundary-policy reconciliation outcome (`configured`, `boundary_date`, `report` — the last two `null` when no boundary policy is configured) plus `policy_load` (`mode`, `unused_stored_bases`) when a policy load is configured; on failure it carries an `error` object with the failing `phase` and `message`. Exit codes are unchanged. |
+| `--output <DIR>` | Path | `<CASE_DIR>/output/` | The output directory: the policy load reads `<DIR>/<policy.path>`, and `policy.path` is checked against it. |
+
+### Examples
+
+```bash
+# Validate a case directory before running
+novomodelo validate /data/cases/hydro_study
+
+# Use in a script: only proceed if validation passes
+novomodelo validate /data/cases/hydro_study && novomodelo run /data/cases/hydro_study
+
+# Machine-readable outcome for a pipeline step
+novomodelo validate /data/cases/hydro_study --json
+```
+
+---
+
+## `novomodelo schema`
+
+Manages JSON Schema files for case directory input types. Its one subcommand is
+`export`.
+
+### Subcommands
+
+| Subcommand | Synopsis                                   | Description                                  |
+| ---------- | ------------------------------------------ | -------------------------------------------- |
+| `export`   | `novomodelo schema export [--output-dir <DIR>]` | Export JSON Schema files for all input types |
+
+| Option               | Type | Default | Description                                                                                |
+| -------------------- | ---- | ------- | ------------------------------------------------------------------------------------------ |
+| `--output-dir <DIR>` | Path | `.`     | Directory to write schema files into. Created if absent. Existing schemas are overwritten. |
+
+### Examples
+
+```bash
+# Export schemas to the current directory
+novomodelo schema export
+
+# Export schemas to a specific directory
+novomodelo schema export --output-dir /data/schemas
+```
+
+---
+
+## `novomodelo version`
+
+Prints the binary version, active solver and communication backends, compression
+support, host architecture, and build profile.
+
+### Output lines
+
+{/* capture: novomodelo version | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: none */}
+
+```
+novomodelo   v0.18.0
+solver: HiGHS 1.13.1
+comm:   local
+zstd:   enabled
+arch:   x86_64-linux
+build:  release (lto=thin)
+```
+
+| Line                               | Description                                                             |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `novomodelo v{version}`                 | The novomodelo release version                                               |
+| `solver: {name} {version}`         | Active LP solver backend and its library version — `HiGHS 1.13.1` in standard builds; a CLP build reports `CLP <version>` |
+| `comm: local` or `comm: mpi`       | Communication backend (`mpi` only when compiled with the `mpi` feature) |
+| `zstd: enabled`                    | Output compression support                                              |
+| `arch: {arch}-{os}`                | Host CPU architecture and operating system                              |
+| `build: release (lto=thin)` or `build: debug` | Build profile                                                |
+
+### Arguments
+
+None.
+
+### Options
+
+None.
+
+---
+
+## Exit Codes
+
+| Code | Category   | Cause                                                                                                                |
+| ---- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success    | The command completed without errors                                                                                 |
+| `1`  | Validation | A refused case or policy under either subcommand: an error collected into the validation report; a `config.json` rule, the `policy.path` guards included; a study-setup refusal (stochastic model, solver profile, admission gate); a refused policy (another software or version, format, state, graph, cost scale); a missing policy directory or a missing or undecodable checkpoint file; a refused or unreadable `policy.boundary` checkpoint; a refusal met while training (thread count, cut-wire version) |
+| `2`  | I/O or usage | A case directory that does not exist (both subcommands); a policy checkpoint the operating system refuses to read; a stochastic input that cannot be read, such as a declared opening-tree file that is absent; a disk-full or other filesystem failure while writing the policy checkpoint or the training or simulation results after training starts, except the write of one simulation scenario's results, which is logged and leaves the exit code `0` (`novomodelo run`); or a command-line usage error — an unknown subcommand or option, a missing subcommand or argument, a conflicting argument, or an invalid option value — reported by the argument parser before any file is read |
+| `3`  | Solver     | An infeasible LP or a solver failure, in training or in simulation, or a solver backend that cannot be initialized |
+| `4`  | Internal   | A communication failure, an unexpected channel closure, or another internal fault; under `novomodelo validate` also the load error that escapes the validation report, an AR-coefficient count mismatch (`novomodelo run`: `1`) |
+| `5`  | Stopped    | `novomodelo run` only: a SIGTERM or SIGINT during training stopped the run at an iteration boundary after writing the training outputs and the checkpoint; the simulation is skipped ([Stopping Rules — Shutdown Requests](/math/stopping-rules/#shutdown-requests)) |
+
+A dangling reference (an entity ID that refers to a non-existent entity) surfaces
+as an `InvalidReference` line inside a semantic-constraint violation (exit code 1).
+
+Error messages are printed to stderr with `error:` prefix and hint lines. See
+[Error Codes](/reference/error-codes/) for a detailed catalog, including
+[Policy-load errors](/reference/error-codes/#policy-load-errors). For the cause and fix of the failures a study commonly meets, see [Troubleshooting](/running/troubleshooting/).
+
+:::note
+Every load failure before the solver exits with the same code under both
+subcommands, except the load error that surfaces only after the validation
+report is complete, a scenario-assembly schema error: `4` under
+`novomodelo validate`, `1` under `novomodelo run`. Message texts and renderings are under
+[`StochasticPreparationError`](/reference/error-codes/#stochasticpreparationerror).
+:::
+
+---
+
+## Environment Variables
+
+Novomodelo reads **no configuration** from environment variables. Every setting comes from the case's config/data files and from `novomodelo` CLI arguments — thread count from `--threads`, color from `--color`, and the communication backend from `--comm-backend`. Terminal width (for progress rendering under a piped stderr) and the hostname recorded in run provenance are queried directly from the terminal and the OS. Two runtime signals are the only environment inputs, and neither is a configuration channel: whether the process was launched under an MPI launcher (consulted only by `--comm-backend auto` to select a backend), and `RUST_LOG`, which sets the verbosity of the diagnostic log written to stderr. `RUST_LOG` defaults to `warn`, which surfaces deprecation and model-quality warnings; `RUST_LOG=debug` (or `trace`) adds diagnostic detail — for example the per-slot boundary-policy reconciliation lines that `novomodelo validate` and `novomodelo run` otherwise fold into a one-line summary — but never changes study results, only what is logged.

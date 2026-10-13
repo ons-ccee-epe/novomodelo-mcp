@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cobre_mcp.adapters import results as R  # noqa: E402
+from novomodelo_mcp.adapters import results as R  # noqa: E402
 
 
 def test_read_metadata_ok():

@@ -1,0 +1,1129 @@
+---
+title: Configuration
+description: Every `config.json` field — training, simulation, modeling, cut selection, estimation, policy, temporal resolution, and exports.
+---
+
+All runtime parameters for `novomodelo run` are controlled by `config.json` in the
+case directory. This page documents every section and field. Every object in
+`config.json` rejects unknown keys, so a misspelled key fails the load with a
+parse error that names the key.
+
+---
+
+## Minimal Config
+
+```json
+{
+  "training": {
+    "selection": { "method": "sampled", "forward_passes": 50 },
+    "stopping_rules": [{ "type": "iteration_limit", "limit": 100 }]
+  }
+}
+```
+
+All other sections are optional with defaults documented below.
+
+---
+
+## Key index
+
+Every `config.json` key down to the second level, with its type and default; each row links its section.
+
+| Name                                         | Type            | Required | Default      | Units | Description                                                                                                                                        |
+| -------------------------------------------- | --------------- | -------- | ------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training`                                   | object          | Yes      | —            | —     | Controls the SDDP training phase. See [`training`](#training).                                                                                     |
+| `training.selection`                         | object          | Yes      | —            | —     | Scenario-selection method of the training forward pass, `sampled` or `enumerated`; the key is required. See [`training.selection`](#trainingselection).                 |
+| `training.stopping_rules`                    | array           | Yes      | —            | —     | Rules that stop training; the key is required. See [`training.stopping_rules`](#trainingstopping_rules).                                           |
+| `training.enabled`                           | boolean         | No       | `true`       | —     | Runs the training phase; `false` skips to simulation. See [`training`](#training).                                                                 |
+| `training.tree_seed`                         | integer \| null | No       | `null`       | —     | Seed of the opening tree; `null` resolves to 42. See [Seed resolution](#seed-resolution).                                                          |
+| `training.stopping_mode`                     | string          | No       | `"any"`      | —     | One of `"any"`, `"all"`. How multiple stopping rules combine. See [`training.stopping_mode`](#trainingstopping_mode).                              |
+| `training.cut_selection`                     | object          | No       | `{}`         | —     | Row-management pipeline; row selection is off unless `selection` is set. See [`training.cut_selection`](#trainingcut_selection).                   |
+| `training.solver`                            | object          | No       | `{}`         | —     | Per-phase LP solver profile overrides; the two `retry_*` keys are accepted and have no effect. See [`training.solver`](#trainingsolver).                                                  |
+| `training.parallelism`                       | object          | No       | `{}`         | —     | Backward-pass worker-scheduling knobs. See [`training.parallelism`](#trainingparallelism).                                                         |
+| `training.scenario_source`                   | object \| null  | No       | `null`       | —     | Per-class forward-pass noise source; `null` reads `in_sample` for every class. See [`training.scenario_source`](#trainingscenario_source).         |
+| `simulation`                                 | object          | No       | `{}`         | —     | Controls the post-training simulation phase. See [`simulation`](#simulation).                                                                      |
+| `simulation.enabled`                         | boolean         | No       | `false`      | —     | Runs the simulation phase after training. See [`simulation`](#simulation).                                                                         |
+| `simulation.selection`                       | object \| null  | No       | `null`       | —     | Scenario-selection method of the simulation phase; `null` resolves to 2000 sampled scenarios. See [`simulation.selection`](#simulationselection).  |
+| `simulation.io_channel_capacity`             | integer         | No       | `64`         | —     | Capacity of the queue between the simulation workers and the output writer. See [`simulation`](#simulation).                                       |
+| `simulation.solver`                          | object \| null  | No       | `null`       | —     | Solver profile of the simulation phase; `null` keeps the built-in profile. See [Solver profile fields](#solver-profile-fields).                                                       |
+| `simulation.scenario_source`                 | object \| null  | No       | `null`       | —     | Scenario source of the simulation phase; `null` reuses `training.scenario_source`. See [`simulation.scenario_source`](#simulationscenario_source). |
+| `modeling`                                   | object          | No       | `{}`         | —     | Controls physical modeling options. See [`modeling`](#modeling).                                                                                   |
+| `modeling.inflow_non_negativity`             | object          | No       | `{}`         | —     | Treatment of negative PAR model inflow draws. See [`modeling.inflow_non_negativity`](#modelinginflow_non_negativity).                              |
+| `modeling.cost_scale_factor`                 | number \| null  | No       | `1000000.0`  | —     | Divisor on every non-θ objective coefficient; `null` or absent uses the default. See [`modeling.cost_scale_factor`](#modelingcost_scale_factor).   |
+| `estimation`                                 | object          | No       | `{}`         | —     | Controls the PAR(p) model estimation pipeline. See [`estimation`](#estimation).                                                                    |
+| `estimation.max_order`                       | integer         | No       | `6`          | —     | Maximum lag order considered during model fitting. See [`estimation`](#estimation).                                                                |
+| `estimation.order_selection`                 | string          | No       | `"pacf"`     | —     | One of `"pacf"`, `"pacf_annual"`. Order selection criterion. See [`estimation`](#estimation).                                                      |
+| `estimation.min_observations_per_season`     | integer         | No       | `30`         | —     | Recommended minimum of fully covered stage occurrences per season and hydro. See [`estimation`](#estimation).                                      |
+| `estimation.max_coefficient_magnitude`       | number \| null  | No       | `null`       | —     | Reduces a fit to order 0 when any coefficient exceeds this magnitude. See [`estimation`](#estimation).                                             |
+| `policy`                                     | object          | No       | `{}`         | —     | Controls policy persistence. See [`policy`](#policy).                                                                                              |
+| `policy.path`                                | string          | No       | `"./policy"` | —     | Policy directory, resolved against the run's output directory. See [`policy`](#policy).                                                            |
+| `policy.mode`                                | string          | No       | `"fresh"`    | —     | One of `"fresh"`, `"warm_start"`, `"resume"`. Initialization mode. See [`policy`](#policy).                                                        |
+| `policy.boundary`                            | object \| null  | No       | `null`       | —     | Terminal boundary cuts loaded from another study's checkpoint. See [`policy.boundary`](#policyboundary).                                           |
+| `policy.checkpointing`                       | object          | No       | `{}`         | —     | Periodic checkpoints during training. See [`policy.checkpointing`](#policycheckpointing).                                              |
+| `upper_bound_evaluation`                     | object          | No       | `{}`         | —     | Accepted; no part of the run reads it. See [`upper_bound_evaluation`](#upper_bound_evaluation).                                                    |
+| `upper_bound_evaluation.enabled`             | boolean \| null | No       | `null`       | —     | Accepted; has no effect. See [`upper_bound_evaluation`](#upper_bound_evaluation).                                                                  |
+| `upper_bound_evaluation.initial_iteration`   | integer \| null | No       | `null`       | —     | Accepted; has no effect. See [`upper_bound_evaluation`](#upper_bound_evaluation).                                                                  |
+| `upper_bound_evaluation.interval_iterations` | integer \| null | No       | `null`       | —     | Accepted; has no effect. See [`upper_bound_evaluation`](#upper_bound_evaluation).                                                                  |
+| `upper_bound_evaluation.lipschitz`           | object          | No       | `{}`         | —     | Accepted; has no effect. See [`upper_bound_evaluation`](#upper_bound_evaluation).                                                                  |
+| `exports`                                    | object          | No       | `{}`         | —     | Controls which outputs are written to the results directory. See [`exports`](#exports).                                                            |
+| `exports.states`                             | boolean         | No       | `false`      | —     | Writes visited forward-pass trial points to the policy checkpoint. See [`exports`](#exports).                                                      |
+| `exports.stochastic`                         | boolean         | No       | `false`      | —     | Writes stochastic preprocessing artifacts. See [`exports`](#exports).                                                                             |
+| `exports.fpha_deviation_points`              | boolean         | No       | `false`      | —     | Writes the computed-FPHA fit-deviation table. See [`exports`](#exports).                                                                          |
+| `$schema`                                    | string \| null  | No       | `null`       | —     | Optional schema URI; the loader does not read it. See [Full Example](#full-example).                                                               |
+
+---
+
+## `training`
+
+Controls the SDDP training phase.
+
+### Mandatory Fields
+
+| Field            | Type   | Description                                                                                                                                                                                            |
+| ---------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `selection`      | object | Scenario-selection method for the training forward pass — `sampled{forward_passes}` or `enumerated{}` (see [`training.selection`](#trainingselection) below). No default: a missing `training.selection` is a hard load error. |
+| `stopping_rules` | array  | Stopping rules (see below). The key is required and the list must contain at least one `iteration_limit` rule; a list without one, `[]` included, is refused when the configuration loads. Training never runs past the largest `iteration_limit` in the list. |
+
+### `training.selection`
+
+Chooses how many trajectories the training forward pass runs per iteration,
+or whether it walks every path of the policy graph instead of
+sampling. The object is internally tagged on `method`; each variant accepts
+only its own fields — pairing `forward_passes` with `"enumerated"` is a
+load-time error (`deny_unknown_fields`).
+
+| Field            | Type    | Required       | Description                                                                                                                                                            |
+| ---------------- | ------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `method`         | string  | Yes            | One of `"sampled"`, `"enumerated"`.                                                                                                                                    |
+| `forward_passes` | integer | `sampled` only | Number of scenario trajectories per iteration (`>= 1`). Larger values reduce variance in each iteration's cut but increase cost per iteration. Rejected under `"enumerated"`. |
+
+There is **no default** forward-pass count: an absent `training.selection` is
+a hard load error ([`SchemaViolation`](/reference/error-codes/#schemaviolation)).
+
+Example — sampled:
+
+```json
+{ "method": "sampled", "forward_passes": 50 }
+```
+
+Example — enumerated (the forward pass walks every path of the policy
+graph instead of drawing a fixed count):
+
+```json
+{ "method": "enumerated" }
+```
+
+Under `enumerated`, a [`scenario_source`](#trainingscenario_source) class reads the
+node's declared opening only when it is `in_sample`, or `external` with a
+scenario column the node pins. A class on `out_of_sample` or `historical`, or
+on `external` without a pinned column, draws its own realization instead, so
+the reported bounds are those of the declared policy graph only when every
+class reads the node's opening.
+
+On two or more MPI ranks, enumerated training admits only a policy graph
+whose branching is all at the last stage (a deterministic trunk ending in a
+terminal fan); a graph with an interior branching node stops `novomodelo run`
+before training, with exit code `1`. `novomodelo validate` does not check it, so a
+passing validation does not rule it out. The error message is listed under
+[Communication failures](/reference/error-codes/#communication-failures).
+
+Enumerated selection, in training or in simulation, also requires every node
+of the policy graph to carry a single opening: it walks each path of the
+policy graph and does not enumerate a node's openings. A node that pins a
+`scenario_id` carries one, and its stage declares no `num_openings`; any
+other node carries the openings its stage generates, so that stage declares
+`num_openings: 1` in `stages.json`. A case with a node carrying more is
+refused at study setup, by `novomodelo validate` and by `novomodelo run` before training, with exit code `1`.
+
+### Optional Fields
+
+| Field           | Type               | Default | Description                                                                                                                                                                                             |
+| --------------- | ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`       | boolean            | `true`  | Set to `false` to skip training and proceed directly to simulation (requires a pre-trained policy).                                                                                                     |
+| `tree_seed`     | integer \| null    | `null`  | Seed of the opening tree and of the in-sample opening draws. When `null`, the default seed 42 is used (deterministic but arbitrary), with no warning; a negative value is used by absolute value. See [Seed resolution](#seed-resolution) for how it relates to `scenario_source.seed`. |
+| `stopping_mode` | string             | `"any"` | One of `"any"`, `"all"`. How multiple stopping rules combine: `"any"` stops when the first rule is satisfied; `"all"` stops when every rule other than `iteration_limit` is satisfied at the same iteration, and the largest `iteration_limit` caps the run.                                |
+| `cut_selection`   | object             | `{}`                                  | Row-management (cut-selection) pipeline, nested at `training.cut_selection` (not a root key). See [`cut_selection`](#trainingcut_selection). |
+| `solver`          | object             | `{}`                                  | Optional per-phase LP solver profile overrides; the two `retry_*` keys have no effect. See [`training.solver`](#trainingsolver). |
+| `parallelism`     | object             | `{}`                                  | Backward-pass worker-scheduling knobs. See [`parallelism`](#trainingparallelism). |
+| `scenario_source` | object \| null     | `null`              | Per-class forward-pass noise source for the training forward pass. See [`scenario_source`](#trainingscenario_source). |
+
+For the per-class `scenario_source` configuration, see the
+[`scenario_source` sub-section](#trainingscenario_source) below and
+[Scenario Generation §3](/math/scenario-generation#3-sampling-scheme-abstraction).
+
+### `training.scenario_source`
+
+Controls where the forward-pass noise comes from for each entity class during
+training. When absent, all classes default to `in_sample` (reusing the
+pre-generated opening tree).
+
+| Field              | Type              | Default       | Description                                                                                             |
+| ------------------ | ----------------- | ------------- | ------------------------------------------------------------------------------------------------------- |
+| `seed`             | integer \| null   | `null`        | Forward seed of training's out-of-sample draws, and of the simulation's when `simulation.scenario_source` is absent; **required when any class is `out_of_sample` or `external`**. Historical-window and external-scenario selection use no seed. See [Seed resolution](#seed-resolution). |
+| `inflow`           | object            | `in_sample`   | Sampling scheme for hydro inflow. Object with `"scheme"` key.                                           |
+| `load`             | object            | `in_sample`   | Sampling scheme for bus load. Object with `"scheme"` key.                                               |
+| `ncs`              | object            | `in_sample`   | Sampling scheme for NCS availability. Object with `"scheme"` key.                                       |
+| `historical_years` | array \| object   | auto-discover | Restrict the pool of historical windows. When absent, every year of the history is a candidate. List (`[1940, 1953]`) or range (`{"from": 1940, "to": 2010}`). Each listed year names the window whose first study stage falls in that year's occurrence of its season; eligibility follows [Historical Window Pool](/math/scenario-generation/#historical-window-pool), and a year that fails it is dropped without a message. An empty result is the "no valid historical windows found" error ([Error Codes](/reference/error-codes/#stochasticpreparationerror)). The same pool supplies the `historical_residuals` openings. |
+| `openings`         | object            | `{"source": "generated"}` | Backward opening-tree source. `{"source": "generated"}` builds the tree internally; `{"source": "file"}` reads a user-supplied tree from `scenarios/noise_openings.parquet` (sampled selection only, and not with a `policy_graph.nodes[]` declared in `stages.json`; either combination is rejected when the case is validated). Training only. A declared file that is missing stops the run in its stochastic phase ([Opening-tree file missing](/reference/error-codes/#opening-tree-file-missing)). |
+
+Valid values for `"scheme"`: `"in_sample"`, `"out_of_sample"`, `"external"` for every class;
+`"historical"` for `inflow` only.
+
+Admission rules (checked at load; the messages are listed under
+[Scenario-source admission rules](/reference/error-codes/#scenario-source-admission-rules)):
+
+- `historical` is valid for `inflow` only — `load` or `ncs` on `historical` is rejected.
+- `seed` is required when any class is `out_of_sample` or `external`.
+- `historical_years` is rejected unless some class uses `historical`.
+- A `historical_years` range must have `from <= to`.
+- `openings` is accepted under `training.scenario_source` only; under
+  `simulation.scenario_source` it is rejected.
+
+For a class on the `"external"` scheme in training, these entities take the mean
+and standard deviation of the external file, per entity and stage:
+
+- the load buses of an external load class;
+- the NCS sources of an external NCS class;
+- the hydros of an external inflow class whose inflow model has AR order 0 and no
+  annual component.
+
+For an external class, `load_seasonal_stats.parquet` and
+`non_controllable_stats.parquet` are therefore optional; a load stats file that
+is present keeps its own rule of a row for every bus at every study stage.
+`scenarios/inflow_seasonal_stats.parquet` still requires, when present, a row
+for every hydro in service at each study stage, and an AR-order-0 hydro's rows
+in `inflow_seasonal_stats.parquet` are not used to sample.
+A hydro with AR order above 0 or an annual component
+keeps the mean, standard deviation and coefficients its files declare
+(or the ones estimated from `inflow_history.parquet` when the files omit them).
+An external column with σ = 0 is accepted for load, NCS and an inflow model of
+AR order 0 with no annual component, and rejected for an inflow model whose
+files declare an AR order above 0 or an annual component (see
+[Error Codes](/reference/error-codes/#deterministic-external-inflow-column-under-an-autoregressive-model)).
+
+Example — out-of-sample inflow with in-sample load and NCS:
+
+```json
+{
+  "training": {
+    "tree_seed": 42,
+    "selection": { "method": "sampled", "forward_passes": 50 },
+    "stopping_rules": [{ "type": "iteration_limit", "limit": 200 }],
+    "scenario_source": {
+      "seed": 99,
+      "inflow": { "scheme": "out_of_sample" },
+      "load": { "scheme": "in_sample" },
+      "ncs": { "scheme": "in_sample" }
+    }
+  }
+}
+```
+
+See [Scenario Generation §3](/math/scenario-generation#3-sampling-scheme-abstraction)
+for a full description of each scheme and of historical windows.
+
+### `training.stopping_rules`
+
+Each entry in `stopping_rules` is a JSON object with a `"type"` discriminator. Each rule's stop condition is defined in [Stopping Rules](/math/stopping-rules/).
+
+#### `iteration_limit`
+
+Stop after a fixed number of training iterations.
+
+```json
+{ "type": "iteration_limit", "limit": 200 }
+```
+
+| Field   | Type    | Description                               |
+| ------- | ------- | ------------------------------------------ |
+| `limit` | integer | Maximum number of SDDP iterations to run. |
+
+Use one `iteration_limit` entry: on a resumed run its `limit` counts the iterations of the earlier runs as well ([Train in slices](/running/policy-management/#train-in-slices)).
+
+#### `time_limit`
+
+Stop after a wall-clock time budget is exhausted.
+
+```json
+{ "type": "time_limit", "seconds": 3600.0 }
+```
+
+| Field     | Type  | Description                       |
+| --------- | ----- | ---------------------------------- |
+| `seconds` | number | Maximum training time in seconds. |
+
+The rule compares `seconds` with the wall-clock seconds since this run's training started, checked after each iteration.
+
+#### `bound_stalling`
+
+Stop when the relative improvement in the lower bound falls below a threshold.
+
+```json
+{ "type": "bound_stalling", "iterations": 20, "tolerance": 0.0001 }
+```
+
+| Field        | Type    | Description                                                                                              |
+| ------------ | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `iterations` | integer | Window size: the number of most recent recorded lower bounds compared.                                   |
+| `tolerance`  | number  | Relative improvement threshold. Training stops when the improvement over the window is below this value. |
+
+The rule cannot trigger before `iterations` bounds have been recorded; a resumed run continues the lower-bound series of its checkpoint, and a warm start begins with an empty series. With a positive `tolerance`, a window of `1` compares the bound with itself and triggers at the first iteration.
+
+#### `gap`
+
+Stop when the exact upper bound has closed to within tolerance of the lower
+bound. Requires an enumerated training forward pass, so the upper bound being
+compared is exact rather than a statistical estimate.
+
+```json
+{ "type": "gap", "tolerance": 1000.0, "relative_tolerance": 0.01 }
+```
+
+| Field                | Type  | Description                                                                                                                                        |
+| -------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tolerance`          | number | Optional. Absolute gap tolerance, in the units of the reported bounds.                                                                              |
+| `relative_tolerance` | number | Optional. Relative gap tolerance in **percent** — `0.01` means 0.01%, compared against `100 · gap / max(1, \|lower_bound\|)`.                       |
+
+At least one of `tolerance` / `relative_tolerance` must be present; a `gap`
+rule with neither field is rejected when the configuration is validated:
+`novomodelo validate` reports it as
+[`ConfigValidationError`](/reference/error-codes/#configvalidationerror), and
+`novomodelo run` prints the same message and exits `1`. When both are present, the
+two arms combine by **disjunction** — training stops as soon as
+either arm is satisfied, not both. The gap itself is
+`max(0, upper_bound − lower_bound)`.
+
+**Admissibility** — the `gap` rule is accepted only when both hold:
+
+- [`training.selection`](#trainingselection)`.method` is `"enumerated"` (the
+  forward pass walks every path of the policy graph, so the upper bound
+  is exact rather than a sampled estimate). Enumerated selection also
+  requires every node of the policy graph to carry a single opening.
+- The risk measure is **uniform across every stage**: either
+  `risk_measure: "expectation"` at every stage, or the same `cvar` measure
+  (identical `lambda` and `alpha`) at every stage in `stages.json` (a `cvar`
+  with `lambda: 0` is expectation-equivalent). Under a uniform `cvar` the
+  exact upper bound is computed as a nested, time-consistent risk recursion
+  over the enumerated tree, so it still brackets the risk-averse lower bound.
+
+Under `sampled` selection, with more than one opening on any node, or with a
+**stage-varying** measure (the risk measure differs across stages), the `gap` rule is rejected at study setup,
+by `novomodelo validate` and by `novomodelo run` before training (exit `1`). The
+exact-bound comparison the rule depends on is unavailable in those cases.
+
+:::note[Type-scoped fields]
+Each stopping rule object accepts only the fields belonging to its own `type`. Supplying a parameter that belongs to a different rule type (for example, `seconds` on an `iteration_limit` rule) is a load-time error. The same type-scoped strictness applies to `training.selection`, `simulation.selection`, and `training.parallelism.backward_scheduler`.
+:::
+
+### `training.stopping_mode`
+
+When multiple stopping rules are listed, `stopping_mode` controls how they
+combine:
+
+- `"any"` (default): stop when any one rule is satisfied.
+- `"all"`: stop when every rule other than `iteration_limit` is satisfied at the same iteration; the largest `iteration_limit` caps the run, and a smaller one has no effect.
+
+```json
+{
+  "training": {
+    "selection": { "method": "sampled", "forward_passes": 50 },
+    "stopping_mode": "all",
+    "stopping_rules": [
+      { "type": "iteration_limit", "limit": 500 },
+      { "type": "bound_stalling", "iterations": 20, "tolerance": 0.0001 }
+    ]
+  }
+}
+```
+
+### `training.parallelism`
+
+Groups the result-preserving worker-scheduling knobs that shape how backward-pass work is distributed across workers, alongside the algorithm-semantics fields at the `training` root.
+
+`backward_scheduler` selects how backward-pass work units are claimed by workers. It is tagged on `method`; supplying a field that does not belong to the selected method is a load-time error (`deny_unknown_fields`), not a silently ignored key.
+
+- `"by_scenario"` (default) — each parallel work unit is one whole trial point.
+
+  ```json
+  { "method": "by_scenario" }
+  ```
+
+- `"by_node"` — each parallel work unit is one `(trial point, opening block)` pair, claimed dynamically off a shared counter.
+
+  | Field        | Type               | Default | Description                                                                                                                                                                                |
+  | ------------ | ------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `block_size` | integer \| null    | `null`  | Openings per block. Absent resolves per stage to `⌈\|Ω_s\|/2⌉` (half the openings, rounded up); a set value is **silently** clamped to `min(\|Ω_s\|, block_size)` — no error, no warning. |
+
+  Two configurations are load-time errors, not silently accepted:
+
+  - `block_size` supplied under `"by_scenario"` — rejected (`deny_unknown_fields`).
+  - `block_size: 0` — rejected (minimum `1`).
+
+Within a stage, opening-blocks are claimed **hardest-first**: blocks are ranked by the previous iteration's mean simplex-pivot cost per `(stage, block)`, descending (ties broken by ascending block index; the first iteration, and any block with no prior data, sort last). This claim order changes only which worker processes which block, and when — it is **result-neutral**: the produced cut set and the training lower bound are identical to canonical-order claiming.
+
+:::caution[Interaction with Dynamic Cut Selection]
+If [Dynamic Cut Selection](#trainingcut_selection) is enabled (`cut_selection.selection.method = "dynamic"`), the `by_node` scheduler falls back to `by_scenario` scheduling from that method's `start_iteration` (default `2`) onward, so `by_node` has no effect from that point on. No warning is emitted. DCS is **not** the default — this caveat only applies when it is explicitly enabled. See [Performance Accelerators](/running/performance/) for the detailed tuning treatment of `by_node`.
+:::
+
+Example — default (`by_scenario`; no `parallelism` block needed):
+
+```json
+{
+  "training": {
+    "selection": { "method": "sampled", "forward_passes": 50 },
+    "stopping_rules": [{ "type": "iteration_limit", "limit": 100 }]
+  }
+}
+```
+
+Example — `by_node` with an explicit `block_size`:
+
+```json
+{
+  "training": {
+    "selection": { "method": "sampled", "forward_passes": 50 },
+    "stopping_rules": [{ "type": "iteration_limit", "limit": 100 }],
+    "parallelism": {
+      "backward_scheduler": { "method": "by_node", "block_size": 4 }
+    }
+  }
+}
+```
+
+For the backward pass this schedules work within, see [SDDP Algorithm §3.4](/math/sddp-algorithm#34-execution-model-and-performance-considerations).
+
+---
+
+### `training.cut_selection`
+
+Controls the row management pipeline for managing row pool growth. The
+pipeline has up to two stages: strategy-based selection and budget
+enforcement. Row management periodically scans the row pool and
+deactivates rows that are unlikely to improve the policy, reducing LP
+size without sacrificing convergence quality. For a detailed explanation
+of each stage, see
+[Performance Accelerators](/running/performance/#cut-management-pipeline) and, for the selection methods themselves, [Cut Management](/math/cut-management/).
+
+The block has two always-on knobs at the top level plus a `selection`
+sub-object that chooses the method and carries only that method's parameters.
+Omitting `selection` (or setting it to `null`) disables row selection — that is
+the default.
+
+#### Always-on fields
+
+| Field                    | Type    | Default | Description                                                                                                                                                           |
+| ------------------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `row_activity_tolerance` | number  | `0.0`   | Threshold for a constraint row to count as binding at a solution point: the row's dual value, not its magnitude, must be strictly greater than this. Rows whose dual is at or below it are treated as inactive in tracking. Separate from a selection method's `tie_tolerance` / `domination_tolerance`; this value only decides which rows count as binding for activity tracking (the `last_active_iter` / `active_count` the budget pass sorts on). |
+| `max_active_per_stage`   | integer | `null`  | Hard cap on active rows per stage LP, enforced after the selection method runs. `null` = no cap.                                                                      |
+| `selection`              | object  | `null`  | The active selection method and its parameters (see below). `null` (the default) disables row selection.                                                              |
+
+#### The `selection` object
+
+`selection.method` is the discriminator; each method exposes only its own
+parameters. Supplying a parameter that belongs to a different method is a config
+load error, and a misspelled method is rejected with the list of valid methods.
+
+- `"level1"` — evaluates all populated rows at every visited state and retains
+  any row whose value is within `tie_tolerance` of the per-state maximum at some
+  state.
+
+  | Field             | Type    | Default | Description                                                              |
+  | ----------------- | ------- | ------- | ------------------------------------------------------------------------ |
+  | `tie_tolerance`   | number  | `1e-10` | A row is active at a state when within this of the best row value there. |
+  | `check_frequency` | integer | `5`     | Iterations between periodic pruning checks. Must be `> 0`.               |
+
+- `"lml1"` — at each visited state, retains only the oldest eligible row within
+  `tie_tolerance` of the per-state maximum; the selected set is the union of
+  those per-state survivors. Same fields as `"level1"` (`tie_tolerance`,
+  `check_frequency`).
+
+- `"domination"` — applies the `"level1"` survival test with its own tolerance,
+  `domination_tolerance`, so the two keep the same rows when the two tolerances
+  are equal.
+
+  | Field                  | Type    | Default | Description                                                                      |
+  | ---------------------- | ------- | ------- | ---------------------------------------------------------------------------------- |
+  | `domination_tolerance` | number  | —       | A row survives if within this of the maximum at any visited state. **Required.** |
+  | `check_frequency`      | integer | `5`     | Iterations between periodic pruning checks. Must be `> 0`.                       |
+
+- `"dynamic"` — a per-solve lazy loop that loads only a small resident subset of
+  rows per solve while retaining the full pool. The resident set is seeded from
+  the most recent iterations, and each lazy-solve round adds the most-violated
+  candidate rows. The method is refused under an enumerated [`training.selection`](#trainingselection) at study setup, by `novomodelo validate` and by `novomodelo run` (exit `1`).
+
+  | Field                 | Type    | Default | Description                                                                                                                                                                                                                                                                              |
+  | --------------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `start_iteration`     | integer | `2`     | First 1-based iteration at which the lazy loop becomes active. Must be `>= 1`.                                                                                                                                                                                                           |
+  | `seed_window`         | integer | `5`     | Number of most-recent iterations whose rows seed the initial resident set. `0` is valid (seeds only the current iteration).                                                                                                                                                              |
+  | `candidate_recency`   | integer | `null`  | Only rows generated within the last `candidate_recency` iterations are scored. `null` (the default) is unbounded — every pool row is a candidate, so the window excludes no row. An integer `n` (must be `>= 1`) makes the loop deliberately inexact: rows older than the window are never added. |
+  | `max_added_per_round` | integer | `10`    | Maximum rows added per lazy-solve round. Must be `>= 1`.                                                                                                                                                                                                                                 |
+  | `violation_tolerance` | number  | `1e-10` | Violation tolerance for accepting a candidate row. Must be `> 0`.                                                                                                                                                                                                                        |
+
+The dynamic method is mutually exclusive with the periodic-pruning methods by
+construction — choosing it from the tagged `selection` block means none of
+`level1` / `lml1` / `domination` can run.
+
+Example with the dynamic method:
+
+```json
+{
+  "training": {
+    "cut_selection": {
+      "row_activity_tolerance": 1e-6,
+      "max_active_per_stage": 4000,
+      "selection": {
+        "method": "dynamic",
+        "start_iteration": 2,
+        "seed_window": 5,
+        "max_added_per_round": 10,
+        "violation_tolerance": 1e-10
+      }
+    }
+  }
+}
+```
+
+Example with the `level1` method and a per-stage budget:
+
+```json
+{
+  "training": {
+    "cut_selection": {
+      "row_activity_tolerance": 1e-6,
+      "max_active_per_stage": 500,
+      "selection": {
+        "method": "level1",
+        "tie_tolerance": 1e-10,
+        "check_frequency": 5
+      }
+    }
+  }
+}
+```
+
+### `training.solver`
+
+For the performance-tuning treatment of the same profiles, see
+[Per-Phase Solver Profiles](/running/performance/#per-phase-solver-profiles).
+
+The two `retry_*` keys have no effect ([Inert keys](#inert-keys)); `backward` and `forward` are optional per-phase LP solver profile overrides.
+
+| Field                       | Type              | Default | Description                                                             |
+| ---------------------------- | ----------------- | ------- | --------------------------------------------------------------------------- |
+| `retry_max_attempts`        | integer           | `5`     | Maximum solver retry attempts before propagating a hard error. No effect; see [Inert keys](#inert-keys). |
+| `retry_time_budget_seconds` | number            | `30.0`  | Total time budget in seconds across all retry attempts for one solve. No effect; see [Inert keys](#inert-keys). |
+| `backward`                  | object \| null    | `null`  | Per-phase LP solver profile override applied during the backward pass.  |
+| `forward`                   | object \| null    | `null`  | Per-phase LP solver profile override applied during the forward pass.   |
+
+`simulation.solver` (see [`simulation`](#simulation) below) is a third,
+independent sibling that takes the identical shape — `training.solver.backward`,
+`training.solver.forward`, and `simulation.solver` all resolve against one
+shared set of solver-profile fields, documented once below.
+
+#### Solver profile fields
+
+Every field is optional and defaults to `null`. An absent field leaves the
+corresponding option at **the phase's built-in tuned profile** — not the
+underlying solver's own default profile; the two differ (for example, all
+three phase profiles set `price` to `"row_hyper_sparse"`, while HiGHS's own
+default pricing is `"row"`). Resolution happens once at setup — before any LP
+template is built — and every rank resolves the same profile from the broadcast configuration.
+
+| Field | Type / values |
+| --- | --- |
+| `dual_edge_weight` | `"devex"` \| `"steepest_edge"` \| `"dantzig"` |
+| `scale` | `"off"` \| `"solver_scaling"` |
+| `price` | `"row"` \| `"row_hyper_sparse"` |
+| `presolve` | `"on"` \| `"off"` \| `"choose"` |
+| `primal_feasibility_tolerance` | number |
+| `dual_feasibility_tolerance` | number |
+| `simplex_update_limit` | integer |
+| `cost_perturbation` | number |
+| `refactor_error_tolerance` | number |
+| `factor_pivot_threshold` | number |
+| `use_warm_start` | boolean |
+| `steepest_edge_devex_fallback_threshold` | number |
+
+- `presolve` affects only a genuinely cold solve — a warm-started solve
+  skips presolve regardless of the setting.
+- `use_warm_start` is a **diagnostic** override, not an intended production
+  setting: setting it to `false` forces every solve in the phase cold.
+- `dual_edge_weight: "steepest_edge"` is a **request, not a guarantee** —
+  HiGHS silently falls back to Devex pricing once the dual steepest-edge
+  weight log-error exceeds `steepest_edge_devex_fallback_threshold`.
+
+:::caution[`scale: "solver_scaling"` compromises single-unscaling exactness]
+Setting `scale` to `"solver_scaling"` re-enables solver-side (Curtis–Reid)
+scaling on top of Novomodelo's own offline prescaler. Dual and cut-coefficient
+unscaling (see [LP Layout and Scaling §2.3](/math/lp-layout-and-scaling#23-row-scaling-geometric-mean))
+is exact only when the solve applies no scaling beyond that prescaler —
+enabling `solver_scaling` introduces a second scaling factor the
+single-unscaling identity does not account for.
+:::
+
+#### Validation
+
+Seven fields are range-checked; a value outside its range is rejected at
+study setup, by `novomodelo validate` and by `novomodelo run` (exit `1`), with an error naming the phase and the offending field:
+
+- `primal_feasibility_tolerance` — must be finite.
+- `dual_feasibility_tolerance` — must be finite and `>= 1e-10`.
+- `simplex_update_limit` — must be `<= 2147483647` (`i32::MAX`).
+- `cost_perturbation` — must be finite and `>= 0`.
+- `refactor_error_tolerance` — must be finite and `>= 0`.
+- `factor_pivot_threshold` — must be in `[8e-4, 0.5]`.
+- `steepest_edge_devex_fallback_threshold` — must be finite and `>= 1.0`.
+
+The closed enums (`dual_edge_weight`, `scale`, `price`, `presolve`) and
+`use_warm_start` are unconditionally valid — every variant is supported.
+
+#### CLP backend
+
+Per-phase solver-profile overrides are HiGHS-only. On the CLP backend, any
+field set under `backward`, `forward`, or `simulation.solver` is rejected at
+setup — deterministically, on every rank, before any LP template is built —
+with a named error identifying the phase and the field. An empty override
+block (for example `"solver": {}` or `"backward": {}`) and an absent block
+are both legal on CLP; only a field that is actually set triggers rejection.
+See [Installation — Choosing a Backend](/getting-started/installation) for
+backend selection and CLP's other limitations.
+
+Example — `training.solver.backward` with two overrides:
+
+```json
+{
+  "training": {
+    "solver": {
+      "retry_max_attempts": 5,
+      "retry_time_budget_seconds": 30.0,
+      "backward": {
+        "dual_edge_weight": "steepest_edge",
+        "factor_pivot_threshold": 0.05
+      }
+    }
+  }
+}
+```
+
+---
+
+## `simulation`
+
+Controls the optional post-training simulation phase.
+
+| Field       | Type    | Default | Description                                                                                                                                                                 |
+| ----------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`   | boolean | `false` | Enable the simulation phase after training.                                                                                                                                 |
+| `selection` | object \| null | `null`  | Scenario-selection method for the simulation phase — `sampled{num_scenarios}` or `enumerated{}` (see [`simulation.selection`](#simulationselection) below). Absent resolves to a sampled count of `2000`. |
+| `io_channel_capacity` | integer | `64` | Capacity of the queue between the simulation workers and the output writer; `0` behaves as `1`. |
+| `solver` | object \| null   | `null` | Solver profile of the simulation phase, with the same fields as a `training.solver` phase profile (see [`training.solver`](#trainingsolver)). Absent leaves the phase's built-in profile. |
+| `scenario_source` | object \| null   | `null` | Scenario source of the simulation phase; absent reuses `training.scenario_source` (see [`simulation.scenario_source`](#simulationscenario_source)). |
+
+### `simulation.selection`
+
+Chooses how many trajectories the post-training simulation runs, or whether
+it walks every path of the policy graph instead of sampling. Internally
+tagged on `method`, mirroring [`training.selection`](#trainingselection)
+above. Unlike `training.selection`, this field is **optional**: an absent
+`simulation.selection` resolves to a sampled count of `2000`.
+
+| Field           | Type    | Required          | Description                                                                                                       |
+| --------------- | ------- | ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `method`        | string  | Yes (if present)  | One of `"sampled"`, `"enumerated"`.                                                                               |
+| `num_scenarios` | integer | `sampled` only     | Number of independent Monte Carlo simulation scenarios to evaluate. Rejected under `"enumerated"`.               |
+
+When `simulation.enabled` is `false`, or the sampled `num_scenarios` count
+resolves to `0`, the simulation phase is skipped entirely.
+
+Under `enumerated`, the classes read the node's opening as in
+[`training.selection`](#trainingselection): a class that does not read it draws
+its own realization instead. The single-opening requirement of
+[`training.selection`](#trainingselection) applies here as well. When exactly one of training and simulation is `enumerated`, `novomodelo run` logs a setup warning naming the statistic the other phase lacks: with enumerated training and sampled simulation, the exact lower bound is available but the weighted census simulation statistics are not. The warning is advisory and the run proceeds; set both selections to `enumerated` for a census simulation.
+
+Example:
+
+```json
+{
+  "simulation": {
+    "enabled": true,
+    "selection": { "method": "sampled", "num_scenarios": 1000 }
+  }
+}
+```
+
+### `simulation.scenario_source`
+
+Controls where the forward-pass noise comes from during the simulation phase.
+When absent, simulation falls back to the scheme configured under
+`training.scenario_source`. This allows you to train with in-sample noise and
+simulate with a different scheme (for example, out-of-sample or historical)
+without changing the training schemes. For which seed each draw uses, and the
+admission rule for the simulation seed, see [Seed resolution](#seed-resolution).
+
+The fields are those of `training.scenario_source` except `openings`, which is
+training-only. When `simulation.scenario_source` is present it replaces the training
+source as a whole — a class it omits defaults to `in_sample`, not to the training
+value:
+
+| Field              | Type              | Default       | Description                                                                                             |
+| ------------------ | ----------------- | ------------- | ------------------------------------------------------------------------------------------------------- |
+| `seed`             | integer \| null   | `null`        | Forward seed of the simulation's out-of-sample draws; **required when a class of `simulation.scenario_source` is `out_of_sample` or `external`**. See [Seed resolution](#seed-resolution). |
+| `inflow`           | object            | `in_sample`   | Sampling scheme for hydro inflow. Object with `"scheme"` key.                                           |
+| `load`             | object            | `in_sample`   | Sampling scheme for bus load. Object with `"scheme"` key.                                               |
+| `ncs`              | object            | `in_sample`   | Sampling scheme for NCS availability. Object with `"scheme"` key.                                       |
+| `historical_years` | array \| object   | auto-discover | Restrict the pool of historical windows. List (`[1940, 1953]`) or range (`{"from": 1940, "to": 2010}`); each listed year is read as under [`training.scenario_source`](#trainingscenario_source). Takes effect only when the training inflow scheme is not `historical`: when training is also `historical`, the simulation replays the training pool and this key has no effect. |
+
+The scheme values and admission rules are those of [`training.scenario_source`](#trainingscenario_source); `openings` is rejected here.
+
+A worked configuration is under [Out-of-sample simulation](#out-of-sample-simulation).
+
+---
+
+## Seed resolution
+
+Three seeds in `config.json` drive the random draws: `training.tree_seed`,
+`training.scenario_source.seed` and `simulation.scenario_source.seed`. The
+forward-pass selection of historical windows and external
+scenarios uses no seed.
+
+- `training.tree_seed` seeds the opening tree and the in-sample opening draws.
+  When it is a non-null integer, Novomodelo uses `|seed|` (unsigned absolute value)
+  as the base seed for deterministic SipHash-1-3 noise generation, so a negative
+  seed `-n` acts as `n`. When it is absent or `null`, the seed is `42` and no
+  warning is printed. Set it explicitly to make the choice intentional and
+  visible to other users of the case directory.
+- `training.scenario_source.seed` is the forward seed of the out-of-sample
+  draws. Novomodelo applies the same absolute-value rule: it uses `|seed|`. Inflow
+  draws from it directly; load and NCS each derive their own stream from it, so
+  the three classes draw independent noise. It is required whenever any class
+  is `out_of_sample` or `external`.
+- The simulation's in-sample draws use `training.tree_seed`, and its
+  out-of-sample draws use `simulation.scenario_source.seed`, or
+  `training.scenario_source.seed` when `simulation.scenario_source` is absent;
+  `simulation.scenario_source.seed` is required when a class of
+  `simulation.scenario_source` is `out_of_sample` or `external`.
+- A `historical` trajectory's window and an `external` trajectory's scenario are
+  chosen by a deterministic hash of the iteration and trajectory indices that
+  takes no seed.
+- The window each `historical_residuals` opening reads is part of the opening
+  tree and follows `training.tree_seed`.
+
+With the same seeds and inputs, the draws are identical across runs.
+
+---
+
+## `modeling`
+
+Controls physical modeling options.
+
+| Field                   | Type   | Default        | Description                                                                                                                       |
+| ----------------------- | ------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `inflow_non_negativity` | object | `{}`           | Strategy for handling negative PAR model inflow draws.                                                                            |
+| `cost_scale_factor`     | number \| null | `1000000.0`    | Divisor on every non-θ objective coefficient (objective conditioning; does not alter the model, unlike this section's other fields). See below. |
+
+### `modeling.inflow_non_negativity`
+
+| Field    | Type   | Default     | Description                                                                   |
+| -------- | ------ | ----------- | ------------------------------------------------------------------------------- |
+| `method` | string | `"penalty"` | One of `"none"`, `"penalty"`, `"truncation"`, or `"truncation_with_penalty"`. |
+
+- `"none"` -- no treatment; negative inflows are passed through to the LP.
+- `"penalty"` -- adds a slack variable to the LP that absorbs negative inflow
+  realisations. The slack carries a per-hydro objective cost from
+  `penalties.json::hydro.inflow_nonnegativity_cost`.
+- `"truncation"` -- clamps negative PAR model draws to zero before applying noise.
+- `"truncation_with_penalty"` -- combines both: clamps the inflow to zero and adds
+  a slack variable (`>= 0`, the same column as under `"penalty"`) penalised by `penalties.json::hydro.inflow_nonnegativity_cost`,
+  providing a smooth backstop for extreme tail realisations.
+
+The four methods are defined in [Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity/).
+
+Example:
+
+```json
+{
+  "modeling": {
+    "inflow_non_negativity": {
+      "method": "penalty"
+    }
+  }
+}
+```
+
+### `modeling.cost_scale_factor`
+
+Divisor applied to every non-θ objective coefficient at LP template build
+time; every cost-domain output (objective value, duals, cut coefficients) is
+multiplied back by the same factor at every reporting boundary. This is
+**objective conditioning, not a physical modeling choice** — unlike
+`inflow_non_negativity` above, results are identical in exact arithmetic;
+changing it never alters the model.
+
+Defaults to `1000000.0` when absent or `null`. Must be finite and `> 0`; a
+value outside `[1.0, 1e12]` is **accepted but logs an advisory warning** -- it
+is not rejected.
+
+:::caution[The dual-tolerance trap]
+The effective dual tolerance in currency units is `dual_feasibility_tolerance
+× cost_scale_factor`. Raising `cost_scale_factor` without lowering
+`dual_feasibility_tolerance` proportionally loosens optimality in currency
+terms, even though the configured tolerance value itself is unchanged.
+:::
+
+Example:
+
+```json
+{
+  "modeling": {
+    "cost_scale_factor": 1000000.0
+  }
+}
+```
+
+For the methodology, see
+[LP Layout and Scaling §2.1](/math/lp-layout-and-scaling#21-cost-scaling).
+
+---
+
+## `estimation`
+
+Controls the PAR(p) model estimation pipeline of [PAR(p) Inflow Model](/math/par-inflow-model/). When the case provides
+`inflow_history.parquet`, Novomodelo can automatically estimate AR coefficients
+instead of requiring pre-computed `inflow_ar_coefficients.parquet`.
+
+| Field                         | Type    | Default  | Description                                                                                       |
+| ----------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `max_order`                   | integer | `6`      | Maximum lag order considered during autoregressive model fitting.                                 |
+| `order_selection`             | string  | `"pacf"` | One of `"pacf"`, `"pacf_annual"`. Order selection criterion: PACF-based, or PACF with an annual component. |
+| `min_observations_per_season` | integer | `30`     | Recommended minimum number of fully covered stage occurrences of each season, per hydro. An occurrence is a stage in `stages.json` (study or pre-study) that carries the season; it counts only when the rows of `inflow_history.parquet` that start inside its window cover all of it, so history outside every stage window is not counted. When estimation runs, a (hydro, season) group with at least one such occurrence but fewer than this draws a [`ModelQuality`](/reference/error-codes/#modelquality) warning naming the hydro and the season, and estimation proceeds. |
+| `max_coefficient_magnitude`   | number \| null | `null`   | Safety net: reduce to order 0 if any coefficient exceeds this magnitude.                          |
+
+Example:
+
+```json
+{
+  "estimation": {
+    "max_order": 6,
+    "order_selection": "pacf",
+    "min_observations_per_season": 30
+  }
+}
+```
+
+Setting `"order_selection": "pacf_annual"` activates the annual component extension. When
+enabled, the estimation pipeline performs four additional steps beyond the classical PAR
+path: (1) the Yule-Walker system is extended to include a cross-correlation term between
+the current-season inflow and the rolling 12-month average; (2) per-season sample
+statistics (mean and standard deviation) of that rolling average are computed for each
+hydro plant; (3) the coefficient, mean, and standard deviation are written to
+`inflow_annual_component.parquet` under `output/stochastic/` when `exports.stochastic` is `true`; and (4) the lag stride used
+when building the LP noise columns is widened to accommodate the extra annual term. Use
+this option when your inflow series shows persistence that extends beyond the
+standard seasonal lag window.
+
+---
+
+## `policy`
+
+Controls policy persistence (checkpoint saving and warm-start loading).
+
+| Field                    | Type                                     | Default      | Description                                                                                                                                 |
+| ------------------------ | ---------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`                   | string                                   | `"./policy"` | Policy directory, resolved against the run's output directory (`<case>/output` by default); training writes the checkpoint there and warm-start, resume and simulation-only read it. An empty path, `.`, `..` or a path with no named component is refused when the configuration loads; after resolution, and through a symbolic link's target, a path that is the output directory or one of its ancestors, that names or contains a directory whose files a run replaces (such as `simulation/solver` or `training/solver`), or that lies inside one a run removes whole (such as `simulation/costs`) is refused. The checkpoint's files are listed under [Policy Checkpoint](/reference/output/policy/). |
+| `mode`                   | string                                   | `"fresh"`    | One of `"fresh"`, `"warm_start"`, `"resume"`. Initialization mode. `"fresh"` starts from scratch; `"warm_start"` loads cuts from a previous run; `"resume"` continues an interrupted run. |
+| `boundary`               | object \| null                           | `null`       | Terminal boundary cut configuration for coupling with an outer model's FCF. See below.                                                      |
+
+### `policy.checkpointing`
+
+`enabled`, `initial_iteration` and `interval_iterations` schedule periodic checkpoints ([Policy Management — Checkpointing Configuration](/running/policy-management/#checkpointing-configuration)); `store_basis` and `compress` have no effect ([Inert keys](#inert-keys)).
+
+| Field                 | Type    | Default | Description                                                         |
+| --------------------- | ------- | ------- | ------------------------------------------------------------------- |
+| `enabled`             | boolean \| null | `null`  | `true` turns periodic checkpoints on; `null` or `false` leaves them off. |
+| `initial_iteration`   | integer \| null | `null`  | First iteration to write a checkpoint, in absolute iteration numbers; `null` means `interval_iterations`. |
+| `interval_iterations` | integer \| null | `null`  | Iterations between checkpoints; required and at least `1` when `enabled` is `true`. |
+| `store_basis`         | boolean \| null | `null`  | Switch for including the LP basis in the checkpoint. No effect; see [Inert keys](#inert-keys). |
+| `compress`            | boolean \| null | `null`  | Switch for compressing the checkpoint files. No effect; see [Inert keys](#inert-keys). |
+
+### `policy.boundary`
+
+Optional configuration for loading terminal-stage boundary cuts from a
+different Novomodelo policy checkpoint. When present, the solver loads cuts from
+the source checkpoint and injects them as fixed boundary conditions at the
+terminal stage of the current study. The imported cuts are not updated by
+training — they remain fixed throughout.
+
+This enables Novomodelo-to-Novomodelo model coupling: an upstream study produces a
+policy checkpoint, and a chained study imports one pool of that checkpoint as
+its fixed terminal function
+([Post-Study Boundary & Chained Studies §5](/math/post-study-boundary#5-chained-studies)).
+
+The source pool is selected automatically by the current study's **terminal
+boundary date** (the last non-negative stage's `end_date`) — there is no
+stage-index knob. `strict` governs a source that prices _more_ than this study
+models.
+
+| Field    | Type    | Default | Description                                                                                                                                                        |
+| -------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `path`   | string  | —       | Path to the source checkpoint directory, resolved against this case directory (an absolute path is used as is), so a sibling study's checkpoint is `../<study>/output/policy`. |
+| `strict` | boolean | `false` | Reject the load when the source prices an entity or commitment this study does not model. `false` drops the surplus (recorded in the reconciliation report) and loads. |
+
+Example — load an upstream study's policy as the terminal boundary:
+
+```json
+{
+  "policy": {
+    "mode": "fresh",
+    "boundary": {
+      "path": "../upstream_study/output/policy",
+      "strict": false
+    }
+  }
+}
+```
+
+Running `novomodelo validate --json` on a case that configures a boundary emits the
+selected date and the per-family reconciliation report as one object — the
+success shape carries `configured`, `boundary_date`, and `report`:
+
+```json
+{
+  "configured": true,
+  "boundary_date": "2027-12-01",
+  "report": {
+    "reconciled": true,
+    "storage": { "copy": 44, "fan_out": 0, "straddling": 0, "default_zero": 0, "dropped_source": 0 },
+    "inflow_lag": { "copy": 44, "fan_out": 0, "straddling": 0, "default_zero": 0, "dropped_source": 0 },
+    "transit_bucket": { "copy": 6, "fan_out": 0, "straddling": 0, "default_zero": 0, "dropped_source": 0 },
+    "anticipated": { "copy": 3, "fan_out": 0, "straddling": 0, "default_zero": 0, "dropped_source": 1 },
+    "anticipated_coverage": { "source_interval_count": 4 },
+    "other_identity": { "copy": 0, "fan_out": 0, "straddling": 0, "default_zero": 0, "dropped_source": 0 },
+    "dropped_source_slots": [
+      { "family": "anticipated", "entity_id": 17, "subindex": 0, "interval": ["2028-01-01", "2028-02-01"], "reference_date": null }
+    ],
+    "straddling_slots": []
+  }
+}
+```
+
+Here one anticipated-commitment slot the source priced (plant `17`, delivering
+in January 2028) is not modelled by this study, so it is dropped and counted
+under `anticipated.dropped_source`; with `strict: true` that same drop would
+reject the load instead.
+
+See [Policy Management — Boundary Cuts](/running/policy-management/#boundary-cuts)
+for a full explanation of the coupling workflow, and
+[Compatibility requirements](/running/policy-management/#compatibility-requirements)
+for the date-selection and subset rejects.
+
+---
+
+## `upper_bound_evaluation`
+
+The loader accepts the block and checks its keys and value types; no part of
+the run reads it, so its fields have no effect ([Inert keys](#inert-keys)).
+
+| Name                                              | Type            | Required | Default | Units | Description                                                      |
+| ------------------------------------------------- | --------------- | -------- | ------- | ----- | ---------------------------------------------------------------- |
+| `upper_bound_evaluation.enabled`                  | boolean \| null | No       | `null`  | —     | Accepted; has no effect. Enabled flag.                           |
+| `upper_bound_evaluation.initial_iteration`        | integer \| null | No       | `null`  | —     | Accepted; has no effect. Initial iteration.                      |
+| `upper_bound_evaluation.interval_iterations`      | integer \| null | No       | `null`  | —     | Accepted; has no effect. Interval, in iterations.                |
+| `upper_bound_evaluation.lipschitz.mode`           | string \| null  | No       | `null`  | —     | Accepted; has no effect. Lipschitz mode; any string is accepted. |
+| `upper_bound_evaluation.lipschitz.fallback_value` | number \| null  | No       | `null`  | —     | Accepted; has no effect. Lipschitz fallback value.               |
+| `upper_bound_evaluation.lipschitz.scale_factor`   | number \| null  | No       | `null`  | —     | Accepted; has no effect. Lipschitz scale factor.                 |
+
+---
+
+## Temporal Resolution
+
+No `config.json` key sets the temporal resolution: each stage's resolution comes
+from its dates and `season_id` in `stages.json`.
+[Multi-Resolution Studies](/math/multi-resolution-studies/) explains how stages
+of different lengths share noise, aggregate history and change lag resolution;
+[Post-Study Boundary & Chained Studies](/math/post-study-boundary/) couples two
+studies, and [Block Formulation Variants](/math/block-formulations/) gives
+weekly dispatch inside a monthly stage through chronological blocks.
+
+### Mixed-resolution behaviour
+
+- Stages share a noise group when they have the same `season_id` and their
+  start dates fall in the same calendar year. The opening tree copies a group's
+  openings only between adjacent stages of the group; an `out_of_sample` forward
+  class gives every stage of the group the same draw, adjacent or not.
+- When stages move from monthly to quarterly, the lag rebuild
+  takes each monthly stage's month from its season's `month_start` and averages the monthly
+  values over calendar quarters (January-March, April-June, July-September,
+  October-December), whatever months the quarterly seasons declare. The rebuild
+  runs at the first stage whose season spans a calendar quarter right after a
+  stage whose season spans a calendar month, by the spans the seasons declare:
+  that stage reads the
+  monthly lags, and the averaged quarterly lags are first read by the stage
+  after it.
+- Under a custom season map whose seasons overlap (monthly and quarterly
+  seasons covering the same months), an observation dated inside a stage of
+  `stages.json` (a study stage, or a pre-study stage with a `season_id`) goes to
+  that stage's season, and one dated outside every such stage goes to the
+  lowest-id season that covers its date; a season that never has the lowest id
+  therefore receives observations only from inside the `stages.json` stages of
+  that season.
+- On a stage that does not close its lag period, such as a weekly stage inside a
+  month, the outgoing inflow lags are the incoming ones, and on the stage that
+  runs the monthly-to-quarterly rebuild they are the averaged quarterly lags,
+  while a cut on the inflow-lag components maps lag 1 to the stage's own inflow
+  and every later lag ℓ to incoming lag ℓ − 1. With such stages and a PAR order
+  of 1 or more, the lower bound is not guaranteed to stay below the upper bound,
+  even with inflow lags in the cut projection
+  ([`stages[].state_variables`](/math/cut-management/#stagesstate_variables--cut-projection)).
+
+---
+
+## `exports`
+
+Controls which outputs are written to the results directory.
+
+| Field                   | Type    | Default | Description                                                                                                            |
+| ----------------------- | ------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `states`                | boolean | `false` | Write visited forward-pass trial points to the policy checkpoint (FlatBuffers).                                        |
+| `stochastic`            | boolean | `false` | Export stochastic preprocessing artifacts to `output/stochastic/`.                                                     |
+| `fpha_deviation_points` | boolean | `false` | Export the per-grid-point computed-FPHA fit-deviation table to `output/hydro_models/fpha_deviation_points.parquet`. Opt-in because it emits one row per (hydro, stage, V, Q) sample point at spillage = 0. |
+
+---
+
+## Inert keys
+
+These keys are accepted when `config.json` loads — their names and value types are checked — and no part of a run reads them, so setting them changes nothing.
+
+| Name                                        | Default | What a run does instead                                                                                                                                                         |
+| ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `policy.checkpointing.store_basis`          | `null`  | A checkpoint written by a training that ended without failure carries its LP bases.                                                                                                           |
+| `policy.checkpointing.compress`             | `null`  | Checkpoint files are written uncompressed.                                                                                                           |
+| `training.solver.retry_max_attempts`        | `5`     | A solve that does not reach optimality escalates through the solver's built-in retry sequence, not this setting ([Solver Safeguards](/running/performance/#solver-safeguards)). |
+| `training.solver.retry_time_budget_seconds` | `30.0`  | A solve that does not reach optimality escalates through the solver's built-in retry sequence, not this setting ([Solver Safeguards](/running/performance/#solver-safeguards)). |
+| `upper_bound_evaluation`                    | `{}`    | Nothing reads the block: every key in it, the `lipschitz` keys included, has no effect.                                                                                         |
+
+---
+
+## Recipes
+
+Each recipe is a `config.json` excerpt that merges into a case: a key in the excerpt replaces the same key in the case, an array included. The rules behind its keys live in the sections it links.
+
+### Converge to a gap
+
+Train with an enumerated forward pass and stop when the exact gap closes. `relative_tolerance` is a percent: `0.01` stops at a 0.01% gap. The `iteration_limit` entry ends the run if the gap does not close first; a sampled simulation after it logs an advisory setup warning ([`simulation.selection`](#simulationselection)). The [`gap`](#gap) rule is admitted only under `enumerated` selection with the same risk measure at every stage (the default `expectation` qualifies), and every stage declares a single opening (`num_openings: 1` in `stages.json`), because enumerated selection requires it ([`training.selection`](#trainingselection)).
+
+{/* capture: novomodelo validate case (exit 0); novomodelo run case --output <dir> (exit 0) | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: 1dtoy + config.json training.selection and training.stopping_rules as below, stages[].num_openings: 1 on every stage */}
+
+```json
+{
+  "training": {
+    "selection": { "method": "enumerated" },
+    "stopping_rules": [
+      { "type": "gap", "relative_tolerance": 0.01 },
+      { "type": "iteration_limit", "limit": 50 }
+    ]
+  }
+}
+```
+
+### Time-boxed run
+
+Bound a run by wall-clock time. Under the default [`stopping_mode`](#trainingstopping_mode) (`"any"`), training stops at the first rule that is satisfied, so pair [`time_limit`](#time_limit) with an `iteration_limit` above what the time allows: training never runs past the largest `iteration_limit` in the set.
+
+{/* capture: novomodelo validate case (exit 0) | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: 1dtoy + config.json training.stopping_rules as below (one iteration_limit entry, replacing the case's 128) */}
+
+```json
+{
+  "training": {
+    "stopping_rules": [
+      { "type": "time_limit", "seconds": 600.0 },
+      { "type": "iteration_limit", "limit": 1000 }
+    ]
+  }
+}
+```
+
+### Out-of-sample simulation
+
+Train with in-sample noise and simulate with out-of-sample inflow. The `simulation.scenario_source.seed` (77) drives the simulation's out-of-sample draws ([Seed resolution](#seed-resolution)). The `simulation.scenario_source` fields are listed under [`simulation.scenario_source`](#simulationscenario_source).
+
+{/* capture: novomodelo validate case (exit 0) | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: 1dtoy + config.json training.selection, training.stopping_rules, training.scenario_source and simulation as below */}
+
+```json
+{
+  "training": {
+    "selection": { "method": "sampled", "forward_passes": 50 },
+    "stopping_rules": [{ "type": "iteration_limit", "limit": 200 }],
+    "scenario_source": { "seed": 77 }
+  },
+  "simulation": {
+    "enabled": true,
+    "selection": { "method": "sampled", "num_scenarios": 2000 },
+    "scenario_source": {
+      "seed": 77,
+      "inflow": { "scheme": "out_of_sample" },
+      "load": { "scheme": "in_sample" },
+      "ncs": { "scheme": "in_sample" }
+    }
+  }
+}
+```
+
+---
+
+## Full Example
+
+```json
+{
+  "$schema": "https://docs.novomodelo.invalid/schemas/config.schema.json",
+  "training": {
+    "tree_seed": 42,
+    "selection": { "method": "sampled", "forward_passes": 50 },
+    "stopping_rules": [
+      { "type": "iteration_limit", "limit": 200 },
+      { "type": "bound_stalling", "iterations": 20, "tolerance": 0.0001 }
+    ],
+    "stopping_mode": "any",
+    "scenario_source": {
+      "seed": 99,
+      "inflow": { "scheme": "out_of_sample" },
+      "load": { "scheme": "in_sample" },
+      "ncs": { "scheme": "in_sample" }
+    },
+    "cut_selection": {
+      "row_activity_tolerance": 1e-6,
+      "max_active_per_stage": null,
+      "selection": {
+        "method": "level1",
+        "tie_tolerance": 1e-10,
+        "check_frequency": 5
+      }
+    }
+  },
+  "modeling": {
+    "inflow_non_negativity": {
+      "method": "penalty"
+    }
+  },
+  "simulation": {
+    "enabled": true,
+    "selection": { "method": "sampled", "num_scenarios": 2000 }
+  },
+  "policy": {
+    "path": "./policy",
+    "mode": "fresh"
+  },
+  "exports": {
+    "states": false,
+    "stochastic": false
+  }
+}
+```
+
+---
+
+## See Also
+
+- [Case Format](/reference/case-format/) — full schema for all input files
+- [Running Studies](/running/running-studies/) — end-to-end workflow guide
+- [Error Codes](/reference/error-codes/) — validation errors including `SchemaViolation` for config fields
+- [Multi-Resolution Studies](/math/multi-resolution-studies/) — how stage resolution affects PAR noise sharing (noise groups) and observation aggregation

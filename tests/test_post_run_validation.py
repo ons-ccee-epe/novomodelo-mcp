@@ -1,7 +1,7 @@
 """Integracao das tools de compare com a validacao de entrada (pytest).
 
 Garante que uma entrada invalida (tolerance/format) e barrada ANTES de invocar
-o cobre-bridge: o envelope de erro e retornado e ``run_bridge`` nao e chamado.
+o novomodelo-bridge: o envelope de erro e retornado e ``run_bridge`` nao e chamado.
 Registra as tools num ``FastMCP`` real e recupera a funcao via ToolManager,
 com ``run_bridge`` substituido por um espiao (nao depende de duckdb/polars).
 """
@@ -9,9 +9,9 @@ import pytest
 
 from mcp.server.fastmcp import FastMCP
 
-from cobre_mcp.config import load_settings
-from cobre_mcp.tools import post_run as post_run_mod
-from cobre_mcp.tools.post_run import register_post_run
+from novomodelo_mcp.config import load_settings
+from novomodelo_mcp.tools import post_run as post_run_mod
+from novomodelo_mcp.tools.post_run import register_post_run
 
 
 def _build(monkeypatch):
@@ -24,7 +24,7 @@ def _build(monkeypatch):
                 "status": "ok", "summary": {}, "diagnostics": [], "exit_code": 0}
 
     monkeypatch.setattr(post_run_mod, "run_bridge", _spy)
-    monkeypatch.delenv("COBRE_MCP_WORKSPACE", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
 
     mcp = FastMCP("t")
     register_post_run(mcp, load_settings())
@@ -38,7 +38,7 @@ def _fn(mcp, name):
 @pytest.mark.parametrize("tool", ["bridge_compare_newave", "bridge_compare_decomp"])
 def test_tolerance_invalida_nao_chama_bridge(monkeypatch, tool):
     mcp, calls = _build(monkeypatch)
-    env = _fn(mcp, tool)("/tmp/src", "/tmp/cobre", tolerance=9.0)
+    env = _fn(mcp, tool)("/tmp/src", "/tmp/novomodelo", tolerance=9.0)
     assert env["status"] == "error"
     assert calls["n"] == 0, "run_bridge nao deve ser chamado com entrada invalida"
 
@@ -46,7 +46,7 @@ def test_tolerance_invalida_nao_chama_bridge(monkeypatch, tool):
 @pytest.mark.parametrize("tool", ["bridge_compare_newave", "bridge_compare_decomp"])
 def test_fmt_invalido_nao_chama_bridge(monkeypatch, tool):
     mcp, calls = _build(monkeypatch)
-    env = _fn(mcp, tool)("/tmp/src", "/tmp/cobre", fmt="xml")
+    env = _fn(mcp, tool)("/tmp/src", "/tmp/novomodelo", fmt="xml")
     assert env["status"] == "error"
     assert calls["n"] == 0
 
@@ -54,6 +54,21 @@ def test_fmt_invalido_nao_chama_bridge(monkeypatch, tool):
 @pytest.mark.parametrize("tool", ["bridge_compare_newave", "bridge_compare_decomp"])
 def test_entrada_valida_chama_bridge(monkeypatch, tool):
     mcp, calls = _build(monkeypatch)
-    env = _fn(mcp, tool)("/tmp/src", "/tmp/cobre", tolerance=0.5, fmt="json")
+    env = _fn(mcp, tool)("/tmp/src", "/tmp/novomodelo", tolerance=0.5, fmt="json")
     assert calls["n"] == 1, "run_bridge deve ser chamado quando a entrada e valida"
     assert env["status"] == "ok"
+
+
+@pytest.mark.parametrize("tool", ["bridge_compare_newave", "bridge_compare_decomp"])
+def test_segundo_argumento_e_a_pasta_de_saida(monkeypatch, tool):
+    """O bridge recebe a pasta de SAÍDA do run (`novomodelo_output_dir`), não a do caso.
+
+    Regressão: no rename o parâmetro virou `case_dir`, nome que induzia o agente a
+    passar a pasta do caso.
+    """
+    import inspect
+
+    mcp, _ = _build(monkeypatch)
+    params = list(inspect.signature(_fn(mcp, tool)).parameters)
+    assert params[1] == "output_dir"
+    assert "case_dir" not in params

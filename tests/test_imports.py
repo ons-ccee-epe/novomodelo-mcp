@@ -7,9 +7,9 @@ o CI garante via `uv sync`.
 import importlib
 import pkgutil
 
-import cobre_mcp
+import novomodelo_mcp
 
 
 def test_all_submodules_import():
-    for mod in pkgutil.walk_packages(cobre_mcp.__path__, cobre_mcp.__name__ + "."):
+    for mod in pkgutil.walk_packages(novomodelo_mcp.__path__, novomodelo_mcp.__name__ + "."):
         importlib.import_module(mod.name)

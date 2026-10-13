@@ -21,7 +21,7 @@ build/
 htmlcov/
 
 # Documento interno de revisão
-REVISAO_COBRE_MCP.md
+REVISAO_NOVOMODELO_MCP.md
 
 # scratch local
 _scratch_ignore/

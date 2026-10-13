@@ -9,24 +9,24 @@ inclusion: always
 # <repositório anterior> — Agent Guidelines
 
 <repositório anterior> is an offline MCP (Model Context Protocol) server that wraps the
-existing `cobre-bridge` and `cobre` CLIs. Each tool envelopes one CLI subcommand
-(with `--json`) or an official `cobre-python` binding and relays the result.
+existing `novomodelo-bridge` and `novomodelo` CLIs. Each tool envelopes one CLI subcommand
+(with `--json`) or an official `novomodelo-python` binding and relays the result.
 `README.md` is the source of truth for what the server does and how it is laid
 out; this file adds only what an agent working in this checkout needs beyond it.
 
 ## Read first
 
 - `README.md` — tools, environment variables, security model, project layout.
-- `src/cobre_mcp/server.py` — how the FastMCP server boots and registers tools.
-- `src/cobre_mcp/adapters/` — the shared transport pieces (CLI runners, path
+- `src/novomodelo_mcp/server.py` — how the FastMCP server boots and registers tools.
+- `src/novomodelo_mcp/adapters/` — the shared transport pieces (CLI runners, path
   guard, error envelope).
-- `src/cobre_mcp/tools/` — the registered MCP tools, grouped by phase.
+- `src/novomodelo_mcp/tools/` — the registered MCP tools, grouped by phase.
 
 ## Quick commands
 
 ```bash
 uv sync --extra dev                 # install (use --system-certs behind a corporate CA)
-uv run cobre-mcp                     # start the server on stdio
+uv run novomodelo-mcp                     # start the server on stdio
 python3 tests/smoke.py               # stdlib smoke tests (offline, no deps)
 python3 tests/smoke_deck.py && python3 tests/smoke_results.py && python3 tests/smoke_paths.py
 uv run pytest                        # full suite (after uv sync)
@@ -51,9 +51,9 @@ read and are the authoritative statements; do not restate them here:
 These are non-negotiable. Fix them before any commit.
 
 - **Thin facade, no business logic.** A tool envelopes a CLI subcommand (with
-  `--json`) or a `cobre-python` binding and relays the result. Never reimplement
+  `--json`) or a `novomodelo-python` binding and relays the result. Never reimplement
   conversion, validation, comparison, or solving inside this server. New
-  behaviour belongs in `cobre` or `cobre-bridge`, not here.
+  behaviour belongs in `novomodelo` or `novomodelo-bridge`, not here.
 - **Offline only.** The server speaks stdio and makes no outbound network
   request. Tests run offline and must stay that way. A tool that needs the
   network is out of scope.
@@ -63,11 +63,11 @@ These are non-negotiable. Fix them before any commit.
   failures (missing binary, timeout, non-JSON output) become envelopes.
 - **Path guard is fail-closed.** Every tool that takes a path calls
   `ensure_in_workspace(...)` before touching the filesystem. With
-  `COBRE_MCP_WORKSPACE` set, any path outside the allowed roots is refused;
+  `NOVOMODELO_MCP_WORKSPACE` set, any path outside the allowed roots is refused;
   `resolve()` neutralises symlinks and `..`. Never bypass the guard, and never
   weaken it to fail-open.
 - **Force writes are gated.** A schema-violating write (`force=True`) requires
-  `COBRE_MCP_ALLOW_FORCE=1`. Do not remove that gate.
+  `NOVOMODELO_MCP_ALLOW_FORCE=1`. Do not remove that gate.
 - **NEWAVE/DECOMP tool parity.** A tool added for one conversion track ships for
   the other in the same change, mirroring the existing `*_newave` / `*_decomp`
   pairs — or the asymmetry is recorded.
@@ -83,7 +83,7 @@ These are non-negotiable. Fix them before any commit.
 
 | Resource          | Location                     | Purpose                                  |
 | ----------------- | ---------------------------- | ---------------------------------------- |
-| Server entry      | `src/cobre_mcp/server.py`    | FastMCP boot and tool registration       |
-| Shared transport  | `src/cobre_mcp/adapters/`    | CLI runners, path guard, error envelope  |
-| Tools             | `src/cobre_mcp/tools/`       | Registered MCP tools, grouped by phase   |
+| Server entry      | `src/novomodelo_mcp/server.py`    | FastMCP boot and tool registration       |
+| Shared transport  | `src/novomodelo_mcp/adapters/`    | CLI runners, path guard, error envelope  |
+| Tools             | `src/novomodelo_mcp/tools/`       | Registered MCP tools, grouped by phase   |
 | Security model    | `README.md` (Segurança)      | Workspace guard and force-write gate     |

@@ -1,0 +1,453 @@
+---
+title: Running Studies
+description: End-to-end workflow for running an SDDP study with `novomodelo run` — preparing a case, terminal output, checking results, reusing a saved policy, and common workflows.
+---
+
+Take a study from case to results: scaffold or prepare the case, validate it,
+run it with `novomodelo run`, and read what the run wrote.
+
+---
+
+## Preparing a Case Directory
+
+To start from a working example, scaffold the `1dtoy` template:
+
+```bash
+novomodelo init --template 1dtoy my_study
+```
+
+It writes eleven files: the eight required files in the structure shown below,
+`system/hydro_production_models.json`, and the two
+`scenarios/*_seasonal_stats.parquet` files. A non-empty target directory is
+refused unless `--force` is given.
+
+A case directory is a folder containing all input data files required by Novomodelo.
+The minimum required structure is:
+
+```
+my_study/
+  config.json
+  penalties.json
+  stages.json
+  initial_conditions.json
+  system/
+    buses.json
+    hydros.json
+    thermals.json
+    lines.json
+```
+
+All eight files are required. Before running, validate the input:
+
+```bash
+novomodelo validate /path/to/my_study
+```
+
+Successful validation prints entity counts and exits with code 0:
+
+{/* capture: novomodelo validate my_study | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: novomodelo init --template 1dtoy my_study, no diff; run from an empty working directory with a relative case path; exit 0, stderr empty */}
+
+```text
+Valid case: 1 buses, 1 hydros, 2 thermals, 0 lines
+```
+
+When validation detects errors — such as a missing required field or a value
+out of range — it prints the error count, then one `error:` line per error
+(kind, file, and field), and exits with code 1. In the case below, the first
+hydro has no `reservoir` field and a `max_turbined_m3s` of `-5.0`. The report
+shows only the missing field, because the read of `system/hydros.json` stops
+there before any value is checked. The negative value is reported once the
+field is restored:
+
+{/* capture: novomodelo validate my_study 2>&1 | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: temporary 1dtoy derivative (novomodelo init --template 1dtoy; system/hydros.json edited with jq: .hydros[0] |= del(.reservoir), then .hydros[0].generation.max_turbined_m3s = -5.0); run from an empty working directory with a relative case path; exit 1, stderr empty */}
+
+```text
+Validation: 1 errors, 0 warnings in my_study
+error: [SchemaViolation] system/hydros.json: field reservoir: missing field `reservoir` at line 31 column 5
+```
+
+Fix any reported errors before proceeding. See
+[Case Format](/reference/case-format/) for the full schema.
+
+---
+
+## Running `novomodelo run`
+
+```bash
+novomodelo run /path/to/my_study
+```
+
+By default, results are written to `<CASE_DIR>/output/`. To specify a different
+location:
+
+```bash
+novomodelo run /path/to/my_study --output /path/to/results
+```
+
+Before it writes a phase's outputs, `novomodelo run`
+removes the earlier run's outputs of that phase, as listed under
+[Output Format — Success markers](/reference/output/#success-markers); every
+other file stays until a run rewrites it, so the `stochastic/` export of an
+earlier run that set `exports.stochastic` remains. Use a fresh `--output` directory, or delete the old one,
+before comparing runs. Warm-start, resume, and simulation-only runs read the
+policy checkpoint from `policy.path` under the output directory, so keep that
+checkpoint when you plan one of those runs ([Policy Management](/running/policy-management/)).
+
+### Lifecycle Stages
+
+The figure follows one study from its case directory to its outputs; the three arrows out of the policy checkpoint are the ways to reuse it.
+
+```d2
+direction: down
+
+case: "Case directory" {shape: parallelogram}
+validate: "novomodelo validate\noptional check, no solve"
+load: "novomodelo run: load\nchecks and sets up the case"
+train: "Train\nbuilds the policy"
+simulate: "Simulate\nwhen enabled"
+ckpt: "Policy checkpoint\npolicy.path" {shape: cylinder}
+out: "Outputs\ntables and metadata" {shape: parallelogram}
+train2: "Later run\ntrains from it"
+simulate2: "Later run\nsimulates it"
+other: "Another study\nterminal boundary"
+
+case -> validate
+case -> load
+load -> train
+train -> simulate
+train -> ckpt: "written at end of training"
+train -> out
+simulate -> out
+ckpt -> train2: "policy.mode\nwarm_start / resume"
+ckpt -> simulate2: "training.enabled = false"
+ckpt -> other: "policy.boundary.path"
+```
+
+`novomodelo run` loads the case, trains unless `training.enabled` is `false`, writes its policy
+checkpoint to `policy.path` when training ends, simulates when simulation is enabled,
+and writes its outputs. `novomodelo validate` checks the case beforehand without solving.
+A later run of the same study can warm-start from or resume the checkpoint, or simulate
+it without training ([Reusing a Saved Policy](#reusing-a-saved-policy)), and another
+study can import it as its terminal boundary
+([Policy Management — Boundary Cuts](/running/policy-management/#boundary-cuts)).
+
+---
+
+## Terminal Output
+
+### Banner
+
+Unless `--quiet` is given, a banner shows the version, followed by an `Execution`
+block with the solver, the communication backend, and the thread count.
+Use `--quiet` to suppress the banner, progress bars, and summaries.
+Errors are always written to stderr regardless of `--quiet`.
+
+### Progress Bars
+
+On a terminal, training shows a live progress bar with the current iteration, the
+bounds, the gap, and the forward and backward times. When stderr is redirected or
+piped, novomodelo prints one line per iteration instead, and simulation reports its
+scenario count the same way. In `--quiet` mode, no progress is printed.
+
+### Summary
+
+An excerpt of the output of `novomodelo run my_study` on the scaffolded case. It omits the
+banner, the `Host` line, and the progress lines between the first and the last of each phase:
+
+{/* capture: novomodelo run my_study 2>&1 | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: novomodelo init --template 1dtoy my_study, no diff; run from an empty working directory with a relative case path and stderr redirected to a file; excerpt: the banner, the Host line and the progress lines between the first and the last of each phase are not quoted */}
+
+```text
+Execution
+  Solver:    HiGHS 1.13.1
+  Backend:   local
+  Threads:   1 rayon thread
+Loading case: my_study
+Setup
+  Load:            2ms
+  Stochastic fit:  0ms
+  Production fit:  0ms
+  Evaporation fit: 0ms
+  Broadcast:       0ms
+Hydro models
+  Production:    1 constant
+  Evaporation:   0 linearized, 1 without
+Model provenance
+  Estimation path: user_stats_white_noise
+  Seasonal stats:  user_file
+  AR coefficients: n/a
+  Correlation:     n/a
+  Opening tree:    estimated
+Training   starting... (max 128 iterations)
+Training   1/128 iter  LB: 5.06021e6  UB: 1.71260e7  gap: 238.4%  fwd: 2ms / bwd: 2ms  [00:00:00 < 00:00:01]
+Training   128/128 iter  LB: 1.55955e7  UB: 5.79592e5  gap: -96.3%  fwd: 0ms / bwd: 4ms  [00:00:00]
+Training complete in 0.9s (128 iterations, iteration_limit)
+  Lower bound:  1.55955e7 $/stage
+  Upper bound:  5.79592e5 +/- 0.00000e0 $/stage
+  Gap:          -96.3% (started at 238.4%)
+  Policy rows:  384 active / 384 generated
+  LP solves:    5632 (5632 first-try, 0 retried, 0 failed)
+  Avg iter:     7ms
+  Time split:   Forward  29ms (3%)   solve 29ms · wait 0ms (0% of phase)
+                Backward 459ms (50%)   solve 448ms · wait 0ms (0% of phase)
+                Serial   439ms (47%)   bound 172ms · selection 0ms · other 267ms
+Writing training outputs...
+Output written to my_study/output/ (0.0s)
+Simulation starting... (100 scenarios across 1 ranks × 1 threads)
+Simulation 1/100 scenarios  LP: 0.2ms avg  [00:00:00 < 00:00:00]
+Simulation 100/100 scenarios  LP: 0.2ms avg  [00:00:00]
+Simulation complete in 0.7s (100 scenarios)
+  Completed: 100  Failed: 0
+  Expected cost: 9.67939e6 +/- 4.64452e6 (std: 2.36965e7)
+  LP solves:    400 (400 first-try, 0 retried, 0 failed)
+  Avg/scenario: 0.007s
+  Time split:   Solver 87ms (12%)
+                Other  626ms (88%)
+Writing simulation outputs...
+Output written to my_study/output/ (0.0s)
+```
+
+Each phase prints a summary to stderr with:
+
+- **Training**: iteration count and how training ended, bounds, gap, policy rows, solves, time
+- **Simulation** (when enabled): scenarios requested, completed, failed
+- **Output directory**: an `Output written to <dir>/` line after each phase that writes outputs, carrying the path exactly as passed to `--output` (or the `<CASE_DIR>/output/` default) — a relative `--output` path is printed relative, not resolved to an absolute path
+
+The scaffold runs one forward pass per iteration, so each upper bound is the cost of
+a single sampled trajectory and the gap can read below zero.
+[Convergence & Diagnostics](/running/interpreting-results/) covers reading the bounds.
+
+---
+
+## Checking Results
+
+Alongside the result tables, `novomodelo run` writes a machine-readable record of
+each phase that ran: `training/metadata.json` when training ran, and
+`simulation/metadata.json` when simulation ran. Query them directly with `jq`:
+
+```bash
+jq '{status, bounds}' /path/to/my_study/output/training/metadata.json
+```
+
+`status` reads `"partial"` when a shutdown request ended the phase early and
+`"complete"` otherwise, including after a
+training that failed, so a script must check the exit code of `novomodelo run` to learn
+whether the run succeeded ([Checking Exit Codes](#checking-exit-codes)). `bounds` carries the final lower and upper bounds. The
+convergence gap sits under `convergence`:
+
+```bash
+jq '.convergence.final_gap_percent' /path/to/my_study/output/training/metadata.json
+```
+
+`convergence.achieved` is `true` when the stopping rules ended the run and a `gap`
+or `bound_stalling` rule was satisfied at that iteration, so a run that
+`iteration_limit` or `time_limit` alone stopped reads `false`.
+`convergence.termination_reason` names the stopping rule that ended training
+(`iteration_limit`, `time_limit`, `bound_stalling`, or `gap`),
+reads `graceful_shutdown` when a shutdown request alone ended it, or `error`
+after a failed training:
+
+```bash
+jq -r '.convergence.termination_reason' /path/to/my_study/output/training/metadata.json
+```
+
+From Python, `novomodelo.results.load_results("/path/to/my_study/output")` returns
+both metadata files as dicts, and `novomodelo.results.load_convergence` /
+`novomodelo.results.load_simulation` load the Parquet tables. See
+[Convergence & Diagnostics](/running/interpreting-results/) for reading the
+convergence trajectory and simulation outputs, and [Output Format](/reference/output/) for every field
+of [`training/metadata.json`](/reference/output/metadata/#trainingmetadatajson) and
+[`simulation/metadata.json`](/reference/output/metadata/#simulationmetadatajson).
+
+---
+
+## Reusing a Saved Policy
+
+A run writes its policy checkpoint to `policy.path`; a later run can simulate it,
+start training from it or resume it, and another study can use it as its terminal
+boundary ([Policy Management](/running/policy-management/)).
+
+### Simulation Against a Saved Policy
+
+Set `training.enabled` to `false` to simulate a saved policy without
+re-training. `training.selection` and `training.stopping_rules` are still
+required. The complete config and the policy load checks are in
+[Policy Management — Simulation-Only Mode](/running/policy-management/#simulation-only-mode).
+
+### Warm-Starting From a Saved Policy
+
+Set `policy.mode` to `"warm_start"` to start training from a saved policy; training
+adds new cuts on top of the saved ones. See
+[Policy Management — Warm Start](/running/policy-management/#warm-start).
+
+### Resuming a Stopped Training
+
+Set `policy.mode` to `"resume"` to continue a stopped training from its checkpoint.
+The largest `iteration_limit` is a total that includes the completed iterations, so
+set it above that number. See
+[Policy Management — Resume](/running/policy-management/#resume).
+
+### Training in Slices
+
+When a scheduler's wall-time limit is shorter than the training needs, train in
+slices: each later slice sets `policy.mode` to `"resume"` and raises the
+`iteration_limit` total.
+See [Policy Management — Train in Slices](/running/policy-management/#train-in-slices).
+
+---
+
+## Common Workflows
+
+### Training Only
+
+To run training without simulation, set `simulation.enabled` to `false` in
+`config.json`:
+
+```json
+{ "simulation": { "enabled": false } }
+```
+
+### Multi-threading
+
+Use `--threads` to accelerate training and simulation with intra-rank
+parallelism:
+
+```bash
+novomodelo run /path/to/my_study --threads 4
+```
+
+The excerpt below compares one thread with four on the scaffold, with
+`training.selection.forward_passes` set to `8` and `simulation.selection.num_scenarios`
+set to `1000`. Each block starts with the command that produced it, and the excerpt keeps
+only the `Threads` line and each phase's completion line. The times are from one machine:
+
+{/* capture: novomodelo run my_study --threads 1 2>&1; novomodelo run my_study --threads 4 2>&1 | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: temporary 1dtoy derivative (novomodelo init --template 1dtoy; config.json edited with jq: training.selection.forward_passes 8 and simulation.selection.num_scenarios 1000); run from an empty working directory with a relative case path, the output directory emptied between the runs, both runs exit 0; excerpt: per run, the Threads line and the two phase completion lines are quoted, the rest of the run including the Host line is not */}
+
+```text
+$ novomodelo run my_study --threads 1
+  Threads:   1 rayon thread
+Training complete in 7.2s (128 iterations, iteration_limit)
+Simulation complete in 3.3s (1000 scenarios)
+
+$ novomodelo run my_study --threads 4
+  Threads:   4 rayon threads
+Training complete in 2.3s (128 iterations, iteration_limit)
+Simulation complete in 3.4s (1000 scenarios)
+```
+
+`--threads` sets the worker threads of each process (each MPI rank). It takes an
+integer of at least `1` and defaults to `1`. The pool solves the forward-pass,
+backward-pass, and simulation LPs in parallel, so speedup is bounded by the
+parallel work available: the forward passes per iteration, the trial points of the
+backward pass, and the simulation scenarios. In the excerpt, simulation time does not fall with the thread count: the solves run in parallel, but each process writes the scenario results through a single writer, which bounds the wall time of a case this small. See
+[Performance Accelerators](/running/performance/) for the execution model.
+
+### Communication Backend
+
+A single `novomodelo run` uses the local (single-process) backend; launching under an
+MPI launcher (`mpiexec`, `mpirun`, or `srun`) distributes the work across ranks when the binary is built with MPI support (the `novomodelo-mpi` binary of [HPC & Cluster Deployment](/running/hpc-deployment/)); the standard `novomodelo` binary offers only the local backend, so under a launcher `auto` runs every process as its own single-process study.
+By default (`--comm-backend auto`) novomodelo detects the launcher and selects the
+backend accordingly, so no flag is needed in either case. Pass
+`--comm-backend mpi` to force the MPI backend — it fails with a clear message on a
+binary built without MPI support — or `--comm-backend local` to force a single
+process even under a launcher.
+
+### Quiet Mode for Scripts
+
+```bash
+novomodelo run /path/to/my_study --quiet
+exit_code=$?
+if [ $exit_code -ne 0 ]; then
+  echo "Study failed with exit code $exit_code" >&2
+fi
+```
+
+Suppresses banner and progress output, suitable for batch scripts.
+
+### Checking Exit Codes
+
+`novomodelo run` exits `0` on success and non-zero otherwise. The meaning of each code
+is in [CLI Reference — Exit Codes](/reference/cli-reference/#exit-codes).
+[Troubleshooting](/running/troubleshooting/) lists error messages with their cause
+and fix.
+
+---
+
+## Exporting Stochastic Artifacts
+
+Set `exports.stochastic` to `true` in `config.json` to write the stochastic
+preprocessing artifacts to `output/stochastic/` before training begins:
+
+```json
+{
+  "exports": {
+    "stochastic": true
+  }
+}
+```
+
+The export holds the stochastic model the run used.
+[Stochastic Artifacts](/reference/output/stochastic/)
+lists each file, the condition under which it is written, and its schema.
+
+### Round-trip workflow
+
+An exported model can be read back as input. Run once with the export enabled,
+copy the exported input files into `scenarios/`, declare the opening
+tree, and run again:
+
+```bash
+# Step 1: initial run with stochastic export enabled in config.json
+novomodelo run my_case
+
+# Step 2: copy the exported input files into scenarios/
+S=my_case/output/stochastic
+cp "$S/noise_openings.parquet" "$S/inflow_seasonal_stats.parquet" \
+   "$S/inflow_ar_coefficients.parquet" "$S/inflow_annual_component.parquet" \
+   my_case/scenarios/
+```
+
+The exported `noise_openings.parquet` numbers its stages by 0-based position,
+so the copied tree loads only when the case's declared stage ids are 0, 1, 2,
+…; with other stage ids the load refuses it.
+
+Keep `inflow_annual_component.parquet` in the copy even when it holds no rows:
+without it, a model with an annual component is read back as a classical
+PAR(p) model with the same AR coefficients, which is a different model and
+can fail the load. Also copy `correlation.json` when its `profiles` object is
+not empty. With both inflow files copied the re-run estimates nothing, so
+without `correlation.json` it has no correlation profiles and the noise it
+draws is uncorrelated across hydros. Leave the file out when `profiles` is
+empty, because the loader refuses a `correlation.json` with no profile. Copy
+`load_seasonal_stats.parquet` when the export wrote it.
+
+Step 3 declares the opening tree in `config.json`, by adding one key to the
+existing `training.scenario_source` object. `novomodelo run` reads
+`scenarios/noise_openings.parquet` only when `training.scenario_source.openings`
+is `{"source": "file"}`; a copied file without the declaration is ignored and
+the tree is generated again:
+
+```json
+{
+  "training": {
+    "scenario_source": {
+      "openings": { "source": "file" }
+    }
+  }
+}
+```
+
+Step 4 runs the study again with `novomodelo run my_case`. The re-run reads the
+inflow model from the copied inflow files instead of estimating any part of it
+from `inflow_history.parquet`, and reads the opening tree from
+`scenarios/noise_openings.parquet` instead of generating it. The tree file must
+hold `num_openings` openings for every stage, or the load fails; a tree that
+the first run clamped to fewer openings, with a warning, fails this check. The
+other conditions on the file are in
+[Scenario Files](/reference/case-format/scenarios/#scenariosnoise_openingsparquet).
+
+---
+
+## See Also
+
+- **Theory:** [SDDP Algorithm](/math/sddp-algorithm/) — the forward/backward pass algorithm this workflow trains and runs.
+- **Troubleshooting:** [Troubleshooting](/running/troubleshooting/) — error messages, their cause and the fix

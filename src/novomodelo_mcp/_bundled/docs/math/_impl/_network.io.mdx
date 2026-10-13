@@ -1,0 +1,41 @@
+This is a topic-scoped index of the files the network layer ([System Element Modeling Overview §2](/math/system-elements#2-buses-regional-subsystems)–[§3](/math/system-elements#3-transmission-lines)) touches — it
+names each file and its role, it does not repeat their field-by-field
+schemas. The exhaustive, field-by-field case-directory and output reference
+is owned by the Reference corpus ([Case Format](/reference/case-format/)
+and [Output Format](/reference/output/) pages).
+
+### Inputs
+
+| File                                 | Role                                                                                                                                                                       |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `system/buses.json`                  | Bus (node) registry — `id`, `name`, and the `deficit_segments` override covered in the Configure tab. Required in every case.                                              |
+| `system/lines.json`                  | Transmission line (edge) registry — `id`, `name`, endpoints, `capacity`, `losses_percent`, and the `exchange_cost` override covered in the Configure tab. Empty array for a single-bus case. |
+| `constraints/line_bounds.parquet`    | Sparse per-`(line_id, stage_id)` overrides of `direct_mw`/`reverse_mw`, optionally narrowed to one block via an optional `block_id` column (see Configure tab) — planned outages, seasonal de-rating, or time-of-day transfer limits, expressed as absolute MW rather than a multiplier on `capacity.direct_mw`/`capacity.reverse_mw`. Absent rows fall back to the base entity values. |
+
+The stage-varying **penalty** overrides that touch these same two files —
+`excess_cost` on buses and `exchange_cost` on lines — are separate sparse
+parquet inputs owned by the penalty system; see the
+[Penalty System](/math/penalty-system#implementation-in-novomodelo) Inputs & Outputs tab
+for `constraints/penalty_overrides_bus.parquet` and
+`constraints/penalty_overrides_line.parquet`. This chapter does not repeat
+that index.
+
+For the complete field-by-field schema of every file above, see the
+[Case Format](/reference/case-format/) reference page in
+the Reference corpus.
+
+### Outputs
+
+| File / column group     | Role                                                                                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `simulation/buses/`      | Per-(stage, block, bus) load balance results: `load_mw`, `deficit_mw`, `excess_mw` (and their `_mwh` energy equivalents), and `spot_price` — the load-balance dual. |
+| `simulation/exchanges/`  | Per-(stage, block, line) flow results: `direct_flow_mw`, `reverse_flow_mw`, `net_flow_mw` (and `_mwh`), transmission `losses_mw`/`losses_mwh`, and the monetary `exchange_cost` attributed to that line's flow. |
+
+A generic constraint can address this same net line flow by bus pair —
+`line_exchange(source_bus=X, target_bus=Y)` folds the orientation sign into
+the term — see [Generic Constraints](/reference/generic-constraints/) for
+the full addressing form.
+
+For the complete output schema (columns, types, file layout), see the
+[Output Format](/reference/output/) reference page in the Reference
+corpus.

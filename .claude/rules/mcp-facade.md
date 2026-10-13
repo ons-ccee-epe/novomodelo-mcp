@@ -5,17 +5,17 @@ paths:
 
 # <repositório anterior> Facade Rules
 
-How every module under `src/cobre_mcp/` must behave. These are contracts, not
+How every module under `src/novomodelo_mcp/` must behave. These are contracts, not
 style preferences: a plausible-looking deviation turns a safe, offline relay
 into a server that reimplements business logic, crashes the client, or escapes
 the workspace sandbox. Auto-loads on `src/**/*.py`.
 
 ## 1. Thin facade — relay, never reimplement
 
-A tool envelopes exactly one CLI subcommand (`cobre-bridge` or `cobre`, invoked
-with `--json`) or one official `cobre-python` binding, and relays the result.
-Conversion, validation, comparison, and solving live in `cobre` and
-`cobre-bridge` — never here. The wrong-but-compiling alternative is to "fix" a
+A tool envelopes exactly one CLI subcommand (`novomodelo-bridge` or `novomodelo`, invoked
+with `--json`) or one official `novomodelo-python` binding, and relays the result.
+Conversion, validation, comparison, and solving live in `novomodelo` and
+`novomodelo-bridge` — never here. The wrong-but-compiling alternative is to "fix" a
 CLI gap by computing the answer in Python: it works for one case and silently
 diverges from the tool the rest of the ecosystem trusts. If a capability is
 missing, it is added upstream, not reimplemented in the server.
@@ -48,7 +48,7 @@ if (err := ensure_in_workspace(src, dst, settings=settings)):
     return err
 ```
 
-With `COBRE_MCP_WORKSPACE` set, a path outside the allowed roots is refused and
+With `NOVOMODELO_MCP_WORKSPACE` set, a path outside the allowed roots is refused and
 `resolve()` neutralises symlinks and `..`. Treat every agent-supplied path as
 untrusted. The wrong-but-compiling alternative is to resolve a path once and
 reuse it, or to guard only the "write" tools: a read tool that skips the guard
@@ -58,7 +58,7 @@ Never relax the guard to fail-open when roots are configured.
 ## 5. Force writes stay gated
 
 A schema-violating edit (`force=True` on a deck-edit tool) is honoured only when
-`COBRE_MCP_ALLOW_FORCE=1`. The gate is deliberate; do not remove it or default
+`NOVOMODELO_MCP_ALLOW_FORCE=1`. The gate is deliberate; do not remove it or default
 it on.
 
 ## 6. NEWAVE/DECOMP tool parity

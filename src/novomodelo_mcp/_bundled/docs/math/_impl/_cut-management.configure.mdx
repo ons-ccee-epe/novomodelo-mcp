@@ -1,0 +1,71 @@
+Novomodelo's cut-management settings live in two places: the
+`training.cut_selection` block of `config.json` (row management) and the
+per-stage `state_variables` field of `stages.json` (cut projection). The cut
+pool itself is generated during training, not authored by the case. This tab
+shows how each is configured; the selection algorithms themselves stay in the
+methodology sections above (§6–§9).
+
+### `training.cut_selection` — Row Management Configuration
+
+Row management combines a selection pass, configured by the `selection` object
+and off by default, with a per-stage budget pass set by `max_active_per_stage`.
+The example runs Level-1 periodic pruning (`level1`) with a budget of 500 active rows per
+stage:
+
+```json
+{
+  "training": {
+    "cut_selection": {
+      "row_activity_tolerance": 1e-6,
+      "max_active_per_stage": 500,
+      "selection": {
+        "method": "level1",
+        "tie_tolerance": 1e-10,
+        "check_frequency": 5
+      }
+    }
+  }
+}
+```
+
+[`training.cut_selection`](/running/configuration/#trainingcut_selection) lists
+every field, default and method parameter. [Cut Management Pipeline](/running/performance/#cut-management-pipeline) describes the budget pass.
+
+### `stages[].state_variables` — Cut Projection
+
+Each study stage selects which incoming-state dimensions its cuts project onto —
+the cut-state projection of
+[State Augmentation §7](/math/state-augmentation#7-cut-state-projection).
+
+| Field         | Type    | Default | Description |
+| ------------- | ------- | ------- | ----------- |
+| `storage`     | boolean | `true`  | Project the cuts onto the storage dimensions. |
+| `inflow_lags` | boolean | `false` | Project the cuts onto the inflow-lag dimensions. |
+
+With `inflow_lags` set to `true` on a stage, the cuts that stage generates also
+carry the inflow-lag coefficients; with `false`, they carry no inflow-lag coefficients.
+
+An absent `state_variables` gives the storage-only default,
+`{ "storage": true, "inflow_lags": false }`; an unknown field is rejected at
+load. In-transit buckets and commitment-ring slots are always projected in and
+have no field.
+
+A study that supplies AR coefficients of order above zero
+(`scenarios/inflow_ar_coefficients.parquet`) but has `inflow_lags` set to
+`false` on every study stage, explicitly or by default, draws a
+[`ModelQuality`](/reference/error-codes/#modelquality) validation warning that
+does not block the run; a PAR model estimated from the inflow history never
+draws it, because the check runs on the supplied table before estimation. With
+the lags projected out, the lag columns are still pinned for the AR dynamics,
+but no cut generated in training carries their coefficients (cuts imported from
+a boundary policy can).
+
+To keep the inflow lags in the cuts a stage generates, set both fields on that
+stage:
+
+```json
+"state_variables": { "storage": true, "inflow_lags": true }
+```
+
+The full `stages[]` entry is listed under
+[`stages.json`](/reference/case-format/stages/#stagesjson).

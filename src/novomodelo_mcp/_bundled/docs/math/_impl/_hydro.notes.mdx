@@ -1,0 +1,231 @@
+Non-normative software behavior for the hydro production models — what Novomodelo
+does at runtime, beyond the equations above. This tab references the
+methodology body for the derivations rather than restating them.
+
+### Computed-FPHA fitting behavior
+
+The computed path (§2.6–§2.7 above) evaluates the exact production function
+on a (volume, turbined-flow) grid at spillage fixed to `0`. The flow axis
+starts at `q = 0`; that zero-flow column is generation-zero by construction
+and anchors the lower closure of the cloud, so the fitter needs neither a
+synthetic closing point nor a spillage axis in the cloud itself — spillage
+sensitivity is captured separately by the per-plane lateral-flow secant
+(§2.7), not by adding a third grid dimension. That secant uses
+nine evenly spaced samples of the lateral flow.
+
+The 3-D convex hull's upper-envelope facets are corrected by a single
+least-squares $k_{FPHA}$ scalar. That correction scales the **whole affine
+plane** — intercept and both slopes together — not just the intercept, unlike
+the `kappa` factor of precomputed planes, which scales the intercept only
+(validated in `(0, 1]`).
+
+Lateral-flow slopes above `-1e-10` — a near-zero negative residual or any
+positive one — are set to exactly `0`, so no near-zero coefficient reaches
+the spillage column.
+
+When any plant uses computed FPHA, the families of `system/tailrace_curves.parquet` are checked as the
+production models are built: consecutive segments of a family must meet (the previous
+`outflow_max_m3s` and the next `outflow_min_m3s` differ by at most `1e-6` m³/s) and give the same
+level at the shared boundary, to within the larger of `0.001` m and `1e-4` of the larger of the two
+levels. A gap, an overlap or a level mismatch beyond these bounds is an error that names the plant by
+id and the boundary.
+
+### Run-of-river support
+
+A plant whose fitting volume range collapses to a single point (constant
+forebay) is fit by synthesizing two nearby volume samples so the 3-D hull
+stays non-degenerate, then snapping the resulting `gamma_v` residual to
+exactly `0` when its magnitude is at most `1e-6` MW per hm³. This enforces the correct
+run-of-river semantics — generation on
+these planes does not vary with storage — and is why run-of-river plants are
+supported on the computed path rather than rejected.
+
+The two samples sit either side of that single volume, each offset by the
+larger of half a percent of the plant's useful storage and `1` hm³, so a
+plant with no useful storage still gets two distinct samples; when the
+volume-height curve spans a range of volumes, both samples are clamped into
+it.
+
+### FPHA without turbine capacity
+
+A plant that requests FPHA, computed (`fpha_config.source: "computed"` in
+any of its production-model entries) or precomputed with no row in
+`system/fpha_hyperplanes.parquet`, and declares `max_turbined_m3s` at or below
+`1e-9` is not fitted; it is modelled with zero productivity at every stage
+([§2.6.1](#261-grid-and-cloud) above). The computed-FPHA prerequisites apply
+to a computed plant: `tailrace`, `hydraulic_losses` and `efficiency` in `hydros.json` and
+geometry rows in `system/hydro_geometry.parquet`; a missing one is a load-time
+error.
+
+A warning names the plant; `novomodelo validate` and `novomodelo run` both print it:
+
+{/* capture: novomodelo validate case 2>&1 | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: temporary 1dtoy derivative (novomodelo init --template 1dtoy; system/hydros.json hydro 0: generation.model fpha, generation.max_turbined_m3s and unit_groups[0].max_turbined_m3s 0.0, specific_productivity_mw_per_m3s_per_m 0.0091 added, tailrace polynomial with coefficients [5.0, 0.001] added, hydraulic_losses factor 0.03 added, efficiency constant 0.93 added; system/hydro_production_models.json: the one stage range set to model fpha with fpha_config.source computed, productivity_mw_per_m3s removed; system/hydro_geometry.parquet added with hydro_id [0, 0, 0], volume_hm3 [0, 500, 1000], height_m [100, 110, 120], area_km2 [10, 15, 20], zstd compression; run with NO_COLOR=1) */}
+
+```text
+ WARN hydro UHE1 (id=0) requests FPHA but has no turbine capacity (max_turbined_m3s = 0); modeling it with zero productivity
+```
+
+Every MPI rank prepares the production models, so a multi-rank run prints the
+warning once per rank.
+
+The plant counts as constant productivity: in `n_constant` of
+`training/hydro_models.json`, in its `no_turbine_capacity` list, in
+`n_constant` of the Python `hydro_models` summary, and in
+the `constant` count of the CLI `Production:` line. It is absent from
+`n_fpha`, `total_planes` and `fpha_details`, from
+`n_fpha_computed_from_geometry` and `n_fpha_precomputed_hyperplanes` in
+`training/model_provenance.json`, and from
+`hydro_models/fpha_hyperplanes.parquet`.
+
+### Fit-quality warning
+
+After the full pipeline, Novomodelo compares the fitted min-envelope against the
+exact production function on the spillage-`0` grid and computes their
+relative mean-absolute deviation. When it exceeds 5%, a warning is logged
+naming the plant and stage:
+
+```
+FPHA fit for hydro UHE Example (stage 3) deviates 6.2% from the exact production function (mean |Δ| 4.1 MW, max 9.7 MW); the convex-hull approximation is poor here — typically a strongly non-concave production surface that no single α correction can track
+```
+
+The warning is informational — the run continues with the fitted planes. A
+high deviation typically indicates a strongly non-concave production surface
+that no single $k_{FPHA}$ scalar can track well; narrowing `fitting_window`
+or raising the discretization point counts are the usual remedies.
+
+### Determinism guarantees
+
+The fitting cloud points and the hull output are canonically sorted, so
+fitted hyperplanes are bit-identical regardless of input ordering and MPI
+rank count. The `fpha_plane_reduction` distance method's sampled draws are
+seeded from stable plant/stage/plane-pair identity — never wall clock or MPI
+rank — so its merges are equally reproducible.
+
+### Evaporation: disabled on zero area, rejected on missing geometry
+
+A hydro that declares `evaporation.coefficients_mm` needs an area-volume
+curve — the rows in `system/hydro_geometry.parquet` — to linearize its
+evaporative flux, and the two ways that curve can be absent are handled
+differently:
+
+- **No geometry rows at all** is a **hard load-time error**. A hydro that
+  declares `evaporation.coefficients_mm` but contributes no rows to
+  `system/hydro_geometry.parquet` is rejected at load, naming the plant: the
+  evaporation linearization requires area-volume curve data and none is
+  present.
+- **Rows present but every `area_km2` is zero** is **disabled with a
+  warning**. The curve exists but describes zero surface area throughout, so
+  evaporative flux is identically zero regardless of the authored
+  coefficients. Novomodelo disables evaporation (zero flux) for that hydro and
+  logs a warning naming the plant rather than failing the run.
+
+Two conditions raised while building the per-stage linearization remain hard
+load-time errors: a stage whose total block duration is not positive, and a
+computed evaporation coefficient — volume slope or intercept — that is not
+finite (the signature of a degenerate area-volume curve). The calendar month
+that selects each stage's monthly evaporation coefficient is taken from that
+stage's start date. See
+[Penalty System — Signed Net Evaporation](/math/penalty-system#signed-net-evaporation)
+for the water-balance treatment of the resulting flux.
+
+### Commissioning: the PreFilling state
+
+A hydro's `entry_stage_id`/`exit_stage_id` commissioning window is honored even for a **non-filling** hydro (one with no `filling` block). At any stage outside its window — before `entry_stage_id`, or from `exit_stage_id` onward — the plant is **PreFilling**: the site is not in service, so its turbine, spillage, and diversion columns are pinned to zero, its storage is frozen by the identity $v_h = v^{in}_h$, and its local inflow, the upstream releases, the flows diverted in and the in-transit water maturing into it are routed past the site to the first downstream plant that is not PreFilling (or leaves the modelled system if there is none). Unlike the generic outside-window zero-pin used for the other entity types, the river is never trapped or duplicated at a site that is not in service. See [LP Formulation — Lifecycle Phases](/math/lp-formulation#lifecycle-phases) for every phase and [Penalty System](/math/penalty-system) for the spillage-frozen-versus-costed distinction.
+
+### Water travel time: in-transit seed and validation
+
+When a plant declares a travel-time arc, the releases already in transit at the
+study start must be supplied so the first stages' delayed-arrival buckets are
+seeded rather than starting empty. This history lives in
+`initial_conditions.past_defluences`: windowed pre-study release records (a
+`hydro_id`, a release window, and an average rate in m³/s) for the plants whose
+outflow feeds a declared arc.
+
+Load-time validation of a declared arc:
+
+- **History depth.** The `past_defluences` windows must cover the arc's
+  in-transit span at study start — the interval `[start_0 − travel_time, start_0)`
+  ending at the study start. A gap, or no windows at all, is a load-time error,
+  and no window may be future-dated past the study start — there is no proxy
+  or fallback seed from any other source.
+- **Downstream must be operating.** A release at a stage before the downstream
+  plant's `entry_stage_id` — while it is PreFilling or Filling — is rejected;
+  the check covers each in-study release stage, the first included, so the
+  downstream plant must have entered service by the first study stage.
+- **Heterogeneous travel time under chronological blocks.** When two or more
+  declared arcs feed the _same_ downstream plant with _differing_
+  `travel_time_hours` and at least one study stage runs in chronological block
+  mode, the case is rejected at load with a `NotImplemented` error, whose message reads "unsupported in v1", naming
+  the downstream plant and the conflicting arcs; align the arcs'
+  `travel_time_hours`, or keep every study stage in parallel block mode. Equal
+  travel times into a confluence, or a study with no chronological stage, are
+  unaffected. See [Error Codes — `NotImplemented`](/reference/error-codes/#notimplemented).
+- **Zero, absent, or invalid travel time.** A zero or absent `travel_time_hours`
+  is treated as undeclared — an instantaneous transfer that creates no
+  cross-stage arc, adds no in-transit bucket, and needs no `past_defluences`
+  seed. An **explicit** `0.0` additionally logs a **model-quality warning** that
+  it is being read as undeclared, so a deliberate zero is flagged while an
+  omitted field stays silent. A **negative or non-finite** `travel_time_hours`
+  is a hard load-time error. See [Error Codes](/reference/error-codes).
+- **Model-quality warnings (non-blocking).** Two further conditions on a
+  declared arc are reported as `warning:` lines after `Valid case: …`; the case
+  still loads and runs. See
+  [Error Codes — `ModelQuality`](/reference/error-codes/#modelquality).
+  - **Negligible travel time.** When `travel_time_hours` is below 1 % of every
+    study stage's length (`travel_time_hours / stage hours < 0.01` on every
+    stage), the arc carries a negligible cross-stage fraction; the warning
+    suggests not declaring it.
+  - **Longer than the remaining study horizon.** When `travel_time_hours`
+    exceeds the remaining study horizon from some stage, releases from that
+    stage onward never arrive within the study, and the warning names the
+    first such stage as the point from which the arc is economically inert.
+    The in-transit sizing stays safe.
+
+In-transit water that matures into a plant at a stage where the plant is
+PreFilling enters the row of the first non-PreFilling plant downstream, and
+leaves the modelled system only when no such plant exists.
+
+**Horizon limitation.** Without a loaded terminal boundary, in-transit water
+that would mature after the last stage is dropped; with one, it is carried to
+the terminal stage and priced there ([State Augmentation — Horizon
+limitation](/math/state-augmentation#horizon-limitation), [Post-Study
+Boundary & Chained Studies](/math/post-study-boundary)).
+
+### Bus-partitioned hydro: cell collapse and the generation-sum caveat
+
+A plant's `unit_groups` partition it into one **cell** per distinct `bus_id`:
+the LP carries one turbine column and one FPHA-generation column per cell.
+When every group shares one bus, the plant collapses to a single cell — the
+same LP shape, byte-identical, as a plant declaring no groups beyond the
+required one. Same-bus groups sharing a cell's turbine and generation
+columns is exact for the box constraints (each group's own bounds fold
+independently before summing into the cell), because every group on a plant
+shares the same production model and productivity coefficients — there is no
+per-group productivity field.
+
+The `simulation/hydro_bus_generation/` output sums bit-exactly to the plant's
+own `turbined_m3s` on every model, since both are a plain sum of the same
+per-cell turbine columns. `generation_mw` sums exactly only for FPHA plants
+and single-cell plants: for `ConstantProductivity`/`LinearizedHead`, the
+plant-level row computes `(Σ_c turbined_c) × ρ` — sum the cells' turbined
+flow first, then multiply once — while each bus-cell row computes
+`turbined_c × ρ` independently. The two expressions are equal in exact
+arithmetic, but floating-point multiplication does not distribute over
+addition bit-for-bit, so the plant total need not equal the sum of the
+cell rows to the last bit once a plant spans more than one cell. FPHA
+plants are exempt because both the plant row and the cell rows sum the
+same underlying per-cell FPHA generation columns the same way; a
+single-cell plant is exempt because there is only one term either way.
+
+### Round-trip parquet export
+
+When hyperplanes are fitted at runtime (`source: "computed"`), the fitted
+coefficients are automatically written to
+`output/hydro_models/fpha_hyperplanes.parquet` using the same schema as the
+`system/fpha_hyperplanes.parquet` input. To reuse a prior fit without
+refitting on a subsequent run, copy this output file into `system/` and
+change `source` to `"precomputed"` in `hydro_production_models.json`.
+
+A plant with no turbine capacity has no rows in the exported file and needs
+none: copied to `system/`, the file loads unedited, and the plant stays at
+zero productivity.
