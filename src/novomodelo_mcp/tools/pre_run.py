@@ -110,12 +110,15 @@ def register_pre_run(mcp, settings: Settings) -> None:
         validate: bool = True,
         force: bool = False,
         dry_run: bool = False,
+        importar_fcf: bool = True,
     ) -> dict:
         """Converte uma revisão DECOMP para deck Novomodelo, escrevendo em `dst`.
 
         Espelha `bridge_convert_newave`: `validate=True` valida o deck resultante,
         `force` sobrescreve `dst`, `dry_run` não escreve. Caminho do deck em
-        `artifacts.deck`.
+        `artifacts.deck`. `importar_fcf=False` converte sem importar os cortes da
+        FCF declarados no deck (`--no-fcf`); só no DECOMP, o conversor NEWAVE não
+        tem essa opção.
         """
         if (err := ensure_in_workspace(src, dst, settings=settings)):
             return err
@@ -126,6 +129,8 @@ def register_pre_run(mcp, settings: Settings) -> None:
             argv.append("--force")
         if dry_run:
             argv.append("--dry-run")
+        if not importar_fcf:
+            argv.append("--no-fcf")
         env = run_bridge(argv, settings=settings)
         if env.get("exit_code") == 0 and not dry_run:
             attach_artifact(env, "deck", dst)
