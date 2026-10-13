@@ -12,7 +12,7 @@ READ_ONLY = {
     "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql",
     "case_validate", "bridge_check_newave", "bridge_check_decomp",
     "results_status", "results_convergence", "results_list_entities", "results_query",
-    "results_stochastic",
+    "results_stochastic", "results_policy",
     "run_plan", "run_status", "run_logs",
 }
 WRITES = {

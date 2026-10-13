@@ -162,6 +162,77 @@ def stochastic_query(output_dir: str, *, hydro_id: int | None = None, stage: int
                      _first_line(exc))
 
 
+def _policy_dir(output_dir: str, policy_subdir: str, settings: Settings) -> Path | dict:
+    if not _ENTITY_NAME.match(policy_subdir or ""):
+        return error(13, f"policy_subdir inválido: {policy_subdir!r}",
+                     "use o nome da subpasta da política (letras, números, _ e -)")
+    root = Path(output_dir).resolve()
+    policy = (root / policy_subdir).resolve()
+    if not policy.is_relative_to(root):
+        return error(13, f"policy_subdir fora da pasta de resultados: {policy_subdir!r}")
+    if (err := ensure_in_workspace(str(policy), settings=settings)):
+        return err
+    if not policy.is_dir():
+        return error(2, f"política inexistente: {policy}")
+    return policy
+
+
+def _cut_row(cut: dict[str, Any]) -> dict[str, Any]:
+    return {"cut_id": cut.get("cut_id"), "iteration": cut.get("iteration"),
+            "forward_pass_index": cut.get("forward_pass_index"),
+            "intercept": cut.get("intercept"), "is_active": cut.get("is_active"),
+            "n_coeficientes": len(cut.get("coefficients") or [])}
+
+
+def policy_summary(output_dir: str, *, settings: Settings, stage: int | None = None,
+                   policy_subdir: str = "policy") -> dict[str, Any]:
+    """Resumo de `novomodelo.results.load_policy`: metadata e cortes por estágio, sem os
+    coeficientes. Acima de `settings.max_policy_bytes` em disco, recusa sem carregar:
+    a biblioteca monta a política inteira em memória."""
+    policy = _policy_dir(output_dir, policy_subdir, settings)
+    if isinstance(policy, dict):
+        return policy
+    size = sum(f.stat().st_size for f in policy.rglob("*") if f.is_file())
+    if size > settings.max_policy_bytes:
+        return error(13, f"política com {size / 1024 ** 3:.1f} GiB em disco: acima do teto "
+                         f"NOVOMODELO_MCP_MAX_POLICY_BYTES ({settings.max_policy_bytes} bytes)",
+                     "a biblioteca carrega a política inteira em memória; o teto protege a "
+                     "máquina (heurística, não regra do novomodelo)")
+    try:
+        from novomodelo import results as nm_results
+    except ImportError:
+        return error(127, "novomodelo-python ausente no ambiente do MCP")
+    try:
+        loaded = nm_results.load_policy(output_dir, policy_subdir=policy_subdir)
+    except Exception as exc:  # noqa: BLE001 - erros da biblioteca (OutputError, OSError) viram envelope
+        return error(2, f"não foi possível ler a política em {policy}", _first_line(exc))
+    meta = dict(loaded.get("metadata") or {})
+    graph = meta.get("graph_manifest")
+    if isinstance(graph, dict):
+        meta["graph_manifest"] = {"n_pools": graph.get("n_pools"),
+                                  "n_nos": len(graph.get("nodes") or []),
+                                  "n_arestas": len(graph.get("edges") or [])}
+    stages = loaded.get("stage_cuts") or []
+    rows = [{"stage_id": s.get("stage_id"), "populated_count": s.get("populated_count"),
+             "capacity": s.get("capacity"), "warm_start_count": s.get("warm_start_count"),
+             "state_dimension": s.get("state_dimension"),
+             "n_cortes": len(s.get("cuts") or []),
+             "n_ativos": sum(1 for c in s.get("cuts") or [] if c.get("is_active"))}
+            for s in stages]
+    cap = settings.max_query_rows
+    out: dict[str, Any] = {"status": "ok", "metadata": meta, "estagios": rows[:cap],
+                           "estagios_truncado": len(rows) > cap}
+    if stage is not None:
+        chosen = next((s for s in stages if s.get("stage_id") == stage), None)
+        if chosen is None:
+            return error(22, f"estágio inexistente na política: {stage}")
+        cuts = chosen.get("cuts") or []
+        n = settings.max_inline_rows
+        out["cortes"] = {"estagio": stage, "linhas": [_cut_row(c) for c in cuts[:n]],
+                         "total": len(cuts), "truncado": len(cuts) > n}
+    return out
+
+
 def _pl():
     import polars as pl
     return pl

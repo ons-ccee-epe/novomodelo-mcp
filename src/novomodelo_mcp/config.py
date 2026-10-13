@@ -29,6 +29,7 @@ class Settings:
     max_query_rows: int             # NOVOMODELO_MCP_MAX_QUERY_ROWS (teto de linhas do deck_sql)
     state_dir: str | None = None    # NOVOMODELO_MCP_STATE_DIR (jobs + calibração; padrão por SO)
     max_jobs: int = 1               # NOVOMODELO_MCP_MAX_JOBS (runs simultâneos permitidos)
+    max_policy_bytes: int = 1024 ** 3   # NOVOMODELO_MCP_MAX_POLICY_BYTES (teto do results_policy)
 
 
 def env_name(suffix: str) -> str:
@@ -80,4 +81,5 @@ def load_settings() -> Settings:
         max_query_rows=_env_int("MAX_QUERY_ROWS", 1000),
         state_dir=_env_str("STATE_DIR"),
         max_jobs=_env_int("MAX_JOBS", 1),
+        max_policy_bytes=_env_int("MAX_POLICY_BYTES", 1024 ** 3),
     )

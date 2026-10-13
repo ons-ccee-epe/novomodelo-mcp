@@ -95,14 +95,14 @@ ignoradas = { "--open" = "abriria um navegador na máquina do servidor, sem o ag
 "results.load_simulation" = { tool = "results_query", nota = "o MCP lê os mesmos Parquet de simulation/" }
 "results.load_simulation_arrow" = { tool = "results_query", nota = "o mesmo dado, em Arrow" }
 "results.load_results" = { tool = "results_status", nota = "metadados e saídas do run; o MCP lê os mesmos arquivos" }
-"results.load_policy" = { pendente = "cortes da política; aguarda decisão sobre tool nova" }
+"results.load_policy" = { tool = "results_policy", nota = "só o resumo; política acima de NOVOMODELO_MCP_MAX_POLICY_BYTES é recusada" }
 "results.load_stochastic" = { tool = "results_stochastic" }
 "results.Stochastic" = { nao_exposto = "tipo de retorno de load_stochastic" }
 "run.run" = { tool = "run_start", nota = "via CLI, como job assíncrono" }
 "schema.export" = { tool = "schema_export", nota = "via CLI" }
 "version_info" = { tool = "solver_version", nota = "via CLI (novomodelo version, mesmo conteúdo)" }
 "Study" = { pendente = "estudo em processo Python (treino e simulação na sessão); aguarda decisão sobre tool nova" }
-"Policy" = { pendente = "política carregada como objeto; aguarda decisão sobre tool nova" }
+"Policy" = { nao_exposto = "tipo de dado; coberto pelo results_policy" }
 "write_policy_checkpoint" = { pendente = "grava arquivo de checkpoint da política (seria tool de escrita); aguarda decisão" }
 "model.Bus" = { nao_exposto = "tipo de dado" }
 "model.EnergyContract" = { nao_exposto = "tipo de dado" }

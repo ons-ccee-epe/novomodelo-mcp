@@ -86,6 +86,22 @@ def register_results(mcp, settings: Settings) -> None:
                                                max_rows=settings.max_inline_rows), settings)
 
     @mcp.tool(annotations=READ_ONLY)
+    def results_policy(output_dir: str, stage: int | None = None,
+                       policy_subdir: str = "policy") -> dict:
+        """Resumo da política treinada (cortes de Benders) de um run, pela biblioteca.
+
+        `metadata` (versão, data, estágios, iterações) e, por estágio, o número de
+        cortes e de cortes ativos; os coeficientes não voltam. Com `stage`, até o
+        teto de cortes daquele estágio (id, iteração, intercepto, ativo). Política
+        maior que `NOVOMODELO_MCP_MAX_POLICY_BYTES` em disco é recusada sem ser
+        carregada (a biblioteca lê a política inteira em memória).
+        """
+        if (err := ensure_in_workspace(output_dir, settings=settings)):
+            return err
+        return cap_envelope(R.policy_summary(output_dir, settings=settings, stage=stage,
+                                             policy_subdir=policy_subdir), settings)
+
+    @mcp.tool(annotations=READ_ONLY)
     def results_list_entities(output_dir: str) -> dict:
         """Lista as entidades de simulação disponíveis (hydros, costs, thermals, buses, ...)."""
         if (err := ensure_in_workspace(output_dir, settings=settings)):
