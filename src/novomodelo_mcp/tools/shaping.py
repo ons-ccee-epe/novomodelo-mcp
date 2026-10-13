@@ -14,6 +14,13 @@ def attach_artifact(envelope: dict[str, Any], key: str, path: str) -> dict[str, 
     return envelope
 
 
+def attach_version_warnings(result: Any, warnings: list[str]) -> Any:
+    """Acrescenta `avisos_de_versao` a uma resposta dict quando há peça divergente."""
+    if warnings and isinstance(result, dict):
+        result["avisos_de_versao"] = warnings
+    return result
+
+
 def cap_envelope(envelope: dict[str, Any], settings: Settings) -> dict[str, Any]:
     """Trunca listas de diagnóstico longas e sinaliza summary grande demais.
 

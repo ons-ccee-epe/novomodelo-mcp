@@ -39,6 +39,7 @@ from typing import Any
 
 from .machine import normalize_hostname
 from .state import atomic_write_text, file_lock
+from .versions import normalize_version
 
 #: Teto de entradas no registro de calibração (mantém as mais recentes).
 MAX_CALIBRATIONS = 200
@@ -252,12 +253,6 @@ def size_ratio(point: dict[str, Any], case_dims: dict[str, Any]) -> float:
 def _is_own(point: dict[str, Any], case_dir: str | None) -> bool:
     return bool(case_dir and point.get("source")) and \
         Path(point["source"]).is_relative_to(Path(case_dir).resolve())
-
-
-def normalize_version(version: Any) -> str | None:
-    """`"v0.18.0"` → `"0.18.0"`; vazio ou None → None."""
-    text = str(version or "").strip().lstrip("vV")
-    return text or None
 
 
 def select_reference(points: list[dict[str, Any]], case_dims: dict[str, Any],

@@ -1,6 +1,6 @@
 # <repositório anterior> — Agent Guidelines
 
-<repositório anterior> is an offline MCP (Model Context Protocol) server that wraps the
+<repositório anterior> is a local MCP (Model Context Protocol) server that wraps the
 existing `novomodelo-bridge` and `novomodelo` CLIs. Each tool envelopes one CLI subcommand
 (with `--json`) or an official `novomodelo-python` binding and relays the result.
 `README.md` is the source of truth for what the server does and how it is laid
@@ -36,7 +36,8 @@ read and are the authoritative statements; do not restate them here:
 - `.claude/rules/testing.md` (`tests/`) — the smoke/pytest tiers, offline
   discipline, the fake CLI, and the no-network contract.
 - `.claude/rules/mcp-facade.md` (`src/`) — the thin-facade contract, the error
-  envelope, the workspace path guard, and tool-shaping limits.
+  envelope, the workspace path guard, the single network exit, and tool-shaping
+  limits.
 
 ## Hard rules
 
@@ -46,9 +47,14 @@ These are non-negotiable. Fix them before any commit.
   `--json`) or a `novomodelo-python` binding and relays the result. Never reimplement
   conversion, validation, comparison, or solving inside this server. New
   behaviour belongs in `novomodelo` or `novomodelo-bridge`, not here.
-- **Offline only.** The server speaks stdio and makes no outbound network
-  request. Tests run offline and must stay that way. A tool that needs the
-  network is out of scope.
+- **Network: official domains, local first, warn when absent.** The server
+  speaks stdio. A tool may use the network only through `adapters/versions.py`
+  (`fetch_bytes`/`fetch_json`, the single exit point), only to the allow-listed
+  official domains, with a short timeout and a local `truststore` context (never
+  `truststore.inject_into_ssl()`). Docs and schemas stay bundled. Without
+  network the tool still answers, with `aviso_rede` and the manual command.
+  Every network tool is listed in `tools/annotations.py::NETWORK_TOOLS` and
+  carries `openWorldHint=True`. Tests never touch the network.
 - **Never raise to the caller.** Every tool and adapter returns an error
   envelope on failure (`adapters/envelope.py` is the single owner of its shape);
   an uncaught exception that crashes the stdio server is a bug. Transport

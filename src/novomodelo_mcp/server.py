@@ -1,7 +1,11 @@
-"""Ponto de entrada do servidor MCP do Novomodelo (transporte stdio, offline)."""
+"""Ponto de entrada do servidor MCP do Novomodelo (transporte stdio)."""
 from __future__ import annotations
 
+import functools
+
 from mcp.server.fastmcp import FastMCP
+
+from .adapters import versions
 
 from .adapters.discovery import find_bridge, find_novomodelo, tool_version
 from .adapters.paths import allowed_roots
@@ -16,13 +20,46 @@ from .tools.pre_run import register_pre_run
 from .tools.reference import register_reference
 from .tools.results import register_results
 from .tools.run import register_run
-from .tools.annotations import READ_ONLY
+from .tools.annotations import READ_ONLY_NET
+from .tools.shaping import attach_version_warnings
+
+
+class _WithVersionWarnings:
+    """`mcp` cujo `.tool()` faz toda resposta levar `avisos_de_versao` quando houver.
+
+    Embrulhar no registro, e não no `cap_envelope`: parte das tools não passa por ele.
+    """
+
+    def __init__(self, mcp: FastMCP, settings) -> None:
+        self._mcp, self._settings = mcp, settings
+
+    def __getattr__(self, name):
+        return getattr(self._mcp, name)
+
+    def tool(self, *args, **kwargs):
+        register = self._mcp.tool(*args, **kwargs)
+
+        def deco(fn):
+            @functools.wraps(fn)
+            def with_warnings(*a, **k):
+                result = fn(*a, **k)
+                try:
+                    warnings = versions.version_warnings(self._settings)
+                except Exception:  # noqa: BLE001 - never-raise: o aviso é extra, não pode derrubar a tool
+                    warnings = []
+                return attach_version_warnings(result, warnings)
+
+            with_warnings._avisos_de_versao = True
+            return register(with_warnings)
+
+        return deco
 
 
 def build_server() -> FastMCP:
     """Constrói e configura o servidor com todas as ferramentas registradas."""
     settings = load_settings()
-    mcp = FastMCP(SERVER_NAME)
+    server = FastMCP(SERVER_NAME)
+    mcp = _WithVersionWarnings(server, settings)
 
     register_pre_run(mcp, settings)     # pré-rodada: check / convert / validate
     register_post_run(mcp, settings)    # pós-rodada: compare_* / dashboard
@@ -32,13 +69,26 @@ def build_server() -> FastMCP:
     register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
     register_run(mcp, settings)         # init / plano / apply / run assíncrono
 
-    @mcp.tool(annotations=READ_ONLY)
+    @mcp.tool(annotations=READ_ONLY_NET)
     def server_info() -> dict:
-        """Diagnóstico do próprio MCP: binários descobertos e suas versões."""
+        """Diagnóstico do próprio MCP: binários, versões e se há versão nova.
+
+        `versoes`: executável, biblioteca, bridge e docs, com a versão esperada.
+        `versao_nova`: consulta, uma vez por sessão e em até alguns segundos, os
+        releases do novomodelo e do bridge (domínios oficiais); sem rede, diz que
+        não foi possível verificar e mostra onde conferir.
+        """
         bridge = find_bridge(settings)
         novomodelo = find_novomodelo(settings)
+        try:
+            pieces = versions.local_versions(settings)
+            newer = versions.update_check(settings)
+        except Exception as exc:  # noqa: BLE001 - never-raise: diagnóstico parcial em vez de derrubar
+            pieces, newer = {"erro": str(exc)}, {"erro": str(exc)}
         return {
             "server": f"{SERVER_NAME}-mcp",
+            "versoes": {**pieces, "esperada": versions.expected_version()},
+            "versao_nova": newer,
             "bridge": {"path": bridge, "version": tool_version(bridge),
                        "available": bridge is not None},
             "novomodelo": {"path": novomodelo, "version": tool_version(novomodelo),
@@ -58,7 +108,7 @@ def build_server() -> FastMCP:
             },
         }
 
-    return mcp
+    return server
 
 
 def main() -> None:

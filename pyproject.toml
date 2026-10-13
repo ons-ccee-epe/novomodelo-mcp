@@ -1,7 +1,7 @@
 [project]
 name = "novomodelo-mcp"
 version = "0.1.0"
-description = "Servidor MCP (fachada offline) sobre as CLIs do Novomodelo e do novomodelo-bridge"
+description = "Servidor MCP (fachada local) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
@@ -13,6 +13,7 @@ dependencies = [
     # gravada pela mesma versão do binding. Sobe junto com o release do novomodelo.
     "novomodelo-python==0.18.0",
     "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
+    "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
 ]
 
 [project.scripts]

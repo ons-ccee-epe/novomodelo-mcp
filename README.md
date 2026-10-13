@@ -1,6 +1,6 @@
 # novomodelo-mcp
 
-Servidor **MCP** (Model Context Protocol) do Novomodelo: uma **fachada fina e offline**
+Servidor **MCP** (Model Context Protocol) do Novomodelo: uma **fachada fina e local**
 sobre as ferramentas que já existem (`novomodelo` e `novomodelo-bridge`). Com ele, um
 agente de IA valida, converte, compara, visualiza, roda e **lê resultados** de casos
 por ferramentas padronizadas, sem que este servidor contenha regra de negócio.
@@ -136,6 +136,22 @@ symlinks e `..`). Sem essa variável o servidor opera **irrestrito**, e o `serve
 sinaliza o estado. Edições com `force=True` (gravar violando o schema) e
 `case_init(force=True)` (sobrescrever arquivos) exigem `NOVOMODELO_MCP_ALLOW_FORCE=1`.
 
+## Versões e rede
+
+O MCP conversa com o executável, a biblioteca (`novomodelo-python`) e o bridge da
+mesma versão (o pin exato da biblioteca no pacote). Se alguma peça estiver em outra
+versão, ou faltar, **toda** resposta traz `avisos_de_versao` com o comando para
+corrigir; a chamada continua.
+
+A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo e do
+bridge (uma vez por sessão, em poucos segundos), e apenas nestes domínios:
+`github.com/ons-ccee-epe/*`, `api.github.com/repos/ons-ccee-epe/*`,
+`pypi.org/pypi/novomodelo-bridge/*` e, como destino de download,
+`release-assets.githubusercontent.com`. A versão nova do MCP é inferida pela do
+novomodelo. O HTTPS usa os certificados do sistema (`truststore`), o que permite
+atravessar proxy corporativo. Sem rede, a resposta diz que não foi possível
+verificar e onde conferir. Documentação e schemas são embutidos e não usam a rede.
+
 ## Variáveis de ambiente
 
 Todas usam o prefixo `NOVOMODELO_MCP_`.
@@ -222,7 +238,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 
 **Referência** (`tools/reference.py`)
 - `schema_list()` / `schema_get(tipo)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{tipo}`
-- `docs_list(section)` / `docs_read(page)`: documentação offline
+- `docs_list(section)` / `docs_read(page)`: documentação embutida (sem rede)
 
 **Solver** (`tools/novomodelo_meta.py`)
 - `solver_version()`: versão, backend e build do `novomodelo` (texto do CLI parseado + `raw`)
@@ -246,7 +262,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
 **Diagnóstico**
-- `server_info()`: binários, versões, workspace, docs, state dir e settings
+- `server_info()`: binários, versões das peças (`versoes`), se há versão nova (`versao_nova`), workspace, docs, state dir e settings
 
 ## Estrutura
 

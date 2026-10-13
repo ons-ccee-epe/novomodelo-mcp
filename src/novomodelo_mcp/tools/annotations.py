@@ -2,7 +2,8 @@
 
 O cliente (Claude Desktop, Claude Code, Kiro…) pode usar essas dicas para decidir
 quando pedir aprovação. São DICAS, não garantias: quem decide é o cliente e a
-política da organização. Todas as tools são locais, então `openWorldHint=False`.
+política da organização. Só as tools de `NETWORK_TOOLS` falam com a rede
+(`openWorldHint=True`); as demais são locais.
 
 Toda tool nova precisa usar uma das três constantes; o teste
 `tests/test_tool_annotations.py` falha se alguma ficar sem classificação.
@@ -18,6 +19,13 @@ except ImportError:  # smoke com Python puro (sem o pacote mcp): as dicas viram 
 #: Só lê: não altera nenhum arquivo do usuário. Pode gravar cache ou estado
 #: interno do próprio MCP (ex.: calibração em state_dir, schemas em /tmp).
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
+
+#: Só lê, e consulta a rede (domínios oficiais; sem rede, devolve aviso).
+READ_ONLY_NET = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
+
+#: Tools que usam a rede: o teste de anotações confere que são exatamente as de
+#: `openWorldHint=True`.
+NETWORK_TOOLS = frozenset({"server_info"})
 
 #: Grava arquivos novos (deck convertido, relatório, dashboard, caso de template)
 #: sem apagar dados existentes; sobrescrever exige `force`, que é controlado.
