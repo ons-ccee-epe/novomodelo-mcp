@@ -24,6 +24,23 @@ from .tools.annotations import READ_ONLY_NET
 from .tools.shaping import attach_version_warnings
 
 
+SERVER_INSTRUCTIONS = """\
+Servidor MCP do novomodelo: valida, converte (NEWAVE/DECOMP), roda, compara e lê os
+resultados de casos, e responde sobre a metodologia pelas docs oficiais.
+
+- Comece por `server_info`: versões das peças, workspace e se há versão nova.
+- As docs embutidas são as oficiais da versão instalada. Para a metodologia e o uso do
+  novomodelo, use `docs_search` antes de responder, e não a web nem a memória: a
+  definição do novomodelo pode diferir da literatura e do NEWAVE.
+- Busque em inglês (as docs estão em inglês); termos em português do glossário das
+  docs são traduzidos. Depois leia a seção com `docs_read(page, secao)`.
+- Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
+- Se as docs não cobrem o assunto, diga isso: não complete de memória.
+- A rede só é usada para versões e para instalar o executável.
+- As tools que gravam ou alteram arquivos pedem aprovação.
+"""
+
+
 class _WithVersionWarnings:
     """`mcp` cujo `.tool()` faz toda resposta levar `avisos_de_versao` quando houver.
 
@@ -58,7 +75,7 @@ class _WithVersionWarnings:
 def build_server() -> FastMCP:
     """Constrói e configura o servidor com todas as ferramentas registradas."""
     settings = load_settings()
-    server = FastMCP(SERVER_NAME)
+    server = FastMCP(SERVER_NAME, instructions=SERVER_INSTRUCTIONS)
     mcp = _WithVersionWarnings(server, settings)
 
     register_pre_run(mcp, settings)     # pré-rodada: check / convert / validate
