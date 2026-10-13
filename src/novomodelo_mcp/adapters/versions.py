@@ -117,13 +117,8 @@ def _bridge_command(version: str, origin: str | None = None) -> str:
     return f"uv tool install --force {BRIDGE_CLI}=={version}"
 
 
-def version_warnings(settings) -> list[str]:
-    """Uma linha por peça ausente ou de outra versão, com o comando para corrigir."""
-    expected = expected_version()
-    if not expected:
-        return []
+def _piece_warnings(settings, expected: str) -> list[str]:
     pieces = local_versions(settings)
-    lines = []
     texts = {
         "executavel": ("executável novomodelo",
                        f"{cli_install_command(expected)} (ou a tool instalar_novomodelo)"),
@@ -132,6 +127,7 @@ def version_warnings(settings) -> list[str]:
         "bridge": (BRIDGE_CLI, _bridge_command(expected, pieces["bridge"].get("origem"))),
         "docs": ("docs embutidas", f"reinstale o MCP {expected} (as docs vêm junto)"),
     }
+    lines = []
     for key, (label, command) in texts.items():
         found = normalize_version(pieces[key]["versao"])
         if found is None and key == "docs":
@@ -141,6 +137,20 @@ def version_warnings(settings) -> list[str]:
         elif found != expected:
             lines.append(f"{label} na versão {found}; o MCP espera {expected}. "
                          f"Atualize: {command}")
+    return lines
+
+
+def version_warnings(settings) -> list[str]:
+    """Uma linha por peça ausente ou de outra versão, com o comando para corrigir; e o
+    aviso de docs lidas de uma pasta de desenvolvimento."""
+    from .reference import docs_origin
+    expected = expected_version()
+    lines = _piece_warnings(settings, expected) if expected else []
+    origin = docs_origin(settings)
+    if origin["origem"] == "pasta_de_desenvolvimento":
+        lines.append(f"docs lidas de uma pasta de desenvolvimento ({origin['caminho']}), não "
+                     "das embutidas da versão do MCP; tire NOVOMODELO_MCP_DOCS_DIR da "
+                     "configuração para usar as embutidas")
     return lines
 
 

@@ -62,7 +62,6 @@ Exemplo chamando o Python do venv direto (arranque rápido, sem rebuild):
         "PATH": "/caminho/para/.cargo/bin:/usr/bin:/bin",
         "NOVOMODELO_MCP_SOLVER_BIN": "/caminho/para/.cargo/bin/novomodelo",
         "NOVOMODELO_MCP_WORKSPACE": "/caminho/para/seus/estudos",
-        "NOVOMODELO_MCP_DOCS_DIR": "/caminho/para/novomodelo-docs/src/content/docs",
         "UV_SYSTEM_CERTS": "1"
       }
     }
@@ -164,7 +163,7 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | `NOVOMODELO_MCP_SOLVER_BIN` | (PATH) | caminho do `novomodelo` |
 | `NOVOMODELO_MCP_BRIDGE_BIN` | (o do pacote, senão PATH) | opcional: outro `novomodelo-bridge`; tem prioridade sobre o do pacote |
 | `NOVOMODELO_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando definida) |
-| `NOVOMODELO_MCP_DOCS_DIR` | — | pasta de páginas `.md`/`.mdx` (ver [Documentação e schemas](#documentação-e-schemas)) |
+| `NOVOMODELO_MCP_DOCS_DIR` | — | só desenvolvimento: pasta de páginas de um clone das docs, no lugar das embutidas (gera aviso; ver [Documentação e schemas](#documentação-e-schemas)) |
 | `NOVOMODELO_MCP_SCHEMAS_DIR` | — | pasta com `*.schema.json` (ver [Documentação e schemas](#documentação-e-schemas)) |
 | `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)` e `case_init(force=True)` |
 | `NOVOMODELO_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
@@ -191,27 +190,31 @@ processos nos três SOs.
 
 ## Documentação e schemas
 
-Tudo é lido do disco; nada vem da rede. A primeira fonte que existir vence:
+As docs e os schemas são lidos do disco, sem rede.
 
-| | 1º | 2º | 3º |
-|---|---|---|---|
-| **Docs** (`docs_list`, `docs_read`) | `NOVOMODELO_MCP_DOCS_DIR` | busca automática de uma pasta `novomodelo-docs` ao lado do repo ou do diretório de trabalho | cópia embutida `src/novomodelo_mcp/_bundled/docs` |
-| **Schemas** (`schema_list`, `schema_get`, `run_apply`) | `NOVOMODELO_MCP_SCHEMAS_DIR` | `novomodelo schema export` do binário instalado | cópia embutida `src/novomodelo_mcp/_bundled/schemas` |
+- **Docs** (`docs_list`, `docs_read`): sempre as **embutidas** no pacote
+  (`src/novomodelo_mcp/_bundled/docs`), que são as da versão do MCP. A versão e o commit
+  das docs ficam em `_bundled/manifest.json` e aparecem no `server_info` (`docs`).
+- **Schemas** (`schema_list`, `schema_get`, `run_apply`, `deck_edit_json`): a primeira fonte
+  que existir vence: `NOVOMODELO_MCP_SCHEMAS_DIR`, depois `novomodelo schema export` do
+  executável instalado, depois a cópia embutida `_bundled/schemas`.
 
-A cópia embutida (`_bundled/`) existe para o MCP funcionar sem clone das docs. Ela é um
-retrato de uma versão e precisa ser atualizada à mão quando o novomodelo mudar:
+### Atualizar as docs embutidas (desenvolvimento)
 
 ```bash
-uv run python scripts/sync_bundled.py --source /caminho/para/novomodelo-docs
+uv run python scripts/sync_bundled.py --source /caminho/para/clone/do/novomodelo-docs
+uv run python scripts/sync_bundled.py --source /caminho/para/clone/do/novomodelo-docs --check
 ```
 
-O script copia `src/content/docs/**/*.md(x)` e `public/schemas/*.schema.json` do clone
-e substitui o conteúdo atual. Hoje ela corresponde à **0.18.0**. Esta arquitetura de docs
-é provisória (ver o plano de evolução do MCP).
+O script grava as páginas já resolvidas (os trechos `_impl` entram no lugar dos
+componentes, e a marcação MDX sai), os schemas, o índice de busca
+(`_bundled/docs_index.sqlite`) e o manifesto (versão do `versions.json` das docs e commit
+do clone). Com `--check`, não grava e sai com erro se o embutido divergir da fonte; o CI
+roda essa checagem no commit gravado no manifesto.
 
-> `deck_edit_json` valida contra schema **só** quando `NOVOMODELO_MCP_SCHEMAS_DIR` está
-> definida; sem ela, a validação por schema é pulada (a resposta avisa). As demais tools
-> usam a cascata acima.
+Para testar mudanças nas docs antes de um release, `NOVOMODELO_MCP_DOCS_DIR` aponta para
+a pasta de páginas de um clone (`src/content/docs`). É uma opção de desenvolvimento: com
+ela, toda resposta traz um aviso em `avisos_de_versao`.
 
 ## Ferramentas
 

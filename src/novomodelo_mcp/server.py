@@ -9,7 +9,7 @@ from .adapters import versions
 
 from .adapters.discovery import bridge_origin, find_novomodelo, tool_version
 from .adapters.paths import allowed_roots
-from .adapters.reference import docs_root
+from .adapters.reference import docs_origin
 from .adapters.state import state_dir
 from .config import load_settings
 from .names import SERVER_NAME
@@ -94,7 +94,7 @@ def build_server() -> FastMCP:
             "novomodelo": {"path": novomodelo, "version": tool_version(novomodelo),
                       "available": novomodelo is not None},
             "schemas_dir": settings.schemas_dir,
-            "docs_dir": docs_root(settings),
+            "docs": docs_origin(settings),
             "workspace": [str(r) for r in allowed_roots(settings)] or "irrestrito (defina NOVOMODELO_MCP_WORKSPACE)",
             "allow_force": settings.allow_force,
             "state_dir": str(state_dir(settings)),

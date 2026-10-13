@@ -41,84 +41,40 @@ def test_docs_list_and_read():
     os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
 
 
-def test_discover_prefers_content_subpath():
-    with tempfile.TemporaryDirectory() as d:
-        base = Path(d)
-        content = base / "novomodelo-docs" / "src" / "content" / "docs"
-        content.mkdir(parents=True)
-        (content / "intro.md").write_text("# intro")
-        found = REF._search_docs_in([base])
-        assert found is not None and Path(found) == content, found
-
-
-def test_discover_accepts_repo_root_layout():
-    with tempfile.TemporaryDirectory() as d:
-        base = Path(d)
-        root = base / "novomodelo-docs"
-        root.mkdir()
-        (root / "guide.mdx").write_text("# guide")
-        found = REF._search_docs_in([base])
-        assert found is not None and Path(found) == root, found
-
-
-def test_discover_none_when_absent():
-    with tempfile.TemporaryDirectory() as d:
-        assert REF._search_docs_in([Path(d)]) is None
-
-
-def test_docs_fallback_to_bundled_when_no_env_or_discovery():
-    """Sem NOVOMODELO_MCP_DOCS_DIR e sem clone descoberto, o fallback EMBUTIDO responde.
-
-    Contrato novo (docs embutidos no pacote): list_docs nunca fica indisponivel
-    quando o snapshot embutido esta presente — retorna as paginas embutidas.
-    """
+def test_clone_nearby_is_ignored_without_env():
+    """Sem NOVOMODELO_MCP_DOCS_DIR, as docs são sempre as EMBUTIDAS, mesmo com um clone ao lado."""
     os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
-    REF._DOCS_DISCOVER_CACHE.clear()
-    with tempfile.TemporaryDirectory() as empty:
-        # forca bases vazias para a auto-descoberta nao achar nada
-        orig = REF._candidate_bases
-        REF._candidate_bases = lambda: [Path(empty)]
+    old_cwd = os.getcwd()
+    with tempfile.TemporaryDirectory() as d:
+        clone = Path(d) / "novomodelo-docs" / "src" / "content" / "docs"
+        clone.mkdir(parents=True)
+        (clone / "pagina-do-clone.md").write_text("# outra versao")
+        os.chdir(d)
         try:
-            s = load_settings()
-            und = REF.list_docs(s)
-            assert und["status"] == "ok", und
-            assert und["count"] > 0, und
-            assert str(Path("_bundled") / "docs") in und["docs_dir"], und
+            lst = REF.list_docs(load_settings())
+            assert lst["status"] == "ok" and lst["count"] > 0, lst
+            assert "pagina-do-clone" not in lst["pages"], lst
+            assert str(Path("_bundled") / "docs") in lst["docs_dir"], lst
         finally:
-            REF._candidate_bases = orig
-            REF._DOCS_DISCOVER_CACHE.clear()
+            os.chdir(old_cwd)
 
 
 def test_docs_unavailable_messages_when_bundled_missing():
-    """Quando NAO ha env var, nem clone, nem embutido, a msg de erro orienta.
-
-    Cenario de borda (build sem o snapshot embutido): a mensagem deve distinguir
-    o caso (NOVOMODELO_MCP_DOCS_DIR nao definido) e dar a dica do clone novomodelo-docs; e um
-    NOVOMODELO_MCP_DOCS_DIR invalido deve aparecer na mensagem do read_doc.
-    """
+    """Sem as embutidas (build quebrado), a mensagem manda reinstalar o MCP, não clonar nada;
+    com NOVOMODELO_MCP_DOCS_DIR inválido, o caminho aparece na mensagem."""
     os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
-    REF._DOCS_DISCOVER_CACHE.clear()
-    with tempfile.TemporaryDirectory() as empty:
-        orig_bases = REF._candidate_bases
-        orig_bundled = REF._bundled_dir
-        REF._candidate_bases = lambda: [Path(empty)]
-        REF._bundled_dir = lambda name: None  # simula build sem o embutido
-        try:
-            s = load_settings()
-            und = REF.list_docs(s)
-            assert und["status"] == "error", und
-            assert "nao definido" in und["diagnostics"][0], und
-            assert "novomodelo-docs" in und["diagnostics"][1], und
-            os.environ["NOVOMODELO_MCP_DOCS_DIR"] = "/tmp/nao/existe/xyz"
-            s2 = load_settings()
-            bad = REF.read_doc(s2, "foo", 100)
-            assert bad["status"] == "error" and "/tmp/nao/existe/xyz" in bad["diagnostics"][0], bad
-        finally:
-            REF._candidate_bases = orig_bases
-            REF._bundled_dir = orig_bundled
-            os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
-            REF._DOCS_DISCOVER_CACHE.clear()
-
+    orig_bundled = REF._bundled_dir
+    REF._bundled_dir = lambda name: None
+    try:
+        und = REF.list_docs(load_settings())
+        assert und["status"] == "error" and "reinstale o MCP" in und["diagnostics"][0], und
+        assert "clone" not in " ".join(und["diagnostics"]), und
+        os.environ["NOVOMODELO_MCP_DOCS_DIR"] = "/tmp/nao/existe/xyz"
+        bad = REF.read_doc(load_settings(), "foo", 100)
+        assert bad["status"] == "error" and "/tmp/nao/existe/xyz" in bad["diagnostics"][0], bad
+    finally:
+        REF._bundled_dir = orig_bundled
+        os.environ.pop("NOVOMODELO_MCP_DOCS_DIR", None)
 
 
 def main():

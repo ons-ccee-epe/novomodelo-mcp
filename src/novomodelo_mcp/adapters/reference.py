@@ -1,11 +1,9 @@
-"""Referência: JSON Schemas de entrada e páginas de documentação (offline).
+"""Referência: JSON Schemas de entrada e páginas de documentação (sem rede).
 
 Fontes:
 - schemas: `NOVOMODELO_MCP_SCHEMAS_DIR`, ou exportados sob demanda via `novomodelo schema export`.
-- docs: `NOVOMODELO_MCP_DOCS_DIR`; se ausente/inválido, AUTO-DESCOBERTA de um clone
-  `novomodelo-docs` em locais previsíveis (ao lado do repo do MCP ou do diretório de
-  trabalho — ex.: .../codigo/<repositório anterior> + .../codigo/novomodelo-docs). Sem env var e
-  sem caminho pessoal fixo: a mesma heurística vale para qualquer checkout.
+- docs: as EMBUTIDAS no pacote (as da versão do MCP). `NOVOMODELO_MCP_DOCS_DIR` só serve
+  para desenvolvimento das docs, e o `server_info` avisa quando ela está em uso.
 Leitura confinada à raiz; conteúdo com teto. Sem regra de negócio.
 """
 from __future__ import annotations
@@ -21,9 +19,9 @@ from pathlib import Path
 
 from ..config import Settings
 from .discovery import find_novomodelo
+from .envelope import error
 
 _SCHEMA_EXPORT_CACHE: dict[str, str] = {}
-_DOCS_DISCOVER_CACHE: dict[str, str] = {}
 _SUFFIX = ".schema.json"
 
 #: `tipo` é o NOME de um schema, nunca um caminho: "D:x" passaria por uma checagem de
@@ -122,106 +120,36 @@ def _within(path: Path, root: Path) -> bool:
 
 # ---------------------------------------------------------------- docs
 
-_CLONE_HINT = (
-    "clone https://github.com/ons-ccee-epe/novomodelo-docs e defina NOVOMODELO_MCP_DOCS_DIR para a "
-    "pasta de paginas .md/.mdx (no layout padrao do repo, src/content/docs), ou "
-    "deixe o clone ao lado do repo do novomodelo/<repositório anterior> para a descoberta automatica "
-    "encontra-lo"
-)
-
-
-def _has_docs(d: Path) -> bool:
-    """True se o diretório contém ao menos um .md/.mdx (para no primeiro achado)."""
-    try:
-        for p in d.rglob("*"):
-            if p.suffix in (".md", ".mdx"):
-                return True
-    except OSError:
-        return False
-    return False
-
-
-def _search_docs_in(bases: list[Path]) -> str | None:
-    """Procura, na ordem dada, um clone `novomodelo-docs` com conteúdo dentro das bases.
-
-    Puro e testável: recebe as bases já resolvidas. Prefere a subpasta de conteúdo
-    do layout padrão (`novomodelo-docs/src/content/docs`); aceita também a raiz do clone,
-    caso o repo seja reorganizado.
-    """
-    for base in bases:
-        for cand in (base / "novomodelo-docs" / "src" / "content" / "docs",
-                     base / "novomodelo-docs"):
-            if cand.is_dir() and _has_docs(cand):
-                return str(cand)
-    return None
-
-
-def _candidate_bases() -> list[Path]:
-    """Bases previsíveis onde um clone `novomodelo-docs` costuma ficar (sem env var).
-
-    Ancestrais do próprio pacote do MCP e do diretório de trabalho — novomodelo o
-    layout usual de checkouts lado a lado, sem depender de caminho pessoal.
-    """
-    bases: list[Path] = []
-    seen: set[str] = set()
-
-    def add(p: Path) -> None:
-        try:
-            rp = p.resolve()
-        except OSError:
-            return
-        key = str(rp)
-        if key not in seen:
-            seen.add(key)
-            bases.append(rp)
-
-    for anc in list(Path(__file__).resolve().parents)[:6]:
-        add(anc)
-    try:
-        cwd = Path.cwd()
-    except OSError:
-        cwd = None
-    if cwd is not None:
-        add(cwd)
-        for anc in list(cwd.resolve().parents)[:4]:
-            add(anc)
-    return bases
-
-
-def _discover_docs_dir() -> str | None:
-    """Auto-descoberta de um clone `novomodelo-docs` (com cache do acerto)."""
-    cached = _DOCS_DISCOVER_CACHE.get("root")
-    if cached and Path(cached).is_dir():
-        return cached
-    found = _search_docs_in(_candidate_bases())
-    if found:
-        _DOCS_DISCOVER_CACHE["root"] = found
-    return found
+def _dev_docs_dir(settings: Settings) -> str | None:
+    docs_dir = getattr(settings, "docs_dir", None)
+    return docs_dir if docs_dir and Path(docs_dir).is_dir() else None
 
 
 def docs_root(settings: Settings) -> str | None:
-    """Raiz efetiva das docs (cascata; primeiro que existir vence).
+    """Raiz das docs: a pasta de desenvolvimento, se definida, senão as embutidas.
 
-    ``NOVOMODELO_MCP_DOCS_DIR`` (valido) -> auto-descoberta de um clone ``novomodelo-docs``
-    -> docs EMBUTIDOS (``_bundled/docs``). O embutido garante o caminho feliz
-    offline, sem clone nem env var.
+    Nunca um clone achado por perto: um clone de outra versão passaria na frente das
+    docs da versão instalada sem ninguém perceber.
     """
-    if settings.docs_dir and Path(settings.docs_dir).is_dir():
-        return settings.docs_dir
-    return _discover_docs_dir() or _bundled_dir("docs")
+    return _dev_docs_dir(settings) or _bundled_dir("docs")
+
+
+def docs_origin(settings: Settings) -> dict:
+    """De onde vêm as docs: `embutidas` (versão e commit) ou `pasta_de_desenvolvimento`."""
+    if dev := _dev_docs_dir(settings):
+        return {"origem": "pasta_de_desenvolvimento", "caminho": dev}
+    manifest = bundled_manifest() or {}
+    return {"origem": "embutidas", "versao": manifest.get("docs_versao"),
+            "commit": manifest.get("docs_commit")}
 
 
 def _docs_unavailable(settings: Settings) -> dict:
-    """Erro quando não há docs: env var ausente/quebrada E nada descoberto."""
-    configured = settings.docs_dir
-    if not configured:
-        msg = ("docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR nao definido e nenhum clone "
-               "novomodelo-docs encontrado automaticamente")
-    else:
-        msg = ("docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR aponta para caminho inexistente "
-               f"ou que nao e diretorio ({configured}) e nenhum clone novomodelo-docs "
-               "encontrado automaticamente")
-    return {"status": "error", "diagnostics": [msg, _CLONE_HINT]}
+    if settings.docs_dir:
+        return error(2, "docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR aponta para caminho "
+                        f"inexistente ou que nao e diretorio ({settings.docs_dir}), e o pacote "
+                        "nao tem as docs embutidas")
+    return error(2, "docs indisponiveis: o pacote do MCP nao tem as docs embutidas; "
+                    "reinstale o MCP")
 
 
 def list_docs(settings: Settings, section: str | None = None) -> dict:
@@ -229,13 +157,7 @@ def list_docs(settings: Settings, section: str | None = None) -> dict:
     if root is None:
         return _docs_unavailable(settings)
     base = Path(root)
-    pages = []
-    for p in sorted(base.rglob("*")):
-        if p.is_file() and p.suffix in (".md", ".mdx"):
-            rel = p.relative_to(base).with_suffix("").as_posix()  # id estável em qualquer SO
-            if section and not rel.startswith(section):
-                continue
-            pages.append(rel)
+    pages = [rel for rel, _ in iter_doc_pages(base) if not section or rel.startswith(section)]
     return {"status": "ok", "docs_dir": str(base), "count": len(pages), "pages": pages}
 
 

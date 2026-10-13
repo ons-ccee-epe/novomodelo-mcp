@@ -17,10 +17,6 @@ def offline_settings(monkeypatch):
     monkeypatch.delenv("NOVOMODELO_MCP_DOCS_DIR", raising=False)
     monkeypatch.delenv("NOVOMODELO_MCP_SCHEMAS_DIR", raising=False)
     monkeypatch.delenv("NOVOMODELO_MCP_SOLVER_BIN", raising=False)
-    # Neutraliza a auto-descoberta de clone novomodelo-docs e o cache, para o teste
-    # exercitar deterministicamente o fallback embutido.
-    monkeypatch.setattr(R, "_discover_docs_dir", lambda: None)
-    R._DOCS_DISCOVER_CACHE.clear()
     R._SCHEMA_EXPORT_CACHE.clear()
     return load_settings()
 
