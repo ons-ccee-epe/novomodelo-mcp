@@ -4,12 +4,25 @@ Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 """
 from __future__ import annotations
 
+from typing import Literal
+
 from ..adapters.bridge import run_bridge
+from ..adapters.envelope import error
 from ..adapters.paths import ensure_in_workspace
-from ..adapters.validate import validate_compare_inputs
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
 from .annotations import WRITES
+
+
+#: Vocabulário do `--format` do bridge, publicado como `enum` no schema da tool.
+FormatoCompare = Literal["console", "html", "csv", "parquet", "json", "all"]
+
+
+def _tolerance_type_error(tolerance) -> dict | None:
+    if tolerance is None or (isinstance(tolerance, (int, float))
+                             and not isinstance(tolerance, bool)):
+        return None
+    return error(2, "tolerance deve ser número", f"recebido: {tolerance!r}")
 
 
 def _compare(kind: str, src_dir: str, output_dir: str, tolerance, fmt, out_dir,
@@ -36,7 +49,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         newave_dir: str,
         output_dir: str,
         tolerance: float | None = None,
-        fmt: str = "json",
+        fmt: FormatoCompare = "json",
         out_dir: str | None = None,
     ) -> dict:
         """Compara resultados de uma rodada NEWAVE contra a saída Novomodelo convertida.
@@ -46,12 +59,13 @@ def register_post_run(mcp, settings: Settings) -> None:
         (a que contém `training/` e `simulation/`), não a pasta do caso.
         `fmt="html"` + `out_dir` geram um relatório multi-aba (custo, sistema,
         balanço energético, rede, convergência, performance, plantas, FPHA);
-        o caminho volta em `artifacts.report_dir`. O veredito de aderência está
-        no envelope (`status`/`diagnostics`), não no código de saída.
+        o caminho volta em `artifacts.report_dir`. Um formato por chamada; para
+        vários, uma chamada por formato. O veredito de aderência está no envelope
+        (`status`/`diagnostics`), não no código de saída.
         """
         if (err := ensure_in_workspace(newave_dir, output_dir, out_dir, settings=settings)):
             return err
-        if (err := validate_compare_inputs(tolerance, fmt)):
+        if (err := _tolerance_type_error(tolerance)):
             return err
         return _compare("newave", newave_dir, output_dir, tolerance, fmt, out_dir,
                         settings)
@@ -61,19 +75,20 @@ def register_post_run(mcp, settings: Settings) -> None:
         decomp_dir: str,
         output_dir: str,
         tolerance: float | None = None,
-        fmt: str = "json",
+        fmt: FormatoCompare = "json",
         out_dir: str | None = None,
     ) -> dict:
         """Compara uma rodada DECOMP contra a saída Novomodelo convertida.
 
         `decomp_dir`: pasta da revisão DECOMP (com os resultados dele).
         `output_dir`: pasta de SAÍDA do `novomodelo run` do caso convertido.
-        Como `bridge_compare_newave`; o relatório HTML acrescenta seções de REE,
+        Como `bridge_compare_newave` (um formato por chamada; para vários, uma
+        chamada por formato); o relatório HTML acrescenta seções de REE,
         restrições e evaporação.
         """
         if (err := ensure_in_workspace(decomp_dir, output_dir, out_dir, settings=settings)):
             return err
-        if (err := validate_compare_inputs(tolerance, fmt)):
+        if (err := _tolerance_type_error(tolerance)):
             return err
         return _compare("decomp", decomp_dir, output_dir, tolerance, fmt, out_dir,
                         settings)
