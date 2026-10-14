@@ -4,6 +4,9 @@ Se uma tool nova for criada sem anotação, ou mudar de categoria sem querer,
 este teste falha e obriga a decidir de forma explícita.
 """
 
+import re
+from pathlib import Path
+
 from novomodelo_mcp.server import build_server
 from novomodelo_mcp.tools.annotations import NETWORK_TOOLS
 
@@ -51,3 +54,39 @@ def test_leitura_escrita_e_destrutivas():
         else:
             assert a.readOnlyHint is False, name
             assert a.destructiveHint is (name in DESTRUCTIVE), name
+
+
+README = Path(__file__).resolve().parents[1] / "README.md"
+_ROW = re.compile(r"^\| (Só leitura|Escreve arquivos novos|Altera ou interrompe) \| (.+) \|$")
+
+
+def _secao(titulo: str) -> str:
+    texto = README.read_text(encoding="utf-8")
+    inicio = texto.index(f"\n## {titulo}")
+    fim = texto.find("\n## ", inicio + 1)
+    return texto[inicio:fim if fim != -1 else None]
+
+
+def test_tabela_de_leitura_e_escrita_do_readme_bate_com_o_servidor():
+    tabela = {}
+    for linha in _secao("Leitura × escrita").splitlines():
+        if m := _ROW.match(linha):
+            tabela[m.group(1)] = set(re.findall(r"`([a-z_]+)`", m.group(2)))
+    tools = _tools()
+    leitura = {n for n, t in tools.items() if t.annotations.readOnlyHint}
+    destrutivas = {n for n, t in tools.items() if t.annotations.destructiveHint}
+    assert tabela == {"Só leitura": leitura,
+                      "Escreve arquivos novos": set(tools) - leitura - destrutivas,
+                      "Altera ou interrompe": destrutivas}
+
+
+def test_readme_nao_congela_contagem_nem_lista_de_liberacao():
+    texto = README.read_text(encoding="utf-8")
+    assert not re.search(r"\| (Só leitura|Escreve arquivos novos|Altera ou interrompe) \(\d+\)",
+                         texto)
+    assert not re.search(r'"mcp__novomodelo__\w+"', texto) and '"autoApprove": [' not in texto
+
+
+def test_lista_de_ferramentas_do_readme_bate_com_o_servidor():
+    citadas = set(re.findall(r"(?:^- |· | / )`([a-z_]+)", _secao("Ferramentas"), re.MULTILINE))
+    assert citadas == set(_tools())

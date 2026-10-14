@@ -48,91 +48,54 @@ subprocesso. A única requisição externa é a do `server_info` (ver *Versões 
 
 ### Configurar num cliente MCP (Claude Desktop, Claude Code, Kiro)
 
-O bloco é o mesmo; muda só o arquivo onde ele fica:
-
-| Cliente | Arquivo |
-|---|---|
-| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Claude Code | `~/.claude.json` (ou `claude mcp add`) |
-
-Exemplo chamando o Python do venv direto (arranque rápido, sem rebuild):
-
-```json
-{
-  "mcpServers": {
-    "novomodelo": {
-      "command": "/caminho/para/<repositório anterior>/.venv/bin/python",
-      "args": ["-m", "novomodelo_mcp"],
-      "env": {
-        "PATH": "/caminho/para/.cargo/bin:/usr/bin:/bin",
-        "NOVOMODELO_MCP_SOLVER_BIN": "/caminho/para/.cargo/bin/novomodelo",
-        "NOVOMODELO_MCP_WORKSPACE": "/caminho/para/seus/estudos",
-        "UV_SYSTEM_CERTS": "1"
-      }
-    }
-  }
-}
+```bash
+novomodelo-mcp configurar --cliente claude-desktop --workspace ~/estudos --mostrar  # só mostra
+novomodelo-mcp configurar --cliente claude-desktop --workspace ~/estudos            # grava
 ```
 
-Depois de editar, feche o cliente por completo e abra de novo. Para conferir, peça ao
-agente a tool `server_info`: ela mostra os binários achados, as versões, o workspace e a
-pasta de docs em uso.
+(No checkout, use `uv run novomodelo-mcp configurar …`.) `--cliente` aceita
+`claude-desktop`, `claude-code` e `kiro`; `--workspace` pode ser repetido.
+
+O comando grava a entrada `novomodelo` com o **caminho absoluto** do executável deste
+pacote (o release do novomodelo publica outro `novomodelo-mcp`, e o nome solto pegaria o
+primeiro do `PATH`) e, se informado, `NOVOMODELO_MCP_WORKSPACE`. Altera só essa entrada;
+o resto do arquivo é mantido. Antes de gravar faz backup `<arquivo>.bak-AAAAMMDD-HHMMSS`;
+rodar de novo sem mudança não grava nada. `--mostrar` imprime só o trecho que mudaria,
+sem tocar em nada.
+
+| Cliente | Arquivo | Tools de leitura |
+|---|---|---|
+| Claude Desktop | macOS `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows `%APPDATA%\Claude\claude_desktop_config.json`; Linux `~/.config/Claude/claude_desktop_config.json` | sem lista: escolha "sempre permitir" na primeira chamada |
+| Claude Code | `~/.claude.json` (escopo de usuário) | `permissions.allow` em `~/.claude/settings.json`, uma regra por tool |
+| Kiro | `~/.kiro/settings/mcp.json` (o `.kiro/settings/mcp.json` do workspace vence) | `autoApprove` na entrada do servidor |
+
+Feche o Claude Code antes de gravar: ele reescreve o `~/.claude.json` enquanto está
+aberto. `--instrucoes` (desligado por padrão) também grava uma linha que orienta o
+agente a usar o MCP para a metodologia: no Claude Code em `~/.claude/CLAUDE.md`, no Kiro em
+`~/.kiro/steering/novomodelo.md`; no Claude Desktop só imprime a linha, para colar nas
+preferências.
+
+Depois de gravar, feche o cliente por completo e abra de novo. Para conferir, peça ao
+agente a tool `server_info`: ela mostra a versão do MCP, os binários achados, as versões
+das peças, o workspace e a origem das docs.
 
 ## Leitura × escrita (aprovação no cliente)
 
 Cada tool declara, pelas anotações do MCP (`readOnlyHint`, `destructiveHint`,
 `openWorldHint`), se só lê ou se escreve. O cliente pode usar isso para não pedir
 aprovação nas tools de leitura. São **dicas**: quem decide é o cliente e a política
-da organização. A classificação fica em `src/novomodelo_mcp/tools/annotations.py`
-e é conferida por `tests/test_tool_annotations.py`.
+da organização. A classificação fica em `src/novomodelo_mcp/tools/annotations.py`;
+`tests/test_tool_annotations.py` confere a tabela abaixo contra o servidor.
 
 | Tipo | Tools |
 |---|---|
-| Só leitura (25) | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `docs_search`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
-| Escreve arquivos novos (7) | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
-| Altera ou interrompe (6) | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
+| Só leitura | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `docs_search`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
+| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
+| Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
 
-Se o seu cliente não usar as anotações, libere as de leitura pela lista de
-permissões dele:
-
-- **Claude Code** (`~/.claude/settings.json`):
-  ```json
-  {
-    "permissions": {
-      "allow": [
-      "mcp__novomodelo__server_info",
-      "mcp__novomodelo__solver_version",
-      "mcp__novomodelo__schema_list",
-      "mcp__novomodelo__schema_get",
-      "mcp__novomodelo__docs_list",
-      "mcp__novomodelo__docs_read",
-      "mcp__novomodelo__docs_search",
-      "mcp__novomodelo__deck_list",
-      "mcp__novomodelo__deck_read_json",
-      "mcp__novomodelo__deck_read_parquet",
-      "mcp__novomodelo__deck_describe_parquet",
-      "mcp__novomodelo__deck_sql",
-      "mcp__novomodelo__case_validate",
-      "mcp__novomodelo__case_summary",
-      "mcp__novomodelo__bridge_check_newave",
-      "mcp__novomodelo__bridge_check_decomp",
-      "mcp__novomodelo__results_status",
-      "mcp__novomodelo__results_convergence",
-      "mcp__novomodelo__results_list_entities",
-      "mcp__novomodelo__results_query",
-      "mcp__novomodelo__results_stochastic",
-      "mcp__novomodelo__results_policy",
-      "mcp__novomodelo__run_plan",
-      "mcp__novomodelo__run_status",
-      "mcp__novomodelo__run_logs"
-      ]
-    }
-  }
-  ```
-- **Kiro** (na entrada do servidor no `mcp.json`):
-  ```json
-  "autoApprove": ["server_info", "solver_version", "schema_list", "schema_get", "docs_list", "docs_read", "docs_search", "deck_list", "deck_read_json", "deck_read_parquet", "deck_describe_parquet", "deck_sql", "case_validate", "case_summary", "bridge_check_newave", "bridge_check_decomp", "results_status", "results_convergence", "results_list_entities", "results_query", "results_stochastic", "results_policy", "run_plan", "run_status", "run_logs"]
-  ```
+A lista de liberação das tools de leitura (Claude Code e Kiro) é gravada pelo
+`configurar`, a partir do servidor; para vê-la, rode
+`novomodelo-mcp configurar --cliente claude-code --mostrar`.
 
 ## Segurança
 

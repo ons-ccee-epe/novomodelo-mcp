@@ -136,7 +136,11 @@ def build_server() -> FastMCP:
 
 
 def main() -> None:
-    """Executável `novomodelo-mcp`: sobe o servidor no transporte stdio."""
+    """Executável `novomodelo-mcp`: sobe o servidor no stdio; `configurar` grava o cliente."""
+    import sys
+    if sys.argv[1:2] == ["configurar"]:
+        from .client_config import main as configure
+        raise SystemExit(configure(sys.argv[2:]))
     build_server().run()
 
 
