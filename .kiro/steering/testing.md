@@ -18,7 +18,7 @@ network or escapes the workspace. Auto-loads under `tests/`.
 1. **Smoke (stdlib, offline, no deps).** The `tests/smoke*.py` scripts run under
    plain `python3` with no third-party imports and no installed server. They are
    the fast gate and must stay dependency-free — a smoke test that needs `pytest`
-   or a real `cobre`/`cobre-bridge` binary belongs in tier 2.
+   or a real `novomodelo`/`novomodelo-bridge` binary belongs in tier 2.
 2. **pytest suite.** `tests/test_*.py` run after `uv sync`. They cover adapters,
    validation, imports, and bundled reference data.
 
@@ -30,7 +30,7 @@ transport/guard contract before reaching for the pytest suite.
 - **No network, ever.** No test makes an outbound request. The server is offline
   by contract and the suite proves it.
 - **No real binaries required.** CLI-dependent behaviour is exercised through
-  `tests/fake_cobre_bridge.py` (a stand-in CLI), not a real `cobre-bridge`
+  `tests/fake_novomodelo_bridge.py` (a stand-in CLI), not a real `novomodelo-bridge`
   install. A test must not fail merely because the real binary is absent.
 - **The path guard is tested on both sides.** `tests/smoke_paths.py` asserts that
   an in-workspace path is accepted and an out-of-workspace path is refused — a

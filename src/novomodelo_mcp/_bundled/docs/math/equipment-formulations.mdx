@@ -1,0 +1,725 @@
+---
+title: Equipment-Specific Formulations
+description: Detailed LP constraints for each equipment type — thermal, transmission, contracts, pumping, NCS — with objective contributions and load balance entries.
+---
+
+## Purpose
+
+This chapter details the LP constraints for each equipment type in Novomodelo. While [System Element Modeling Overview](/math/system-elements) describes _what_ each element is and its decision variables, this chapter contains the _detailed mathematical constraints_ governing each equipment type's behavior within the LP. The reading order is: [System Element Modeling Overview](/math/system-elements) → **this chapter** → [LP Formulation](/math/lp-formulation).
+
+For variable definitions and index sets, see [Notation Conventions](/overview/notation-conventions). For hydro production constraints specifically, see [Hydro Production Function Models](/math/hydro-production-models).
+
+## 1. Thermal Plants
+
+### 1.1 Standard Thermals
+
+Each thermal plant has one marginal cost per MWh of generation, $c^{th}_j$, and one generation column per block, $g_{j,k}$.
+
+**Decision Variables:**
+
+- $g_{j,k}$ = generation at thermal $j$, block $k$ (MW)
+
+**Constraints:**
+
+Generation bounds:
+
+$$
+\underline{G}_j \leq g_{j,k} \leq \bar{G}_j
+$$
+
+Both bounds are **hard** constraints with no slack variables — thermal dispatch is directly controllable (unlike hydro, which depends on exogenous inflows). The bounds may vary by stage and by block; $c^{th}_j$ varies by stage only.
+
+**Objective Contribution:**
+
+$$
+\sum_{k} \tau_k \, c^{th}_j \, g_{j,k}
+$$
+
+:::note[Continuous relaxation]
+Novomodelo does not include binary commitment variables in the training LP. The minimum generation $\underline{G}_j$ is enforced as a simple lower bound in every block in which the plant is in service: a plant with $\underline{G}_j > 0$ is never switched off, and a plant with $\underline{G}_j = 0$ may be dispatched at an intermediate level between zero and the minimum stable load of the physical unit — a region that is physically infeasible for most thermal units. This is a deliberate modeling choice: the continuous relaxation is acceptable for the long-term planning horizon targeted by SDDP.
+:::
+
+## 2. Transmission Lines
+
+**Decision Variables:**
+
+- $f^+_{n,k}$ = direct flow (source → target)
+- $f^-_{n,k}$ = reverse flow (target → source)
+
+**Bounds:**
+
+$$
+0 \leq f^+_{n,k} \leq \bar{F}^+_n, \quad 0 \leq f^-_{n,k} \leq \bar{F}^-_n
+$$
+
+:::note[Stage- and block-varying capacity]
+The capacity limits $\bar{F}^+_n$ and $\bar{F}^-_n$ may vary by stage and, optionally, by block through a stage-varying capacity override in absolute MW (Configure tab of [System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo)). A line with no override keeps its base capacity unchanged.
+:::
+
+**Load Balance Contribution:**
+
+At source bus:
+
+$$
+-f^+_{n,k} + f^-_{n,k}
+$$
+
+At target bus:
+
+$$
+f^+_{n,k} - f^-_{n,k}
+$$
+
+The dispatch LP is lossless: both flow directions enter the bus balances with coefficient ±1. Transmission losses are a reported quantity computed after the solve, $\text{loss}_{n,k} = (1 - \eta_n)\,(f^+_{n,k} + f^-_{n,k})$, where $\eta_n$ is the line's reported efficiency ([Notation Conventions](/overview/notation-conventions)). See [System Element Modeling Overview](/math/system-elements) for the network model.
+
+**Objective Contribution:**
+
+$$
+\sum_{k} \tau_k \cdot c^{exch}_n (f^+_{n,k} + f^-_{n,k})
+$$
+
+:::note[Note on Exchange Cost]
+The cost $c^{exch}_n$ is a **regularization term**, not an actual transmission cost. Its purpose is to:
+
+1. **Prevent degenerate solutions**: Without this term, multiple equivalent solutions exist with different flow patterns
+2. **Guide the solver**: Small positive cost encourages minimal power transfers when indifferent
+3. **Improve numerical stability**: Reduces cycling in LP simplex iterations
+
+Its value is set well below every generation and deficit cost, so that it only breaks ties; if it noticeably changes dispatch decisions, it is set too high.
+
+See [Penalty System — Category 3](/math/penalty-system#category-3-regularization-costs-solution-guidance) for the regularization costs.
+:::
+
+## 3. Import/Export Contracts
+
+Each contract is **unidirectional** — either an import or an export contract.
+
+**Decision Variables:**
+
+- $\chi_{c,k}$ = dispatched power for contract $c$, block $k$
+
+**Bounds:**
+
+$$
+\underline{C}_c \leq \chi_{c,k} \leq \bar{C}_c
+$$
+
+**Load Balance Contribution:**
+
+At connected bus:
+
+- Import contracts ($c \in \mathcal{C}^{imp}$): $+\chi_{c,k}$ (power entering the system)
+- Export contracts ($c \in \mathcal{C}^{exp}$): $-\chi_{c,k}$ (power leaving the system)
+
+**Objective Contribution:**
+
+$$
+\sum_{k} \tau_k \sum_{c \in \mathcal{C}} c^{ctr}_c \cdot \chi_{c,k}
+$$
+
+Because import prices ($c^{ctr}_c$) are positive and export prices are negative, this single summation naturally adds import costs and subtracts export revenue. The price sign is independent of the load-balance sign: an import column injects $+\chi_{c,k}$ _and_ carries a positive (cost) price; an export column withdraws $-\chi_{c,k}$ _and_ carries a negative (revenue) price.
+
+**Take-or-pay floor and lifecycle.** A non-zero lower bound $\underline{C}_c$ is a hard **take-or-pay** obligation: the LP must dispatch at least $\underline{C}_c$ at the contract price, even when cheaper supply exists. Bounds $[\underline{C}_c, \bar{C}_c]$ and the price $c^{ctr}_c$ may each vary by stage and, optionally, by block. Outside its commissioning window ([System Element Modeling Overview §1](/math/system-elements#entity-commissioning-windows)) a contract's column is pinned to zero. A contract is **stateless**: it carries no state variable and contributes nothing to the Benders cuts.
+
+## 4. Pumping Stations
+
+Pumping stations transfer water from a source reservoir to a destination reservoir, consuming electrical power in the process. The source-to-destination direction is a modeling choice (typically uphill / against the cascade); the formulation does not require any particular elevation relationship.
+
+**Decision Variables:**
+
+- $p_{y,k}$ = pumped water flow at station $y$, block $k$ (m³/s)
+
+**Bounds:**
+
+$$
+\underline{P}_y \leq p_{y,k} \leq \bar{P}_y
+$$
+
+Both bounds are hard constraints and may vary by stage and, optionally, by block. Outside its commissioning window ([System Element Modeling Overview §1](/math/system-elements#entity-commissioning-windows)) a pumping station's flow column is pinned to zero, so the station moves no water and draws no power.
+
+**Power Consumption:**
+
+$$
+P^{pump}_{y,k} = \rho^{pump}_y \cdot p_{y,k}
+$$
+
+where $\rho^{pump}_y$ is the power consumption rate (MW per m³/s).
+
+**Water Balance Impact:**
+
+The pumped flow leaves the source plant's reservoir and enters the destination's, converted to volume by the block conversion $\zeta_k = 0.0036\,\tau_k$, with $\tau_k$ the duration of block $k$ in hours:
+
+- On a chronological stage, block $k$: $-\zeta_k \, p_{y,k}$ on the source plant's block-$k$ water balance and $+\zeta_k \, p_{y,k}$ on the destination's.
+- On a parallel stage each plant has one stage row: $-\sum_{k \in \mathcal{K}} \zeta_k \, p_{y,k}$ on the source's and $+\sum_{k \in \mathcal{K}} \zeta_k \, p_{y,k}$ on the destination's.
+
+These are storage-change signs; in the all-terms row of [LP Formulation §4](/math/lp-formulation#4-hydro-water-balance) the same terms appear on the left with the opposite signs.
+
+**Load Balance Impact:**
+
+At connected bus: $-P^{pump}_{y,k} = -\rho^{pump}_y \cdot p_{y,k}$ (power consumed)
+
+**Objective Contribution:** None
+
+:::note[Economic Modeling Note]
+Pumping stations do not have a direct cost term in the objective function. The cost of pumping is implicitly captured through energy consumption — the marginal cost of energy at the connected bus determines the effective pumping cost. This approach correctly models the economic incentive: pumping is attractive when energy prices are low (e.g., excess hydro/renewable generation) and unattractive when prices are high (e.g., thermal dispatch at margin).
+:::
+
+## 5. Hydro Plants
+
+Hydro constraints are the most complex in the system. Rather than duplicating them here, the hydro formulation is split across two chapters:
+
+- **Water balance, outflow, storage bounds, and soft constraints**: See [LP Formulation](/math/lp-formulation) §4 (water balance), §6 (generation constraints), §7 (outflow constraints), §8 (variable bounds), §9 (constraint violation penalties).
+- **Production function models** (constant productivity, FPHA, linearized head): See [Hydro Production Function Models](/math/hydro-production-models).
+
+A plant declares one or more **unit groups**, each on its own bus; groups sharing a bus form one **(hydro, bus) cell**, and turbined flow and generation are tracked per cell rather than per plant — storage, spillage, and diversion stay per plant. Turbined-flow and generation bounds (§8, §6 of [LP Formulation](/math/lp-formulation)) compose per cell from the cell's member unit groups; a single-bus plant has exactly one cell and every formula reduces to the plant-level form.
+
+For hydro decision variables and physical meaning, see [System Element Modeling Overview](/math/system-elements) §5.
+
+## 6. Non-Controllable Generation Sources
+
+Non-controllable sources (wind farms, solar plants, small run-of-river hydros) have an available generation the solver takes as given: drawn per scenario from the source's availability model when it has one ([Scenario Generation §5.4](/math/scenario-generation#54-non-controllable-source-availability)), and otherwise its stage's available generation. The solver can only curtail generation below the available amount — it cannot dispatch upward beyond what nature provides.
+
+**Decision Variables:**
+
+- $g^{nc}_{r,k}$ = generation at non-controllable source $r$, block $k$
+
+**Bounds (hard):**
+
+$$
+0 \leq g^{nc}_{r,k} \leq A_{r,k}, \qquad A_{r,k} = \bar{G}_r \, \xi_r \, f_{r,k}
+$$
+
+where $\bar{G}_r$ is the installed capacity, $\xi_r$ the availability ratio of the stage and scenario ([System Element Modeling Overview §6](/math/system-elements#curtailable-vs-must-run)) and $f_{r,k}$ the block factor of block $k$ ($1$ when none is given); a must-run source has $g^{nc}_{r,k} = A_{r,k}$; a source without stochastic availability takes its stage's available generation, the installed capacity unless the stage sets it, in place of $\bar{G}_r \xi_r$.
+
+**Load Balance Contribution:**
+
+At connected bus: $+g^{nc}_{r,k}$ (generation injected)
+
+**Objective Contribution:**
+
+$$
+- \sum_{k} \tau_k \sum_{r \in \mathcal{R}} c^{curt}_r \, g^{nc}_{r,k}
+$$
+
+The LP prices curtailment as a reward on dispatched generation. The term equals the curtailment penalty $\sum_k \tau_k \sum_r c^{curt}_r \kappa_{r,k}$ minus the constant $\sum_k \tau_k \sum_r c^{curt}_r A_{r,k}$: it leads to the same decisions, and the stage objective can therefore be negative. A must-run source contributes the constant $-\tau_k c^{curt}_r A_{r,k}$.
+
+The curtailment cost $c^{curt}_r$ is a **regularization** penalty (Category 3 in the [Penalty System](/math/penalty-system)), analogous to the spillage cost of a hydro — curtailment discards available "free" energy.
+
+:::note[Note on curtailment not separate]
+Curtailment is **not** a separate LP decision variable — it is derived as $\kappa_{r,k} = A_{r,k} - g^{nc}_{r,k}$. Both bounds are hard constraints with no slack variables, since the available generation is never negative: a curtailable source can be curtailed to zero, and a must-run source's two bounds both equal $A_{r,k}$.
+:::
+
+:::note[Block factors]
+The availability ratio is one value per stage and scenario, and the block factors $f_{r,k}$ shape it across the blocks of the stage, as block load factors shape the load ([Scenario Generation](/math/scenario-generation)).
+:::
+
+## Implementation in Novomodelo
+
+The methodology above defines every equipment type's LP constraints; the tabs below cover how Novomodelo's software surface configures, feeds, and reports on the four element types with dedicated configuration files — thermals, contracts, pumping stations, and non-controllable sources.
+
+**Configure**
+
+Novomodelo's `system/thermals.json`, `system/energy_contracts.json`,
+`system/pumping_stations.json`, and `system/non_controllable_sources.json`
+files author the four equipment types that carry dedicated element
+configuration in this chapter. The equations these fields feed are in the
+sections above.
+
+### Shared Operational Start Date
+
+Thermals, non-controllable sources, pumping stations, and energy contracts all
+carry a required `operational_start_date` field:
+
+| Field                     | Type                    | Description |
+| -------------------------- | ------------------------ | ----------- |
+| `operational_start_date` | string (ISO-8601 date) | Calendar date (`YYYY-MM-DD`) the entity enters the registry's operational history. Provenance and the canonical `(operational_start_date, id)` ordering key (see [Notation Conventions](/overview/notation-conventions)) — **independent of** the commissioning window below: it does not gate commissioning, and the window does not derive from it. |
+
+### Shared Commissioning Window
+
+Thermals, lines, contracts, pumping stations, and non-controllable sources all
+carry the same optional pair of fields:
+
+| Field            | Type            | Description |
+| ----------------- | --------------- | ----------- |
+| `entry_stage_id` | integer or null | Stage index at which the entity enters service (**inclusive**). `null` means the entity is available from stage 0. |
+| `exit_stage_id`  | integer or null | Stage index at which the entity is decommissioned. The commissioning window is **half-open** `[entry_stage_id, exit_stage_id)`: the entity is active through `exit_stage_id - 1`, and from `exit_stage_id` onward its columns are pinned to `[0, 0]`. `null` means the entity is never decommissioned. |
+
+Outside its window, an entity's decision columns remain present in the LP but
+are pinned to zero: it injects no power, withdraws no power, moves no water,
+and draws no bus power. An `entry_stage_id` past the last study stage is accepted: the entity then
+stays out of service for the whole study. See [System Element Modeling Overview §1](/math/system-elements#entity-commissioning-windows)
+for the shared methodology statement — methodology §3–4 above cover how the
+window interacts with contract take-or-pay bounds and pumping flow.
+
+### `system/thermals.json` — Thermal Plant Registry
+
+Thermal units are defined in `system/thermals.json`. The top-level object has
+a single key `"thermals"` containing an array of unit objects:
+
+```json
+{
+  "thermals": [
+    {
+      "id": 0,
+      "name": "UTE1",
+      "bus_id": 0,
+      "operational_start_date": "1998-03-01",
+      "cost_per_mwh": 5.0,
+      "generation": { "min_mw": 0.0, "max_mw": 15.0 }
+    },
+    {
+      "id": 1,
+      "name": "Angra 1",
+      "bus_id": 0,
+      "operational_start_date": "1985-01-01",
+      "entry_stage_id": null,
+      "exit_stage_id": null,
+      "cost_per_mwh": 50.0,
+      "generation": { "min_mw": 0.0, "max_mw": 657.0 },
+      "anticipated_config": { "lead_stages": 2 }
+    }
+  ]
+}
+```
+
+Only `id`, `name`, `bus_id`, `operational_start_date`, `cost_per_mwh`, and
+`generation` are required; `entry_stage_id`, `exit_stage_id`, and
+`anticipated_config` are optional.
+
+#### Core Fields
+
+| Field          | Type   | Required | Description |
+| -------------- | ------ | -------- | ----------- |
+| `id`           | integer | Yes     | Unique non-negative identifier. |
+| `name`         | string  | Yes     | Human-readable plant name. Used in output files, validation messages, and log output. |
+| `bus_id`       | integer | Yes     | Identifier of the electrical bus to which this unit's generation is injected. Must match an `id` in `buses.json`. |
+| `operational_start_date` | string (ISO-8601 date) | Yes | Calendar date (`YYYY-MM-DD`) the unit enters the registry's operational history — see [Shared Operational Start Date](#shared-operational-start-date) above. |
+| `cost_per_mwh` | number  | Yes     | Marginal cost of generation, in dollars per MWh. Must be non-negative. |
+
+#### Generation Bounds
+
+The `generation` block sets the output limits, stored internally as
+`min_generation_mw` / `max_generation_mw` on the entity, and enforced as the
+hard generation bounds from methodology §1.1 in every stage LP.
+
+```json
+"generation": { "min_mw": 0.0, "max_mw": 657.0 }
+```
+
+| Field    | Type   | Description |
+| -------- | ------ | ----------- |
+| `min_mw` | number | Minimum electrical generation, in MW. A non-zero value is a must-run commitment: the solver must dispatch at least this much whenever the unit is in service (subject to the continuous-relaxation caveat in methodology §1.1). |
+| `max_mw` | number | Maximum electrical generation (installed capacity), in MW. |
+
+Stage-varying bounds are supplied via `constraints/thermal_bounds.parquet`,
+which accepts sparse `(thermal_id, stage_id)` rows carrying `min_generation_mw`
+and/or `max_generation_mw`, optionally narrowed to one block via an optional
+`block_id` column; absent rows fall back to the base entity values.
+`cost_per_mwh` has no per-block variant — a row combining a non-null
+`cost_per_mwh` with a non-null `block_id` is rejected at validation, and a
+`block_id` row on a thermal declaring `anticipated_config` is rejected
+outright, since the delivered commitment is bounded at a single stage.
+
+#### Anticipated Dispatch Configuration (`anticipated_config`)
+
+The optional `anticipated_config` block flags a thermal as anticipated,
+attaching the per-plant lead described in [System Element Modeling Overview §4](/math/system-elements#4-thermal-plants). The lead is given in **exactly one** of two mutually exclusive forms — a stage count or a physical duration:
+
+```json
+"anticipated_config": { "lead_stages": 2 }
+```
+
+```json
+"anticipated_config": { "lead_time_hours": 720.0 }
+```
+
+| Field             | Type    | Description |
+| ----------------- | ------- | ----------- |
+| `lead_stages`     | integer | Number of stages of dispatch anticipation, calendar-free. A value of `2` means the commitment for stage `t` must be decided at stage `t - 2`. Must be `>= 1`. |
+| `lead_time_hours` | number  | Physical anticipation lead in hours; must be finite and `> 0`. Each delivery stage's commitment is decided at the stage containing the instant one lead before the delivery stage's end (an instant on a stage boundary belongs to the earlier stage); a delivery whose instant is at or before the study start is decided before the study. When the instant falls inside the delivery stage itself, the delivery is not anticipated: the plant dispatches as an ordinary thermal at that stage, and the study setup logs a warning naming the plant and the stage. |
+
+Supplying both keys, or neither, is a load error. A lead that reaches past the study horizon — `lead_stages` exceeding the stage count, or `lead_time_hours` exceeding the summed horizon — is rejected at load **unless** the plant's lead reaches a **declared post-study stage** (both lead modes are gated identically): such a commitment is delivered past the horizon, whether decided in the study or before it. With no post-study stage to reach, the plant can never deliver within the study horizon and the over-horizon lead is rejected. A `lead_time_hours` lead coarse enough that one decision stage would decide more than one delivery stage is rejected when the study is set up; a `lead_stages` lead never does this. See [Post-Study Boundary & Chained Studies](/math/post-study-boundary) and [`post_study_stages.json`](/reference/case-format/stages/#post_study_stagesjson) for the boundary a post-horizon delivery is priced against.
+
+An anticipated plant also declares, in `initial_conditions.json`'s
+`past_anticipated_commitments`, every commitment it decided before the study
+([System Element Modeling Overview §4](/math/system-elements#anticipated-thermal-plants),
+"Commitments decided before the study"). Each entry is a **dated,
+delivery-anchored window** — a committed MW rate held constant over
+`[start_date, end_date)`:
+
+```json
+{
+  "past_anticipated_commitments": [
+    { "thermal_id": 2, "start_date": "2025-11-01", "end_date": "2025-12-01", "value_mw": 0.0 }
+  ]
+}
+```
+
+| Field        | Type                    | Description |
+| ------------ | ----------------------- | ----------- |
+| `thermal_id` | integer                 | Identifier of an anticipated thermal (must carry `anticipated_config`). |
+| `start_date` | string (ISO-8601 date)  | Start of the commitment window (inclusive). |
+| `end_date`   | string (ISO-8601 date)  | End of the commitment window (**exclusive**); must be after `start_date`. |
+| `value_mw`   | number                  | Committed MW rate held constant over the window. |
+
+A plant's windows must **tile every delivery stage the plant decided before
+the study, exactly** — coverage `1.0`, no gap, no overlap. Those stages may sit
+on **either side** of the horizon: the leading in-study delivery stages, and
+any post-horizon stages at which a commitment decided before the study is
+delivered (for the equivalent term in other planning tools, see the
+[Glossary](/reference/glossary)). A window may never cover a stage the study
+itself decides, and no single window may straddle
+the horizon end — split it there into an in-study and a post-study window. A
+stretch with no scheduled commitment still needs an explicit `0.0`-rate window
+rather than a gap left to be inferred. How each `value_mw` is bounds-checked
+depends on where its window's delivery stages fall. A window covering one or
+more **in-study** delivery stages has each covered, commissioning-active
+stage's `value_mw` checked against **that stage's resolved generation box** —
+the base `[min_mw, max_mw]` narrowed by any `constraints/thermal_bounds.parquet`
+stage/block override — within the solver's feasibility tolerance. A **purely
+post-horizon** window (covering no in-study stage) instead checks each
+`value_mw` against the plant's static `[min_mw, max_mw]` bounds, within the same
+tolerance. A `value_mw` outside its stage's box is a load-time error, because
+the LP delivery equality on that stage could not otherwise be satisfied. The
+committed values are sunk: an in-study window seeds the ring slot of its
+delivery stage at the first stage, and that stage's
+[fish row](/math/state-augmentation#ring-rows) pins the plant's generation to it;
+a post-horizon window holds no slot, and when a boundary is loaded its state
+contribution is folded once, at load, into the intercept of every boundary
+cut. Neither enters the study objective, and a post-horizon window is echoed at
+its real delivery date in `anticipated/fixed_deliveries.parquet`.
+
+#### Post-horizon deliveries
+
+An anticipated thermal whose lead delivers **after the study horizon** has two
+declaration surfaces, by who decides the commitment:
+
+- **Decided in-study, delivered post-horizon** — bounded and costed **solely**
+  by a `thermal_bounds[]` cell in
+  [`post_study_stages.json`](/reference/case-format/stages/#post_study_stagesjson)
+  (`{thermal_id, post_study_stage_index, cost_per_mwh, min_mw, max_mw}`), one
+  per reached post-study stage. The study decides the MW; the cell supplies its
+  price and capability.
+- **Decided before the study, delivered post-horizon** — a
+  `past_anticipated_commitments` window (above) extending past the horizon end.
+
+An in-study decision is charged on its decision column at the `cost_per_mwh`
+of its `thermal_bounds[]` cell, discounted from the delivery stage, and the
+loaded boundary prices the commitment carried into the terminal state; with no
+`policy.boundary` declared in `config.json`,
+the study setup warns that the delivery prices at zero terminal value. A
+commitment decided before the study is sunk: its fuel enters no objective, and
+with a boundary loaded its state contribution enters the boundary cuts'
+intercepts. Without a boundary, a post-horizon window with a non-zero rate
+raises the same setup warning; an all-zero window raises none. See
+[Post-Study Boundary & Chained Studies](/math/post-study-boundary) for the
+formulation and [Case Format](/reference/case-format/) for
+the file shapes.
+
+#### Constraining Commitments via Generic Constraints
+
+The anticipated-commitment decision variable can be referenced in a generic
+constraint using the `anticipated_decision(N)` expression, where `N` is the
+thermal's `id` — for example, to cap the MW level committed at each decision
+stage:
+
+```json
+{
+  "constraints": [
+    {
+      "id": 1,
+      "name": "cap_ant_t1",
+      "expression": "anticipated_decision(2) <= 400.0",
+      "slack": { "enabled": false }
+    }
+  ]
+}
+```
+
+See [Generic Constraints](/reference/generic-constraints/) for the full
+authoring language — named expressions, the activation grid, and two-sided
+slack.
+
+`anticipated_decision(N)` must reference a thermal carrying an
+`anticipated_config` block — referencing a non-anticipated thermal is a hard
+load-time error. `thermal_generation(N)` on an anticipated thermal is accepted
+but flagged with a semantic-ambiguity warning, since that expression reads the
+per-block delivered generation, not the forward commitment.
+
+#### Load-Time Validation Rules
+
+| Rule                        | Error Class          | Description |
+| ---------------------------- | --------------------- | ----------- |
+| Bus reference integrity      | Reference error       | Every `bus_id` must match an `id` in `buses.json`. |
+| Non-negative cost            | Schema error          | `cost_per_mwh` must be non-negative. |
+| Generation bounds ordering   | Physical feasibility  | `min_mw` must be `<= max_mw`. |
+| Anticipated lead validity    | Physical feasibility  | When `anticipated_config` is present, `lead_stages` must be `>= 1`; a `lead_stages` above the study's stage count, or a `lead_time_hours` above the summed horizon hours, is rejected unless the lead reaches a declared post-study stage. |
+| Commitment-window tiling     | Reference error       | Every anticipated thermal's `past_anticipated_commitments` windows must tile every delivery stage the plant decided before the study exactly (coverage `1.0`, no gap, no overlap) — in-study leading stages and post-horizon stages decided before the study alike — never a stage the study itself decides, and no window may straddle the horizon end. |
+| Commitment thermal reference | Reference error   | Every `past_anticipated_commitments` entry's `thermal_id` must reference an anticipated thermal. |
+| Commitment value bounds      | Physical feasibility  | Each `past_anticipated_commitments` window's `value_mw` must lie within every covered delivery stage's resolved generation box (in-study coverage) or the plant's static `[min_mw, max_mw]` bounds (purely post-horizon), within solver tolerance. See [Error Codes](/reference/error-codes). |
+| Post-study delivery bounds   | Reference error       | Every post-study stage an anticipated thermal's lead reaches must carry a matching `post_study_stages.json` `thermal_bounds[]` cell, and every post-study stage covered by a window for a commitment decided before the study must be tiled at coverage `1.0`. See [Error Codes](/reference/error-codes) for the exact failure modes. |
+
+### `system/non_controllable_sources.json` — NCS Registry
+
+Non-controllable sources (wind, solar, small run-of-river hydro) are defined
+in `system/non_controllable_sources.json`:
+
+```json
+{
+  "non_controllable_sources": [
+    {
+      "id": 0,
+      "name": "Wind Farm A",
+      "bus_id": 1,
+      "operational_start_date": "2015-06-01",
+      "max_generation_mw": 100.0
+    }
+  ]
+}
+```
+
+| Field               | Type   | Required | Description |
+| -------------------- | ------ | -------- | ----------- |
+| `id`                 | integer | Yes     | Unique identifier. |
+| `name`               | string  | Yes     | Human-readable source name. |
+| `bus_id`             | integer | Yes     | Bus to which this source's generation is injected. |
+| `operational_start_date` | string (ISO-8601 date) | Yes | Calendar date (`YYYY-MM-DD`) the source enters the registry's operational history — see [Shared Operational Start Date](#shared-operational-start-date) above. |
+| `max_generation_mw`  | number  | Yes     | Installed capacity, in MW. It scales the stochastic availability described in methodology §6 and does not cap the available generation. |
+| `allow_curtailment`  | boolean | No      | Defaults to `true` (curtailable). Set `false` for must-run sources that pin generation to the realized availability every scenario — see [System Element Modeling Overview §6](/math/system-elements#curtailable-vs-must-run) for when this is required (e.g. already-netted aggregate NCS totals). |
+| `curtailment_cost`   | number or null | No | Entity-level override of `non_controllable_source.curtailment_cost` in `penalties.json`. |
+
+The availability ratio comes from `scenarios/non_controllable_stats.parquet`
+(or `scenarios/external_ncs_scenarios.parquet` under the `external` scheme) and
+the block factors from `scenarios/non_controllable_factors.json`; a source with
+no availability model takes its stage's available generation from
+`constraints/ncs_bounds.parquet`, `max_generation_mw` where no row applies — see
+the Inputs & Outputs tab.
+
+### `system/pumping_stations.json` — Pumping Station Registry
+
+```json
+{
+  "pumping_stations": [
+    {
+      "id": 0,
+      "name": "Bombeamento Serra da Mesa",
+      "bus_id": 10,
+      "operational_start_date": "2010-09-15",
+      "source_hydro_id": 3,
+      "destination_hydro_id": 5,
+      "consumption_mw_per_m3s": 0.5,
+      "flow": { "min_m3s": 0.0, "max_m3s": 150.0 }
+    }
+  ]
+}
+```
+
+| Field                     | Type    | Required | Description |
+| -------------------------- | ------- | -------- | ----------- |
+| `id`                       | integer | Yes     | Unique identifier. |
+| `name`                     | string  | Yes     | Human-readable station name. |
+| `bus_id`                   | integer | Yes     | Bus from which electrical power is consumed. |
+| `operational_start_date`   | string (ISO-8601 date) | Yes | Calendar date (`YYYY-MM-DD`) the station enters the registry's operational history — see [Shared Operational Start Date](#shared-operational-start-date) above. |
+| `source_hydro_id`          | integer | Yes     | Hydro plant from whose reservoir water is extracted (see methodology §4). Must differ from `destination_hydro_id` — a station modeling a self-transfer (same id on both sides) is a load-time error, since it would silently cancel on one water-balance row while still drawing power. The station's `[entry_stage_id, exit_stage_id)` window must lie inside the Operating stages of both its source and its destination hydro (not before entry, not at or after exit, and not Filling); otherwise the case is rejected (`BusinessRuleViolation` on `system/pumping_stations.json`), one error per offending side naming the first such stage. Zero `pumping_bounds` rows do not satisfy the rule. |
+| `destination_hydro_id`     | integer | Yes     | Hydro plant into whose reservoir water is injected (see methodology §4). |
+| `consumption_mw_per_m3s`   | number  | Yes     | Power consumption rate, in MW per m³/s (methodology §4). |
+| `flow.min_m3s` / `flow.max_m3s` | number | Yes | Pumped-flow bounds, in m³/s (methodology §4). |
+
+Stage-varying bounds are supplied via `constraints/pumping_bounds.parquet`,
+which accepts sparse `(pumping_station_id, stage_id)` rows carrying `min_m3s` and/or
+`max_m3s`, optionally narrowed to one block via an optional `block_id`
+column; absent rows fall back to the base entity values.
+
+### `system/energy_contracts.json` — Contract Registry
+
+```json
+{
+  "contracts": [
+    {
+      "id": 0,
+      "name": "Importação Argentina",
+      "bus_id": 5,
+      "operational_start_date": "2005-01-01",
+      "type": "import",
+      "price_per_mwh": 200.0,
+      "limits": { "min_mw": 0.0, "max_mw": 1000.0 }
+    },
+    {
+      "id": 1,
+      "name": "Exportação Uruguai",
+      "bus_id": 6,
+      "operational_start_date": "2020-04-01",
+      "type": "export",
+      "entry_stage_id": 1,
+      "exit_stage_id": 60,
+      "price_per_mwh": -150.0,
+      "limits": { "min_mw": 0.0, "max_mw": 500.0 }
+    }
+  ]
+}
+```
+
+| Field                          | Type    | Required | Description |
+| -------------------------------- | ------- | -------- | ----------- |
+| `id`                             | integer | Yes     | Unique identifier. |
+| `name`                           | string  | Yes     | Human-readable contract name. |
+| `bus_id`                         | integer | Yes     | Bus at which the contracted power is injected or withdrawn. |
+| `operational_start_date`         | string (ISO-8601 date) | Yes | Calendar date (`YYYY-MM-DD`) the contract enters the registry's operational history — see [Shared Operational Start Date](#shared-operational-start-date) above. |
+| `type`                           | string  | Yes     | `"import"` or `"export"` — sets the load-balance sign and the import/export set membership from methodology §3. |
+| `price_per_mwh`                  | number  | Yes     | Contract price, in dollars per MWh. Positive for imports (cost), negative for exports (revenue) — see methodology §3. |
+| `limits.min_mw` / `limits.max_mw`| number  | Yes     | Dispatch bounds, in MW. A non-zero `min_mw` is the hard take-or-pay floor. |
+
+Stage-varying bounds and price are supplied via
+`constraints/contract_bounds.parquet`, which accepts sparse
+`(contract_id, stage_id)` rows carrying any combination of `min_mw`,
+`max_mw`, and `price_per_mwh`, optionally narrowed to one block via an
+optional `block_id` column; absent rows fall back to the base entity values.
+Unlike thermal `cost_per_mwh`, contract `price_per_mwh` is block-eligible —
+a study's simulation cost path honors a per-block price override — because
+commitment is a stage-level decision for a thermal but a contract's price
+can legitimately vary within a stage.
+
+**Inputs & Outputs**
+
+This is a topic-scoped index of the files thermals, contracts, pumping
+stations, and non-controllable sources touch — it names each file and its
+role, it does not repeat their field-by-field schemas. The exhaustive,
+field-by-field case-directory and output reference is owned by the Reference
+corpus ([Case Format](/reference/case-format/) and
+[Output Format](/reference/output/) pages).
+
+### Inputs
+
+| File | Role |
+| ---- | ---- |
+| `system/thermals.json` | Thermal plant registry — core fields, generation bounds, and optional `anticipated_config` (see the Configure tab). |
+| `system/energy_contracts.json` | Contract registry — direction, price, dispatch bounds, and commissioning window. |
+| `system/pumping_stations.json` | Pumping station registry — source/destination hydro, consumption rate, and flow bounds. |
+| `system/non_controllable_sources.json` | NCS registry — installed capacity, curtailment flag and cost override. |
+| `constraints/thermal_bounds.parquet` | Sparse per-(thermal, stage) overrides of `min_generation_mw`, `max_generation_mw`, and `cost_per_mwh`, with an optional per-block axis on the generation bounds only (see Configure tab). |
+| `constraints/pumping_bounds.parquet` | Sparse per-(station, stage) overrides of `min_m3s`/`max_m3s`, with an optional per-block axis (see Configure tab). |
+| `constraints/ncs_bounds.parquet` | Per-`(ncs_id, stage_id)` available generation of a source with no stochastic availability model, in place of its `max_generation_mw`; a source with `scenarios/non_controllable_stats.parquet` rows, or one that draws from `scenarios/external_ncs_scenarios.parquet` under the `external` scheme, ignores its rows ([Equipment-Specific Formulations §6](/math/equipment-formulations#6-non-controllable-generation-sources)). |
+| `scenarios/non_controllable_factors.json` / `scenarios/non_controllable_stats.parquet` | Deterministic block factors or stochastic availability statistics for NCS. |
+| `constraints/contract_bounds.parquet` | Sparse per-(contract, stage) overrides of `min_mw`, `max_mw`, and `price_per_mwh`, with an optional per-block axis on all three (see Configure tab). |
+| `initial_conditions.json` (`past_anticipated_commitments`) | Commitments each anticipated thermal decided before the study, delivering inside the horizon or past it (system elements §4). |
+| `constraints/generic_constraint_bounds.parquet` | The two-sided interval (`bound_lower`/`bound_upper`) that also serves as the generic-constraint **activation grid** — one row per `(constraint_id, stage_id[, block_id])` cell, including any `anticipated_decision(N)` expression. |
+
+For the complete field-by-field schema of each file above, see the
+[Case Format](/reference/case-format/) reference page in
+the Reference corpus.
+
+### Outputs
+
+| File | Role |
+| ---- | ---- |
+| `simulation/thermals/` | Per-(stage, block, thermal) dispatch results — generation, cost, and (for anticipated plants) `is_anticipated`, `anticipated_committed_mw`, `anticipated_decision_mw`. |
+| `simulation/contracts/` | Per-(stage, block, contract) dispatch results — `power_mw`, `energy_mwh`, `price_per_mwh`, `total_cost`, `operative_state_code`. Contract cost has its own `contract_cost` column in `simulation/costs/`. |
+| `simulation/pumping_stations/` | Per-(stage, block, station) pumped-flow results and a `pumping_cost` column that is always `0`: pumping carries no objective cost, and its power enters the bus balance (see the Implementation notes tab). |
+| `simulation/non_controllables/` | Per-(stage, block, source) `generation_mw`, `available_mw`, `curtailment_mw`, `curtailment_cost`. |
+| `simulation/costs/` | Per-stage cost breakdown; thermal fuel cost, contract cost, and curtailment cost each contribute their own column. |
+| `generic_constraints/resolved_echo.parquet` | The flat, desugared form of every generic constraint the solver actually built — written whenever the study has generic constraints. See [Generic Constraints](/reference/generic-constraints/) for the resolved-echo shape. |
+| `simulation/anticipated_lanes/` | Post-horizon commitments the study decides, one row per scenario and decision at its decision stage; written only when the study declares `post_study_stages` (schema: [Simulation Output](/reference/output/simulation/#simulationanticipated_lanes)). |
+| `anticipated/fixed_deliveries.parquet` | Run-level echo of every commitment **decided before the study** and delivered past the horizon (for the equivalent term in other planning tools, see the [Glossary](/reference/glossary)); no cost column, since that fuel is sunk and enters no objective (schema and write conditions: [Simulation Output](/reference/output/simulation/#anticipatedfixed_deliveriesparquet)). |
+
+For the complete output schema (columns, types, file layout), see the
+[Output Format](/reference/output/) reference page in the Reference
+corpus.
+
+**Implementation notes**
+
+Non-normative software behavior for thermal, contract, pumping, and NCS
+equipment — what Novomodelo does at runtime, beyond the equations above. This tab
+references the methodology body for the derivations rather than restating
+them.
+
+### Commissioning window: output rows outside the window
+
+Outside its commissioning window
+([Shared Commissioning Window](#shared-commissioning-window)) an entity still
+emits its output rows, zeroed rather than absent, with the same
+`operative_state_code` as in service.
+
+### Contracts are stateless
+
+An energy contract contributes exactly one LP column per block per direction
+and carries **no state variable** — it is not part of the Bellman recursion
+and contributes no term to the Benders cuts ([Equipment-Specific Formulations §3](/math/equipment-formulations#3-importexport-contracts)). This is a
+structural difference from hydro plants and anticipated thermals, whose
+storage and commitment-ring state variables do carry a cut term. A non-zero
+`min_mw` at a contract's active stages is a hard take-or-pay floor: the LP
+must dispatch at least that quantity at the contract price regardless of
+cheaper alternatives elsewhere in the system. All contract cost — the import
+cost or the (negative) export revenue — has its own `contract_cost` column in
+the per-stage cost breakdown of `simulation/costs/`, next to `thermal_cost`.
+
+### Pumping stations carry no explicit objective cost
+
+A pumping station's flow variable has **no direct term in the objective
+function** ([Equipment-Specific Formulations §4](/math/equipment-formulations#4-pumping-stations)). The cost of pumping is entirely implicit:
+pumping draws power at the connected bus in proportion to pumped flow, and
+that draw is priced by whatever the bus's marginal cost happens to be at
+that stage and scenario — cheap when hydro/renewable surplus is on the
+margin, expensive when thermal dispatch is setting the price. This is why
+pumping economically self-selects toward low-price periods without any
+pump-specific cost coefficient to tune.
+
+### Anticipated thermals are the exception to "no cross-stage state" for equipment
+
+Every other equipment type in this chapter is memoryless: its dispatch at
+stage `t` depends only on that stage's own bounds and price. An anticipated
+thermal (`anticipated_config`) is the one exception — its commitment, decided
+at an earlier stage or before the study, is held as commitment-ring state until
+its delivery stage,
+where the plant's generation must deliver it ([System Element Modeling Overview §4](/math/system-elements#anticipated-thermal-plants)). The
+`anticipated_decision(N)` generic-constraint expression lets a case author
+cap or floor that forward commitment directly; referencing a non-anticipated
+thermal with this expression is a hard load-time error, and referencing an
+anticipated thermal's per-block generation with `thermal_generation(N)` is
+accepted but flagged, since it does not read the forward commitment.
+
+### Over-commitment is rejected at case load, not reconciled per solve
+
+A delivered commitment's forward value is held as commitment-ring state, so at
+its delivery stage the fish row ([State Augmentation §5](/math/state-augmentation#ring-rows)) reads the solver's computed value
+— accurate only to the LP backend's feasibility tolerance, not exact. Novomodelo runs
+**no** per-solve reconciliation pass. Instead, the outgoing state is
+**canonicalized onto its admissible bounds when it is read back** from each
+solve, and that projection is the identity for a value already in box: a
+commitment that settles a hair outside its cap is clamped back in-box before it
+is carried forward, so training continues normally instead of surfacing a
+spurious infeasible LP. This is the single read-back canonicalization seam the
+methodology states once — see
+[SDDP Algorithm §3.1](/math/sddp-algorithm#31-forward-pass) and
+[Determinism & Provenance §3](/math/determinism-guarantees#3-methodology-mechanisms).
+
+A commitment **genuinely** beyond the plant's generation bounds is not a solver
+artifact and is not absorbed by that clamp. It is caught **at case load**, when
+`initial_conditions.json`'s `past_anticipated_commitments` windows are validated
+(see the Configure tab). A `value_mw` outside the bounds admissible at a covered
+delivery stage is a named load-time error that identifies the thermal, the
+offending window, the `value_mw`, and the bounds it violates — not a bare
+infeasible LP surfacing mid-solve. See [Error Codes](/reference/error-codes) for
+the failure class.
+
+### Must-run NCS and the double-discount trap
+
+The `allow_curtailment: false` flag pins an NCS generation column to the
+realized availability every scenario — a bound-equality, not merely an upper
+bound. This exists specifically for aggregate, non-simulated generation
+figures (small hydro, biomass, distributed generation) that an upstream
+source model has already subtracted from load before the dispatch LP runs:
+leaving such an aggregate curtailable lets the LP "curtail" energy that was
+never separately available to curtail, silently cheapening the hydrothermal
+dispatch relative to the reference model it is meant to reproduce.
+Stand-alone wind and solar plants, where curtailment is a real physical and
+economic choice, use the default curtailable behavior instead.
+
+## Cross-References
+
+- [Notation Conventions](/overview/notation-conventions) — variable and set definitions ($g_j$, $f_n$, $\chi_c$, $p_y$, $\tau_k$, $\zeta_k$)
+- [System Element Modeling Overview](/math/system-elements) — element descriptions, decision variables, and connections
+- [LP Formulation](/math/lp-formulation) — how equipment constraints integrate into the assembled LP; hydro water balance (§4), generation constraints (§6), variable bounds (§8)
+- [Hydro Production Function Models](/math/hydro-production-models) — hydro-specific production function constraints (constant, FPHA, linearized head)
+- [Penalty System](/math/penalty-system) — penalty taxonomy, regularization vs. violation costs
+- [Block Formulation Variants](/math/block-formulations) — block structure within which equipment constraints operate
+- [SDDP Algorithm](/math/sddp-algorithm) — iterative algorithm that solves stage subproblems containing these equipment constraints

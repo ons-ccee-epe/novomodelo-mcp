@@ -1,0 +1,29 @@
+# TEMPORÁRIO: existe só enquanto o MCP vive fora do repo do novomodelo e
+# consome a novomodelo-python do PyPI. Na migração para o monorepo, apagar a
+# entrada "uv" (a versão passa a subir junto com o release do novomodelo).
+#
+# Dependabot: abre PRs para a develop quando sai versão nova.
+# Atenção: o GitHub só lê este arquivo na branch padrão do repositório.
+version: 2
+updates:
+  # novomodelo-python anda junto com o release do novomodelo (pin exato no
+  # pyproject). Só ela: as demais dependências seguem o uv.lock até um bump
+  # deliberado. Ao aceitar, subir também o `ref` do job rename-guard no CI.
+  - package-ecosystem: "uv"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "novomodelo-python"
+    commit-message:
+      prefix: "build"
+
+  # Versões das actions usadas no CI (checkout, setup-uv).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

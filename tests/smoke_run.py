@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Smoke test de init / plano / apply / run assíncrono (stdlib puro, offline).
 
-Usa o `cobre` falso (tests/fake_cobre.py, via lançador portável em _fakes.py) e
+Usa o `novomodelo` falso (tests/fake_novomodelo.py, via lançador portável em _fakes.py) e
 uma máquina MOCKADA (machine_id, hostname, cores, RAM) com metadata/config
 sintéticos -> veredito determinístico em qualquer SO. Cada teste usa um state
-dir temporário (COBRE_MCP_STATE_DIR) — nunca o do usuário.
-A execução REAL do solver só roda com COBRE_MCP_REAL_SOLVER=1 (fora do CI).
+dir temporário (NOVOMODELO_MCP_STATE_DIR) — nunca o do usuário.
+A execução REAL do solver só roda com NOVOMODELO_MCP_REAL_SOLVER=1 (fora do CI).
 Roda com: python3 tests/smoke_run.py
 """
 import contextlib
@@ -22,11 +22,11 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from _fakes import fake_bin                              # noqa: E402
-from cobre_mcp.adapters import jobs, machine, run_plan, runtime, state  # noqa: E402
-from cobre_mcp.config import load_settings              # noqa: E402
-from cobre_mcp.tools.run import make_plan, register_run  # noqa: E402
+from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state  # noqa: E402
+from novomodelo_mcp.config import load_settings              # noqa: E402
+from novomodelo_mcp.tools.run import make_plan, register_run  # noqa: E402
 
-FAKE = fake_bin("fake_cobre.py")
+FAKE = fake_bin("fake_novomodelo.py")
 HOST = "host-sintetico"
 MID = "0123456789abcdef"
 GIB = 1024 ** 3
@@ -61,7 +61,7 @@ class _StubMCP:
     def __init__(self):
         self.tools = {}
 
-    def tool(self):
+    def tool(self, *args, **kwargs):  # aceita annotations=… como o FastMCP
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
@@ -83,8 +83,8 @@ def _env(**kv):
 def _sandbox(**kv):
     """Workspace + state dir temporários (nunca toca o estado real do usuário)."""
     with tempfile.TemporaryDirectory() as d, \
-            _env(COBRE_MCP_WORKSPACE=d, COBRE_MCP_STATE_DIR=str(Path(d) / "state"), **kv):
-        os.environ.pop("COBRE_MCP_ALLOW_FORCE", None)
+            _env(NOVOMODELO_MCP_WORKSPACE=d, NOVOMODELO_MCP_STATE_DIR=str(Path(d) / "state"), **kv):
+        os.environ.pop("NOVOMODELO_MCP_ALLOW_FORCE", None)
         try:
             yield Path(d)
         finally:
@@ -110,25 +110,25 @@ def _make_case(root: Path, *, fwd=4, iters=6, n_stages=72, openings=8, hydros=15
         "simulation": {"enabled": True, "selection": {"method": "sampled",
                                                       "num_scenarios": sim}},
         "modeling": {"inflow_non_negativity": {"method": modeling}},
-    }))
+    }), encoding="utf-8")
     (case / "stages.json").write_text(json.dumps({"stages": [
-        {"id": i, "num_openings": openings} for i in range(n_stages)]}))
+        {"id": i, "num_openings": openings} for i in range(n_stages)]}), encoding="utf-8")
     (case / "system" / "hydros.json").write_text(json.dumps(
-        {"hydros": [{"id": i} for i in range(hydros)]}))
-    (case / "system" / "buses.json").write_text(json.dumps({"buses": [{"id": 0}]}))
+        {"hydros": [{"id": i} for i in range(hydros)]}), encoding="utf-8")
+    (case / "system" / "buses.json").write_text(json.dumps({"buses": [{"id": 0}]}), encoding="utf-8")
     if meta_host:
         tr = case / "output" / "training"
         tr.mkdir(parents=True)
-        (tr / "metadata.json").write_text(json.dumps({**REF_META, "hostname": meta_host}))
+        (tr / "metadata.json").write_text(json.dumps({**REF_META, "hostname": meta_host}), encoding="utf-8")
         (case / "output" / "simulation").mkdir()
-        (case / "output" / "simulation" / "metadata.json").write_text(json.dumps(SIM_META))
+        (case / "output" / "simulation" / "metadata.json").write_text(json.dumps(SIM_META), encoding="utf-8")
     return case
 
 
 def _wait(tools, job_id, timeout=15.0):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        st = tools["cobre_run_status"](job_id)
+        st = tools["run_status"](job_id)
         if st["state"] != "running":
             return st
         time.sleep(0.1)
@@ -159,7 +159,7 @@ def test_machine_cgroup_parsers_and_hostname():
 
 def test_state_dir_is_persistent_not_tmp():
     d = state.default_state_dir()
-    assert d.name == "cobre-mcp", d
+    assert d.name == "novomodelo-mcp", d
     assert not str(d).startswith(tempfile.gettempdir()), d
 
 
@@ -230,7 +230,7 @@ def test_find_reference_same_host_only():
             tr.mkdir(parents=True)
             meta = {**REF_META, "hostname": host,
                     "solve_stats": {**REF_META["solve_stats"], "total_lp_solves": total}}
-            (tr / "metadata.json").write_text(json.dumps(meta))
+            (tr / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
         runs = runtime.find_reference_runs([d], HOST.upper() + ".local")  # normalizado
         assert len(runs) == 1 and f"{os.sep}a{os.sep}" in runs[0]["source"], runs
         assert runs[0]["sim"] is None
@@ -246,7 +246,7 @@ def test_reference_prefers_same_modeling_and_reports_range():
         trn = _make_case(d / "trn", modeling="truncation")
         # truncation: LP mais barato e run MAIS RECENTE (antes vencia o desempate)
         meta = {**REF_META, "duration_seconds": 186.6, "completed_at": "2026-12-31T00:00:00Z"}
-        (trn / "output" / "training" / "metadata.json").write_text(json.dumps(meta))
+        (trn / "output" / "training" / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
         case = _make_case(d / "alvo", modeling="penalty", meta_host=None)
         plan = make_plan(str(case), load_settings(), machine={**MOCK_MACHINE,
                                                               "performance_cpus": 4})
@@ -332,29 +332,29 @@ def test_plan_memory_gate():
 # ── tools: init / apply ───────────────────────────────────────────────────────
 
 def test_init_list_and_guard():
-    with _sandbox(COBRE_BIN=FAKE) as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE) as d:
         t = _tools()
-        env = t["cobre_init"](list=True)
+        env = t["case_init"](list=True)
         assert env["status"] == "ok" and env["exit_code"] == 0, env
         assert env["templates"][0]["name"] == "1dtoy", env
-        out = t["cobre_init"](directory=str(d.parent / "fora-do-ws"), template="1dtoy")
+        out = t["case_init"](directory=str(d.parent / "fora-do-ws"), template="1dtoy")
         assert out["status"] == "error" and out["exit_code"] == 13, out
         target = str(d / "novo")
-        ok = t["cobre_init"](directory=target, template="1dtoy")
+        ok = t["case_init"](directory=target, template="1dtoy")
         assert ok["status"] == "ok" and ok["artifacts"]["case_dir"] == target, ok
-        again = t["cobre_init"](directory=target, template="1dtoy")
+        again = t["case_init"](directory=target, template="1dtoy")
         assert again["status"] == "error", again
-        forced = t["cobre_init"](directory=target, template="1dtoy", force=True)
-        assert forced["exit_code"] == 13, "force deveria exigir COBRE_MCP_ALLOW_FORCE"
-        assert t["cobre_init"]()["exit_code"] == 22
+        forced = t["case_init"](directory=target, template="1dtoy", force=True)
+        assert forced["exit_code"] == 13, "force deveria exigir NOVOMODELO_MCP_ALLOW_FORCE"
+        assert t["case_init"]()["exit_code"] == 22
         # nome de template vindo do agente não pode virar opção da CLI
         for bad in ("--force", "-x", "../x", "a b"):
-            r = t["cobre_init"](directory=target, template=bad)
+            r = t["case_init"](directory=target, template=bad)
             assert r["exit_code"] == 22, (bad, r)
 
 
 def test_cli_paths_are_absolute_even_for_dash_prefixed_input():
-    from cobre_mcp.tools.run import _cli_path
+    from novomodelo_mcp.tools.run import _cli_path
     cwd = os.getcwd()
     with tempfile.TemporaryDirectory() as d:
         os.chdir(d)
@@ -369,82 +369,86 @@ def test_run_apply_config_only():
     with _sandbox() as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
-        r = t["cobre_run_apply"](str(case), {"forward_passes": 2, "iteration_limit": 3})
+        r = t["run_apply"](str(case), {"forward_passes": 2, "iteration_limit": 3})
         assert r["status"] == "ok" and r["written"] is True, r
-        cfg = json.loads((case / "config.json").read_text())
+        cfg = json.loads((case / "config.json").read_text(encoding="utf-8"))
         assert cfg["training"]["selection"]["forward_passes"] == 2
         assert cfg["training"]["stopping_rules"][0]["limit"] == 3
         assert (case / "config.json.bak").exists()
-        bad = t["cobre_run_apply"](str(case), {"num_openings": 2})
+        bad = t["run_apply"](str(case), {"num_openings": 2})
         assert bad["status"] == "error" and bad["exit_code"] == 22, bad
-        neg = t["cobre_run_apply"](str(case), {"forward_passes": 0})
-        assert neg["status"] == "error", neg
-        dry = t["cobre_run_apply"](str(case), {"simulation_scenarios": 5}, dry_run=True)
+        neg = t["run_apply"](str(case), {"forward_passes": -5})
+        import importlib.util
+        if importlib.util.find_spec("jsonschema"):
+            assert neg["status"] == "error", neg
+        else:
+            assert "validação por schema pulada" in (neg.get("note") or ""), neg
+        dry = t["run_apply"](str(case), {"simulation_scenarios": 5}, dry_run=True)
         assert dry["written"] is False, dry
-        assert json.loads((case / "config.json").read_text())["simulation"]["selection"][
+        assert json.loads((case / "config.json").read_text(encoding="utf-8"))["simulation"]["selection"][
             "num_scenarios"] == 100
 
 
 # ── tools: run assíncrono ─────────────────────────────────────────────────────
 
 def test_run_async_lifecycle():
-    with _sandbox(COBRE_BIN=FAKE, FAKE_COBRE_SLEEP="0.3") as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_SLEEP="0.3") as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
         t0 = time.time()
-        r = t["cobre_run_start"](str(case), threads=2)
+        r = t["run_start"](str(case), threads=2)
         assert r["status"] == "ok" and r["job_id"], r
         assert time.time() - t0 < 5, "start deveria voltar na hora"
-        assert r["cmd"][-7:] == ["--output", str((case / "output").resolve()), "--threads", "2",
-                                 "--comm-backend", "local", "--quiet"], r["cmd"]
-        busy = t["cobre_run_start"](str(case), threads=2)
+        assert r["cmd"][-6:] == ["--output", str((case / "output").resolve()), "--threads", "2",
+                                 "--comm-backend", "local"], r["cmd"]
+        busy = t["run_start"](str(case), threads=2)
         assert busy["status"] == "error" and busy["exit_code"] == 16, busy
         st = _wait(t, r["job_id"])
         assert st["state"] == "succeeded" and st["exit_code"] == 0, st
         assert st["milestones"]["training"] is True, st
-        logs = t["cobre_run_logs"](r["job_id"])
+        logs = t["run_logs"](r["job_id"])
         assert "fake run: done" in logs["stdout"], logs
-        assert t["cobre_run_status"]("../../etc")["status"] == "error"
+        assert t["run_status"]("../../etc")["status"] == "error"
 
 
 def test_run_async_failure_and_cancel():
-    with _sandbox(COBRE_BIN=FAKE, FAKE_COBRE_RC="3") as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_RC="3") as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
-        st = _wait(t, t["cobre_run_start"](str(case))["job_id"])
+        st = _wait(t, t["run_start"](str(case))["job_id"])
         assert st["state"] == "failed" and st["exit_code"] == 3, st
         assert "solver falhou" in st["stderr_tail"], st
-    with _sandbox(COBRE_BIN=FAKE, FAKE_COBRE_SLEEP="30") as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_SLEEP="30") as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
-        job = t["cobre_run_start"](str(case))["job_id"]
+        job = t["run_start"](str(case))["job_id"]
         time.sleep(0.3)
-        c = t["cobre_run_cancel"](job)
+        c = t["run_cancel"](job)
         assert c["state"] == "cancelled", c
-        assert t["cobre_run_status"](job)["state"] == "cancelled"
+        assert t["run_status"](job)["state"] == "cancelled"
 
 
 def test_run_start_refuses_nao_cabe():
-    with _sandbox(COBRE_BIN=FAKE) as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE) as d:
         case = _make_case(d, meta_host=socket.gethostname().upper())  # casa normalizado
         t = _tools()
-        r = t["cobre_run_start"](str(case), time_budget_s=0.01)
+        r = t["run_start"](str(case), time_budget_s=0.01)
         assert r["status"] == "error" and r["plan"]["verdict"] == "nao_cabe", r
-        ok = t["cobre_run_start"](str(case), time_budget_s=0.01, override=True)
+        ok = t["run_start"](str(case), time_budget_s=0.01, override=True)
         assert ok["status"] == "ok", ok
         _wait(t, ok["job_id"])
-        outside = t["cobre_run_start"](str(case), output=str(Path(d).parent / "fora-do-ws"))
+        outside = t["run_start"](str(case), output=str(Path(d).parent / "fora-do-ws"))
         assert outside["exit_code"] == 13, outside
 
 
 def test_calibration_registry_by_machine_id():
-    """Run via cobre_run_start alimenta o registro; o plano o usa mesmo se o hostname mudar."""
-    with _sandbox(COBRE_BIN=FAKE, FAKE_COBRE_META=json.dumps(REF_META)) as d:
+    """Run via run_start alimenta o registro; o plano o usa mesmo se o hostname mudar."""
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_META=json.dumps(REF_META)) as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
-        st = _wait(t, t["cobre_run_start"](str(case), override=True)["job_id"])
+        st = _wait(t, t["run_start"](str(case), override=True)["job_id"])
         assert st["state"] == "succeeded", st
-        reg = json.loads((d / "state" / "calibration.json").read_text())
+        reg = json.loads((d / "state" / "calibration.json").read_text(encoding="utf-8"))
         mid = machine.detect_machine_id()
         assert reg["version"] == 2 and len(reg["entries"]) == 1, reg
         assert reg["entries"][0]["machine_id"] == mid, reg
@@ -455,7 +459,7 @@ def test_calibration_registry_by_machine_id():
         case2 = _make_case(other, meta_host=None)
         m = {**MOCK_MACHINE, "machine_id": mid, "hostname": "hostname-mudou"}
         plan = make_plan(str(case2), load_settings(), machine=m)
-        assert plan["reference"]["points"][0]["origin"] == "cobre_run_start", plan
+        assert plan["reference"]["points"][0]["origin"] == "run_start", plan
         # outra máquina NÃO herda a calibração
         plan = make_plan(str(case2), load_settings(),
                          machine={**m, "machine_id": "ffffffffffffffff"})
@@ -463,10 +467,10 @@ def test_calibration_registry_by_machine_id():
 
 
 def test_terminal_state_only_after_runner_exits():
-    with _sandbox(COBRE_BIN=FAKE) as d:
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE) as d:
         case = _make_case(d, meta_host=None)
         t = _tools()
-        job = t["cobre_run_start"](str(case), override=True)["job_id"]
+        job = t["run_start"](str(case), override=True)["job_id"]
         st = _wait(t, job)
         assert st["state"] == "succeeded", st
         assert job not in jobs._PROCS, "estado terminal com o runner ainda vivo"
@@ -478,7 +482,7 @@ def test_job_lost_when_runner_dies():
         d = jobs.jobs_root(settings) / "20200101-000000-abcdef"
         d.mkdir()
         (d / "job.json").write_text(json.dumps({"job_id": d.name, "cmd": ["x"], "pid": 1,
-                                                "started_at": time.time() - 3600}))
+                                                "started_at": time.time() - 3600}), encoding="utf-8")
         (d / "heartbeat").touch()
         old = time.time() - 3600
         os.utime(d / "heartbeat", (old, old))
@@ -487,19 +491,19 @@ def test_job_lost_when_runner_dies():
 
 
 def test_real_solver_gated():
-    """Execução REAL (cobre init 1dtoy + 1 iteração). Só com COBRE_MCP_REAL_SOLVER=1."""
-    if os.environ.get("COBRE_MCP_REAL_SOLVER") != "1":
-        print("    (pulado: defina COBRE_MCP_REAL_SOLVER=1 para rodar o solver real)")
+    """Execução REAL (novomodelo init 1dtoy + 1 iteração). Só com NOVOMODELO_MCP_REAL_SOLVER=1."""
+    if os.environ.get("NOVOMODELO_MCP_REAL_SOLVER") != "1":
+        print("    (pulado: defina NOVOMODELO_MCP_REAL_SOLVER=1 para rodar o solver real)")
         return
     with _sandbox() as d:
         t = _tools()
         case = str(d / "toy")
-        assert t["cobre_init"](directory=case, template="1dtoy")["status"] == "ok"
-        assert t["cobre_run_apply"](case, {"iteration_limit": 1,
+        assert t["case_init"](directory=case, template="1dtoy")["status"] == "ok"
+        assert t["run_apply"](case, {"iteration_limit": 1,
                                            "simulation_scenarios": 1})["status"] == "ok"
-        r = t["cobre_run_start"](case, threads=1, override=True)
+        r = t["run_start"](case, threads=1, override=True)
         st = _wait(t, r["job_id"], timeout=300)
-        assert st["state"] == "succeeded", (st, t["cobre_run_logs"](r["job_id"]))
+        assert st["state"] == "succeeded", (st, t["run_logs"](r["job_id"]))
 
 
 def main():

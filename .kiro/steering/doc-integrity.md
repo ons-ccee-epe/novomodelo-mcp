@@ -38,7 +38,7 @@ For this server specifically:
 - State the rule, not the census: "every tool returns the error envelope on
   failure" (a contract a test enforces), not "all N tools" (a count that rots as
   tools are added).
-- Default values (timeouts, ceilings) live in `Settings` (`src/cobre_mcp/
+- Default values (timeouts, ceilings) live in `Settings` (`src/novomodelo_mcp/
   config.py`) and are surfaced in the README table — prose elsewhere references
   the knob by name, never a hand-copied number.
 
@@ -54,7 +54,7 @@ For this server specifically:
    must resolve against the live tree or the server's real env vars. Never cite
    gitignored or machine-local paths in shipped docs.
 5. **Self-executable instructions.** A command a doc tells the reader to run
-   (`uv sync`, `uv run cobre-mcp`, a smoke script) must itself succeed — verify
+   (`uv sync`, `uv run novomodelo-mcp`, a smoke script) must itself succeed — verify
    by running it.
 6. **False-confidence guards.** A passing test is evidence only for the
    fact-class it checks; audit coverage, not just pass/fail.

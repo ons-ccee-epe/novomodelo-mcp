@@ -1,26 +1,22 @@
 """Testes do fallback EMBUTIDO de docs/schemas (funciona offline, sem clone/env var).
 
 Requisito de produto: as tools ``docs_*`` e ``schema_*`` devem funcionar assim
-que o MCP e conectado, sem ``COBRE_DOCS_DIR``/``COBRE_SCHEMAS_DIR``, sem clone
-``cobre-docs`` e sem o binario ``cobre``. Estes testes forcam esse cenario e
-verificam que o conteudo vem do snapshot embutido em ``cobre_mcp/_bundled``.
+que o MCP e conectado, sem ``NOVOMODELO_MCP_DOCS_DIR``/``NOVOMODELO_MCP_SCHEMAS_DIR``, sem clone
+``novomodelo-docs`` e sem o binario ``novomodelo``. Estes testes forcam esse cenario e
+verificam que o conteudo vem do snapshot embutido em ``novomodelo_mcp/_bundled``.
 """
 import pytest
 
-from cobre_mcp.adapters import reference as R
-from cobre_mcp.config import load_settings
+from novomodelo_mcp.adapters import reference as R
+from novomodelo_mcp.config import load_settings
 
 
 @pytest.fixture
 def offline_settings(monkeypatch):
     """Settings sem env vars e SEM auto-descoberta (forca o fallback embutido)."""
-    monkeypatch.delenv("COBRE_DOCS_DIR", raising=False)
-    monkeypatch.delenv("COBRE_SCHEMAS_DIR", raising=False)
-    monkeypatch.delenv("COBRE_BIN", raising=False)
-    # Neutraliza a auto-descoberta de clone cobre-docs e o cache, para o teste
-    # exercitar deterministicamente o fallback embutido.
-    monkeypatch.setattr(R, "_discover_docs_dir", lambda: None)
-    R._DOCS_DISCOVER_CACHE.clear()
+    monkeypatch.delenv("NOVOMODELO_MCP_DOCS_DIR", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_SCHEMAS_DIR", raising=False)
+    monkeypatch.delenv("NOVOMODELO_MCP_SOLVER_BIN", raising=False)
     R._SCHEMA_EXPORT_CACHE.clear()
     return load_settings()
 
@@ -37,7 +33,7 @@ def test_bundled_dirs_present():
 def test_schema_list_offline_uses_bundled(offline_settings):
     types = R.list_schema_types(offline_settings)
     assert len(types) > 0, "schema_list deveria listar os schemas embutidos offline"
-    # tipos-chave que o deck Cobre exige
+    # tipos-chave que o deck Novomodelo exige
     for expected in ("hydros", "config", "penalties", "stages"):
         assert expected in types, f"schema '{expected}' ausente no embutido"
 

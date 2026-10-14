@@ -1,0 +1,41 @@
+# Mapa de nomes do rename do MCP, no formato da ferramenta do upstream
+# (novomodelo: scripts/rebrand/rebrand.py). Uso, a partir da raiz deste repo:
+#
+#   uv run python <clone-novomodelo>/scripts/rebrand/rebrand.py paths  --root . --map scripts/rebrand/map.toml
+#   uv run python <clone-novomodelo>/scripts/rebrand/rebrand.py tokens --root . --map scripts/rebrand/map.toml
+#   uv run python <clone-novomodelo>/scripts/rebrand/rebrand.py check  --root . --map scripts/rebrand/map.toml
+#
+# Para o próximo nome (<nome futuro>): um mapa novo com `from = "novomodelo"`.
+
+[name]
+from = "cobre"
+forms = { cobre = "novomodelo", Cobre = "Novomodelo", COBRE = "NOVOMODELO" }
+
+[paths]
+keep = []
+
+[content]
+# Nunca editados por `tokens` nem varridos por `check`.
+keep_files = [
+  "LICENSE",          # texto de licença e atribuição: fica como está
+  "scripts/rebrand/*",
+]
+
+# Regras de endereço, tentadas antes da regra do nome; a primeira que casa vence.
+
+# Nome do repositório no GitHub (<repositório anterior>) e da pasta do clone.
+# O repo continua com esse nome por ora (decisão de 10/out); trocar quando for renomeado.
+[[rule]]
+pattern = '<repositório anterior>'
+keep = true
+
+# Campo de metadados gravado por runs antigos (≤ 0.17). É dado em disco, não nome do MCP:
+# results_status lê `software_version` e cai neste quando o run é antigo.
+[[rule]]
+pattern = 'cobre_version'
+keep = true
+
+# "cobrem" (verbo cobrir), não o nome do produto.
+[[rule]]
+pattern = '[Cc]obrem'
+keep = true

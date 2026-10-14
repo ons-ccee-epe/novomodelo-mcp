@@ -1,0 +1,214 @@
+---
+title: Python Quickstart
+description: Install the novomodelo Python package, run the 1dtoy example case with novomodelo.run.run(), and read and plot its results.
+---
+
+Install the `novomodelo` Python package, scaffold the 1dtoy example case, run it with `novomodelo.run.run()`, then read and plot the results. The remaining sections change the configuration, validate a case and handle errors.
+
+## Install
+
+```bash
+pip install novomodelo-python polars pyarrow matplotlib
+```
+
+The package imports as `novomodelo`; `polars`, `pyarrow` and `matplotlib` serve the read and plot steps. [Installation](/getting-started/installation/) lists the supported Python versions and platforms.
+
+## Scaffold a Case
+
+The Python package has no scaffold command. Create the 1dtoy example case with the `novomodelo` command-line tool from [Installation](/getting-started/installation/):
+
+```bash
+novomodelo init --template 1dtoy my_study
+```
+
+Alternatively, copy the repository's [examples/1dtoy](https://github.com/ons-ccee-epe/novomodelo/tree/v0.18.0/examples/1dtoy) at the `v0.18.0` tag to `my_study/`. Run the snippets below, in order, from the directory that holds `my_study/`.
+
+## Run the Study
+
+`novomodelo.run.run()` loads the case, trains an SDDP policy, simulates 100 scenarios and writes the results to `my_study/output`. It returns a dict:
+
+```python
+import novomodelo
+
+result = novomodelo.run.run("my_study")
+print(f"converged:   {result['converged']}")
+print(f"iterations:  {result['iterations']}")
+print(f"lower_bound: {result['lower_bound']:.6g}")
+print(f"upper_bound: {result['upper_bound']:.6g}")
+print(f"gap_percent: {result['gap_percent']:.1f}")
+print(f"simulation:  {result['simulation']}")
+print(f"output_dir:  {result['output_dir']}")
+```
+
+```text
+converged:   False
+iterations:  128
+lower_bound: 1.55955e+07
+upper_bound: 579592
+gap_percent: -96.3
+simulation:  {'n_scenarios': 100, 'completed': 100}
+output_dir:  my_study/output
+```
+
+The printed keys are part of the result dict; see [`RunResult`](/reference/python-api/#novomodelo_typesrunresult) for the full shape and [`novomodelo.run.run`](/reference/python-api/#novomodelorunrun) for the parameters. `converged` is `True` when a `gap` or `bound_stalling` rule stops training. Here the 128-iteration limit stopped it, so `False` is expected. The bounds and the negative gap match the CLI quickstart, which explains them in [What You Just Ran](/getting-started/quickstart/#what-you-just-ran).
+
+## Read the Results
+
+Read the convergence record and the simulation costs back from the output directory:
+
+```python
+import novomodelo
+import polars as pl
+
+conv = pl.from_arrow(novomodelo.results.load_convergence_arrow("my_study/output"))
+print(conv.select("iteration", "lower_bound", "upper_bound", "gap_percent").tail(3))
+
+costs = pl.from_arrow(
+    novomodelo.results.load_simulation_arrow("my_study/output", entity_type="costs")
+)
+per_scenario = costs.group_by("scenario_id").agg(
+    (pl.col("discount_factor") * pl.col("immediate_cost")).sum().alias("cost")
+)
+print(per_scenario.select(
+    pl.col("cost").mean().alias("mean"),
+    pl.col("cost").median().alias("median"),
+))
+```
+
+```text
+shape: (3, 4)
+┌───────────┬─────────────┬───────────────┬─────────────┐
+│ iteration ┆ lower_bound ┆ upper_bound   ┆ gap_percent │
+│ ---       ┆ ---         ┆ ---           ┆ ---         │
+│ i32       ┆ f64         ┆ f64           ┆ f64         │
+╞═══════════╪═════════════╪═══════════════╪═════════════╡
+│ 126       ┆ 1.5596e7    ┆ 615923.497494 ┆ -96.050638  │
+│ 127       ┆ 1.5596e7    ┆ 615923.497494 ┆ -96.050638  │
+│ 128       ┆ 1.5596e7    ┆ 579592.198622 ┆ -96.283598  │
+└───────────┴─────────────┴───────────────┴─────────────┘
+shape: (1, 2)
+┌──────────┬───────────────┐
+│ mean     ┆ median        │
+│ ---      ┆ ---           │
+│ f64      ┆ f64           │
+╞══════════╪═══════════════╡
+│ 9.6794e6 ┆ 615923.497494 │
+└──────────┴───────────────┘
+```
+
+The two [`novomodelo.results`](/reference/python-api/#novomodeloresults) loaders return `pyarrow.Table`s, which `polars.from_arrow` wraps. A scenario's cost is the sum of `discount_factor * immediate_cost` over its `costs` rows, one per stage here; the mean matches the `Expected cost` line of the CLI run summary, and the median, far below the mean, shows that most scenarios are cheap.
+
+## Plot the Convergence
+
+Plot both bounds against the iteration:
+
+```python
+import novomodelo
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import polars as pl
+
+conv = pl.from_arrow(novomodelo.results.load_convergence_arrow("my_study/output"))
+fig, ax = plt.subplots()
+ax.plot(conv["iteration"], conv["lower_bound"], label="lower bound")
+ax.plot(conv["iteration"], conv["upper_bound"], label="upper bound")
+ax.set_yscale("log")
+ax.set_xlabel("iteration")
+ax.set_ylabel("expected cost")
+ax.legend()
+fig.savefig("convergence.png")
+print("saved convergence.png")
+```
+
+```text
+saved convergence.png
+```
+
+The saved `convergence.png` uses a log axis. The lower bound rises from about 5.1e6 and flattens near 1.56e7. The upper bound is the cost of one forward pass per iteration; it sits near 6e5 with spikes above 1e8. `matplotlib.use("Agg")` draws to a file, so the script needs no display.
+
+## Change the Configuration
+
+`config_overrides` changes `config.json` settings for one call without editing the file. This call reruns the study with another seed:
+
+```python
+import novomodelo
+
+result = novomodelo.run.run(
+    "my_study",
+    output_dir="my_study/output-seed7",
+    config_overrides={"training.tree_seed": 7},
+)
+print(f"lower_bound: {result['lower_bound']:.6g}")
+```
+
+```text
+lower_bound: 9.7055e+06
+```
+
+The keys are dotted `config.json` paths. `training.tree_seed` seeds the opening tree and the in-sample draws (default 42), so another seed gives another tree and another lower bound: 9.7055e+06 here, against 1.55955e+07 for the first run. Pass nested settings as dotted keys: a dict under a non-dotted key replaces that whole object. `output_dir` keeps this run apart from the first. [Seed resolution](/running/configuration/#seed-resolution) describes the seeds.
+
+A run with training disabled simulates the policy already in the output directory, here the one the first run wrote:
+
+```python
+import novomodelo
+
+result = novomodelo.run.run("my_study", config_overrides={"training.enabled": False})
+print(f"iterations:  {result['iterations']}")
+print(f"upper_bound: {result['upper_bound']}")
+print(f"gap_percent: {result['gap_percent']}")
+```
+
+```text
+iterations:  0
+upper_bound: 579592.1986224409
+gap_percent: None
+```
+
+With training disabled and simulation enabled, `iterations` is `0`, `gap_percent` is `None`, and `upper_bound` is the last training upper bound recorded in the policy checkpoint the run loads (`None` if it records no finite one). With both phases disabled, `lower_bound` is `0.0` and `upper_bound`, `gap_percent` and `simulation` are `None`. The `threads` argument of `novomodelo.run.run` sets the worker count (default 1); `0` raises `ValueError`.
+
+## Validate a Case
+
+`novomodelo.io.validate` checks a case directory without running it:
+
+```python
+import novomodelo
+
+print(novomodelo.io.validate("my_study"))
+```
+
+```text
+{'valid': True, 'errors': [], 'warnings': []}
+```
+
+The dict has the keys `valid`, `errors` and `warnings`; each entry of `errors` is a dict with `kind` and `message`. `novomodelo.Study("my_study").validate()` returns a dict with the same keys.
+
+## Error Handling
+
+A setting that fails validation raises a typed exception. This call misspells a config key:
+
+```python
+import novomodelo
+
+try:
+    novomodelo.run.run("my_study", config_overrides={"training.tree_seeds": 7})
+except novomodelo.errors.NovomodeloError as err:
+    print(type(err).__name__, isinstance(err, ValueError))
+```
+
+```text
+ValidationError True
+```
+
+The typed exceptions are in `novomodelo.errors`. Each specific class derives from the base `NovomodeloError` and from a builtin (`ValueError`, `OSError` or `RuntimeError`), so an existing `except ValueError` also catches this `ValidationError`. Argument checks such as `threads=0` or a missing case directory raise the builtin directly. See [`novomodelo.errors`](/reference/python-api/#novomodeloerrors) for the classes, [Error Codes](/reference/error-codes/) for the messages and [Policy-load errors](/reference/error-codes/#policy-load-errors) for which load path raises which class.
+
+## Policy Checkpoints
+
+Load a trained policy with `novomodelo.results.load_policy`, edit its cuts, and write a checkpoint Novomodelo can load with
+`novomodelo.write_policy_checkpoint`. The round-trip how-to is
+[Read and Write Checkpoints from Python](/running/policy-management/#read-and-write-checkpoints-from-python).
+
+## Next Steps
+
+- See [Case Format](/reference/case-format/) for input file specifications.
+- Explore the [Worked Examples](/examples/toy-single-reservoir/) for small, fully worked cases.

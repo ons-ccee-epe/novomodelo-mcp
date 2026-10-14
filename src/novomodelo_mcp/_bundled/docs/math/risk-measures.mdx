@@ -1,0 +1,356 @@
+---
+title: Risk Measures
+description: Risk-averse SDDP via CVaR — definitions, dual representations, the subgradient theorem, risk-averse cut generation, and bound-validity implications.
+---
+
+## Purpose
+
+This chapter defines the risk-averse SDDP formulation used in Novomodelo, based on Conditional Value-at-Risk (CVaR). It covers the CVaR definition, the convex combination risk measure, dual representations, the risk-averse subgradient theorem, modified Bellman equation with discount factor, risk-averse cut generation, and when the bounds are valid under a risk measure.
+
+For notation conventions (index sets, parameters, decision variables, dual variables), see [Notation Conventions](/overview/notation-conventions).
+
+:::note[Symbol conventions]
+
+- $\alpha$ denotes the **CVaR tail fraction**.
+- $d$ denotes the **discount factor**. See [Discount Rate Formulation](/math/discount-rate).
+- $\mu$ denotes the **risk-adjusted probability measure**.
+- $\psi(p, \mu)$ denotes the **dual penalty function** in the general dual representation.
+
+:::
+
+## 1 Motivation
+
+Risk-neutral SDDP minimizes expected cost, which can lead to policies that perform poorly in adverse scenarios. **Risk-averse SDDP** incorporates a coherent risk measure (typically CVaR) to protect against tail risks while maintaining the convexity properties required for valid cut generation.
+
+_Cost distribution $f(Z)$ for a right-skewed Gamma law with $\mathbb{E}[Z]$, $\mathrm{VaR}_\alpha$ and $\mathrm{CVaR}_\alpha$ marked and the worst $\alpha$ tail shaded. The convex-combination measure $\rho^{\lambda,\alpha}[Z] = (1-\lambda)\,\mathbb{E}[Z] + \lambda\,\mathrm{CVaR}_\alpha[Z]$ interpolates between the risk-neutral mean and the tail. All three markers are derived numerically from the PDF._
+
+## 2 Conditional Value-at-Risk (CVaR)
+
+For a random variable $Z$ representing cost and tail fraction $\alpha \in (0, 1]$:
+
+$$
+\text{CVaR}_\alpha(Z) = \min_{\eta \in \mathbb{R}} \left\{ \eta + \frac{1}{\alpha} \mathbb{E}\left[(Z - \eta)^+\right] \right\}
+$$
+
+where $(Z - \eta)^+ = \max(0, Z - \eta)$ captures the excess cost above threshold $\eta$.
+
+**Interpretation**: CVaR$_\alpha$ is the expected cost in the worst $\alpha$-fraction of scenarios.
+
+| $\alpha$ | Risk Posture           | Meaning                                     |
+| -------- | ---------------------- | ------------------------------------------- |
+| 1.0      | Risk-neutral           | CVaR$_1$ = $\mathbb{E}[Z]$ (expected value) |
+| 0.5      | Moderately risk-averse | Average of worst 50% of outcomes            |
+| 0.2      | Risk-averse            | Average of worst 20% of outcomes            |
+| 0.05     | Highly risk-averse     | Average of worst 5% of outcomes             |
+
+## 3 Convex Combination Risk Measure
+
+Novomodelo uses a convex combination of expectation and CVaR, the structure of SDDP.jl's EAVaR measure ([Dowson & Kapelevich, 2021](/reference/bibliography/#software-references)), with $\lambda$ weighting the CVaR term:
+
+$$
+\rho^{\lambda, \alpha}[Z] = (1 - \lambda) \mathbb{E}[Z] + \lambda \cdot \text{CVaR}_\alpha[Z]
+$$
+
+where:
+
+- $\lambda \in [0, 1]$: Risk aversion weight (0 = risk-neutral, 1 = pure CVaR)
+- $\alpha \in (0, 1]$: CVaR tail fraction
+
+This is sometimes called the **EAVaR** (Expectation + Average Value-at-Risk) risk measure.
+
+## 4 Dual Representation of Convex Risk Measures
+
+Convex risk measures have a **dual representation** that is essential for computing risk-averse cuts:
+
+$$
+\mathbb{F}[Z] = \sup_{\mu \in \mathcal{M}(p)} \mathbb{E}_\mu[Z] - \psi(p, \mu)
+$$
+
+where:
+
+- $\mathcal{M}(p) \subseteq \mathcal{P}$ is a convex subset of the probability simplex
+- $\psi(p, \mu)$ is a convex penalty function (the minimal penalty)
+- $\mathcal{P} = \{p \geq 0 : \sum_{\omega} p_\omega = 1\}$
+
+**Interpretation**: The dual computes the expectation with respect to the **worst** probability vector $\mu$ within the set $\mathcal{M}$, less a penalty term $\psi(p, \mu)$.
+
+### 4.1 CVaR Dual Representation
+
+For CVaR$_\alpha$, the dual representation is:
+
+$$
+\text{CVaR}_\alpha[Z] = \sup_{\mu \in \mathcal{M}_\alpha(p)} \mathbb{E}_\mu[Z]
+$$
+
+where the risk set $\mathcal{M}_\alpha(p)$ is:
+
+$$
+\mathcal{M}_\alpha(p) = \left\{\mu \geq 0 : \sum_\omega \mu_\omega = 1, \; \mu_\omega \leq \frac{p_\omega}{\alpha} \; \forall \omega \right\}
+$$
+
+The penalty $\psi(p, \mu) = 0$ for CVaR (no penalty term).
+
+**Interpretation**: CVaR puts more probability weight on the worst outcomes, with each scenario receiving at most $p_\omega / \alpha$ probability mass. For small $\alpha$, only the worst scenarios receive significant weight.
+
+### 4.2 EAVaR Dual Representation
+
+For the convex combination $\rho^{\lambda, \alpha}[Z] = (1-\lambda)\mathbb{E}[Z] + \lambda \cdot \text{CVaR}_\alpha[Z]$:
+
+$$
+\mathcal{M}^{EAVaR}(p) = \left\{\mu : \sum_\omega \mu_\omega = 1,\; (1-\lambda)\, p_\omega \leq \mu_\omega \leq (1-\lambda)\, p_\omega + \frac{\lambda\, p_\omega}{\alpha} \;\; \forall \omega \right\}
+$$
+
+Equivalently, $\mathcal{M}^{EAVaR}(p)$ is the set of $\mu = (1-\lambda)\, p + \lambda\, q$ with $q \in \mathcal{M}_\alpha(p)$: the expectation contributes the fixed share $(1-\lambda)\, p$, and the CVaR term the share $\lambda\, q$.
+
+## 5 Risk-Averse Subgradient Theorem
+
+The key theorem for computing risk-averse cuts:
+
+:::note[Theorem (Risk-Averse Subgradient)]
+
+Let $V(x, \omega)$ be convex with respect to $x$ for all fixed $\omega \in \Omega$, and let $\beta(\tilde{x}, \omega)$ be a subgradient of $V(x, \omega)$ at $x = \tilde{x}$.
+
+If $\mu^* = \text{argmax}_{\mu \in \mathcal{M}(p)} \mathbb{E}_\mu[V(\tilde{x}, \omega)] - \psi(p, \mu)$, then:
+
+$$
+\sum_{\omega \in \Omega} \mu^*_\omega \cdot \beta(\tilde{x}, \omega)
+$$
+
+is a subgradient of $\mathbb{F}[V(x, \omega)]$ at $\tilde{x}$.
+
+:::
+
+**Application to Cut Generation**: In SDDP, the subgradients $\beta(\tilde{x}, \omega)$ are the cut coefficients $\beta_t(\omega)$ obtained from LP duals (see [Cut Management §2](/math/cut-management)). The risk-averse cut coefficients are computed by replacing the nominal probabilities $p(\omega)$ with the risk-adjusted probabilities $\mu^*$:
+
+$$
+\bar{\beta}_{t-1,h} = \sum_{\omega \in \Omega_t} \mu^*_\omega \cdot \beta_{t,h}(\omega)
+$$
+
+where $\mu^*$ is the optimal dual probability vector computed from the scenario costs $\{Q_t(\hat{x}, \omega)\}_{\omega \in \Omega_t}$.
+
+## 6 Risk-Averse Bellman Equation
+
+The risk-averse value function with discount factor $d$ satisfies, for $t = 2, \ldots, T$:
+
+$$
+V_t(x_{t-1}) = \rho^{\lambda_{t-1}, \alpha_{t-1}}\left[\min_{x_t, u_t} \left\{ c_t(x_t, u_t) + d_{t \to t+1} \cdot V_{t+1}(x_t) : (x_t, u_t) \in \mathcal{X}_t(x_{t-1}, \omega) \right\}\right]
+$$
+
+The measure $\rho_{t-1} = \rho^{\lambda_{t-1}, \alpha_{t-1}}$ of stage $t-1$ aggregates the openings $\omega \in \Omega_t$ of stage $t$. The cuts that approximate $V_t$ are stored at stage $t-1$, and the measure of the stage that owns a cut aggregates the openings of the next stage into it ([Cut Management §3](/math/cut-management#3-single-cut-aggregation)). This indexing has two ends. The last stage's measure $\rho_T$ has no later openings to aggregate, so it enters no value function. The first stage's measure $\rho_1$ also aggregates the first stage's own openings $\omega \in \Omega_1$: the equation holds at $t = 1$ with $\rho^{\lambda_1, \alpha_1}$ as the aggregating measure, and $V_1(x_0)$ is the nested value that the lower bound of §9 bounds from below.
+
+This modifies the standard [Bellman recursion](/math/sddp-algorithm) in two ways:
+
+1. **Risk measure replaces expectation**: $\rho^{\lambda_{t-1}, \alpha_{t-1}}[\cdot]$ replaces $\mathbb{E}[\cdot]$
+2. **Discount factor on future cost**: $d_{t \to t+1} \cdot V_{t+1}(x_t)$ discounts the cost-to-go (see [Discount Rate Formulation §2](/math/discount-rate))
+
+:::note[Time consistency]
+The risk measure is applied stage-wise (nested formulation), not to the total cost. This guarantees time consistency, which is essential for the dynamic programming decomposition. Formally, with $\rho_t$ acting on the cost of stage $t+1$, the costs of stages $2, \ldots, T$ nest as $\rho_1[\rho_2[\cdots \rho_{T-1}[\cdot]]]$, not $\rho[\text{total cost}]$, and $\rho_1$ also aggregates the first stage's own openings outside that nest.
+:::
+
+In the LP subproblem at stage $t$, the future cost variable $\theta$ appears in the objective as $d_{t \to t+1} \cdot \theta$ (see [Discount Rate Formulation §4](/math/discount-rate#4-discount-factor-in-the-stage-subproblem)). Cuts bound $\theta$ (not $d \cdot \theta$), so the discount factor multiplies $\theta$ only in the objective — exactly as in the risk-neutral case.
+
+## 7 Cut Generation with Risk Measures
+
+For each visited state $\hat{x}_{t-1}$, compute the risk-averse cut as follows:
+
+**Step 1: Solve subproblems** for all realizations $\omega \in \Omega_t$:
+
+$$
+Q_t(\hat{x}_{t-1}, \omega) = \min_{x_t, u_t} \left\{ c_t(x_t, u_t) + d_{t \to t+1} \cdot \theta_t : \text{constraints} \right\}
+$$
+
+Extract dual solutions $\beta_t(\omega)$ and compute per-scenario cut coefficients:
+
+- Intercept: $\beta_{0,t}(\omega) = Q_t(\hat{x}_{t-1}, \omega) - \beta_t(\omega)^\top \hat{x}_{t-1}$
+- Coefficients: $\beta_t(\omega)$ — derived from LP duals (see [Cut Management §2](/math/cut-management))
+
+**Step 2: Compute risk-adjusted scenario weights** $\mu^*_\omega$ with the measure of stage $t-1$, the stage that owns the cut (§6), $(\lambda, \alpha) = (\lambda_{t-1}, \alpha_{t-1})$.
+
+Each scenario $\omega$ has a probability upper bound:
+
+$$
+\bar{\mu}_\omega = (1 - \lambda) \, p_\omega + \frac{\lambda \, p_\omega}{\alpha}
+$$
+
+Since $\bar{\mu}_\omega > p_\omega$ when $\lambda > 0$ and $\alpha < 1$, the total capacity $\sum_\omega \bar{\mu}_\omega > 1$, so not every opening reaches its cap. The weights are built from the tail weights $q^*$, the $\text{CVaR}_\alpha$ weights: the probability vector in $\mathcal{M}_\alpha(p)$ (§4.1) that maximizes the expected opening cost, found greedily:
+
+1. Sort the openings by cost $Q_t(\hat{x}_{t-1}, \omega)$ in **descending** order
+2. Walk down the sorted list, giving each opening $q^*_\omega = p_\omega / \alpha$
+3. When the cumulative mass reaches 1, the current opening receives the remainder, and every cheaper opening gets $q^*_\omega = 0$
+
+The risk-adjusted weights mix the tail weights with the nominal probabilities:
+
+$$
+\mu^* = (1-\lambda)\, p + \lambda\, q^*
+$$
+
+$\bar{\mu}_\omega$ is the cap of $\mu^*$: $\mu^*$ attains it, $\mu^*_\omega = \bar{\mu}_\omega$, on every opening that $q^*$ fills fully.
+
+:::note[Special cases]
+
+- **Risk-neutral** ($\lambda = 0$): $\bar{\mu}_\omega = p_\omega$ for all $\omega$, so $\mu^* = p$ and this reduces to the standard aggregation from [Cut Management §3](/math/cut-management).
+- **Pure CVaR** ($\lambda = 1$): $\bar{\mu}_\omega = p_\omega / \alpha$, the floor is zero and $\mu^* = q^*$. Only the worst $\alpha$-fraction of scenarios receive weight; all others get $\mu^*_\omega = 0$.
+- **Convex combination** ($0 < \lambda < 1$): every opening keeps the floor $(1-\lambda)\, p_\omega$, and the costliest openings, those that $q^*$ fills fully, reach the cap $\bar{\mu}_\omega$.
+
+:::
+
+:::note[Equivalence note]
+$\mu^*$ solves the linear program $\max_{\mu \in \mathcal{M}^{EAVaR}(p)} \sum_\omega \mu_\omega\, Q_t(\hat{x}_{t-1}, \omega)$ of §4.2, which has a floor and a cap per opening and one equality. By the equivalent form of §4.2, the program is $(1-\lambda)\, \mathbb{E}[Q_t(\hat{x}_{t-1}, \omega)]$ plus $\lambda$ times the $\text{CVaR}_\alpha$ program over $\mathcal{M}_\alpha(p)$, whose optimum is the greedy $q^*$, so its optimal value is $\rho^{\lambda, \alpha}$ of the opening costs. For example, four equiprobable openings with costs 10, 20, 30 and 40 at $\alpha = \lambda = 0.5$ give $q^* = (0, 0, 0.5, 0.5)$, $\mu^* = (0.125, 0.125, 0.375, 0.375)$ and the value $30$, the mean $25$ mixed with the $\text{CVaR}_\alpha$ of $35$.
+:::
+
+_Four equiprobable openings with costs 10, 20, 30 and 40 at $\alpha = \lambda = 0.5$: every opening keeps the floor $(1-\lambda)\, p_\omega = 0.125$ in its risk-adjusted weight $\mu^*_\omega$, the two costliest openings reach the cap $\bar{\mu}_\omega = 0.375$, and the weights value the openings at $30$._
+
+**Step 3: Compute risk-averse cut coefficients** using $\mu^*$ (justified by the theorem in §5):
+
+$$
+\bar{\beta}_{0,t-1} = \sum_{\omega \in \Omega_t} \mu^*_\omega \cdot \beta_{0,t}(\omega)
+$$
+
+$$
+\bar{\beta}_{t-1} = \sum_{\omega \in \Omega_t} \mu^*_\omega \cdot \beta_t(\omega)
+$$
+
+**Step 4: Add cut to stage $t-1$**:
+
+$$
+\theta_{t-1} \geq \bar{\beta}_{0,t-1} + \bar{\beta}_{t-1}^\top x_{t-1}
+$$
+
+:::note[Comparison with risk-neutral aggregation]
+The only difference from [Cut Management §3](/math/cut-management) is that the scenario probabilities $p(\omega)$ are replaced by the risk-adjusted weights $\mu^*_\omega$.
+:::
+
+## 8 Upper Bound with Risk Measures
+
+Monte Carlo simulation cannot directly estimate the upper bound for CVaR problems because:
+
+1. CVaR is computed over the entire distribution, not sample averages
+2. The optimal $\eta$ (VaR threshold) changes with the policy
+
+The exact deterministic upper bound and the `gap` stopping rule that compares it against the lower bound ([Stopping Rules §5](/math/stopping-rules)) require an **enumerated** forward pass together with a risk measure that is **uniform across all stages** — either expectation at every stage, or one CVaR measure (the same risk-aversion weight $\lambda$ and tail fraction $\alpha$) at every stage. Under a uniform CVaR the exact bound is not a probability-weighted average of path costs but a nested, time-consistent risk recursion over the enumerated tree, aggregated with the study's own CVaR weighting so that it brackets the risk-averse lower bound from above (see [Upper Bound Evaluation §2](/math/upper-bound-evaluation)). [Stopping Rules §5](/math/stopping-rules#5-gap-based-stopping-recommended) defines a stage-varying measure and states the setup rejection of a `gap` rule under one.
+
+Under a sampled forward pass Novomodelo computes no exact upper bound. Under an enumerated forward pass with a stage-varying measure it reports the exact probability-weighted path cost, which is not an upper bound on the risk-averse objective. The inner approximation in the appendix of [Upper Bound Evaluation](/math/upper-bound-evaluation) is a reserved design.
+
+## 9 Lower Bound Validity with Risk Measures
+
+Under a coherent stage measure, which is monotone and convex, such as $\rho^{\lambda, \alpha}$ of §3, every aggregated cut lies below the nested risk-adjusted cost-to-go $V_t(x_{t-1})$ of §6. By the theorem of §5, the cut of §7 is a supporting hyperplane, at its trial point, of the measure of stage $t-1$ applied to the opening costs of stage $t$, which is convex in the incoming state. Those opening costs carry the current cuts in place of the next stage's cost-to-go, and those cuts lie below it by induction from the last stage, so the monotonicity of the measure keeps the new cut below $V_t(x_{t-1})$ at every incoming state. The training lower bound $\underline{z}^k$, the first stage's measure of its opening objectives with these cuts in place, is therefore a valid lower bound on the nested risk-adjusted optimal value of the model as trained, whether or not the measure varies across stages, and it does not decrease in $k$, since the problem it is evaluated on keeps every cut once added.
+
+The validity rests on the [Tier 1 hypotheses](/math/cut-management#tier-1-valid-lower-bound) ([Philpott, de Matos & Finardi, 2013](/reference/bibliography/#risk-measures)), among them a cost-to-go convex in the incoming state, which the truncation methods of [Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity) break in the inflow-lag components; cuts that span every state component the cost-to-go depends on; a non-negative cost-to-go, since the future-cost variable is bounded below by zero; and a fixed terminal function. [Tier 2](/math/cut-management#tier-2-convergence) establishes the convergence of $\underline{z}^k$ to that optimal value for an expectation measure at every stage.
+
+What a risk-averse run lacks under a sampled forward pass is a valid upper-bound estimate. The mean of the sampled path costs estimates the policy's expected cost, not its nested risk-adjusted value; under $\rho^{\lambda, \alpha}$ that value is at least the expected cost, so the sampled mean can fall below $\underline{z}^k$ and certifies nothing. The certificate is the exact nested bound of an enumerated tree under a measure uniform across stages ([Tier 3](/math/cut-management#tier-3-gap-certificate); see [Upper Bound Evaluation](/math/upper-bound-evaluation)).
+
+### Recommendations
+
+| Purpose                    | Method                                                                                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Convergence monitoring** | Bound stalling on $\underline{z}^k$, a lower bound valid under the Tier 1 hypotheses — see [Stopping Rules](/math/stopping-rules)                                                          |
+| **Certified optimality**   | The gap rule against the exact nested bound of an enumerated forward pass under a uniform measure — see [Upper Bound Evaluation](/math/upper-bound-evaluation) |
+| **Policy evaluation**      | Simulation reports the cost distribution of the policy; it bounds no risk-adjusted value                                                                       |
+
+## 10 References
+
+- [Philpott, de Matos & Finardi (2013)](/reference/bibliography/#risk-measures)
+- [Shapiro (2011)](/reference/bibliography/#sddp-foundations)
+
+## Implementation in Novomodelo
+
+The methodology above defines the risk measure, its weights and the bounds it leaves valid; the tabs below cover how Novomodelo configures the measure per stage and which weights it applies.
+
+**Configure**
+
+Novomodelo reads the risk measure of each stage from the `risk_measure` field of the
+stage's entry in `stages.json`. This tab is the field-level configuration
+reference; the measure it selects, $\rho^{\lambda,\alpha}$, is defined in
+[§3 Convex Combination Risk Measure](/math/risk-measures#3-convex-combination-risk-measure);
+the weights Novomodelo applies to the openings are stated on the Implementation notes
+tab. The full file reference is
+[`stages.json`](/reference/case-format/stages/#stagesjson).
+
+### `stages[].risk_measure` — Risk Measure
+
+| Value                                 | Meaning                                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `"expectation"`                       | Risk-neutral: every opening is weighted by its probability. It is what an absent `risk_measure` resolves to; any other string is rejected at load.     |
+| `{"cvar": {"alpha": α, "lambda": λ}}` | The convex combination of the expectation and the CVaR at tail fraction `alpha`, with weight `lambda` on the CVaR and `1 - lambda` on the expectation. |
+
+The `cvar` object takes the two keys below, both required; an object missing
+either key is a [`ParseError`](/reference/error-codes/#parseerror).
+
+| Field    | Type   | Range    | Description                                                                                             |
+| -------- | ------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `alpha`  | number | `(0, 1]` | The CVaR tail fraction: the worst `alpha`-fraction of outcomes enters the CVaR. `1` is the expectation: every opening then counts in the tail. |
+| `lambda` | number | `[0, 1]` | The weight of the CVaR term: `0` is the expectation and `1` is the pure CVaR.                           |
+
+Both ranges are checked at load: a value outside its range is a
+[`SchemaViolation`](/reference/error-codes/#schemaviolation) on `stages.json`.
+
+:::caution[Tail fraction convention]
+`alpha` is the **tail fraction**: the worst `alpha`-fraction of outcomes enters
+the CVaR. `0.95` therefore averages the worst 95% of outcomes and is nearly
+risk-neutral; the worst 5% is `0.05`. A tool that takes a confidence-level
+parameter `c` corresponds to `alpha = 1 - c`.
+:::
+
+### Example
+
+The measure may differ from stage to stage. This excerpt of `stages.json` lowers
+`lambda` from the first stage to the second and gives the third stage the
+expectation:
+
+```json
+{
+  "stages": [
+    {
+      "id": 0,
+      "risk_measure": { "cvar": { "alpha": 0.5, "lambda": 0.5 } }
+    },
+    {
+      "id": 1,
+      "risk_measure": { "cvar": { "alpha": 0.5, "lambda": 0.25 } }
+    },
+    {
+      "id": 2,
+      "risk_measure": "expectation"
+    }
+  ]
+}
+```
+
+### Effective measure and stage mapping
+
+`lambda: 0` weights every opening by its probability, as `"expectation"` does,
+whatever its `alpha`, and counts as `"expectation"` for the gap rule. The gap
+rule needs one effective measure at every stage
+([Optimality gap](/math/stopping-rules#optimality-gap)).
+
+A stage's `risk_measure` weights the openings of the next stage in the cuts that
+stage stores, and the first stage's `risk_measure` also weights the first
+stage's own openings in the lower bound. The last study stage's `risk_measure`
+enters no cut, but it counts when the gap rule checks that the measure is the
+same at every stage.
+
+**Implementation notes**
+
+Non-normative software behavior for risk measures — what Novomodelo computes, beyond
+the equations above. This tab states the weighting Novomodelo applies and references
+the methodology body
+([§7](/math/risk-measures#7-cut-generation-with-risk-measures)) for the weights
+it derives rather than restating them.
+
+### Applied CVaR weights
+
+Novomodelo applies the weights $\mu^*$ of
+[Risk Measures §7](/math/risk-measures#7-cut-generation-with-risk-measures) to
+the cuts of every backward pass, to the first stage's openings in the training
+lower bound, and to every node of the exact nested upper bound of an enumerated
+forward pass.
+
+## Cross-References
+
+- [Notation Conventions](/overview/notation-conventions) — Symbol definitions, dual variable notation, and sign conventions
+- [SDDP Algorithm](/math/sddp-algorithm) — Bellman recursion and forward/backward pass structure modified by risk measures
+- [Cut Management](/math/cut-management) — Dual extraction and cut coefficient computation; risk-averse aggregation replaces $p(\omega)$ with $\mu^*_\omega$ (§7)
+- [Stopping Rules](/math/stopping-rules) — Bound stalling suits risk-averse convergence monitoring in general; the gap rule is available under a risk-averse measure only when that CVaR is uniform across stages and the forward pass is enumerated
+- [Discount Rate Formulation](/math/discount-rate) — Discount factor $d$ convention and discounted Bellman equation
+- [Horizon Modes](/math/horizon-modes) — Interaction of risk measures with the reserved cyclic policy-graph design
+- [Upper Bound Evaluation](/math/upper-bound-evaluation) — the nested enumerated exact bound for a uniform CVaR, and the reserved inner approximation in its appendix
