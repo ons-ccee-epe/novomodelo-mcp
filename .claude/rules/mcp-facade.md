@@ -6,7 +6,7 @@ paths:
 # <repositório anterior> Facade Rules
 
 How every module under `src/novomodelo_mcp/` must behave. These are contracts, not
-style preferences: a plausible-looking deviation turns a safe, offline relay
+style preferences: a plausible-looking deviation turns a safe, local relay
 into a server that reimplements business logic, crashes the client, or escapes
 the workspace sandbox. Auto-loads on `src/**/*.py`.
 
@@ -75,7 +75,21 @@ parameter — tools and adapters do not read `os.environ` directly. A new knob i
 added to `Settings`, documented in `README.md`'s environment table, and passed
 down, never fetched ad hoc at a call site.
 
-## 8. Output shaping is applied, not bypassed
+## 8. Network goes through one exit, to official domains only
+
+`adapters/versions.py` owns the only outbound requests (`fetch_bytes`,
+`fetch_json`). It accepts `https` URLs on the allow-list (`github.com/ons-ccee-epe/*`,
+`api.github.com/repos/ons-ccee-epe/*`, `pypi.org/pypi/novomodelo-bridge/*`, and
+`release-assets.githubusercontent.com` only as a redirect target), uses a short
+timeout and a local `truststore.SSLContext` (falling back to the default
+context), and never raises: a failure becomes `aviso_rede`. The wrong-but-
+running alternatives are calling `urllib`/`subprocess curl` from a tool, which
+bypasses the allow-list, and `truststore.inject_into_ssl()`, which swaps TLS for
+the whole process. A tool that uses the network is added to
+`tools/annotations.py::NETWORK_TOOLS` with `openWorldHint=True`; the annotation
+test enforces the match. Tests replace the network; they never reach it.
+
+## 9. Output shaping is applied, not bypassed
 
 Tool results pass through the shaping helpers (`tools/shaping.py` —
 `cap_envelope`, `attach_artifact`) so diagnostics, rows, and summary sizes stay

@@ -23,7 +23,7 @@ class _CaptureMCP:
     def __init__(self):
         self.tools: dict[str, object] = {}
 
-    def tool(self):
+    def tool(self, *args, **kwargs):  # aceita annotations=… como o FastMCP
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
@@ -44,14 +44,16 @@ def _write_fake_novomodelo(dir_path: Path, body: str) -> str:
         "argv = sys.argv[1:]\n"
         "if argv[:2] == ['--color', 'never']:\n"
         "    argv = argv[2:]\n"
-        + body
+        + body,
+        encoding="utf-8",
     )
     launcher = dir_path / ("novomodelo.cmd" if os.name == "nt" else "novomodelo")
     if os.name == "nt":
-        launcher.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n')
+        launcher.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
     else:
         launcher.write_text(
-            f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n'
+            f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n',
+            encoding="utf-8",
         )
         launcher.chmod(0o755)
     return str(launcher)
@@ -60,8 +62,11 @@ def _write_fake_novomodelo(dir_path: Path, body: str) -> str:
 def test_missing_binary_is_127():
     """find_novomodelo -> None (sem NOVOMODELO_MCP_SOLVER_BIN e PATH vazio) vira envelope 127, sem exceção."""
     old_bin = os.environ.pop("NOVOMODELO_MCP_SOLVER_BIN", None)
-    old_path = os.environ.get("PATH")
+    saved = {k: os.environ.get(k) for k in ("PATH", "HOME", "USERPROFILE")}
+    empty_home = tempfile.mkdtemp()
     os.environ["PATH"] = ""
+    # HOME vazio também: a descoberta procura em ~/.cargo/bin, onde a máquina pode ter um real
+    os.environ["HOME"] = os.environ["USERPROFILE"] = empty_home
     try:
         env = _tools()["solver_version"]()
         assert env["status"] == "error", env
@@ -69,10 +74,12 @@ def test_missing_binary_is_127():
     finally:
         if old_bin is not None:
             os.environ["NOVOMODELO_MCP_SOLVER_BIN"] = old_bin
-        if old_path is not None:
-            os.environ["PATH"] = old_path
-        else:
-            os.environ.pop("PATH", None)
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        os.rmdir(empty_home)
 
 
 def test_nonjson_output_lands_in_diagnostics():

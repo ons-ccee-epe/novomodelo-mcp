@@ -34,7 +34,7 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
     cmd = [binpath, "--color", "never", *subargv]
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True,
+            cmd, capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout if timeout is not None else settings.default_timeout,
         )
     except subprocess.TimeoutExpired:
@@ -65,20 +65,22 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
     return env
 
 
-def validate_deck_binding(case_dir: str, *, settings: Settings | None = None) -> dict[str, Any]:
+def validate_deck_binding(case_dir: str, *, output_dir: str | None = None,
+                          settings: Settings | None = None) -> dict[str, Any]:
     """Valida um deck pelo binding `novomodelo.io.validate` — saida ESTRUTURADA.
 
     Retorna {"valid": bool, "errors": [{kind,message,file,entity}], "warnings": [...]}.
     Sem parsing de texto e sem depender do binario Rust. Transporte puro.
     """
-    log(settings, "validate_deck_binding", case_dir=case_dir)
+    settings = settings or load_settings()
+    log(settings, "validate_deck_binding", case_dir=case_dir, output_dir=output_dir)
     try:
         # Import literal (não dinâmico): o nome do módulo é fixo e o rename o reescreve.
         import novomodelo.io as _cio
     except ImportError:
         return _error(127, f"{BINDING_DIST} ausente no venv; rode: uv sync --system-certs")
     try:
-        report = _cio.validate(case_dir)
+        report = _cio.validate(case_dir, **({"output_dir": output_dir} if output_dir else {}))
     except FileNotFoundError as exc:
         return _error(2, f"caso nao encontrado: {exc}")
     except Exception as exc:  # noqa: BLE001 - repassa como erro, nao derruba o servidor
@@ -93,7 +95,44 @@ def validate_deck_binding(case_dir: str, *, settings: Settings | None = None) ->
             "valid": valid, "n_errors": len(errors), "n_warnings": len(warnings),
             "errors": errors, "warnings": warnings}
 
-def validate_deck_cli(case_dir: str, *, settings: Settings | None = None) -> dict[str, Any]:
+#: Nome na resposta → (atributo de contagem do `model.System`, lista de itens).
+_SYSTEM_KINDS = {
+    "barras": ("n_buses", "buses"), "linhas": ("n_lines", "lines"),
+    "hidros": ("n_hydros", "hydros"), "termicas": ("n_thermals", "thermals"),
+    "contratos": (None, "contracts"), "bombeamento": (None, "pumping_stations"),
+    "fontes_nao_controlaveis": (None, "non_controllable_sources"),
+}
+
+
+def case_summary_binding(case_dir: str, *, max_items: int,
+                         settings: Settings | None = None) -> dict[str, Any]:
+    """O caso lido por `novomodelo.io.load_case`: contagens e `{id, name}` por tipo.
+
+    Só `load_case`, nunca `Study`: o `Study` grava arquivos na pasta de saída do caso.
+    """
+    settings = settings or load_settings()
+    log(settings, "case_summary_binding", case_dir=case_dir)
+    try:
+        import novomodelo.io as _cio
+    except ImportError:
+        return _error(127, f"{BINDING_DIST} ausente no venv; rode: uv sync --system-certs")
+    try:
+        system = _cio.load_case(case_dir)
+    except Exception as exc:  # noqa: BLE001 - caso inválido (ValueError/OSError) vira envelope
+        return _error(1, "o novomodelo não conseguiu ler o caso", f"{type(exc).__name__}: {exc}")
+    counts: dict[str, Any] = {}
+    items: dict[str, Any] = {}
+    for kind, (count_attr, list_attr) in _SYSTEM_KINDS.items():
+        entries = list(getattr(system, list_attr, None) or [])
+        counts[kind] = getattr(system, count_attr) if count_attr else len(entries)
+        items[kind] = {"lista": [{"id": e.id, "name": e.name} for e in entries[:max_items]],
+                       "truncado": len(entries) > max_items}
+    counts["estagios"] = getattr(system, "n_stages", None)
+    return {"status": "ok", "exit_code": 0, "contagens": counts, "itens": items}
+
+
+def validate_deck_cli(case_dir: str, *, output_dir: str | None = None,
+                      settings: Settings | None = None) -> dict[str, Any]:
     """Valida um deck rodando `novomodelo validate` em modo TEXTO (relatorio completo).
 
     O `--json` do novomodelo devolve apenas a reconciliacao de boundary; o relatorio
@@ -105,8 +144,10 @@ def validate_deck_cli(case_dir: str, *, settings: Settings | None = None) -> dic
     if binpath is None:
         return _error(127, _NOT_FOUND)
     cmd = [binpath, "--color", "never", "validate", case_dir]
+    if output_dir:
+        cmd += ["--output", output_dir]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
+        proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
                               timeout=settings.default_timeout)
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
@@ -150,7 +191,7 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
     cmd = [binpath, "--color", "never", "version"]
     # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout), nunca propagam ao stdio.
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
+        proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
                               timeout=settings.default_timeout)
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")

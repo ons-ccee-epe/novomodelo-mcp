@@ -39,6 +39,7 @@ from typing import Any
 
 from .machine import normalize_hostname
 from .state import atomic_write_text, file_lock
+from .versions import normalize_version
 
 #: Teto de entradas no registro de calibração (mantém as mais recentes).
 MAX_CALIBRATIONS = 200
@@ -116,6 +117,9 @@ def point_from_run(train_meta: dict[str, Any], sim_meta: dict[str, Any] | None =
         "threads": dist.get("threads_per_rank") or stats.get("parallelism") or 1,
         "ranks": dist.get("world_size") or 1,
         "completed_at": train_meta.get("completed_at"),
+        # runs ≤ 0.17 gravaram `cobre_version`: é dado já escrito em disco
+        "software_version": train_meta.get("software_version")
+        or train_meta.get("cobre_version"),
         "dims": dims_of(train_meta.get("problem_dimensions")),
         "config_sig": config_sig or config_signature(config),
         "train": train,
@@ -226,28 +230,68 @@ def match_level(point: dict[str, Any], case_dims: dict[str, Any], case_sig: str 
     return 2
 
 
+#: Entidades que crescem o LP de cada estágio (o nº de estágios já entra na conta
+#: de solves). Proxy de tamanho para comparar casos DIFERENTES.
+_SIZE_KEYS = ("num_hydros", "num_thermals", "num_buses", "num_lines")
+
+#: Acima desta razão de tamanho (para mais ou para menos) a referência de outro
+#: caso não serve: o plano devolve `indeterminado`.
+MAX_SIZE_RATIO = 10.0
+
+
+def lp_size(dims: dict[str, Any] | None) -> int:
+    d = dims_of(dims)
+    return max(1, sum(int(d[k]) for k in _SIZE_KEYS))
+
+
+def size_ratio(point: dict[str, Any], case_dims: dict[str, Any]) -> float:
+    """Quantas vezes o caso é maior (ou menor) que a referência; sempre ≥ 1."""
+    a, b = lp_size(point.get("dims")), lp_size(case_dims)
+    return max(a, b) / min(a, b)
+
+
 def _is_own(point: dict[str, Any], case_dir: str | None) -> bool:
     return bool(case_dir and point.get("source")) and \
         Path(point["source"]).is_relative_to(Path(case_dir).resolve())
 
 
 def select_reference(points: list[dict[str, Any]], case_dims: dict[str, Any],
-                     case_sig: str | None, case_dir: str | None = None
-                     ) -> dict[str, Any] | None:
+                     case_sig: str | None, case_dir: str | None = None, *,
+                     version: str | None = None) -> dict[str, Any] | None:
     """Melhor nível disponível; dentro dele, UM ponto por nº de threads
-    (próprio caso > mais recente). Devolve também os candidatos p/ a faixa."""
+    (próprio caso > mais recente). Devolve também os candidatos p/ a faixa.
+
+    Com `version` (a do novomodelo instalado), só os pontos dessa versão entram;
+    sem nenhum, entram todos e o resultado traz `version_mismatch`.
+    """
     if not points:
         return None
+    mismatch = False
+    if version:
+        same = [p for p in points if normalize_version(p.get("software_version"))
+                == normalize_version(version)]
+        mismatch = not same
+        points = same or points
     scored = [(match_level(p, case_dims, case_sig, case_dir), p) for p in points]
     level = max(s for s, _ in scored)
+    pool = [p for s, p in scored if s == level]
+    if level == 1:
+        # o de tamanho mais parecido, não o mais recente: o mais recente pode ser um
+        # caso de brinquedo e subestimar o tempo em ordens de grandeza.
+        best = min(size_ratio(p, case_dims) for p in pool)
+        pool = [p for p in pool if size_ratio(p, case_dims) == best]
     by_threads: dict[int, dict[str, Any]] = {}
-    for s, p in sorted(scored, key=lambda sp: (_is_own(sp[1], case_dir),
-                                               sp[1].get("completed_at") or "")):
-        if s == level:
-            by_threads[int(p["threads"])] = p  # o último (melhor) vence
-    return {"level": level, "level_name": LEVELS[level],
-            "points": [by_threads[t] for t in sorted(by_threads)],
-            "candidates": [p for s, p in scored if s >= 2] or [p for _, p in scored]}
+    for p in sorted(pool, key=lambda p: (_is_own(p, case_dir), p.get("completed_at") or "")):
+        by_threads[int(p["threads"])] = p  # o último (melhor) vence
+    chosen = [by_threads[t] for t in sorted(by_threads)]
+    ref = {"level": level, "level_name": LEVELS[level], "points": chosen,
+           "size_ratio": round(max(size_ratio(p, case_dims) for p in chosen), 2),
+           "candidates": [p for s, p in scored if s >= 2] or [p for _, p in scored]}
+    if mismatch:
+        ref["version_mismatch"] = True
+        ref["versions_used"] = sorted({normalize_version(p.get("software_version"))
+                                       or "desconhecida" for p in chosen})
+    return ref
 
 
 # ── estimativa ────────────────────────────────────────────────────────────────
@@ -292,7 +336,10 @@ def estimate(points: list[dict[str, Any]], threads: int, train_solves: int,
             "training_wall_per_solve": round(tr[0], 5), "training_method": tr[1],
             "simulation_wall_per_solve": round(sim[0], 5), "simulation_method": sim[1],
             "training_seconds": round(t_tr, 1), "simulation_seconds": round(t_sim, 1),
-            "total_seconds": round(t_tr + t_sim, 1), "notes": notes}
+            "total_seconds": round(t_tr + t_sim, 1), "notes": notes,
+            # valor sem arredondar, só para contas internas do plano (sai antes da resposta):
+            # o arredondado vira 0.0 em casos minúsculos e quebrava divisões.
+            "_exact_training_seconds": t_tr}
 
 
 def training_solves(iters: int, forward_passes: int, openings: list[int]) -> int:

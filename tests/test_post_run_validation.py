@@ -1,7 +1,5 @@
-"""Integracao das tools de compare com a validacao de entrada (pytest).
+"""Tools de compare: o MCP checa só o tipo da tolerância; o valor é do bridge.
 
-Garante que uma entrada invalida (tolerance/format) e barrada ANTES de invocar
-o novomodelo-bridge: o envelope de erro e retornado e ``run_bridge`` nao e chamado.
 Registra as tools num ``FastMCP`` real e recupera a funcao via ToolManager,
 com ``run_bridge`` substituido por um espiao (nao depende de duckdb/polars).
 """
@@ -16,10 +14,11 @@ from novomodelo_mcp.tools.post_run import register_post_run
 
 def _build(monkeypatch):
     """Registra as tools com run_bridge espiao; sem workspace (irrestrito)."""
-    calls = {"n": 0}
+    calls = {"n": 0, "argv": None}
 
     def _spy(argv, **kwargs):
         calls["n"] += 1
+        calls["argv"] = argv
         return {"schema_version": "1", "command": " ".join(argv[:2]),
                 "status": "ok", "summary": {}, "diagnostics": [], "exit_code": 0}
 
@@ -36,18 +35,20 @@ def _fn(mcp, name):
 
 
 @pytest.mark.parametrize("tool", ["bridge_compare_newave", "bridge_compare_decomp"])
-def test_tolerance_invalida_nao_chama_bridge(monkeypatch, tool):
+def test_tolerance_fora_de_0_1_chega_ao_bridge(monkeypatch, tool):
     mcp, calls = _build(monkeypatch)
-    env = _fn(mcp, tool)("/tmp/src", "/tmp/novomodelo", tolerance=9.0)
-    assert env["status"] == "error"
-    assert calls["n"] == 0, "run_bridge nao deve ser chamado com entrada invalida"
+    _fn(mcp, tool)("/tmp/src", "/tmp/novomodelo", tolerance=9.0)
+    assert calls["n"] == 1
+    i = calls["argv"].index("--tolerance")
+    assert calls["argv"][i + 1] == "9.0"
 
 
 @pytest.mark.parametrize("tool", ["bridge_compare_newave", "bridge_compare_decomp"])
-def test_fmt_invalido_nao_chama_bridge(monkeypatch, tool):
+def test_tolerance_booleana_e_erro_de_tipo(monkeypatch, tool):
     mcp, calls = _build(monkeypatch)
-    env = _fn(mcp, tool)("/tmp/src", "/tmp/novomodelo", fmt="xml")
-    assert env["status"] == "error"
+    env = _fn(mcp, tool)("/tmp/src", "/tmp/novomodelo", tolerance=True)
+    assert env["status"] == "error" and env["exit_code"] == 2
+    assert "tolerance deve ser número" in " ".join(env["diagnostics"])
     assert calls["n"] == 0
 
 

@@ -19,3 +19,7 @@ BRIDGE_CLI = "novomodelo-bridge"
 BINDING_DIST = "novomodelo-python"
 #: Prefixo de todas as variáveis de ambiente do MCP.
 ENV_PREFIX = "NOVOMODELO_MCP_"
+#: Distribuição do próprio MCP (metadados: versão e pin da biblioteca).
+MCP_DIST = "novomodelo-mcp"
+#: Base do link do release do MCP, completada com `v<versão>` no aviso de versão nova.
+MCP_RELEASE_TAG_URL = "https://github.com/<repositório anterior>/releases/tag/"

@@ -10,7 +10,8 @@ import re
 from pathlib import Path
 
 from ..adapters import deck_io, jobs, runtime
-from ..adapters.novomodelo import run_novomodelo
+from ..adapters.results import numeric_diagnosis, read_metadata, termination_fields
+from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.envelope import as_error, error
 from ..adapters.machine import detect_machine
@@ -21,6 +22,7 @@ from ..adapters.run_plan import CONFIG_KNOBS, build_plan, read_case_params
 from ..adapters.state import state_dir
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope
+from .annotations import DESTRUCTIVE, READ_ONLY, WRITES
 
 
 def _calibration_file(settings: Settings) -> Path:
@@ -72,9 +74,17 @@ def make_plan(case_dir: str, settings: Settings, *, time_budget_s: float = 900,
     known = {p.get("source") for p in points}
     points += [p for p in runtime.find_reference_runs(roots, machine["hostname"])
                if p.get("source") not in known]
+    installed = version_cli(settings=settings)
+    version = runtime.normalize_version(installed.get("version")) \
+        if installed.get("status") == "ok" else None
     ref = runtime.select_reference(points, params["dimensions"], params["config_sig"],
-                                   case_dir) or runtime.calibration_probe()
+                                   case_dir, version=version) or runtime.calibration_probe()
     plan = build_plan(params, machine, ref, time_budget_s, threads)
+    if ref and ref.get("version_mismatch"):
+        plan.setdefault("warnings", []).append(
+            "estimativa baseada em runs de outra versão do novomodelo "
+            f"({', '.join(ref['versions_used'])}); pode não refletir a versão "
+            f"instalada ({version})")
     plan["case_dir"] = case_dir
     plan["reference_candidates"] = len(points)
     return plan
@@ -91,8 +101,8 @@ def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
                 return error(22, f"{knob} deve ser booleano")
             changes.append({"path": "simulation.enabled", "value": value})
             continue
-        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-            return error(22, f"{knob} deve ser inteiro >= 1 (recebido {value!r})")
+        if isinstance(value, bool) or not isinstance(value, int):
+            return error(22, f"{knob} deve ser inteiro (recebido {value!r})")
         if knob == "iteration_limit":
             rules = list((config.get("training") or {}).get("stopping_rules") or [])
             idx = next((i for i, r in enumerate(rules)
@@ -111,7 +121,7 @@ def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
 def register_run(mcp, settings: Settings) -> None:
     """Registra as tools de scaffold/execução no servidor `mcp`."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=WRITES)
     def case_init(directory: str | None = None, template: str | None = None,
                    list: bool = False, force: bool = False) -> dict:  # noqa: A002
         """Cria um caso a partir de um template embutido (`novomodelo init`).
@@ -147,7 +157,7 @@ def register_run(mcp, settings: Settings) -> None:
             attach_artifact(env, "case_dir", directory)
         return cap_envelope(env, settings)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def run_plan(case_dir: str, time_budget_s: float = 900,
                        threads: int | None = None) -> dict:
         """Planeja um run LOCAL do caso: estima tempo e memória. NÃO executa, NÃO grava.
@@ -172,7 +182,7 @@ def register_run(mcp, settings: Settings) -> None:
         except Exception as exc:  # noqa: BLE001 - repassa como erro, não derruba
             return as_error(exc)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE)
     def run_apply(case_dir: str, overrides: dict, dry_run: bool = False) -> dict:
         """Aplica knobs de execução no config.json do caso (só config; nada mais).
 
@@ -197,14 +207,14 @@ def register_run(mcp, settings: Settings) -> None:
         return deck_io.edit_json(path, changes, schemas_dir=schemas_root(settings),
                                  dry_run=dry_run)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE)
     def run_start(case_dir: str, threads: int | None = None,
                         output: str | None = None, time_budget_s: float = 900,
                         override: bool = False) -> dict:
         """Dispara `novomodelo run` em BACKGROUND e devolve `job_id` na hora.
 
         Comando: `novomodelo run <case> --output <output> --threads N --comm-backend
-        local --quiet`. `threads` default = o do plano (núcleos de performance em
+        local`. `threads` default = o do plano (núcleos de performance em
         CPU híbrida, ou o nº medido mais rápido); `output` default =
         `<case_dir>/output`. Antes de lançar roda o run_plan: se o veredito
         for `nao_cabe`, RECUSA (salvo `override=True`). Acompanhe com
@@ -232,7 +242,7 @@ def register_run(mcp, settings: Settings) -> None:
                                     "ajuste com run_apply ou passe override=True"]}
         n = threads or plan.get("target_threads") or 1
         cmd = [binpath, "--color", "never", "run", _cli_path(case_dir), "--output", _cli_path(output),
-               "--threads", str(n), "--comm-backend", "local", "--quiet"]
+               "--threads", str(n), "--comm-backend", "local"]
         jobs.prune_jobs(settings)
         try:
             meta = jobs.start_job(settings, cmd, max_running=settings.max_jobs, info={
@@ -249,13 +259,17 @@ def register_run(mcp, settings: Settings) -> None:
         log(settings, "run_start", job_id=meta["job_id"], cmd=cmd)
         return {"status": "ok", **meta, "warnings": plan.get("warnings", [])}
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def run_status(job_id: str) -> dict:
         """Estado de um run: running | succeeded | failed | cancelled | lost.
 
         Inclui tempo decorrido, estimativa do plano e marcos de saída
-        (`training/_SUCCESS`, `simulation/_SUCCESS`). Com o run concluído, use
-        results_status / results_convergence no `output`.
+        (`training/_SUCCESS`, `simulation/_SUCCESS`). `_SUCCESS` só indica que a
+        saída foi gravada; veja `treino.termination_reason` e `treino.converged_at`
+        para saber se convergiu. Se o run falhou, `escalonamento` repassa a razão de
+        coeficientes do executável e, se for extrema, `diagnostico_heuristico`
+        sugere a causa provável (heurística). Com o run concluído, use results_status /
+        results_convergence no `output`.
         """
         st = jobs.job_state(settings, job_id)
         if st is None:
@@ -263,22 +277,35 @@ def register_run(mcp, settings: Settings) -> None:
         out = Path(st.get("output") or "")
         st["milestones"] = {phase: (out / phase / "_SUCCESS").exists()
                             for phase in ("training", "simulation")}
+        if (out / "training" / "metadata.json").is_file():
+            try:
+                meta = read_metadata(str(out))
+            except (OSError, ValueError):  # metadata ainda sendo gravado: tenta na próxima
+                meta = {}
+            if meta.get("status") == "ok":
+                st.update(termination_fields(meta["training"], meta.get("simulation")))
+        if st["state"] == "failed" or (st.get("treino") or {}).get("termination_reason") == "error":
+            st.update(numeric_diagnosis(str(out)))
         if st["state"] in ("failed", "lost"):
             st["stderr_tail"] = (jobs.job_logs(settings, job_id, lines=20) or {}).get("stderr")
         if st["state"] == "succeeded":
             harvest_calibrations(settings)
         return {"status": "ok", **st}
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     def run_logs(job_id: str, lines: int = 100) -> dict:
-        """Últimas `lines` linhas de stdout/stderr do run (com teto de caracteres)."""
+        """Últimas `lines` linhas de stdout/stderr do run (com teto de caracteres).
+
+        Durante o run, o `stderr` traz as linhas de progresso do novomodelo
+        (iteração, limites, gap), cortadas pelo teto.
+        """
         logs = jobs.job_logs(settings, job_id, lines=max(1, lines),
                              max_chars=settings.max_summary_chars)
         if logs is None:
             return error(2, f"job inexistente: {job_id}")
         return {"status": "ok", "job_id": job_id, **logs}
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTRUCTIVE)
     def run_cancel(job_id: str) -> dict:
         """Interrompe um run em andamento (encerra a árvore de processos; força se não sair).
 

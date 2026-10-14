@@ -15,8 +15,6 @@ hero:
       variant: minimal
 ---
 
-import { CardGrid, LinkCard } from "@astrojs/starlight/components";
-
 Novomodelo is an open-source solver for multi-stage stochastic hydrothermal dispatch:
 it trains an operating policy with Stochastic Dual Dynamic Programming (SDDP) and
 simulates it, from the command line or from Python. This site documents the
@@ -25,130 +23,34 @@ installing Novomodelo, running studies and reading their results.
 
 ## Where to start
 
-<CardGrid>
-  <LinkCard
-    title="Run studies"
-    href="/getting-started/quickstart"
-    description="Scaffold, validate and run a first study from the command line."
-  />
-  <LinkCard
-    title="Coming from other software?"
-    href="/running/case-conversion"
-    description="Convert an existing case to Novomodelo's input format and compare the results."
-  />
-  <LinkCard
-    title="Study SDDP"
-    href="/math/sddp-algorithm"
-    description="The algorithm chapters: forward and backward passes, cuts, bounds and stopping rules."
-  />
-  <LinkCard
-    title="Work in Python"
-    href="/getting-started/python-quickstart"
-    description="Run a study and read its results from Python."
-  />
-</CardGrid>
+  - [Run studies](/getting-started/quickstart): Scaffold, validate and run a first study from the command line.
+  - [Coming from other software?](/running/case-conversion): Convert an existing case to Novomodelo's input format and compare the results.
+  - [Study SDDP](/math/sddp-algorithm): The algorithm chapters: forward and backward passes, cuts, bounds and stopping rules.
+  - [Work in Python](/getting-started/python-quickstart): Run a study and read its results from Python.
 
 ## Theory
 
-<CardGrid>
-  <LinkCard
-    title="Introduction"
-    href="/overview/sddp-framework-overview"
-    description="The SDDP framework in one page, the notation, and how to read this site."
-  />
-  <LinkCard
-    title="System Modelling"
-    href="/math/system-elements"
-    description="The power system's elements and the stage linear programme Novomodelo solves."
-  />
-  <LinkCard
-    title="Stochastic Modelling"
-    href="/math/par-inflow-model"
-    description="The inflow model and how scenarios are generated."
-  />
-  <LinkCard
-    title="The SDDP Algorithm"
-    href="/math/sddp-algorithm"
-    description="Passes, cuts, bounds, risk measures, stopping rules and determinism."
-  />
-  <LinkCard
-    title="Coupling & Boundary Conditions"
-    href="/math/horizon-modes"
-    description="Horizon modes, the post-study boundary and discounting."
-  />
-  <LinkCard
-    title="Worked Examples"
-    href="/examples/toy-single-reservoir"
-    description="Single- and four-reservoir systems small enough to trace by hand."
-  />
-</CardGrid>
+  - [Introduction](/overview/sddp-framework-overview): The SDDP framework in one page, the notation, and how to read this site.
+  - [System Modelling](/math/system-elements): The power system's elements and the stage linear programme Novomodelo solves.
+  - [Stochastic Modelling](/math/par-inflow-model): The inflow model and how scenarios are generated.
+  - [The SDDP Algorithm](/math/sddp-algorithm): Passes, cuts, bounds, risk measures, stopping rules and determinism.
+  - [Coupling & Boundary Conditions](/math/horizon-modes): Horizon modes, the post-study boundary and discounting.
+  - [Worked Examples](/examples/toy-single-reservoir): Single- and four-reservoir systems small enough to trace by hand.
 
 ## Running Novomodelo
 
-<CardGrid>
-  <LinkCard
-    title="Running Studies"
-    href="/running/running-studies"
-    description="Run a study end to end and check its results."
-  />
-  <LinkCard
-    title="Configuration"
-    href="/running/configuration"
-    description="The study configuration file and its settings."
-  />
-  <LinkCard
-    title="Policy Management"
-    href="/running/policy-management"
-    description="Warm start, resume and simulation-only runs from a saved policy, and boundary cuts."
-  />
-  <LinkCard
-    title="Convergence & Diagnostics"
-    href="/running/interpreting-results"
-    description="Read the convergence record and the simulation results."
-  />
-  <LinkCard
-    title="Performance Accelerators"
-    href="/running/performance"
-    description="The performance settings to tune and what to read back from a run."
-  />
-  <LinkCard
-    title="HPC & Cluster Deployment"
-    href="/running/hpc-deployment"
-    description="Run the MPI build on a cluster."
-  />
-</CardGrid>
+  - [Running Studies](/running/running-studies): Run a study end to end and check its results.
+  - [Configuration](/running/configuration): The study configuration file and its settings.
+  - [Policy Management](/running/policy-management): Warm start, resume and simulation-only runs from a saved policy, and boundary cuts.
+  - [Convergence & Diagnostics](/running/interpreting-results): Read the convergence record and the simulation results.
+  - [Performance Accelerators](/running/performance): The performance settings to tune and what to read back from a run.
+  - [HPC & Cluster Deployment](/running/hpc-deployment): Run the MPI build on a cluster.
 
 ## Reference
 
-<CardGrid>
-  <LinkCard
-    title="CLI Reference"
-    href="/reference/cli-reference"
-    description="Every subcommand and flag of the command-line program."
-  />
-  <LinkCard
-    title="JSON Schemas"
-    href="/reference/json-schemas"
-    description="The schemas of the case input files."
-  />
-  <LinkCard
-    title="Error Codes"
-    href="/reference/error-codes"
-    description="Error kinds, their messages and exit codes."
-  />
-  <LinkCard
-    title="Generic Constraints"
-    href="/reference/generic-constraints"
-    description="User-defined linear constraints on a case."
-  />
-  <LinkCard
-    title="Glossary"
-    href="/reference/glossary"
-    description="The terms used across this site."
-  />
-  <LinkCard
-    title="Bibliography"
-    href="/reference/bibliography"
-    description="The works the methodology cites."
-  />
-</CardGrid>
+  - [CLI Reference](/reference/cli-reference): Every subcommand and flag of the command-line program.
+  - [JSON Schemas](/reference/json-schemas): The schemas of the case input files.
+  - [Error Codes](/reference/error-codes): Error kinds, their messages and exit codes.
+  - [Generic Constraints](/reference/generic-constraints): User-defined linear constraints on a case.
+  - [Glossary](/reference/glossary): The terms used across this site.
+  - [Bibliography](/reference/bibliography): The works the methodology cites.

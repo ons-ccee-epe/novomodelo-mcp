@@ -771,8 +771,6 @@ the same range `@emax` spans. Pairing `max_stored_energy` with the
 reference-point `accumulated_productivity` instead does not cancel and raises a
 [`SemanticAmbiguity`](/reference/error-codes/#semanticambiguity) warning.
 
-{/* capture: novomodelo run case --output out --quiet | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: temporary 1dtoy derivative (ticket-179 overlay + the security-curve fences; constraints/generic_constraint_bounds.parquet rows for constraint 1, stages 0-3, both bounds null; config.json training stopped at 3 iterations, simulation disabled; run with NO_COLOR=1, exit code 0) */}
-
 **What the echo shows.** On a plant with `reservoir.min_storage_hm3 = 100`,
 `reservoir.max_storage_hm3 = 1000`, `specific_productivity_mw_per_m3s_per_m = 0.0088`
 and a three-row volume-height-area geometry table (100, 500 and 1000 hm³),

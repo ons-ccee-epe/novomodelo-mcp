@@ -63,7 +63,7 @@ def _write_launcher(tmp_path: Path) -> str:
         launcher.write_text(f'@"{sys.executable}" "{FAKE}" %*\r\n', encoding="utf-8")
     else:
         launcher = tmp_path / "novomodelo"
-        launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{FAKE}" "$@"\n')
+        launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{FAKE}" "$@"\n', encoding="utf-8")
         launcher.chmod(launcher.stat().st_mode | stat.S_IEXEC)
     return str(launcher)
 

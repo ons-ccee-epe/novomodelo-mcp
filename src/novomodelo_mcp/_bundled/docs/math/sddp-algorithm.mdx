@@ -3,10 +3,6 @@ title: SDDP Algorithm
 description: Multistage stochastic formulation, iterative forward/backward pass structure, convergence monitoring, policy graph topologies, state variable requirements, and the single-cut formulation.
 ---
 
-import ValueFunctionPlot from "../../../components/ValueFunctionPlot.astro";
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Content as SddpConfigure } from './_impl/_sddp.configure.mdx';
-
 ## Purpose
 
 This chapter describes the Stochastic Dual Dynamic Programming (SDDP) algorithm as implemented in Novomodelo: the multistage stochastic formulation, the iterative forward/backward pass structure, convergence monitoring, policy graph topologies, state variable requirements, and the single-cut formulation. It serves as the algorithmic foundation referenced by the other methodology chapters.
@@ -39,8 +35,6 @@ $$
 with terminal condition $V_{T+1}(x) = 0$, which a study may replace with an imported terminal function (§7).
 
 **Key insight**: The value function $V_t(x)$ is convex and piecewise linear (for LP subproblems), enabling outer approximation via Benders cuts.
-
-<ValueFunctionPlot />
 
 _Value function approximation via Benders cuts — each cut is a tangent at a trial point (its slope is the analytic derivative $V'(v)$), tightening the outer approximation toward the true convex cost-to-go function._
 
@@ -293,9 +287,36 @@ The source pool, the compatibility conditions, the carried state and the calenda
 
 The methodology above defines the forward/backward pass structure and the execution-model constraints that shape it; the tab below covers how Novomodelo's software surface configures backward-pass work scheduling.
 
-<Tabs>
-  <TabItem label="Configure"><SddpConfigure /></TabItem>
-</Tabs>
+**Configure**
+
+Novomodelo's backward-pass work-scheduling knob lives in `config.json`'s
+`training.parallelism` block. This tab shows how the scheduler is chosen; the
+backward pass and execution model the scheduler distributes work within stay in
+the methodology sections above
+([§3.2 Backward Pass](/math/sddp-algorithm#32-backward-pass),
+[§3.4 Execution Model and Performance Considerations](/math/sddp-algorithm#34-execution-model-and-performance-considerations)).
+
+### `training.parallelism` — Backward-Pass Scheduler Configuration
+
+The scheduler decides how backward-pass work is split across workers: one trial
+point per work unit by default, or one `(trial point, opening block)` pair per
+work unit with `by_node`. The choice changes neither the cut set nor the
+training lower bound. The example selects `by_node` with four openings per block:
+
+```json
+{
+  "training": {
+    "parallelism": {
+      "backward_scheduler": { "method": "by_node", "block_size": 4 }
+    }
+  }
+}
+```
+
+[`training.parallelism`](/running/configuration/#trainingparallelism) lists the
+methods, fields, defaults and load errors;
+[By-node scheduling](/running/performance/#by-node-scheduling) covers when to
+use `by_node` and its interaction with Dynamic Cut Selection.
 
 ## Cross-References
 

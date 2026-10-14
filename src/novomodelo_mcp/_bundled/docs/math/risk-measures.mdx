@@ -3,12 +3,6 @@ title: Risk Measures
 description: Risk-averse SDDP via CVaR — definitions, dual representations, the subgradient theorem, risk-averse cut generation, and bound-validity implications.
 ---
 
-import CvarPlot from "../../../components/CvarPlot.astro";
-import CvarWeightsPlot from "../../../components/CvarWeightsPlot.astro";
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Content as RiskConfigure } from './_impl/_risk.configure.mdx';
-import { Content as RiskNotes } from './_impl/_risk.notes.mdx';
-
 ## Purpose
 
 This chapter defines the risk-averse SDDP formulation used in Novomodelo, based on Conditional Value-at-Risk (CVaR). It covers the CVaR definition, the convex combination risk measure, dual representations, the risk-averse subgradient theorem, modified Bellman equation with discount factor, risk-averse cut generation, and when the bounds are valid under a risk measure.
@@ -27,8 +21,6 @@ For notation conventions (index sets, parameters, decision variables, dual varia
 ## 1 Motivation
 
 Risk-neutral SDDP minimizes expected cost, which can lead to policies that perform poorly in adverse scenarios. **Risk-averse SDDP** incorporates a coherent risk measure (typically CVaR) to protect against tail risks while maintaining the convexity properties required for valid cut generation.
-
-<CvarPlot />
 
 _Cost distribution $f(Z)$ for a right-skewed Gamma law with $\mathbb{E}[Z]$, $\mathrm{VaR}_\alpha$ and $\mathrm{CVaR}_\alpha$ marked and the worst $\alpha$ tail shaded. The convex-combination measure $\rho^{\lambda,\alpha}[Z] = (1-\lambda)\,\mathbb{E}[Z] + \lambda\,\mathrm{CVaR}_\alpha[Z]$ interpolates between the risk-neutral mean and the tail. All three markers are derived numerically from the PDF._
 
@@ -206,8 +198,6 @@ $\bar{\mu}_\omega$ is the cap of $\mu^*$: $\mu^*$ attains it, $\mu^*_\omega = \b
 $\mu^*$ solves the linear program $\max_{\mu \in \mathcal{M}^{EAVaR}(p)} \sum_\omega \mu_\omega\, Q_t(\hat{x}_{t-1}, \omega)$ of §4.2, which has a floor and a cap per opening and one equality. By the equivalent form of §4.2, the program is $(1-\lambda)\, \mathbb{E}[Q_t(\hat{x}_{t-1}, \omega)]$ plus $\lambda$ times the $\text{CVaR}_\alpha$ program over $\mathcal{M}_\alpha(p)$, whose optimum is the greedy $q^*$, so its optimal value is $\rho^{\lambda, \alpha}$ of the opening costs. For example, four equiprobable openings with costs 10, 20, 30 and 40 at $\alpha = \lambda = 0.5$ give $q^* = (0, 0, 0.5, 0.5)$, $\mu^* = (0.125, 0.125, 0.375, 0.375)$ and the value $30$, the mean $25$ mixed with the $\text{CVaR}_\alpha$ of $35$.
 :::
 
-<CvarWeightsPlot />
-
 _Four equiprobable openings with costs 10, 20, 30 and 40 at $\alpha = \lambda = 0.5$: every opening keeps the floor $(1-\lambda)\, p_\omega = 0.125$ in its risk-adjusted weight $\mu^*_\omega$, the two costliest openings reach the cap $\bar{\mu}_\omega = 0.375$, and the weights value the openings at $30$._
 
 **Step 3: Compute risk-averse cut coefficients** using $\mu^*$ (justified by the theorem in §5):
@@ -266,10 +256,94 @@ What a risk-averse run lacks under a sampled forward pass is a valid upper-bound
 
 The methodology above defines the risk measure, its weights and the bounds it leaves valid; the tabs below cover how Novomodelo configures the measure per stage and which weights it applies.
 
-<Tabs>
-  <TabItem label="Configure"><RiskConfigure /></TabItem>
-  <TabItem label="Implementation notes"><RiskNotes /></TabItem>
-</Tabs>
+**Configure**
+
+Novomodelo reads the risk measure of each stage from the `risk_measure` field of the
+stage's entry in `stages.json`. This tab is the field-level configuration
+reference; the measure it selects, $\rho^{\lambda,\alpha}$, is defined in
+[§3 Convex Combination Risk Measure](/math/risk-measures#3-convex-combination-risk-measure);
+the weights Novomodelo applies to the openings are stated on the Implementation notes
+tab. The full file reference is
+[`stages.json`](/reference/case-format/stages/#stagesjson).
+
+### `stages[].risk_measure` — Risk Measure
+
+| Value                                 | Meaning                                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `"expectation"`                       | Risk-neutral: every opening is weighted by its probability. It is what an absent `risk_measure` resolves to; any other string is rejected at load.     |
+| `{"cvar": {"alpha": α, "lambda": λ}}` | The convex combination of the expectation and the CVaR at tail fraction `alpha`, with weight `lambda` on the CVaR and `1 - lambda` on the expectation. |
+
+The `cvar` object takes the two keys below, both required; an object missing
+either key is a [`ParseError`](/reference/error-codes/#parseerror).
+
+| Field    | Type   | Range    | Description                                                                                             |
+| -------- | ------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `alpha`  | number | `(0, 1]` | The CVaR tail fraction: the worst `alpha`-fraction of outcomes enters the CVaR. `1` is the expectation: every opening then counts in the tail. |
+| `lambda` | number | `[0, 1]` | The weight of the CVaR term: `0` is the expectation and `1` is the pure CVaR.                           |
+
+Both ranges are checked at load: a value outside its range is a
+[`SchemaViolation`](/reference/error-codes/#schemaviolation) on `stages.json`.
+
+:::caution[Tail fraction convention]
+`alpha` is the **tail fraction**: the worst `alpha`-fraction of outcomes enters
+the CVaR. `0.95` therefore averages the worst 95% of outcomes and is nearly
+risk-neutral; the worst 5% is `0.05`. A tool that takes a confidence-level
+parameter `c` corresponds to `alpha = 1 - c`.
+:::
+
+### Example
+
+The measure may differ from stage to stage. This excerpt of `stages.json` lowers
+`lambda` from the first stage to the second and gives the third stage the
+expectation:
+
+```json
+{
+  "stages": [
+    {
+      "id": 0,
+      "risk_measure": { "cvar": { "alpha": 0.5, "lambda": 0.5 } }
+    },
+    {
+      "id": 1,
+      "risk_measure": { "cvar": { "alpha": 0.5, "lambda": 0.25 } }
+    },
+    {
+      "id": 2,
+      "risk_measure": "expectation"
+    }
+  ]
+}
+```
+
+### Effective measure and stage mapping
+
+`lambda: 0` weights every opening by its probability, as `"expectation"` does,
+whatever its `alpha`, and counts as `"expectation"` for the gap rule. The gap
+rule needs one effective measure at every stage
+([Optimality gap](/math/stopping-rules#optimality-gap)).
+
+A stage's `risk_measure` weights the openings of the next stage in the cuts that
+stage stores, and the first stage's `risk_measure` also weights the first
+stage's own openings in the lower bound. The last study stage's `risk_measure`
+enters no cut, but it counts when the gap rule checks that the measure is the
+same at every stage.
+
+**Implementation notes**
+
+Non-normative software behavior for risk measures — what Novomodelo computes, beyond
+the equations above. This tab states the weighting Novomodelo applies and references
+the methodology body
+([§7](/math/risk-measures#7-cut-generation-with-risk-measures)) for the weights
+it derives rather than restating them.
+
+### Applied CVaR weights
+
+Novomodelo applies the weights $\mu^*$ of
+[Risk Measures §7](/math/risk-measures#7-cut-generation-with-risk-measures) to
+the cuts of every backward pass, to the first stage's openings in the training
+lower bound, and to every node of the exact nested upper bound of an enumerated
+forward pass.
 
 ## Cross-References
 

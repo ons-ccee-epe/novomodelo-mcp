@@ -3,10 +3,6 @@ title: Scenario Generation
 description: Reproducible noise generation, correlated noise, the opening tree and its sampling methods, the sampling scheme abstraction (InSample/OutOfSample/External/Historical), external and historical scenario integration, load and non-controllable source scenarios, and enumerated scenario trees.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
-import { Content as ScenarioConfigure } from './_impl/_scenario.configure.mdx';
-import { Content as ScenarioNotes } from './_impl/_scenario.notes.mdx';
-
 ## Purpose
 
 This chapter defines the Novomodelo scenario generation methodology. It covers
@@ -789,10 +785,133 @@ branch at few stages.
 
 The methodology above defines how scenarios are generated and sampled; the tabs below cover how Novomodelo's software surface configures the schemes, seeds and inputs, and how it implements seed derivation, the inversion lag chain and its warnings.
 
-<Tabs>
-  <TabItem label="Configure"><ScenarioConfigure /></TabItem>
-  <TabItem label="Implementation notes"><ScenarioNotes /></TabItem>
-</Tabs>
+**Configure**
+
+You set the sampling scheme, the opening-tree method and the seeds in `config.json` and `stages.json`, and supply the input files named below. This tab maps the concepts of the methodology above to those keys and files; [Configuration](/running/configuration/#trainingscenario_source) and [Case Format](/reference/case-format/) own the field tables.
+
+### Sampling schemes
+
+[§3.2](/math/scenario-generation#32-forward-sampling-schemes) defines the four forward sampling schemes. Each stochastic class (`inflow`, `load`, `ncs`) takes its own `scheme` value in `training.scenario_source`, and a class without one is `in_sample`.
+
+| Scheme      | Per-class `scheme` value   | Required inputs                                                                                                                                                              |
+| ----------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| InSample    | `in_sample`                | Uncertainty models or inflow history                                                                                                                                         |
+| OutOfSample | `out_of_sample`            | The same inputs as `in_sample`                                                                                                                                               |
+| External    | `external`                 | The class's external scenario file: `scenarios/external_inflow_scenarios.parquet`, `scenarios/external_load_scenarios.parquet` or `scenarios/external_ncs_scenarios.parquet` |
+| Historical  | `historical` (inflow only) | `scenarios/inflow_history.parquet` and `season_definitions` in `stages.json`                                                                                                 |
+
+For `out_of_sample`, the forward draw is fresh noise from a seed independent of the tree's, drawn with the stage's `sampling_method` (plain Monte Carlo at `selective` and `historical_residuals` stages), with correlation applied to every draw.
+
+`historical` is valid for the `inflow` class only. The key `training.scenario_source.historical_years` restricts the pool of historical windows; see [scenario_source](/running/configuration/#trainingscenario_source). `simulation.scenario_source` sets the simulation schemes in the same way, and when it is absent simulation uses `training.scenario_source`. `out_of_sample` and `external` need the section's `scenario_source.seed`, and `historical` needs none; `simulation.scenario_source.seed` seeds the simulation's out-of-sample draws (see [Seeds](#seeds)).
+
+### Opening-tree methods
+
+[§2.3a](/math/scenario-generation#23a-sampling-method-and-opening-tree-generation) defines the methods. Each study stage selects one with `sampling_method` in `stages.json`.
+
+| Method               | `stages[].sampling_method` | Requires                                                                                                                                 |
+| -------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Plain Monte Carlo    | `saa` (the default)        | Nothing further                                                                                                                          |
+| Latin hypercube      | `lhs`                      | Nothing further                                                                                                                          |
+| Scrambled Sobol      | `qmc_sobol`                | A noise dimension within the Sobol limit (see the Implementation notes tab)                                                              |
+| Scrambled Halton     | `qmc_halton`               | Nothing further                                                                                                                          |
+| Selective            | `selective`                | A supplied opening tree: `training.scenario_source.openings` set to `{"source": "file"}`, which reads `scenarios/noise_openings.parquet` |
+| Historical residuals | `historical_residuals`     | `scenarios/inflow_history.parquet` and a season on every study stage, when the opening tree is generated                                 |
+
+### Seeds
+
+| Key                             | Seeds                                                  | Default                                                          |
+| ------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- |
+| `training.tree_seed`            | The opening tree and the in-sample opening draws       | `42` when absent; a negative value is used by its absolute value |
+| `training.scenario_source.seed` | The out-of-sample draws of training, and of simulation when `simulation.scenario_source` is absent | None; required when a class is `out_of_sample` or `external`     |
+| `simulation.scenario_source.seed` | The simulation's out-of-sample draws                   | None; required when a class of that section is `out_of_sample` or `external` |
+
+Historical-window and external-scenario selection use no seed. [Seed resolution](/running/configuration/#seed-resolution) owns the rules.
+
+### Inputs
+
+- `scenarios/correlation.json` holds the correlation profiles and an optional `schedule` that maps `stage_id` values to profile names; its `method` accepts only `"spectral"`. A stage the schedule does not list uses the profile named `default`, or the only profile when the file holds one. The full schema and an example are in the Configure tab of [PAR(p) Inflow Model](/math/par-inflow-model/#implementation-in-novomodelo).
+- `scenarios/inflow_seasonal_stats.parquet` and `scenarios/inflow_ar_coefficients.parquet` hold the PAR parameters, described under [PAR(p) Inflow Model](/math/par-inflow-model).
+- `scenarios/load_seasonal_stats.parquet` holds the load mean and standard deviation of [§5.1](/math/scenario-generation#51-load-uncertainty-model), and `scenarios/load_factors.json` the block factors of [§5.2](/math/scenario-generation#52-block-load-factors); where a block factor is absent it is one.
+- `scenarios/non_controllable_stats.parquet` holds the availability moments of [§5.4](/math/scenario-generation#54-non-controllable-source-availability).
+- `scenarios/external_inflow_scenarios.parquet`, `scenarios/external_load_scenarios.parquet` and `scenarios/external_ncs_scenarios.parquet` hold the external scenarios of [§4.1](/math/scenario-generation#41-external-scenario-sources), one file per class with class-specific entity id and value columns.
+- `scenarios/inflow_history.parquet` holds the inflow record, and `season_definitions` in `stages.json` maps season ids to calendar periods. `recent_observations` in `initial_conditions.json` shadows the history day by day where both cover a date; the result is the derived inflow-lag seed of [§4.5](/math/scenario-generation#45-x-consistency-under-historical-replay).
+- `scenarios/noise_openings.parquet` holds a supplied opening tree, read when `training.scenario_source.openings` is `{"source": "file"}`.
+
+**Implementation notes**
+
+This tab records how Novomodelo implements [§2.2 Reproducible Sampling](/math/scenario-generation#22-reproducible-sampling), [§2.3 Opening Tree](/math/scenario-generation#23-opening-tree), [§2.5 Historical-Residual Openings](/math/scenario-generation#25-historical-residual-openings), [§4.3 Noise Inversion for External and Historical Scenarios](/math/scenario-generation#43-noise-inversion-for-external-and-historical-scenarios) and [§4.5 x₀ Consistency Under Historical Replay](/math/scenario-generation#45-x-consistency-under-historical-replay),
+and lists the byte layouts, the lag chain, the tolerance, the warnings and the limit that the methodology leaves out.
+
+### Seed derivation
+
+Every seed is a SipHash-1-3 digest of a little-endian byte concatenation, and the 64-bit digest seeds the PCG64 generator that draws the noise. The layouts, with the seed the first field of each:
+
+| Seed            | Bytes, in order                                                                    | Length          | Seed value                                                                                    | Draw                                                                                                                        |
+| --------------- | ---------------------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Forward         | seed `u64`, iteration `u32`, scenario `u32`, stage `u32`                           | 20              | `training.tree_seed` for the in-sample choice; a fixed base for window and external selection | The in-sample choice of an opening; with a fixed base, the choice of a historical window or an external scenario.           |
+| Stage batch     | seed `u64`, stage `u32`                                                            | 12              | `training.tree_seed`                                                                          | A Latin-hypercube, Sobol or Halton opening-tree batch.                                                                      |
+| Opening         | seed `u64`, opening index `u32`, stage `u32`                                       | 16              | `training.tree_seed`                                                                          | A Monte Carlo opening-tree draw, and the window that a historical-residual opening reads.                                   |
+| Grouped forward | tag byte `0x01`, seed `u64`, iteration `u32`, scenario `u32`, noise-group id `u32` | 21              | The class's forward seed                                                                      | The out-of-sample forward draw of the Monte Carlo method, to which `selective` and `historical_residuals` stages fall back. |
+| Class forward   | tag byte `0x02`, seed `u64`, class name bytes                                      | 9 + name length | The phase's forward seed                                                                      | The forward seed of the load class and of the NCS class.                                                                    |
+
+The Grouped forward layout takes the class's forward seed as its seed: the phase's forward seed for the inflow class, and the Class forward digest of it for the load class and the NCS class. The phase's forward seed is `training.scenario_source.seed` in training, and in simulation `simulation.scenario_source.seed`, or `training.scenario_source.seed` when `simulation.scenario_source` is absent. The Class forward layout hashes the phase's forward seed with the class name bytes `load` or `ncs`; the inflow class has no digest of its own. The three classes therefore draw independent noise, because their seeds differ.
+
+Window and external-scenario selection hash `(iteration, scenario)` with the Forward layout, stage `0`, and a fixed base in place of the seed: `0x6869_7374_6f72_6963` (the ASCII text `historic`, most significant byte first) selects a historical window, and `0x6578_7465_726e_616c` (`external`) selects an external scenario. No user seed enters either selection.
+
+### Inversion lag chain
+
+The inversion of §4.3 advances its lag chain with the per-stage lag transitions that the LP uses. `resolve_stage_lag_transitions` derives the downstream PAR order and the per-stage lag transitions (`StageLagTransition`), and it is, in the source's words, "The sole owner of both derivations"; the LP setup and the historical scenario library each call it once, over their own PAR model.
+
+The library carries a fingerprint of the inflow-lag seed that rooted its inversion chain: a SipHash-1-3 digest of the seed's lag values as little-endian `f64` bytes. Novomodelo reports it as `historical_library_seed_digest` in `training/model_provenance.json` (see [Metadata Files](/reference/output/metadata/#trainingmodel_provenancejson)) and omits it when no library was built. A digest that differs from the one of the freshly derived seed marks a library inverted against a different x₀, whose replay is not exact.
+
+### Deterministic tolerance
+
+The σ = 0 rule of §4.3 compares the standard deviation with `0.0` exactly. At σ = 0 the inversion returns noise `0` when the target differs from the deterministic value by less than `1e-10` in magnitude, and `NEG_INFINITY` otherwise. The library validation refuses a `NEG_INFINITY` or NaN noise value. Check V2.3 covers the historical window pool and check V3.7 an external library; the error messages carry these identifiers (see [Error Codes](/reference/error-codes/#stochasticpreparationerror)).
+
+### Warnings
+
+Novomodelo logs these six warnings and continues. Each text below is fixed apart from the values at its placeholders.
+
+- **Clamp by external scenarios.** A class on the external scheme has fewer raw external scenarios at a stage than the stage's `branching_factor`, and no tighter clamp applies:
+
+  ```text
+  External scenarios: {} raw scenarios < branching_factor {}; opening tree clamped to {} openings
+  ```
+- **Clamp by the window pool.** A `historical_residuals` stage has a window pool smaller than its `branching_factor`:
+
+  ```text
+  HistoricalResiduals: {} historical windows < branching_factor {}; opening tree clamped to {} openings
+  ```
+- **Out-of-sample fallback.** A class on the `out_of_sample` scheme has stages that select `selective` or `historical_residuals`, and the forward pass draws plain Monte Carlo noise at those stages:
+
+  ```text
+  class '{class_str}' has {count} out-of-sample forward stage(s) selecting {methods} noise, not implemented in the forward pass; falling back to the sample-average method for stage id(s) {stage_ids:?}
+  ```
+
+  The `{methods}` placeholder reads `selective`, `historical_residuals` or `selective or historical_residuals`, and the sample-average method is the plain Monte Carlo method (`saa`).
+- **Few historical windows.** The historical window pool holds fewer windows than there are forward passes:
+
+  ```text
+  fewer windows ({}) than forward passes ({forward_passes}): historical sampling will repeat windows across forward passes
+  ```
+- **Few windows in the historical library.** Novomodelo checks the historical window pool again when it validates the library built from it, so the same shortfall logs a second warning:
+
+  ```text
+  historical library has fewer windows ({}) than forward passes ({}); windows will be reused across forward passes
+  ```
+- **Few scenarios in the external library.** No stage of an external scenario library holds as many scenarios as there are forward passes; each class on the external scheme is checked on its own:
+
+  ```text
+  external {class} library has fewer scenarios ({n_scenarios}) than forward passes ({forward_passes}); scenarios will be reused across forward passes
+  ```
+
+  The `{class}` placeholder reads `inflow`, `load` or `ncs`.
+
+### Sobol dimension limit
+
+The Sobol direction numbers cover `SOBOL_MAX_DIM: usize = 21201` dimensions. A stage on `qmc_sobol` whose noise vector has more coordinates is rejected with the error below, where `{method}` is `sobol`.
+
+`noise dimension {dim} exceeds maximum supported dimension {max_dim} for {method}`
 
 ## Cross-References
 

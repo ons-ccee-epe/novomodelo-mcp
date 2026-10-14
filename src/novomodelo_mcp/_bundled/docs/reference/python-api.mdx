@@ -32,8 +32,6 @@ Describes the running build. The dict has the keys `version` (equal to `novomode
 
 **Returns**: the build description dict.
 
-{/* capture: python t231-version-info | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: none */}
-
 ```python
 import novomodelo
 
@@ -288,8 +286,6 @@ Returns the active cuts of one stage as two NumPy arrays, in ascending slot orde
 - `OverflowError` (builtin) when `stage` is negative.
 - `ImportError` (builtin) when NumPy is not installed.
 
-{/* capture: python t232-policy-units | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy scaffold */}
-
 ```python
 import novomodelo
 import novomodelo.results
@@ -385,16 +381,12 @@ A stop requested by `on_iteration` records `convergence.termination_reason` as `
 - The classes listed for [`novomodelo.Study`](#novomodelostudy), [`novomodelo.Study.train`](#novomodelostudytrain) and [`novomodelo.Study.simulate`](#novomodelostudysimulate), according to the phase that fails.
 - Any exception raised by the callback, re-raised verbatim after the artifacts are written.
 
-{/* capture: python t231-run-on-iteration | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy scaffold */}
-
 ```python
 import novomodelo.run
-
 
 def on_iteration(info):
     print(info)
     return info["iteration"] >= 3  # a truthy return requests a stop
-
 
 novomodelo.run.run("case", output_dir="output", on_iteration=on_iteration)
 ```
@@ -452,8 +444,6 @@ Runs the full validation pipeline (case structure, schema, configuration, stocha
 **Raises**
 
 - `ValueError` (builtin) only when `config_overrides` is malformed.
-
-{/* capture: python t231-io-validate | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy scaffold */}
 
 ```python
 import novomodelo.io
@@ -513,8 +503,6 @@ Reads `training/convergence.parquet`; for the columns, see [`training/convergenc
 
 - `FileNotFoundError` (builtin) when `output_dir` or `training/convergence.parquet` is missing.
 - `OSError` (builtin) for other I/O failures and Parquet decoding failures.
-
-{/* capture: python t232-load-convergence | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy scaffold */}
 
 ```python
 import novomodelo.results
@@ -706,8 +694,6 @@ The loaded system: entity counts and one list per entity class.
 | `contracts` | `list[EnergyContract]` | The energy contracts, in canonical order. Empty when the case has none. |
 | `pumping_stations` | `list[PumpingStation]` | The pumping stations, in canonical order. Empty when the case has none. |
 | `non_controllable_sources` | `list[NonControllableSource]` | The non-controllable sources, in canonical order. Empty when the case has none. |
-
-{/* capture: python t231a-load-case | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy scaffold */}
 
 ```python
 import novomodelo.io
@@ -908,8 +894,6 @@ An internal software or environment fault, such as a worker-thread panic. Raised
 
 Some failures raise a builtin exception that is not a `NovomodeloError`: a missing case directory (`OSError`), `threads=0` and a malformed `config_overrides` mapping (`ValueError`), and a callback's own exception.
 
-{/* capture: python t231-validation-error | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: 1dtoy scaffold */}
-
 ```python
 import novomodelo
 from novomodelo.errors import ValidationError
@@ -947,8 +931,6 @@ Writes the JSON Schema file of every case-directory input type into `output_dir`
 - `ValueError` (builtin) when schema generation or serialisation fails.
 - `OSError` (builtin) when the directory cannot be created or a file cannot be written.
 
-{/* capture: python t232-schema-export | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: none */}
-
 ```python
 import novomodelo.schema
 
@@ -970,7 +952,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from novomodelo._types import RunResult
-
 
 def final_lower_bound(result: RunResult) -> float:
     return result["lower_bound"]

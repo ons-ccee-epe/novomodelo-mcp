@@ -20,7 +20,7 @@ def test_read_metadata_ok():
             "status": "complete",
             "bounds": {"final_lower_bound": 1.0, "final_upper_bound": 1.1},
             "convergence": {"achieved": True, "final_gap_percent": 0.9},
-        }))
+        }), encoding="utf-8")
         env = R.read_metadata(str(out))
         assert env["status"] == "ok", env
         assert env["simulation_ran"] is False, env

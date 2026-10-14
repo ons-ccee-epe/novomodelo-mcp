@@ -61,8 +61,6 @@ novomodelo version
 
 Expected output (exact versions and arch will vary):
 
-{/* capture: novomodelo version | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: none */}
-
 ```
 novomodelo   v0.18.0
 solver: HiGHS 1.13.1
@@ -112,8 +110,6 @@ use the `musllinux` wheel.
 ```bash
 python -c "import novomodelo; print(novomodelo.__version__); print(novomodelo.version_info())"
 ```
-
-{/* capture: python -c "import novomodelo; print(novomodelo.__version__); print(novomodelo.version_info())" | novomodelo-python 0.18.0 (PyPI wheel sha256 8a31828a) | python 3.12.3 | case: none */}
 
 ```text
 0.18.0
@@ -233,8 +229,6 @@ explicitly. The default build (no extra flags) uses HiGHS.
 ### Identifying the active backend
 
 The `novomodelo version` banner shows which backend is compiled in:
-
-{/* capture: novomodelo version | novomodelo   v0.18.0 | binary: novomodelo-cli sha256 93cb7307 | case: excerpt; CLP line verified at crates/novomodelo-solver/vendor/coin-build/include/ClpConfig.h:21 at novomodelo v0.18.0, solver line not capturable from the HiGHS release asset */}
 
 ```
 novomodelo   v0.18.0
