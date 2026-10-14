@@ -123,8 +123,9 @@ def edit_json(path: str, changes: list[dict], *, schemas_dir: str | None = None,
     p = Path(path)
     if not p.exists():
         return {"status": "error", "diagnostics": [f"arquivo não existe: {path}"]}
+    raw = p.read_bytes()
     try:
-        original = p.read_text(encoding="utf-8")
+        original = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         return {"status": "error", "diagnostics": [f"arquivo não está em UTF-8: {exc}"]}
     try:
@@ -166,9 +167,13 @@ def edit_json(path: str, changes: list[dict], *, schemas_dir: str | None = None,
                 "changes": applied, "schema": schema,
                 "schema_errors": schema_errors, "note": val.get("note")}
 
-    Path(backup_path(path)).write_text(original, encoding="utf-8")
+    # Bytes, não texto: o `.bak` é cópia exata e o deck mantém o fim de linha que tinha;
+    # gravar como texto troca `\n`/`\r\n` conforme o sistema.
+    Path(backup_path(path)).write_bytes(raw)
+    newline = "\r\n" if b"\r\n" in raw else "\n"
+    text = json.dumps(obj, indent=2, ensure_ascii=False) + "\n"
     tmp = f"{path}.tmp"
-    Path(tmp).write_text(json.dumps(obj, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    Path(tmp).write_bytes(text.replace("\n", newline).encode("utf-8"))
     os.replace(tmp, path)
     return {"status": "ok", "written": True, "changes": applied,
             "schema": schema, "schema_errors": schema_errors,

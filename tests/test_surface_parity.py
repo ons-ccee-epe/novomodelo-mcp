@@ -26,11 +26,12 @@ ADAPTER = {"novomodelo": SRC / "adapters" / "novomodelo.py", "bridge": SRC / "ad
 _META_KEYS = {"raiz", "ignorados"}
 
 # clap indenta a opção em até 6 espaços (a descrição vem mais funda); o Typer abre a
-# linha com "│ ", ou "| " quando o console não é UTF-8. Formas curtas (`-o`) são
+# linha com "│ ", ou "| " quando o console não é UTF-8; a caixa é arredondada (╭),
+# quadrada (┌, no modo legado do Windows) ou ASCII (+). Formas curtas (`-o`) são
 # ignoradas: só a longa conta.
 _BORDERS = "│|"
 _OPTION_LINE = re.compile(r"^(?:[│|] |\s{2,6})(?:-[A-Za-z],\s*)?(--[a-z][a-z0-9-]*)")
-_COMMANDS_HEADER = re.compile(r"^(?:Commands:|[╭+][─-] Commands)")
+_COMMANDS_HEADER = re.compile(r"^(?:Commands:|[╭┌+][─-] Commands)")
 
 
 def parse_options(help_text: str) -> set[str]:
@@ -53,7 +54,7 @@ def parse_commands(help_text: str) -> set[str]:
             continue
         if inside:
             row = _row(line)
-            if not row.strip() or line.strip().startswith(("╰", "+", "Options:")):
+            if not row.strip() or line.strip().startswith(("╰", "└", "+", "Options:")):
                 break
             depth = len(row) - len(row.lstrip())
             indent = depth if indent is None else indent
@@ -258,6 +259,16 @@ TYPER_HELP_ASCII = """ Usage: novomodelo-bridge [OPTIONS] COMMAND [ARGS]...
 | convert    Convert data from a source format to Novomodelo JSON.             |
 +------------------------------------------------------------------------------+
 """
+TYPER_HELP_QUADRADA = """ Usage: novomodelo-bridge [OPTIONS] COMMAND [ARGS]...
+┌─ Options ────────────────────────────────────────────────────────────────────┐
+│ --version                     Show the version and exit.                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌─ Commands ───────────────────────────────────────────────────────────────────┐
+│ dashboard  Generate an interactive HTML dashboard from Novomodelo simulation │
+│            results.                                                          │
+│ convert    Convert data from a source format to Novomodelo JSON.             │
+└──────────────────────────────────────────────────────────────────────────────┘
+"""
 CLAP_HELP_80_COLUNAS = """Usage: novomodelo [OPTIONS] <COMMAND>
 
 Commands:
@@ -296,3 +307,8 @@ def test_detector_acusa_opcao_nova_e_opcao_sumida():
     gaps = option_gaps({"--force", "--help", "--nova"}, entry, "bridge x")
     assert any("opção nova" in g and "--nova" in g for g in gaps)
     assert any("sumiu" in g and "--velha" in g for g in gaps)
+
+
+def test_parse_aceita_borda_quadrada():
+    assert parse_commands(TYPER_HELP_QUADRADA) == {"dashboard", "convert"}
+    assert parse_options(TYPER_HELP_QUADRADA) == {"--version"}

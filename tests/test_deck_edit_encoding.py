@@ -80,3 +80,44 @@ def test_valor_acentuado_novo_e_gravado_em_utf8_e_o_antigo_volta_legivel(tmp_pat
     assert out["changes"] == [{"path": "nome", "old": NOME, "new": NOVO}]
     assert json.loads(deck.read_bytes().decode("utf-8"))["nome"] == NOVO
 
+
+
+def _edit_in_process(deck: Path) -> dict:
+    from novomodelo_mcp.adapters.deck_io import edit_json
+    return edit_json(str(deck), [{"path": "limite", "value": 99}])
+
+
+def _deck_bytes(newline: str) -> bytes:
+    text = json.dumps({"nome": NOME, "limite": 50}, ensure_ascii=False, indent=2) + "\n"
+    return text.replace("\n", newline).encode("utf-8")
+
+
+def test_deck_crlf_tem_backup_identico_e_continua_crlf(tmp_path):
+    deck = tmp_path / "notas.json"
+    original = _deck_bytes("\r\n")
+    deck.write_bytes(original)
+    assert _edit_in_process(deck)["written"] is True
+    assert (tmp_path / "notas.json.bak").read_bytes() == original
+    editado = deck.read_bytes()
+    assert editado.count(b"\r\n") == editado.count(b"\n") == original.count(b"\n")
+    assert json.loads(editado.decode("utf-8")) == {"nome": NOME, "limite": 99}
+
+
+def test_deck_lf_continua_lf(tmp_path):
+    deck = tmp_path / "notas.json"
+    original = _deck_bytes("\n")
+    deck.write_bytes(original)
+    assert _edit_in_process(deck)["written"] is True
+    assert (tmp_path / "notas.json.bak").read_bytes() == original
+    assert b"\r" not in deck.read_bytes()
+
+
+def test_restore_backup_devolve_os_bytes_originais(tmp_path):
+    from novomodelo_mcp.adapters.deck_io import restore_backup
+    deck = tmp_path / "notas.json"
+    original = _deck_bytes("\r\n")
+    deck.write_bytes(original)
+    _edit_in_process(deck)
+    assert deck.read_bytes() != original
+    assert restore_backup(str(deck)) is True
+    assert deck.read_bytes() == original
