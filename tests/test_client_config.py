@@ -222,3 +222,30 @@ def test_workspace_que_nao_pode_ser_criado_da_erro_claro(home, tmp_path, capsys)
     assert C.main(["--cliente", "kiro", "--workspace", str(arquivo / "novomodelo")]) == 1
     assert "não foi possível criar a pasta" in capsys.readouterr().err
     assert not C.config_path("kiro").exists()
+
+
+FECHAR_CLAUDE_CODE = "Feche o Claude Code antes de gravar"
+REABRIR = "Feche e abra o cliente e peça o server_info."
+
+
+def test_aviso_de_fechar_o_claude_code_sai_antes_de_gravar(home, capsys):
+    assert C.main(["--cliente", "claude-code"]) == 0
+    linhas = capsys.readouterr().out.splitlines()
+    aviso = next(i for i, linha in enumerate(linhas) if linha.startswith(FECHAR_CLAUDE_CODE))
+    gravou = next(i for i, linha in enumerate(linhas) if linha.startswith(("criado:", "atualizado:")))
+    assert aviso < gravou
+
+
+def test_mostrar_tambem_avisa_para_fechar_antes_de_gravar(home, capsys):
+    assert C.main(["--cliente", "claude-code", "--mostrar"]) == 0
+    linhas = capsys.readouterr().out.splitlines()
+    assert linhas[0].startswith(FECHAR_CLAUDE_CODE)
+    assert REABRIR not in linhas
+
+
+@pytest.mark.parametrize("cliente", CLIENTES)
+def test_depois_de_gravar_so_pede_para_reabrir_o_cliente(home, cliente, capsys):
+    assert C.main(["--cliente", cliente]) == 0
+    saida = capsys.readouterr().out
+    assert saida.splitlines()[-1] == REABRIR
+    assert "Depois, feche o cliente" not in saida

@@ -190,13 +190,16 @@ def apply(changes: list[tuple[Path, str, str]]) -> list[dict[str, str]]:
     return done
 
 
+_BEFORE_WRITE = {
+    "claude-code": "Feche o Claude Code antes de gravar: ele reescreve o ~/.claude.json "
+                   "enquanto está aberto.",
+}
 _NOTES = {
     "claude-desktop": "No Claude Desktop não há lista de liberação: na primeira chamada de "
                       "cada tool de leitura, escolha \"sempre permitir\".",
-    "claude-code": "Feche o Claude Code antes de gravar: ele reescreve o ~/.claude.json "
-                   "enquanto está aberto.",
     "kiro": "O mcp.json de um workspace (.kiro/settings/mcp.json) vence o do usuário.",
 }
+REOPEN = "Feche e abra o cliente e peça o server_info."
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -216,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"erro: {exc}", file=sys.stderr)
         return 1
+    if args.cliente in _BEFORE_WRITE:
+        print(_BEFORE_WRITE[args.cliente])
     if args.mostrar:
         for path, _, fragment in changes:
             print(f"── {path} (só o trecho que muda; o resto do arquivo é mantido)\n{fragment}")
@@ -233,6 +238,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{item['acao']}: {item['arquivo']}{extra}")
     if args.instrucoes and args.cliente == "claude-desktop":
         print(f"Cole nas preferências do Claude Desktop:\n  {INSTRUCTIONS_LINE}")
-    print(_NOTES[args.cliente])
-    print("Depois, feche o cliente por completo, abra de novo e peça a tool server_info.")
+    if args.cliente in _NOTES:
+        print(_NOTES[args.cliente])
+    if not args.mostrar:
+        print(REOPEN)
     return 0
