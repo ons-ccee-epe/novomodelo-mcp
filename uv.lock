@@ -525,7 +525,7 @@ wheels = [
 
 [[package]]
 name = "novomodelo-mcp"
-version = "0.18.0"
+version = "0.18.0.post1"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
