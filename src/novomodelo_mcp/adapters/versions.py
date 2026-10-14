@@ -111,31 +111,50 @@ def cli_install_command(version: str) -> str:
     return f"curl --proto '=https' --tlsv1.2 -LsSf {base}/novomodelo-cli-installer.sh | sh"
 
 
+def mcp_install_command(version: str) -> str:
+    wheel = f"novomodelo_mcp-{version}-py3-none-any.whl"
+    return (f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
+            f"`uv tool install --force ./{wheel}` (o bridge, a biblioteca e as docs vêm junto)")
+
+
 def _bridge_command(version: str, origin: str | None = None) -> str:
     if origin == "pacote":
-        return f"reinstale o MCP {version} (o bridge vem junto)"
+        return mcp_install_command(version)
     return f"uv tool install --force {BRIDGE_CLI}=={version}"
 
 
 def _piece_warnings(settings, expected: str) -> list[str]:
+    """Avisos com a peça mais nova como alvo: quem está atrás é atualizado, nunca rebaixado.
+
+    O MCP traz a biblioteca, o bridge do pacote e as docs; se ele é quem está atrás
+    (o executável já é mais novo), o aviso manda atualizar o MCP, não rebaixar a peça.
+    """
     pieces = local_versions(settings)
+    found = {key: normalize_version(piece["versao"]) for key, piece in pieces.items()}
+    target = max((v for v in (expected, *found.values()) if v), key=_version_key)
     texts = {
         "executavel": ("executável novomodelo",
-                       f"{cli_install_command(expected)} (ou a tool instalar_novomodelo)"),
-        "biblioteca": ("biblioteca novomodelo-python",
-                       f"reinstale o MCP {expected} (a biblioteca vem junto)"),
-        "bridge": (BRIDGE_CLI, _bridge_command(expected, pieces["bridge"].get("origem"))),
-        "docs": ("docs embutidas", f"reinstale o MCP {expected} (as docs vêm junto)"),
+                       f"{cli_install_command(target)} (ou a tool instalar_novomodelo)"),
+        "biblioteca": ("biblioteca novomodelo-python", mcp_install_command(target)),
+        "bridge": (BRIDGE_CLI, _bridge_command(target, pieces["bridge"].get("origem"))),
+        "docs": ("docs embutidas", mcp_install_command(target)),
     }
+    bundled = {"biblioteca", "docs"} | ({"bridge"} if pieces["bridge"].get("origem") == "pacote"
+                                       else set())
     lines = []
+    if _version_key(expected) < _version_key(target):
+        newer = ", ".join(texts[k][0] for k, v in found.items() if v == target)
+        lines.append(f"o MCP ({expected}) está atrás de {newer} ({target}): atualize o MCP "
+                     f"para {target}: {mcp_install_command(target)}")
     for key, (label, command) in texts.items():
-        found = normalize_version(pieces[key]["versao"])
-        if found is None and key == "docs":
+        version = found[key]
+        if version is None and key == "docs":
             continue
-        if found is None:
+        if version is None:
             lines.append(f"{label} {pieces[key]['motivo']}. Instale: {command}")
-        elif found != expected:
-            lines.append(f"{label} na versão {found}; o MCP espera {expected}. "
+        elif _version_key(version) < _version_key(target) and not (
+                key in bundled and version == expected):
+            lines.append(f"{label} na versão {version}; a mais nova encontrada é {target}. "
                          f"Atualize: {command}")
     return lines
 
@@ -281,6 +300,7 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     if cli["status"] == "nova":
         mcp = {"status": "nova", "mais_recente": cli["mais_recente"],
                "link": f"{MCP_RELEASE_TAG_URL}v{cli['mais_recente']}",
+               "comando": mcp_install_command(cli["mais_recente"]),
                "nota": "inferida pela versão do novomodelo; atualize as três peças juntas, "
                        "na mesma versão"}
     else:
