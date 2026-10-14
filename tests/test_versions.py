@@ -345,14 +345,19 @@ def test_rede_lenta_respeita_o_orcamento(pecas, monkeypatch):
     assert nova["bridge"]["status"] == "nao_foi_possivel_verificar"
 
 
-def test_verificacao_de_versao_nova_uma_vez_por_processo(pecas, monkeypatch):
-    chamadas = []
+def test_verificacao_de_versao_nova_vale_por_6_horas(pecas, monkeypatch):
+    chamadas, agora = [], [1000.0]
     _respostas(monkeypatch)
     abrir = V._open
     monkeypatch.setattr(V, "_open", lambda req, **k: chamadas.append(req) or abrir(req, **k))
+    monkeypatch.setattr(V.time, "monotonic", lambda: agora[0])
     V.update_check(object())
+    agora[0] += 6 * 3600 - 1
     V.update_check(object())
-    assert len(chamadas) == 2   # novomodelo + bridge, uma vez só
+    assert len(chamadas) == 2   # novomodelo + bridge, uma vez só nas 6 h
+    agora[0] += 2
+    V.update_check(object())
+    assert len(chamadas) == 4   # passadas as 6 h, consulta de novo
 
 
 def test_docs_de_outra_versao_avisam_e_sem_manifesto_nao(pecas, monkeypatch):

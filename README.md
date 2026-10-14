@@ -134,7 +134,8 @@ versão, ou faltar, **toda** resposta traz `avisos_de_versao` com o comando para
 corrigir; a chamada continua.
 
 A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo e do
-bridge (uma vez por sessão, em poucos segundos), e pelo `instalar_novomodelo`, e
+bridge (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo
+`instalar_novomodelo`, e
 apenas nestes domínios:
 `github.com/ons-ccee-epe/*`, `api.github.com/repos/ons-ccee-epe/*`,
 `pypi.org/pypi/novomodelo-bridge/*` e, como destino de download,

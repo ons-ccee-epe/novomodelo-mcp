@@ -13,6 +13,7 @@ import json
 import re
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -27,6 +28,7 @@ NOVOMODELO_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo/releas
 BRIDGE_PYPI = "https://pypi.org/pypi/novomodelo-bridge/json"
 BRIDGE_PAGE = "https://pypi.org/project/novomodelo-bridge/"
 UPDATE_BUDGET_S = 3.0
+UPDATE_TTL_S = 6 * 3600
 _MAX_BYTES = 64 * 1024 * 1024
 
 #: (host, prefixo de caminho) permitidos; o CDN do GitHub só como destino de redirecionamento.
@@ -281,12 +283,13 @@ def _newer(current: str | None, fetched: dict[str, Any], extract, manual: str,
 
 
 def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, Any]:
-    """Uma vez por processo: há versão nova do novomodelo, do bridge e do MCP?
+    """Há versão nova do novomodelo, do bridge e do MCP? Consulta no máximo uma vez a
+    cada `UPDATE_TTL_S`: um cliente aberto há horas também vê um lançamento.
 
     O MCP é inferido pelo novomodelo (o repositório do MCP é privado). Todo o
     trabalho cabe em `budget_s`; o que não responder a tempo vira aviso.
     """
-    if "resultado" in _UPDATE:
+    if "resultado" in _UPDATE and time.monotonic() - _UPDATE["quando"] < UPDATE_TTL_S:
         return _UPDATE["resultado"]
     pieces = local_versions(settings)
     current = expected_version() or pieces["executavel"]["versao"]
@@ -311,6 +314,7 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     else:
         mcp = {"status": cli["status"], "nota": "inferida pela versão do novomodelo"}
     _UPDATE["resultado"] = {"novomodelo": cli, "bridge": bridge, "mcp": mcp}
+    _UPDATE["quando"] = time.monotonic()
     return _UPDATE["resultado"]
 
 
