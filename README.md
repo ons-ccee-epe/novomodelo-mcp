@@ -54,7 +54,8 @@ novomodelo-mcp configurar --cliente claude-desktop --workspace ~/estudos        
 ```
 
 (No checkout, use `uv run novomodelo-mcp configurar …`.) `--cliente` aceita
-`claude-desktop`, `claude-code` e `kiro`; `--workspace` pode ser repetido.
+`claude-desktop`, `claude-code` e `kiro`; `--workspace` pode ser repetido, e a pasta que ainda não
+existe é criada ao gravar (nunca com `--mostrar`).
 
 O comando grava a entrada `novomodelo` com o **caminho absoluto** do executável deste
 pacote (o release do novomodelo publica outro `novomodelo-mcp`, e o nome solto pegaria o

@@ -147,6 +147,17 @@ def plan(client: str, workspace: list[str], instructions: bool) -> list[tuple[Pa
     return changes
 
 
+def create_workspaces(workspace: list[str]) -> list[Path]:
+    """Cria as pastas do workspace que ainda não existem; devolve as criadas."""
+    created = []
+    for w in workspace:
+        root = Path(w).expanduser().resolve()
+        if not root.exists():
+            root.mkdir(parents=True)
+            created.append(root)
+    return created
+
+
 def _backup(path: Path, stamp: str) -> Path:
     backup = path.with_name(f"{path.name}.bak-{stamp}")
     backup.write_bytes(path.read_bytes())
@@ -209,6 +220,14 @@ def main(argv: list[str] | None = None) -> int:
         for path, _, fragment in changes:
             print(f"── {path} (só o trecho que muda; o resto do arquivo é mantido)\n{fragment}")
     else:
+        try:
+            created = create_workspaces(args.workspace)
+        except OSError as exc:
+            print(f"erro: não foi possível criar a pasta do workspace ({exc}). Nada foi gravado.",
+                  file=sys.stderr)
+            return 1
+        for root in created:
+            print(f"pasta criada: {root}")
         for item in apply(changes):
             extra = f" (backup: {item['backup']})" if "backup" in item else ""
             print(f"{item['acao']}: {item['arquivo']}{extra}")

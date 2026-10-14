@@ -192,3 +192,33 @@ def test_subcomando_configurar_pelo_executavel(home, monkeypatch):
     with pytest.raises(SystemExit) as saida:
         server.main()
     assert saida.value.code == 0 and C.config_path("kiro").exists()
+
+
+def test_workspace_que_nao_existe_e_criado_ao_gravar(home, tmp_path, capsys):
+    pasta = tmp_path / "Documents" / "novomodelo"
+    assert C.main(["--cliente", "claude-desktop", "--workspace", str(pasta)]) == 0
+    assert pasta.is_dir()
+    assert str(pasta) in capsys.readouterr().out
+    assert _entrada("claude-desktop")["env"]["NOVOMODELO_MCP_WORKSPACE"] == str(pasta.resolve())
+
+
+def test_mostrar_nao_cria_o_workspace(home, tmp_path):
+    pasta = tmp_path / "novomodelo"
+    assert C.main(["--cliente", "kiro", "--workspace", str(pasta), "--mostrar"]) == 0
+    assert not pasta.exists()
+
+
+def test_workspace_que_ja_existe_continua_igual(home, tmp_path):
+    pasta = tmp_path / "estudos"
+    pasta.mkdir()
+    (pasta / "caso.json").write_text("{}", encoding="utf-8")
+    assert C.main(["--cliente", "kiro", "--workspace", str(pasta)]) == 0
+    assert (pasta / "caso.json").read_text(encoding="utf-8") == "{}"
+
+
+def test_workspace_que_nao_pode_ser_criado_da_erro_claro(home, tmp_path, capsys):
+    arquivo = tmp_path / "um-arquivo"
+    arquivo.write_text("x", encoding="utf-8")
+    assert C.main(["--cliente", "kiro", "--workspace", str(arquivo / "novomodelo")]) == 1
+    assert "não foi possível criar a pasta" in capsys.readouterr().err
+    assert not C.config_path("kiro").exists()
