@@ -19,6 +19,9 @@ from typing import Any
 from .names import ENV_PREFIX, MCP_DIST, SERVER_NAME
 
 CLIENTS = ("claude-desktop", "claude-code", "kiro")
+CLIENT_NAMES = {"claude-desktop": "Claude Desktop", "claude-code": "Claude Code", "kiro": "Kiro"}
+SYSTEM_APPS = Path("/Applications")
+_PROGRAMS = {"claude-desktop": (), "claude-code": ("claude",), "kiro": ("kiro", "kiro-cli")}
 INSTRUCTIONS_MARK = "<!-- novomodelo-mcp -->"
 INSTRUCTIONS_LINE = (
     "Para perguntas sobre a metodologia do novomodelo, use o MCP novomodelo: "
@@ -65,6 +68,32 @@ def config_path(client: str) -> Path:
     if sys.platform == "darwin":
         return home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
     return home / ".config" / "Claude" / "claude_desktop_config.json"
+
+
+def _install_paths(client: str) -> list[Path]:
+    home = _home()
+    if client == "claude-code":
+        return [home / ".claude" / "local" / "claude"]
+    if sys.platform == "darwin":
+        app = {"claude-desktop": "Claude.app", "kiro": "Kiro.app"}[client]
+        return [SYSTEM_APPS / app, home / "Applications" / app]
+    if sys.platform == "win32":
+        local = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
+        if client == "claude-desktop":
+            return [local / "AnthropicClaude", local / "Programs" / "Claude"]
+        return [local / "Programs" / "Kiro"]
+    return []
+
+
+def _config_dir(client: str) -> Path:
+    return {"claude-code": _home() / ".claude", "kiro": _home() / ".kiro"}.get(
+        client, config_path(client).parent)
+
+
+def client_found(client: str) -> bool:
+    """O programa (no PATH ou no lugar de instalação) ou a pasta de configuração existe."""
+    return (any(shutil.which(name) for name in _PROGRAMS[client])
+            or any(p.exists() for p in [*_install_paths(client), _config_dir(client)]))
 
 
 def server_entry(client: str, workspace: list[str]) -> dict[str, Any]:
@@ -221,6 +250,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.cliente in _BEFORE_WRITE:
         print(_BEFORE_WRITE[args.cliente])
+    if not client_found(args.cliente):
+        print(f"{CLIENT_NAMES[args.cliente]} não encontrado nesta máquina; a configuração fica "
+              "pronta para quando você instalar.")
     if args.mostrar:
         for path, _, fragment in changes:
             print(f"── {path} (só o trecho que muda; o resto do arquivo é mantido)\n{fragment}")

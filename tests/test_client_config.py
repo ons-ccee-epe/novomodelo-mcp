@@ -21,6 +21,10 @@ def home(tmp_path, monkeypatch):
     casa.mkdir()
     monkeypatch.setattr(C, "_home", lambda: casa)
     monkeypatch.setenv("APPDATA", str(casa / "AppData" / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(casa / "AppData" / "Local"))
+    (tmp_path / "path-vazio").mkdir()
+    monkeypatch.setenv("PATH", str(tmp_path / "path-vazio"))
+    monkeypatch.setattr(C, "SYSTEM_APPS", tmp_path / "Applications", raising=False)
     return casa
 
 
@@ -249,3 +253,72 @@ def test_depois_de_gravar_so_pede_para_reabrir_o_cliente(home, cliente, capsys):
     saida = capsys.readouterr().out
     assert saida.splitlines()[-1] == REABRIR
     assert "Depois, feche o cliente" not in saida
+
+
+NOMES = {"claude-desktop": "Claude Desktop", "claude-code": "Claude Code", "kiro": "Kiro"}
+
+
+def _nao_encontrado(cliente):
+    return (f"{NOMES[cliente]} não encontrado nesta máquina; a configuração fica pronta para "
+            "quando você instalar")
+
+
+@pytest.mark.parametrize("cliente", CLIENTES)
+def test_cliente_ausente_avisa_e_grava_mesmo_assim(home, cliente, capsys):
+    assert C.main(["--cliente", cliente]) == 0
+    linhas = capsys.readouterr().out.splitlines()
+    aviso = next(i for i, linha in enumerate(linhas) if linha.startswith(_nao_encontrado(cliente)))
+    gravou = next(i for i, linha in enumerate(linhas) if linha.startswith(("criado:", "atualizado:")))
+    assert aviso < gravou and C.config_path(cliente).exists()
+
+
+@pytest.mark.parametrize("cliente", CLIENTES)
+def test_mostrar_tambem_avisa_que_o_cliente_nao_foi_encontrado(home, cliente, capsys):
+    assert C.main(["--cliente", cliente, "--mostrar"]) == 0
+    assert _nao_encontrado(cliente) in capsys.readouterr().out
+    assert [p for p in home.rglob("*") if p.is_file()] == []
+
+
+@pytest.mark.parametrize("cliente,pasta", [
+    ("claude-desktop", None), ("claude-code", ".claude"), ("kiro", ".kiro")])
+def test_pasta_de_configuracao_do_cliente_conta_como_encontrado(home, cliente, pasta, capsys):
+    (home / pasta if pasta else C.config_path(cliente).parent).mkdir(parents=True)
+    assert C.main(["--cliente", cliente]) == 0
+    assert "não encontrado nesta máquina" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("cliente,programa", [("claude-code", "claude"), ("kiro", "kiro"),
+                                              ("kiro", "kiro-cli")])
+def test_programa_no_path_conta_como_encontrado(home, tmp_path, monkeypatch, cliente, programa,
+                                                capsys):
+    pasta = tmp_path / "bin"
+    pasta.mkdir()
+    exe = pasta / (f"{programa}.exe" if os.name == "nt" else programa)
+    exe.write_text("#!/bin/sh\n", encoding="utf-8")
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", str(pasta))
+    assert C.main(["--cliente", cliente]) == 0
+    assert "não encontrado nesta máquina" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("plataforma,cliente,instalado", [
+    ("darwin", "claude-desktop", "Applications/Claude.app"),
+    ("darwin", "kiro", "Applications/Kiro.app"),
+    ("win32", "claude-desktop", "AppData/Local/AnthropicClaude"),
+    ("win32", "claude-desktop", "AppData/Local/Programs/Claude"),
+    ("win32", "kiro", "AppData/Local/Programs/Kiro")])
+def test_programa_instalado_conta_como_encontrado(home, tmp_path, monkeypatch, plataforma,
+                                                  cliente, instalado, capsys):
+    monkeypatch.setattr(C.sys, "platform", plataforma)
+    monkeypatch.setattr(C.shutil, "which", lambda name: None)
+    assert not C.client_found(cliente)
+    base = tmp_path if instalado.startswith("Applications") else home
+    (base / instalado).mkdir(parents=True)
+    assert C.client_found(cliente)
+
+
+def test_claude_code_instalado_localmente_conta_como_encontrado(home):
+    local = home / ".claude" / "local"
+    local.mkdir(parents=True)
+    (local / "claude").write_text("", encoding="utf-8")
+    assert C.client_found("claude-code")

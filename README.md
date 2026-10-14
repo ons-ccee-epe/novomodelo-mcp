@@ -65,7 +65,9 @@ inteira**: o cliente passa a usar o executável deste pacote, e variáveis de
 desenvolvimento como `PYTHONPATH`, `NOVOMODELO_MCP_DOCS_DIR` e caminhos de binários saem
 (o backup guarda a entrada anterior). Antes de gravar faz backup `<arquivo>.bak-AAAAMMDD-HHMMSS`;
 rodar de novo sem mudança não grava nada. `--mostrar` imprime só o trecho que mudaria,
-sem tocar em nada.
+sem tocar em nada. Se o cliente não está na máquina (nem o programa nem a pasta de
+configuração dele), o comando avisa e grava mesmo assim: a configuração fica pronta para
+quando o cliente for instalado.
 
 | Cliente | Arquivo | Tools de leitura |
 |---|---|---|
