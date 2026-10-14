@@ -12,17 +12,17 @@ TYPES = {"config", "hydros", "stages"}
 
 def _make_case(root, n_scenarios=50):
     (root / "system").mkdir(parents=True)
-    (root / "config.json").write_text("{}")
-    (root / "config.json.bak").write_text("{}")
-    (root / "stages.json").write_text("{}")
-    (root / "system" / "hydros.json").write_text("{}")
+    (root / "config.json").write_text("{}", encoding="utf-8")
+    (root / "config.json.bak").write_text("{}", encoding="utf-8")
+    (root / "stages.json").write_text("{}", encoding="utf-8")
+    (root / "system" / "hydros.json").write_text("{}", encoding="utf-8")
     (root / "scenarios").mkdir()
     (root / "scenarios" / "inflow_history.parquet").write_bytes(b"x")
-    (root / "dashboard.html").write_text("<html/>")
+    (root / "dashboard.html").write_text("<html/>", encoding="utf-8")
     out = root / "output_variante"          # nome qualquer: o contrato é training/metadata.json
     (out / "training").mkdir(parents=True)
-    (out / "training" / "metadata.json").write_text("{}")
-    (out / "training" / "_SUCCESS").write_text("")
+    (out / "training" / "metadata.json").write_text("{}", encoding="utf-8")
+    (out / "training" / "_SUCCESS").write_text("", encoding="utf-8")
     for s in range(n_scenarios):
         part = out / "simulation" / "hydros" / f"scenario_id={s}"
         part.mkdir(parents=True)

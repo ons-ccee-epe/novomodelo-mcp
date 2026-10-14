@@ -46,7 +46,8 @@ def _docs_version(source: Path) -> str | None:
 def _docs_commit(source: Path) -> str | None:
     try:
         proc = subprocess.run(["git", "-C", str(source), "rev-parse", "HEAD"],
-                              capture_output=True, text=True, timeout=30)
+                              capture_output=True, encoding="utf-8", errors="replace",
+                              timeout=30)
     except (OSError, subprocess.SubprocessError):
         return None
     return proc.stdout.strip() or None if proc.returncode == 0 else None

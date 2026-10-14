@@ -49,7 +49,7 @@ def tool(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "novomodelo.io", pkg.io)
     case = tmp_path / "ws" / "caso"
     case.mkdir(parents=True)
-    (case / "config.json").write_text("{}")
+    (case / "config.json").write_text("{}", encoding="utf-8")
     mcp = _CaptureMCP()
     pre_run.register_pre_run(mcp, dataclasses.replace(load_settings(), workspace=str(tmp_path / "ws"),
                                                       max_inline_rows=5))

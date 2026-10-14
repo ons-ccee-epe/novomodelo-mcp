@@ -15,8 +15,8 @@ from novomodelo_mcp.config import load_settings         # noqa: E402
 
 def test_schema_list_and_get():
     with tempfile.TemporaryDirectory() as d:
-        (Path(d) / "hydros.schema.json").write_text('{"type":"object"}')
-        (Path(d) / "config.schema.json").write_text('{"type":"object"}')
+        (Path(d) / "hydros.schema.json").write_text('{"type":"object"}', encoding="utf-8")
+        (Path(d) / "config.schema.json").write_text('{"type":"object"}', encoding="utf-8")
         os.environ["NOVOMODELO_MCP_SCHEMAS_DIR"] = d
         s = load_settings()
         assert REF.list_schema_types(s) == ["config", "hydros"]
@@ -29,7 +29,7 @@ def test_schema_list_and_get():
 def test_docs_list_and_read():
     with tempfile.TemporaryDirectory() as d:
         (Path(d) / "reference").mkdir()
-        (Path(d) / "reference" / "cli-reference.md").write_text("# CLI\nconteudo")
+        (Path(d) / "reference" / "cli-reference.md").write_text("# CLI\nconteudo", encoding="utf-8")
         os.environ["NOVOMODELO_MCP_DOCS_DIR"] = d
         s = load_settings()
         lst = REF.list_docs(s)
@@ -48,7 +48,7 @@ def test_clone_nearby_is_ignored_without_env():
     with tempfile.TemporaryDirectory() as d:
         clone = Path(d) / "novomodelo-docs" / "src" / "content" / "docs"
         clone.mkdir(parents=True)
-        (clone / "pagina-do-clone.md").write_text("# outra versao")
+        (clone / "pagina-do-clone.md").write_text("# outra versao", encoding="utf-8")
         os.chdir(d)
         try:
             lst = REF.list_docs(load_settings())

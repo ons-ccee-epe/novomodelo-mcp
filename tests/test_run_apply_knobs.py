@@ -28,7 +28,7 @@ def _run_apply(tmp_path, monkeypatch):
                                    state_dir=str(tmp_path / "state"))
     mcp = _CaptureMCP()
     register_run(mcp, settings)
-    (tmp_path / "config.json").write_text(json.dumps(CONFIG))
+    (tmp_path / "config.json").write_text(json.dumps(CONFIG), encoding="utf-8")
     return mcp.tools["run_apply"]
 
 
@@ -49,5 +49,5 @@ def test_negativo_e_recusado_pelo_schema_e_nao_pelo_mcp(tmp_path, monkeypatch):
 def test_inteiro_valido_continua_gravando(tmp_path, monkeypatch):
     out = _run_apply(tmp_path, monkeypatch)(str(tmp_path), {"forward_passes": 2})
     assert out["status"] == "ok" and out["written"] is True
-    cfg = json.loads((tmp_path / "config.json").read_text())
+    cfg = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
     assert cfg["training"]["selection"]["forward_passes"] == 2

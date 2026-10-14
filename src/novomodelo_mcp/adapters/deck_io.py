@@ -80,7 +80,7 @@ def validate_json(obj: Any, schema_path: str | None) -> dict[str, Any]:
     except ImportError:
         return {"validated": False, "errors": [],
                 "note": "jsonschema não instalado — validação por schema pulada"}
-    with open(schema_path) as fh:
+    with open(schema_path, encoding="utf-8") as fh:
         schema = json.load(fh)
     validator_cls = validator_for(schema)
     validator_cls.check_schema(schema)
@@ -109,7 +109,7 @@ def restore_backup(path: str) -> bool:
 # ── JSON: leitura e edição ─────────────────────────────────────────────────────
 
 def read_json(path: str) -> Any:
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         return json.load(fh)
 
 
@@ -123,7 +123,10 @@ def edit_json(path: str, changes: list[dict], *, schemas_dir: str | None = None,
     p = Path(path)
     if not p.exists():
         return {"status": "error", "diagnostics": [f"arquivo não existe: {path}"]}
-    original = p.read_text()
+    try:
+        original = p.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        return {"status": "error", "diagnostics": [f"arquivo não está em UTF-8: {exc}"]}
     try:
         obj = json.loads(original)
     except json.JSONDecodeError as exc:
@@ -163,9 +166,9 @@ def edit_json(path: str, changes: list[dict], *, schemas_dir: str | None = None,
                 "changes": applied, "schema": schema,
                 "schema_errors": schema_errors, "note": val.get("note")}
 
-    Path(backup_path(path)).write_text(original)
+    Path(backup_path(path)).write_text(original, encoding="utf-8")
     tmp = f"{path}.tmp"
-    Path(tmp).write_text(json.dumps(obj, indent=2, ensure_ascii=False) + "\n")
+    Path(tmp).write_text(json.dumps(obj, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
     return {"status": "ok", "written": True, "changes": applied,
             "schema": schema, "schema_errors": schema_errors,

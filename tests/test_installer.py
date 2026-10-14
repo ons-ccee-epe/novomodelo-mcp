@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import urllib.error
+from pathlib import Path
 
 import pytest
 
@@ -46,22 +47,32 @@ def rede(monkeypatch):
     return pedidas, estado
 
 
+BINARIO = "novomodelo.exe" if sys.platform == "win32" else "novomodelo"
+
+
 @pytest.fixture
 def instalador(monkeypatch, tmp_path):
-    """Substitui a execução do instalador; o fake cria o binário que responde a versão."""
+    """Substitui a execução do instalador; o fake cria o binário que responde a versão.
+
+    No Windows o binário falso não é um `.exe` de verdade: a pergunta da versão é
+    substituída, e o resto da verificação (nome e caminho do binário) continua real.
+    """
     execucoes = []
 
     def _run(cmd, **kw):
         execucoes.append({"cmd": cmd, "env": kw.get("env")})
         dest = kw["env"]["NOVOMODELO_CLI_INSTALL_DIR"]
         os.makedirs(os.path.join(dest, "bin"), exist_ok=True)
-        binario = os.path.join(dest, "bin", "novomodelo")
-        with open(binario, "w") as fh:
+        binario = os.path.join(dest, "bin", BINARIO)
+        with open(binario, "w", encoding="utf-8") as fh:
             fh.write(f"#!/bin/sh\necho 'novomodelo   v{VERSAO}'\n")
         os.chmod(binario, 0o755)
         return types_proc(0, "instalado", "")
 
     monkeypatch.setattr(I, "_run_installer", _run)
+    if sys.platform == "win32":
+        monkeypatch.setattr(I, "tool_version", lambda path: (
+            f"novomodelo   v{VERSAO}" if os.path.basename(path) == BINARIO else None))
     return execucoes
 
 
@@ -117,12 +128,11 @@ def test_variaveis_que_trocam_a_origem_nao_chegam_ao_instalador(rede, instalador
     assert "NOVOMODELO_CLI_NO_MODIFY_PATH" not in passado
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="o fake do binário é script sh")
 def test_instalacao_confirma_a_versao_e_devolve_o_caminho(rede, instalador, tmp_path):
     env = I.install(confirmar=True, pasta=str(tmp_path / "nm"))
     assert env["status"] == "ok" and env["executado"] is True
     assert env["versao_instalada"] == VERSAO
-    assert env["caminho"] == str(tmp_path / "nm" / "bin" / "novomodelo")
+    assert Path(env["caminho"]) == tmp_path / "nm" / "bin" / BINARIO
     assert "NOVOMODELO_MCP_SOLVER_BIN" in env["configuracao"]
 
 

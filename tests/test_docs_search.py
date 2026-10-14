@@ -51,7 +51,7 @@ title: Glossary
 def settings(tmp_path):
     for rel, text in PAGINAS.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text(text)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
     return dataclasses.replace(load_settings(), docs_dir=str(tmp_path), max_summary_chars=2000)
 
 

@@ -67,7 +67,8 @@ def _expected_sha256(version: str) -> str | dict[str, str]:
 
 
 def _run_installer(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
+                          **kwargs)
 
 
 def _installer_env(pasta: str | None) -> dict[str, str]:

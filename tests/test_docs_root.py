@@ -26,7 +26,7 @@ def _settings(**kw):
 def test_clone_ao_lado_sem_variavel_usa_as_embutidas(tmp_path, monkeypatch):
     clone = tmp_path / "novomodelo-docs" / "src" / "content" / "docs"
     clone.mkdir(parents=True)
-    (clone / "pagina-do-clone.md").write_text("# outra versão")
+    (clone / "pagina-do-clone.md").write_text("# outra versão", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     lst = REF.list_docs(_settings(docs_dir=None))
     assert lst["status"] == "ok" and "pagina-do-clone" not in lst["pages"]
@@ -37,8 +37,8 @@ def test_clone_ao_lado_sem_variavel_usa_as_embutidas(tmp_path, monkeypatch):
 def test_pasta_de_desenvolvimento_e_usada_e_avisada(tmp_path):
     dev = tmp_path / "docs-dev"
     (dev / "math" / "_impl").mkdir(parents=True)
-    (dev / "math" / "pagina.mdx").write_text("# P")
-    (dev / "math" / "_impl" / "_trecho.mdx").write_text("trecho")
+    (dev / "math" / "pagina.mdx").write_text("# P", encoding="utf-8")
+    (dev / "math" / "_impl" / "_trecho.mdx").write_text("trecho", encoding="utf-8")
     settings = _settings(docs_dir=str(dev))
     lst = REF.list_docs(settings)
     assert lst["pages"] == ["math/pagina"]

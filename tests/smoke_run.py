@@ -110,18 +110,18 @@ def _make_case(root: Path, *, fwd=4, iters=6, n_stages=72, openings=8, hydros=15
         "simulation": {"enabled": True, "selection": {"method": "sampled",
                                                       "num_scenarios": sim}},
         "modeling": {"inflow_non_negativity": {"method": modeling}},
-    }))
+    }), encoding="utf-8")
     (case / "stages.json").write_text(json.dumps({"stages": [
-        {"id": i, "num_openings": openings} for i in range(n_stages)]}))
+        {"id": i, "num_openings": openings} for i in range(n_stages)]}), encoding="utf-8")
     (case / "system" / "hydros.json").write_text(json.dumps(
-        {"hydros": [{"id": i} for i in range(hydros)]}))
-    (case / "system" / "buses.json").write_text(json.dumps({"buses": [{"id": 0}]}))
+        {"hydros": [{"id": i} for i in range(hydros)]}), encoding="utf-8")
+    (case / "system" / "buses.json").write_text(json.dumps({"buses": [{"id": 0}]}), encoding="utf-8")
     if meta_host:
         tr = case / "output" / "training"
         tr.mkdir(parents=True)
-        (tr / "metadata.json").write_text(json.dumps({**REF_META, "hostname": meta_host}))
+        (tr / "metadata.json").write_text(json.dumps({**REF_META, "hostname": meta_host}), encoding="utf-8")
         (case / "output" / "simulation").mkdir()
-        (case / "output" / "simulation" / "metadata.json").write_text(json.dumps(SIM_META))
+        (case / "output" / "simulation" / "metadata.json").write_text(json.dumps(SIM_META), encoding="utf-8")
     return case
 
 
@@ -230,7 +230,7 @@ def test_find_reference_same_host_only():
             tr.mkdir(parents=True)
             meta = {**REF_META, "hostname": host,
                     "solve_stats": {**REF_META["solve_stats"], "total_lp_solves": total}}
-            (tr / "metadata.json").write_text(json.dumps(meta))
+            (tr / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
         runs = runtime.find_reference_runs([d], HOST.upper() + ".local")  # normalizado
         assert len(runs) == 1 and f"{os.sep}a{os.sep}" in runs[0]["source"], runs
         assert runs[0]["sim"] is None
@@ -246,7 +246,7 @@ def test_reference_prefers_same_modeling_and_reports_range():
         trn = _make_case(d / "trn", modeling="truncation")
         # truncation: LP mais barato e run MAIS RECENTE (antes vencia o desempate)
         meta = {**REF_META, "duration_seconds": 186.6, "completed_at": "2026-12-31T00:00:00Z"}
-        (trn / "output" / "training" / "metadata.json").write_text(json.dumps(meta))
+        (trn / "output" / "training" / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
         case = _make_case(d / "alvo", modeling="penalty", meta_host=None)
         plan = make_plan(str(case), load_settings(), machine={**MOCK_MACHINE,
                                                               "performance_cpus": 4})
@@ -371,7 +371,7 @@ def test_run_apply_config_only():
         t = _tools()
         r = t["run_apply"](str(case), {"forward_passes": 2, "iteration_limit": 3})
         assert r["status"] == "ok" and r["written"] is True, r
-        cfg = json.loads((case / "config.json").read_text())
+        cfg = json.loads((case / "config.json").read_text(encoding="utf-8"))
         assert cfg["training"]["selection"]["forward_passes"] == 2
         assert cfg["training"]["stopping_rules"][0]["limit"] == 3
         assert (case / "config.json.bak").exists()
@@ -385,7 +385,7 @@ def test_run_apply_config_only():
             assert "validação por schema pulada" in (neg.get("note") or ""), neg
         dry = t["run_apply"](str(case), {"simulation_scenarios": 5}, dry_run=True)
         assert dry["written"] is False, dry
-        assert json.loads((case / "config.json").read_text())["simulation"]["selection"][
+        assert json.loads((case / "config.json").read_text(encoding="utf-8"))["simulation"]["selection"][
             "num_scenarios"] == 100
 
 
@@ -448,7 +448,7 @@ def test_calibration_registry_by_machine_id():
         t = _tools()
         st = _wait(t, t["run_start"](str(case), override=True)["job_id"])
         assert st["state"] == "succeeded", st
-        reg = json.loads((d / "state" / "calibration.json").read_text())
+        reg = json.loads((d / "state" / "calibration.json").read_text(encoding="utf-8"))
         mid = machine.detect_machine_id()
         assert reg["version"] == 2 and len(reg["entries"]) == 1, reg
         assert reg["entries"][0]["machine_id"] == mid, reg
@@ -482,7 +482,7 @@ def test_job_lost_when_runner_dies():
         d = jobs.jobs_root(settings) / "20200101-000000-abcdef"
         d.mkdir()
         (d / "job.json").write_text(json.dumps({"job_id": d.name, "cmd": ["x"], "pid": 1,
-                                                "started_at": time.time() - 3600}))
+                                                "started_at": time.time() - 3600}), encoding="utf-8")
         (d / "heartbeat").touch()
         old = time.time() - 3600
         os.utime(d / "heartbeat", (old, old))

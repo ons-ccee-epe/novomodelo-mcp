@@ -80,7 +80,7 @@ def update_meta(settings: Settings, job_id: str, **fields: Any) -> None:
 
 def _exit_code(d: Path) -> int | None:
     try:
-        return int((d / "exit_code").read_text().strip())
+        return int((d / "exit_code").read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return None
 

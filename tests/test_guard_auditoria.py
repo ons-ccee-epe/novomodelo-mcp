@@ -34,10 +34,10 @@ def _edit_with_validation(monkeypatch, workspace, path):
 
 
 def test_caso_acima_do_workspace_nao_e_validado(tmp_path, monkeypatch):
-    (tmp_path / "config.json").write_text("{}")
+    (tmp_path / "config.json").write_text("{}", encoding="utf-8")
     ws = tmp_path / "ws"
     ws.mkdir()
-    (ws / "x.json").write_text(json.dumps({"a": 1}))
+    (ws / "x.json").write_text(json.dumps({"a": 1}), encoding="utf-8")
     env, validated = _edit_with_validation(monkeypatch, str(ws), ws / "x.json")
     assert validated == []
     assert env["case_validation"].startswith("pulada")
@@ -46,8 +46,8 @@ def test_caso_acima_do_workspace_nao_e_validado(tmp_path, monkeypatch):
 def test_caso_dentro_do_workspace_continua_validado(tmp_path, monkeypatch):
     case = tmp_path / "ws" / "caso"
     (case / "system").mkdir(parents=True)
-    (case / "config.json").write_text("{}")
-    (case / "system" / "x.json").write_text(json.dumps({"a": 1}))
+    (case / "config.json").write_text("{}", encoding="utf-8")
+    (case / "system" / "x.json").write_text(json.dumps({"a": 1}), encoding="utf-8")
     env, validated = _edit_with_validation(monkeypatch, str(tmp_path / "ws"),
                                            case / "system" / "x.json")
     assert validated == [str(case.resolve())] and env["case_validation"] == "ok"
@@ -67,8 +67,8 @@ def test_tipo_de_schema_que_nao_e_nome_simples_e_recusado(offline, tmp_path, tip
     schemas = tmp_path / "schemas"
     schemas.mkdir()
     for nome in ("D:segredo", "a.b", "config "):
-        (schemas / f"{nome}.schema.json").write_text('{"conteudo_de_fora": true}')
-    (tmp_path / "x.schema.json").write_text('{"conteudo_de_fora": true}')
+        (schemas / f"{nome}.schema.json").write_text('{"conteudo_de_fora": true}', encoding="utf-8")
+    (tmp_path / "x.schema.json").write_text('{"conteudo_de_fora": true}', encoding="utf-8")
     r = REF.read_schema(dataclasses.replace(offline, schemas_dir=str(schemas)), tipo)
     assert r["status"] == "error" and "conteudo_de_fora" not in json.dumps(r)
 
@@ -82,7 +82,7 @@ def test_schema_real_continua_lido(offline):
 
 def test_fora_da_raiz_das_docs_nao_revela_se_o_arquivo_existe(offline, tmp_path):
     existe = tmp_path / "existe.md"
-    existe.write_text("# segredo")
+    existe.write_text("# segredo", encoding="utf-8")
     a = REF.read_doc(offline, str(existe), 100)
     b = REF.read_doc(offline, str(tmp_path / "nao-existe.md"), 100)
     assert a["status"] == b["status"] == "error"

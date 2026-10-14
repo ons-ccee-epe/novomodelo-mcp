@@ -36,17 +36,17 @@ def _deck_edit_json(tmp_path, monkeypatch):
 
 def _write_config(tmp_path):
     cfg = tmp_path / "config.json"
-    cfg.write_text(json.dumps(CONFIG))
+    cfg.write_text(json.dumps(CONFIG), encoding="utf-8")
     return cfg
 
 
 def test_valor_fora_do_schema_e_recusado_sem_variavel_de_schemas(tmp_path, monkeypatch):
     edit = _deck_edit_json(tmp_path, monkeypatch)
     cfg = _write_config(tmp_path)
-    before = cfg.read_text()
+    before = cfg.read_text(encoding="utf-8")
     out = edit(str(cfg), [{"path": "training.selection.forward_passes", "value": "abc"}])
     assert out["status"] == "error"
-    assert cfg.read_text() == before
+    assert cfg.read_text(encoding="utf-8") == before
     assert not (tmp_path / "config.json.bak").exists()
 
 
@@ -55,5 +55,5 @@ def test_valor_valido_grava_com_backup(tmp_path, monkeypatch):
     cfg = _write_config(tmp_path)
     out = edit(str(cfg), [{"path": "training.selection.forward_passes", "value": 8}])
     assert out["status"] == "ok" and out["written"] is True
-    assert json.loads(cfg.read_text())["training"]["selection"]["forward_passes"] == 8
+    assert json.loads(cfg.read_text(encoding="utf-8"))["training"]["selection"]["forward_passes"] == 8
     assert (tmp_path / "config.json.bak").exists()

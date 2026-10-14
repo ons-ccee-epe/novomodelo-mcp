@@ -1,4 +1,5 @@
 """Testes de contrato do adaptador (pytest). Usam o novomodelo-bridge falso."""
+import os
 import sys
 from pathlib import Path
 
@@ -48,7 +49,7 @@ def _scripts_dir_with_fake_bridge(tmp_path, monkeypatch):
     scripts.mkdir()
     name = "novomodelo-bridge.exe" if os.name == "nt" else "novomodelo-bridge"
     fake = scripts / name
-    fake.write_text("#!/bin/sh\necho novomodelo-bridge 0.18.0\n")
+    fake.write_text("#!/bin/sh\necho novomodelo-bridge 0.18.0\n", encoding="utf-8")
     fake.chmod(0o755)
     real = sysconfig.get_path
     monkeypatch.setattr(sysconfig, "get_path",
@@ -60,7 +61,8 @@ def test_bridge_do_pacote_vem_antes_do_path(tmp_path, monkeypatch):
     from novomodelo_mcp.adapters.discovery import bridge_origin
     fake = _scripts_dir_with_fake_bridge(tmp_path, monkeypatch)
     monkeypatch.delenv("NOVOMODELO_MCP_BRIDGE_BIN", raising=False)
-    assert bridge_origin(load_settings()) == (fake, "pacote")
+    path, origin = bridge_origin(load_settings())
+    assert (os.path.normcase(path), origin) == (os.path.normcase(fake), "pacote")
 
 
 def test_variavel_vence_o_bridge_do_pacote(tmp_path, monkeypatch):
@@ -84,10 +86,11 @@ def test_sem_pacote_cai_no_path(tmp_path, monkeypatch):
     no_path.mkdir()
     import os
     name = "novomodelo-bridge.exe" if os.name == "nt" else "novomodelo-bridge"
-    (no_path / name).write_text("#!/bin/sh\n")
+    (no_path / name).write_text("#!/bin/sh\n", encoding="utf-8")
     (no_path / name).chmod(0o755)
     monkeypatch.setenv("PATH", str(no_path))
-    assert bridge_origin(load_settings()) == (str(no_path / name), "path")
+    path, origin = bridge_origin(load_settings())
+    assert (os.path.normcase(path), origin) == (os.path.normcase(no_path / name), "path")
 
 
 def test_server_info_mostra_a_origem_do_bridge(tmp_path, monkeypatch):

@@ -12,6 +12,7 @@ Nenhuma regra de conversão/validação mora aqui: só transporte e parsing.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from typing import Any
 
@@ -60,8 +61,9 @@ def run_bridge(argv: list[str], *, timeout: float | None = None,
     cmd = [binpath, *argv, "--json", "--no-color"]
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True,
+            cmd, capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout if timeout is not None else settings.default_timeout,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         )
     except FileNotFoundError:
         return _error(127, f"binário não encontrado/executável: {binpath}")

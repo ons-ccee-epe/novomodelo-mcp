@@ -44,14 +44,16 @@ def _write_fake_novomodelo(dir_path: Path, body: str) -> str:
         "argv = sys.argv[1:]\n"
         "if argv[:2] == ['--color', 'never']:\n"
         "    argv = argv[2:]\n"
-        + body
+        + body,
+        encoding="utf-8",
     )
     launcher = dir_path / ("novomodelo.cmd" if os.name == "nt" else "novomodelo")
     if os.name == "nt":
-        launcher.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n')
+        launcher.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
     else:
         launcher.write_text(
-            f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n'
+            f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n',
+            encoding="utf-8",
         )
         launcher.chmod(0o755)
     return str(launcher)

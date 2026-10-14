@@ -147,7 +147,7 @@ def normalize_hostname(name: str | None) -> str:
 
 def _read(path: Path) -> str | None:
     try:
-        return path.read_text()
+        return path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
 
@@ -185,7 +185,7 @@ def detect_cpu_count() -> int:
 def _sysctl_int(name: str) -> int | None:
     try:
         # argv fixa (ferramenta do SO + nome de chave interno), sem shell: nada vem do agente.
-        out = subprocess.run([_sysctl(), "-n", name], capture_output=True, text=True,  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+        out = subprocess.run([_sysctl(), "-n", name], capture_output=True, encoding="utf-8", errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                              timeout=5)
         return int(out.stdout.strip()) if out.returncode == 0 else None
     except (OSError, subprocess.SubprocessError, ValueError):
@@ -300,7 +300,8 @@ def _raw_machine_id() -> str | None:
             # argv fixa, sem shell: nada vem do agente.
             out = subprocess.run([system_tool("ioreg", "/usr/sbin"),  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                                   "-rd1", "-c", "IOPlatformExpertDevice"],
-                                 capture_output=True, text=True, timeout=5)
+                                 capture_output=True, encoding="utf-8", errors="replace",
+                                 timeout=5)
         except (OSError, subprocess.SubprocessError):
             return None
         m = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', out.stdout or "")

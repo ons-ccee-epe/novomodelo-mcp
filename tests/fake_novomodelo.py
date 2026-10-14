@@ -79,7 +79,7 @@ if subargv[:1] == ["init"]:
         print("error: target not empty (use --force)", file=sys.stderr)
         sys.exit(1)
     target.mkdir(parents=True, exist_ok=True)
-    (target / "config.json").write_text(json.dumps({"template": template}))
+    (target / "config.json").write_text(json.dumps({"template": template}), encoding="utf-8")
     print(f"Created {target} case directory from template '{template}'", file=sys.stderr)
     sys.exit(0)
 
@@ -90,9 +90,9 @@ if subargv[:1] == ["run"]:
     rc = int(os.environ.get("FAKE_NOVOMODELO_RC", "0"))
     if rc == 0:
         (out / "training").mkdir(parents=True, exist_ok=True)
-        (out / "training" / "_SUCCESS").write_text("")
+        (out / "training" / "_SUCCESS").write_text("", encoding="utf-8")
         if os.environ.get("FAKE_NOVOMODELO_META"):
-            (out / "training" / "metadata.json").write_text(os.environ["FAKE_NOVOMODELO_META"])
+            (out / "training" / "metadata.json").write_text(os.environ["FAKE_NOVOMODELO_META"], encoding="utf-8")
         print("fake run: done", flush=True)
     else:
         print("fake run: solver falhou", file=sys.stderr, flush=True)

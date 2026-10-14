@@ -49,4 +49,8 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["F", "B", "UP"]
+# PLW1514 (open/read_text/write_text sem `encoding`) só existe em preview; o
+# `explicit-preview-rules` liga essa e nenhuma outra regra de preview.
+select = ["F", "B", "UP", "PLW1514"]
+preview = true
+explicit-preview-rules = true

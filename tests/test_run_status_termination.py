@@ -35,10 +35,10 @@ def _output(tmp_path, training, simulation=None):
     (out / "training").mkdir(parents=True)
     if training is not None:
         text = training if isinstance(training, str) else json.dumps(training)
-        (out / "training" / "metadata.json").write_text(text)
+        (out / "training" / "metadata.json").write_text(text, encoding="utf-8")
     if simulation is not None:
         (out / "simulation").mkdir()
-        (out / "simulation" / "metadata.json").write_text(json.dumps(simulation))
+        (out / "simulation" / "metadata.json").write_text(json.dumps(simulation), encoding="utf-8")
     return out
 
 

@@ -39,8 +39,8 @@ Second section with the same title.
 @pytest.fixture
 def settings(tmp_path):
     (tmp_path / "math").mkdir()
-    (tmp_path / "math" / "hydro.md").write_text(PAGINA)
-    (tmp_path / "math" / "outra.md").write_text("---\ntitle: Outra\ndescription: Desc.\n---\n\n## A\n\nx\n")
+    (tmp_path / "math" / "hydro.md").write_text(PAGINA, encoding="utf-8")
+    (tmp_path / "math" / "outra.md").write_text("---\ntitle: Outra\ndescription: Desc.\n---\n\n## A\n\nx\n", encoding="utf-8")
     return dataclasses.replace(load_settings(), docs_dir=str(tmp_path), max_summary_chars=20000)
 
 

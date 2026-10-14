@@ -59,10 +59,10 @@ def test_find_case_dir_stops_at_workspace_root():
     from novomodelo_mcp.adapters.deck_io import find_case_dir
     from novomodelo_mcp.adapters.paths import allowed_roots
     with tempfile.TemporaryDirectory() as d:
-        (Path(d) / "config.json").write_text("{}")
+        (Path(d) / "config.json").write_text("{}", encoding="utf-8")
         ws = Path(d) / "ws"
         ws.mkdir()
-        (ws / "x.json").write_text("{}")
+        (ws / "x.json").write_text("{}", encoding="utf-8")
         os.environ["NOVOMODELO_MCP_WORKSPACE"] = str(ws)
         roots = allowed_roots(load_settings())
         assert find_case_dir(str(ws / "x.json"), stop_at=roots) is None

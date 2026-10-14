@@ -18,5 +18,5 @@ def fake_bin(script: str) -> str:
     if os.name != "nt":
         return str(path)
     launcher = Path(tempfile.gettempdir()) / f"novomodelo-mcp-{path.stem}.cmd"
-    launcher.write_text(f'@echo off\r\n"{sys.executable}" "{path}" %*\r\n')
+    launcher.write_text(f'@echo off\r\n"{sys.executable}" "{path}" %*\r\n', encoding="utf-8")
     return str(launcher)

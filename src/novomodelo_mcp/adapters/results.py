@@ -25,7 +25,7 @@ _AGGS = {"mean", "min", "max", "sum", "median", "std", "p10", "p90"}
 
 
 def _read_json(path: Path) -> Any:
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         return json.load(fh)
 
 

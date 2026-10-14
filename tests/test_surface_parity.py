@@ -78,8 +78,8 @@ def _binary(program: str) -> str | None:
 def _help(binary: str, words: list[str]) -> str:
     env = {**os.environ, "NO_COLOR": "1", "COLUMNS": "200", "TERM": "dumb",
            "PYTHONIOENCODING": "utf-8"}
-    proc = subprocess.run([binary, *words, "--help"], capture_output=True, text=True,
-                          timeout=60, env=env)
+    proc = subprocess.run([binary, *words, "--help"], capture_output=True, encoding="utf-8",
+                          errors="replace", timeout=60, env=env)
     return proc.stdout + proc.stderr
 
 

@@ -25,7 +25,7 @@ _WIN = sys.platform == "win32"
 
 def _write(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text)
+    tmp.write_text(text, encoding="utf-8")
     for _ in range(20):
         try:
             os.replace(tmp, path)

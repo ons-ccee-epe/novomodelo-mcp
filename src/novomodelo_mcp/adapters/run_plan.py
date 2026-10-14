@@ -43,7 +43,7 @@ CONVERGENCE_WARNING = (
 
 
 def _load(path: Path) -> Any:
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def iteration_limit_of(config: dict[str, Any]) -> int | None:

@@ -49,11 +49,11 @@ class _CaptureMCP:
 def _output(tmp_path, meta, report):
     out = tmp_path / "caso" / "output"
     (out / "training").mkdir(parents=True)
-    (out / "training" / "metadata.json").write_text(json.dumps(meta))
+    (out / "training" / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
     if report is not None:
         text = report if isinstance(report, str) else json.dumps(report)
-        (out / "training" / "scaling_report.json").write_text(text)
-    (tmp_path / "caso" / "config.json").write_text("{}")
+        (out / "training" / "scaling_report.json").write_text(text, encoding="utf-8")
+    (tmp_path / "caso" / "config.json").write_text("{}", encoding="utf-8")
     return out
 
 

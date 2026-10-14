@@ -34,7 +34,7 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
     cmd = [binpath, "--color", "never", *subargv]
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True,
+            cmd, capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout if timeout is not None else settings.default_timeout,
         )
     except subprocess.TimeoutExpired:
@@ -147,7 +147,7 @@ def validate_deck_cli(case_dir: str, *, output_dir: str | None = None,
     if output_dir:
         cmd += ["--output", output_dir]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
+        proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
                               timeout=settings.default_timeout)
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
@@ -191,7 +191,7 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
     cmd = [binpath, "--color", "never", "version"]
     # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout), nunca propagam ao stdio.
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
+        proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
                               timeout=settings.default_timeout)
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")

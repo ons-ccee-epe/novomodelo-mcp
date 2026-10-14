@@ -30,10 +30,10 @@ def tools(monkeypatch, tmp_path):
 def _output(tmp_path, training="{}", simulation=None):
     out = tmp_path / "output"
     (out / "training").mkdir(parents=True)
-    (out / "training" / "metadata.json").write_text(training)
+    (out / "training" / "metadata.json").write_text(training, encoding="utf-8")
     if simulation is not None:
         (out / "simulation").mkdir()
-        (out / "simulation" / "metadata.json").write_text(simulation)
+        (out / "simulation" / "metadata.json").write_text(simulation, encoding="utf-8")
     return str(out)
 
 
