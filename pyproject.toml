@@ -1,10 +1,25 @@
 [project]
 name = "novomodelo-mcp"
-version = "0.1.0"
+version = "0.18.0"
 description = "Servidor MCP (fachada local) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+authors = [
+    { name = "Operador Nacional do Sistema Elétrico - ONS" },
+    { name = "Câmara de Comercialização de Energia Elétrica - CCEE" },
+    { name = "Empresa de Pesquisa Energética - EPE" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "mcp>=1.2.0,<2",  # mcp 2.x renomeou FastMCP->MCPServer e quebra o import; manter <2
     "polars>=1.0",

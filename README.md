@@ -290,7 +290,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
 **Diagnóstico**
-- `server_info()`: binários, versões das peças (`versoes`), se há versão nova (`versao_nova`), workspace, docs, state dir e settings
+- `server_info()`: a versão do MCP (`versao_mcp`), binários, versões das peças (`versoes`), se há versão nova (`versao_nova`), workspace, docs, state dir e settings
 
 ## Estrutura
 
@@ -378,6 +378,10 @@ novomodelo na mesma tag do pin do `novomodelo-python`. Se o nome antigo reaparec
 **Temporário, enquanto o MCP vive fora do repo do novomodelo:** o Dependabot abre um PR para a `develop` quando sai uma `novomodelo-python` nova. Ao
 aceitar, suba junto o `ref` do job `rename-guard` em `.github/workflows/ci.yml` para a
 mesma tag, e atualize o novomodelo e o bridge na máquina para a mesma versão.
+
+A versão do MCP (`version` no `pyproject.toml`) é a do novomodelo; uma correção só do MCP
+vira `.postN` (ex.: `0.18.0.post1`). `tests/test_package_metadata.py` confere que a versão
+acompanha o pin da biblioteca e que o `initialize` anuncia a versão do MCP.
 
 ## Licença
 

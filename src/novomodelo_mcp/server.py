@@ -5,6 +5,8 @@ import functools
 
 from mcp.server.fastmcp import FastMCP
 
+from . import __version__
+
 from .adapters import versions
 
 from .adapters.discovery import bridge_origin, find_novomodelo, tool_version
@@ -77,6 +79,8 @@ def build_server() -> FastMCP:
     """Constrói e configura o servidor com todas as ferramentas registradas."""
     settings = load_settings()
     server = FastMCP(SERVER_NAME, instructions=SERVER_INSTRUCTIONS)
+    # O FastMCP não recebe versão: sem isto o `initialize` anuncia a do SDK `mcp`.
+    server._mcp_server.version = __version__
     mcp = _WithVersionWarnings(server, settings)
 
     register_pre_run(mcp, settings)     # pré-rodada: check / convert / validate
@@ -106,6 +110,7 @@ def build_server() -> FastMCP:
             pieces, newer = {"erro": str(exc)}, {"erro": str(exc)}
         return {
             "server": f"{SERVER_NAME}-mcp",
+            "versao_mcp": __version__,
             "versoes": {**pieces, "esperada": versions.expected_version()},
             "versao_nova": newer,
             "bridge": {"path": bridge, "version": tool_version(bridge),

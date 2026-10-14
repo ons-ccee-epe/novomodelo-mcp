@@ -5,4 +5,11 @@ subcomando de CLI já existente (`novomodelo-bridge … --json`, `novomodelo …
 repassa o resultado. Ver docs/ no projeto Novomodelo (arquitetura e especificação).
 """
 
-__version__ = "0.1.0"
+from importlib import metadata
+
+from .names import MCP_DIST
+
+try:
+    __version__ = metadata.version(MCP_DIST)
+except metadata.PackageNotFoundError:  # fonte sem instalar (smoke com Python puro)
+    __version__ = "0+desconhecida"
