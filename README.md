@@ -354,6 +354,29 @@ A versão do MCP (`version` no `pyproject.toml`) é a do novomodelo; uma correç
 vira `.postN` (ex.: `0.18.0.post1`). `tests/test_package_metadata.py` confere que a versão
 acompanha o pin da biblioteca e que o `initialize` anuncia a versão do MCP.
 
+## Release
+
+`.github/workflows/release.yml` gera o pacote a partir de uma tag `v<versão>`, igual à
+`version` do `pyproject.toml` (com outra versão, o workflow falha):
+
+1. confere as docs embutidas contra o commit do `novomodelo-docs` gravado no manifesto e
+   roda os testes;
+2. gera o wheel e o sdist, e o `SHA256SUMS` dos dois;
+3. instala o wheel com `uv tool install` num diretório vazio, em Linux, macOS e Windows, e
+   confere pelo stdio a versão anunciada, as tools e o `server_info`
+   (`scripts/conferir_instalacao.py`);
+4. publica os arquivos no release do GitHub com o nome da tag.
+
+Quem cria a tag é quem mantém o repositório (`git tag v0.18.0 && git push origin v0.18.0`). Para
+ensaiar sem publicar, faça push numa branch `ensaio/<nome>` (ou use "Run workflow" na aba
+Actions, depois que o workflow estiver na branch padrão): os arquivos ficam como artefato
+da execução.
+
+Se a organização não permitir `contents: write` ao `GITHUB_TOKEN`, o job "Publicar no
+release" falha e o resto continua valendo. Nesse caso, baixe o artefato da execução e
+anexe à mão: `gh release create v<versão> novomodelo_mcp-*.whl novomodelo_mcp-*.tar.gz
+SHA256SUMS --title "novomodelo-mcp <versão>"`.
+
 ## Licença
 
 Apache-2.0 (ver `LICENSE`), alinhada ao ecossistema Novomodelo.
