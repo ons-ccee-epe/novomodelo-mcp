@@ -312,7 +312,7 @@ uv run ruff check src tests
 ```
 
 **Bateria de ponta a ponta** contra os programas reais (fora do CI): sobe o servidor como um
-cliente MCP, confere as anotações que ele anuncia e chama as 33 tools num rascunho dentro do
+cliente MCP, confere as anotações que ele anuncia e chama todas as tools num rascunho dentro do
 workspace (`<workspace>/_e2e/<data-hora>/`). As tools do bridge usam os decks mínimos públicos do
 `novomodelo-bridge` (`tests/decks/newave_mini` e `decomp_mini`); sem `--bridge-repo`, elas ficam como PULADAS:
 
