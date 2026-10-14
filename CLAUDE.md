@@ -25,6 +25,11 @@ uv run pytest                        # full suite (after uv sync)
 uv run ruff check . && uv run ruff format --check .   # as CI runs it
 ```
 
+No `PYTHONPATH` is needed. If `import novomodelo_mcp` fails inside the venv, check
+whether the checkout is in a synced folder (iCloud, OneDrive): it marks the `.venv`
+`.pth` files hidden, and Python skips hidden `.pth` files. Keep the environment outside
+it with `UV_PROJECT_ENVIRONMENT` (see README, "Pasta sincronizada").
+
 ## Rules
 
 Path-scoped rules in `.claude/rules/` load automatically when a matching file is

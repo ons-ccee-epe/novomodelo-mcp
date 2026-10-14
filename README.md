@@ -37,6 +37,12 @@ uv run novomodelo-mcp      # sobe o servidor no transporte stdio
 > **Rede corporativa:** sem `--system-certs` (ou `UV_SYSTEM_CERTS=1`), o `uv` pode
 > falhar no PyPI com `UnknownIssuer` por causa do proxy que reassina certificados.
 
+> **Pasta sincronizada (iCloud, OneDrive):** não desenvolva nem instale dentro dela. O
+> iCloud marca os arquivos `.pth` do `.venv` como ocultos, e o Python ignora `.pth`
+> ocultos: o `import novomodelo_mcp` falha, e parece faltar `PYTHONPATH`. Se o checkout
+> precisa ficar ali, ponha o ambiente fora:
+> `UV_PROJECT_ENVIRONMENT=~/.venvs/novomodelo-mcp uv sync` (e o mesmo valor no `uv run`).
+
 O servidor fala **stdio**: não abre porta e é iniciado pelo cliente MCP como
 subprocesso. A única requisição externa é a do `server_info` (ver *Versões e rede*).
 
@@ -58,7 +64,6 @@ Exemplo chamando o Python do venv direto (arranque rápido, sem rebuild):
       "command": "/caminho/para/<repositório anterior>/.venv/bin/python",
       "args": ["-m", "novomodelo_mcp"],
       "env": {
-        "PYTHONPATH": "/caminho/para/<repositório anterior>/src",
         "PATH": "/caminho/para/.cargo/bin:/usr/bin:/bin",
         "NOVOMODELO_MCP_SOLVER_BIN": "/caminho/para/.cargo/bin/novomodelo",
         "NOVOMODELO_MCP_WORKSPACE": "/caminho/para/seus/estudos",
