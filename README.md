@@ -59,7 +59,10 @@ novomodelo-mcp configurar --cliente claude-desktop --workspace ~/estudos        
 O comando grava a entrada `novomodelo` com o **caminho absoluto** do executável deste
 pacote (o release do novomodelo publica outro `novomodelo-mcp`, e o nome solto pegaria o
 primeiro do `PATH`) e, se informado, `NOVOMODELO_MCP_WORKSPACE`. Altera só essa entrada;
-o resto do arquivo é mantido. Antes de gravar faz backup `<arquivo>.bak-AAAAMMDD-HHMMSS`;
+o resto do arquivo é mantido. Uma entrada `novomodelo` que já exista é **substituída
+inteira**: o cliente passa a usar o executável deste pacote, e variáveis de
+desenvolvimento como `PYTHONPATH`, `NOVOMODELO_MCP_DOCS_DIR` e caminhos de binários saem
+(o backup guarda a entrada anterior). Antes de gravar faz backup `<arquivo>.bak-AAAAMMDD-HHMMSS`;
 rodar de novo sem mudança não grava nada. `--mostrar` imprime só o trecho que mudaria,
 sem tocar em nada.
 
