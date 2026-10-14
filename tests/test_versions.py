@@ -123,22 +123,15 @@ def _bridge_do_pacote(monkeypatch):
         "bridge": {"versao": ler(s)["bridge"]["versao"], "origem": "pacote"}})
 
 
-def test_executavel_mais_novo_manda_atualizar_o_mcp_e_nunca_rebaixar(pecas, monkeypatch):
+def test_executavel_mais_novo_que_o_mcp_manda_voltar_ou_esperar_o_mcp(pecas, monkeypatch):
     estado, _ = pecas
     estado["executavel"] = "0.18.1"
     _bridge_do_pacote(monkeypatch)
-    avisos = V.version_warnings(object())
-    assert len(avisos) == 1, avisos
-    assert "atualize o MCP para 0.18.1" in avisos[0]
-    assert "uv tool install --force" in avisos[0] and "novomodelo_mcp-0.18.1" in avisos[0]
-    assert "/releases/tag/v0.18.1" in avisos[0]
-    assert "v0.18.0/novomodelo-cli-installer" not in avisos[0]
-
-
-def test_mcp_atras_diz_que_o_bridge_e_a_biblioteca_vem_junto(pecas):
-    estado, _ = pecas
-    estado["executavel"] = "0.18.1"
-    assert "vêm junto" in V.version_warnings(object())[0]
+    [aviso] = V.version_warnings(object())
+    assert "mais nova que a do MCP (0.18.0)" in aviso
+    assert "o MCP 0.18.1 pode ainda não ter saído" in aviso
+    assert "v0.18.0/novomodelo-cli-installer" in aviso and "instalar_novomodelo" in aviso
+    assert "novomodelo_mcp-0.18.1" not in aviso and "/releases/tag/v0.18.1" not in aviso
 
 
 def test_executavel_mais_velho_manda_instalar_a_versao_do_mcp(pecas):
@@ -148,11 +141,11 @@ def test_executavel_mais_velho_manda_instalar_a_versao_do_mcp(pecas):
     assert "v0.18.0/novomodelo-cli-installer" in aviso and "instalar_novomodelo" in aviso
 
 
-def test_bridge_instalado_a_parte_e_atrasado_ganha_linha_propria(pecas):
+def test_bridge_instalado_a_parte_e_mais_novo_volta_para_a_versao_do_mcp(pecas):
     estado, _ = pecas
-    estado["executavel"] = "0.18.1"
-    avisos = V.version_warnings(object())
-    assert len(avisos) == 2 and "novomodelo-bridge==0.18.1" in avisos[1]
+    estado["bridge"] = "0.18.1"
+    [aviso] = V.version_warnings(object())
+    assert "mais nova que a do MCP (0.18.0)" in aviso and "novomodelo-bridge==0.18.0" in aviso
 
 
 def test_bridge_do_pacote_atras_tem_o_comando_do_mcp(pecas, monkeypatch):
@@ -165,15 +158,13 @@ def test_bridge_do_pacote_atras_tem_o_comando_do_mcp(pecas, monkeypatch):
 
 @pytest.mark.parametrize("executavel", ["0.17.0", "0.18.0", "0.18.1", None])
 @pytest.mark.parametrize("bridge", ["0.17.0", "0.18.0", "0.18.1"])
-def test_nenhum_aviso_aponta_para_versao_abaixo_da_mais_nova(pecas, executavel, bridge):
+def test_nenhum_aviso_manda_instalar_versao_diferente_da_do_mcp(pecas, executavel, bridge):
     estado, _ = pecas
     estado.update(executavel=executavel, bridge=bridge)
-    alvo = max(v for v in ("0.18.0", executavel, bridge) if v)
     texto = " ".join(V.version_warnings(object()))
-    for velha in ("0.17.0", "0.18.0", "0.18.1"):
-        if velha < alvo:
-            assert f"v{velha}/novomodelo-cli-installer" not in texto
-            assert f"=={velha}" not in texto and f"novomodelo_mcp-{velha}" not in texto
+    for outra in ("0.17.0", "0.18.1"):
+        assert f"v{outra}/novomodelo-cli-installer" not in texto
+        assert f"=={outra}" not in texto and f"novomodelo_mcp-{outra}" not in texto
 
 
 def test_leitura_das_pecas_uma_vez_por_processo(pecas):
@@ -306,18 +297,21 @@ def _respostas(monkeypatch, tag="v0.19.0", bridge="0.19.0", atraso=0.0):
     monkeypatch.setattr(V, "_open", _abrir)
 
 
-def test_release_mais_novo_mostra_o_comando_e_o_link_do_mcp(pecas, monkeypatch):
-    _respostas(monkeypatch)
-    nova = V.update_check(object())
-    assert nova["novomodelo"]["mais_recente"] == "0.19.0" and nova["novomodelo"]["comando"]
-    assert nova["bridge"]["mais_recente"] == "0.19.0"
-    assert nova["mcp"]["link"].endswith("/releases/tag/v0.19.0")
-
-
-def test_release_mais_novo_traz_o_comando_do_mcp(pecas, monkeypatch):
+def test_release_mais_novo_nao_da_o_mcp_novo_como_existente(pecas, monkeypatch):
     _respostas(monkeypatch)
     mcp = V.update_check(object())["mcp"]
-    assert "uv tool install --force" in mcp["comando"] and "novomodelo_mcp-0.19.0" in mcp["comando"]
+    assert mcp["status"] == "aguardando" and "link" not in mcp and "comando" not in mcp
+    assert "o MCP 0.19.0 pode ainda não ter saído" in mcp["nota"]
+    assert "página do guia" in mcp["nota"]
+
+
+def test_release_mais_novo_nao_manda_instalar_so_o_executavel(pecas, monkeypatch):
+    _respostas(monkeypatch)
+    nova = V.update_check(object())
+    assert nova["novomodelo"]["status"] == "nova" and nova["novomodelo"]["mais_recente"] == "0.19.0"
+    assert "comando" not in nova["novomodelo"]
+    assert "mantenha o executável na versão do MCP (0.18.0)" in nova["novomodelo"]["nota"]
+    assert "comando" not in nova["bridge"] and nova["bridge"]["mais_recente"] == "0.19.0"
 
 
 def test_versao_atual_nao_sugere_atualizar(pecas, monkeypatch):

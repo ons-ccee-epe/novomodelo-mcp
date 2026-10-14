@@ -130,39 +130,31 @@ def _bridge_command(version: str, origin: str | None = None) -> str:
 
 
 def _piece_warnings(settings, expected: str) -> list[str]:
-    """Avisos com a peça mais nova como alvo: quem está atrás é atualizado, nunca rebaixado.
-
-    O MCP traz a biblioteca, o bridge do pacote e as docs; se ele é quem está atrás
-    (o executável já é mais novo), o aviso manda atualizar o MCP, não rebaixar a peça.
-    """
+    """Avisos com a versão do MCP como alvo: a peça mais velha sobe até ela, e a mais nova
+    volta para ela, porque o MCP da versão mais nova pode ainda não ter saído (o
+    repositório do MCP é privado e não dá para conferir)."""
     pieces = local_versions(settings)
-    found = {key: normalize_version(piece["versao"]) for key, piece in pieces.items()}
-    target = max((v for v in (expected, *found.values()) if v), key=_version_key)
-    texts = {
-        "executavel": ("executável novomodelo", cli_install_command(target)),
-        "biblioteca": ("biblioteca novomodelo-python", mcp_install_command(target)),
-        "bridge": (BRIDGE_CLI, _bridge_command(target, pieces["bridge"].get("origem"))),
-        "docs": ("docs embutidas", mcp_install_command(target)),
+    actions = {
+        "executavel": ("executável novomodelo",
+                       f"{ASK_AGENT_TO_INSTALL}. Manual: {cli_install_command(expected)}"),
+        "biblioteca": ("biblioteca novomodelo-python", mcp_install_command(expected)),
+        "bridge": (BRIDGE_CLI, _bridge_command(expected, pieces["bridge"].get("origem"))),
+        "docs": ("docs embutidas", mcp_install_command(expected)),
     }
-    bundled = {"biblioteca", "docs"} | ({"bridge"} if pieces["bridge"].get("origem") == "pacote"
-                                       else set())
     lines = []
-    if _version_key(expected) < _version_key(target):
-        newer = ", ".join(texts[k][0] for k, v in found.items() if v == target)
-        lines.append(f"o MCP ({expected}) está atrás de {newer} ({target}): atualize o MCP "
-                     f"para {target}: {mcp_install_command(target)}")
-    for key, (label, command) in texts.items():
-        version = found[key]
-        if version is None and key == "docs":
-            continue
-        action = (f"{ASK_AGENT_TO_INSTALL}. Manual: {command}" if key == "executavel"
-                  else None)
+    for key, (label, action) in actions.items():
+        version = normalize_version(pieces[key]["versao"])
+        verb = "" if key == "executavel" else "Instale: "
         if version is None:
-            lines.append(f"{label} {pieces[key]['motivo']}. {action or f'Instale: {command}'}")
-        elif _version_key(version) < _version_key(target) and not (
-                key in bundled and version == expected):
-            lines.append(f"{label} na versão {version}; a mais nova encontrada é {target}. "
-                         f"{action or f'Atualize: {command}'}")
+            if key != "docs":
+                lines.append(f"{label} {pieces[key]['motivo']}. {verb}{action}")
+        elif _version_key(version) < _version_key(expected):
+            verb = "" if key == "executavel" else "Atualize: "
+            lines.append(f"{label} na versão {version}; a do MCP é {expected}. {verb}{action}")
+        elif _version_key(version) > _version_key(expected):
+            lines.append(f"{label} na versão {version}, mais nova que a do MCP ({expected}); o "
+                         f"MCP {version} pode ainda não ter saído (a página do guia avisa "
+                         f"quando sair). Até lá, volte para a {expected}: {action}")
     return lines
 
 
@@ -286,8 +278,9 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     """Há versão nova do novomodelo, do bridge e do MCP? Consulta no máximo uma vez a
     cada `UPDATE_TTL_S`: um cliente aberto há horas também vê um lançamento.
 
-    O MCP é inferido pelo novomodelo (o repositório do MCP é privado). Todo o
-    trabalho cabe em `budget_s`; o que não responder a tempo vira aviso.
+    O repositório do MCP é privado: um novomodelo novo não garante o MCP da mesma versão,
+    então nada novo vem com comando de instalação (instalar só uma peça desalinha as
+    outras). Todo o trabalho cabe em `budget_s`; o que não responder a tempo vira aviso.
     """
     if "resultado" in _UPDATE and time.monotonic() - _UPDATE["quando"] < UPDATE_TTL_S:
         return _UPDATE["resultado"]
@@ -306,13 +299,18 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     bridge = _newer(current, got["bridge"], lambda d: d["info"]["version"], BRIDGE_PAGE,
                     lambda v: _bridge_command(v, origin))
     if cli["status"] == "nova":
-        mcp = {"status": "nova", "mais_recente": cli["mais_recente"],
-               "link": f"{MCP_RELEASE_TAG_URL}v{cli['mais_recente']}",
-               "comando": mcp_install_command(cli["mais_recente"]),
-               "nota": "inferida pela versão do novomodelo; atualize as três peças juntas, "
-                       "na mesma versão"}
+        newest = cli["mais_recente"]
+        note = (f"o novomodelo {newest} saiu; o MCP {newest} pode ainda não ter saído (a "
+                f"página do guia avisa quando sair). Até lá, mantenha o executável na versão "
+                f"do MCP ({current}).")
+        cli = {k: v for k, v in cli.items() if k != "comando"} | {"nota": note}
+        mcp = {"status": "aguardando", "novomodelo": newest, "nota": note}
     else:
         mcp = {"status": cli["status"], "nota": "inferida pela versão do novomodelo"}
+    if bridge["status"] == "nova":
+        bridge = {k: v for k, v in bridge.items() if k != "comando"} | {
+            "nota": f"atualize junto com o MCP {bridge['mais_recente']}, quando ele sair; até "
+                    f"lá, mantenha o bridge na versão do MCP ({current})."}
     _UPDATE["resultado"] = {"novomodelo": cli, "bridge": bridge, "mcp": mcp}
     _UPDATE["quando"] = time.monotonic()
     return _UPDATE["resultado"]

@@ -99,7 +99,7 @@ def build_server() -> FastMCP:
         """Diagnóstico do próprio MCP: binários, versões e se há versão nova.
 
         `versoes`: executável, biblioteca, bridge e docs, com a versão esperada.
-        `versao_nova`: consulta, uma vez por sessão e em até alguns segundos, os
+        `versao_nova`: consulta, no máximo a cada 6 horas e em até alguns segundos, os
         releases do novomodelo e do bridge (domínios oficiais); sem rede, diz que
         não foi possível verificar e mostra onde conferir.
         """
