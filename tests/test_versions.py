@@ -87,6 +87,36 @@ def test_peca_ausente_tem_aviso_proprio(pecas):
     assert "novomodelo-cli-installer" in avisos[0]
 
 
+PECA_AO_AGENTE = "Peça ao agente: “instale o executável do novomodelo” (tool instalar_novomodelo)"
+
+
+def _primeiro_o_agente_depois_o_manual(aviso):
+    agente, manual = aviso.index(PECA_AO_AGENTE), aviso.index("Manual: ")
+    assert agente < manual
+    assert "novomodelo-cli-installer" in aviso[manual:]
+    assert "novomodelo-cli-installer" not in aviso[:manual]
+
+
+def test_executavel_ausente_sugere_primeiro_pedir_ao_agente(pecas):
+    estado, _ = pecas
+    estado["executavel"] = None
+    [aviso] = V.version_warnings(object())
+    _primeiro_o_agente_depois_o_manual(aviso)
+
+
+def test_executavel_em_outra_versao_sugere_primeiro_pedir_ao_agente(pecas):
+    estado, _ = pecas
+    estado["executavel"] = "0.17.0"
+    [aviso] = V.version_warnings(object())
+    _primeiro_o_agente_depois_o_manual(aviso)
+
+
+def test_instrucoes_do_servidor_usam_a_mesma_frase():
+    from novomodelo_mcp.server import SERVER_INSTRUCTIONS
+    assert "“instale o executável do novomodelo”" in SERVER_INSTRUCTIONS
+    assert "`instalar_novomodelo`" in SERVER_INSTRUCTIONS
+
+
 def _bridge_do_pacote(monkeypatch):
     ler = V._read_local
     monkeypatch.setattr(V, "_read_local", lambda s: ler(s) | {

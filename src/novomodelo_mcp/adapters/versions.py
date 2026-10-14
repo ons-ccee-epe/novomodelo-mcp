@@ -111,6 +111,10 @@ def cli_install_command(version: str) -> str:
     return f"curl --proto '=https' --tlsv1.2 -LsSf {base}/novomodelo-cli-installer.sh | sh"
 
 
+ASK_AGENT_TO_INSTALL = ("Peça ao agente: “instale o executável do novomodelo” "
+                        "(tool instalar_novomodelo)")
+
+
 def mcp_install_command(version: str) -> str:
     wheel = f"novomodelo_mcp-{version}-py3-none-any.whl"
     return (f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
@@ -133,8 +137,7 @@ def _piece_warnings(settings, expected: str) -> list[str]:
     found = {key: normalize_version(piece["versao"]) for key, piece in pieces.items()}
     target = max((v for v in (expected, *found.values()) if v), key=_version_key)
     texts = {
-        "executavel": ("executável novomodelo",
-                       f"{cli_install_command(target)} (ou a tool instalar_novomodelo)"),
+        "executavel": ("executável novomodelo", cli_install_command(target)),
         "biblioteca": ("biblioteca novomodelo-python", mcp_install_command(target)),
         "bridge": (BRIDGE_CLI, _bridge_command(target, pieces["bridge"].get("origem"))),
         "docs": ("docs embutidas", mcp_install_command(target)),
@@ -150,12 +153,14 @@ def _piece_warnings(settings, expected: str) -> list[str]:
         version = found[key]
         if version is None and key == "docs":
             continue
+        action = (f"{ASK_AGENT_TO_INSTALL}. Manual: {command}" if key == "executavel"
+                  else None)
         if version is None:
-            lines.append(f"{label} {pieces[key]['motivo']}. Instale: {command}")
+            lines.append(f"{label} {pieces[key]['motivo']}. {action or f'Instale: {command}'}")
         elif _version_key(version) < _version_key(target) and not (
                 key in bundled and version == expected):
             lines.append(f"{label} na versão {version}; a mais nova encontrada é {target}. "
-                         f"Atualize: {command}")
+                         f"{action or f'Atualize: {command}'}")
     return lines
 
 
