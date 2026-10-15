@@ -131,8 +131,9 @@ pergunta vem na mensagem seguinte.
 O MCP conversa com o executável, a biblioteca (`novomodelo-python`) e o bridge da
 mesma versão (o pin exato da biblioteca no pacote). Se alguma peça estiver em outra
 versão, ou faltar, **toda** resposta traz `avisos_de_versao` com o comando para
-corrigir; a chamada continua. O alvo é sempre a versão do MCP: uma peça mais nova que ele
-volta para a versão do MCP, porque o MCP da versão mais nova pode ainda não ter saído.
+corrigir; a chamada continua. Nenhum aviso manda rebaixar uma peça: a mais velha que o
+MCP sobe até a versão dele; a mais nova pode ser usada, e o aviso aponta a página do guia
+para conferir se já saiu o MCP dessa versão (o MCP não tem como saber).
 
 A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo e do
 bridge (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo
@@ -142,7 +143,8 @@ apenas nestes domínios:
 `pypi.org/pypi/novomodelo-bridge/*` e, como destino de download,
 `release-assets.githubusercontent.com`. Um novomodelo ou um bridge novo aparece em
 `versao_nova` sem comando de instalação: o MCP da mesma versão pode ainda não ter saído
-(o repositório do MCP é privado), e a página do guia avisa quando sair. O HTTPS usa os certificados do sistema (`truststore`), o que permite
+(o repositório do MCP é privado), e a página do guia avisa quando sair. O HTTPS usa os
+certificados do sistema (`truststore`), o que permite
 atravessar proxy corporativo. Sem rede, a resposta diz que não foi possível
 verificar e onde conferir. Documentação e schemas são embutidos e não usam a rede.
 
