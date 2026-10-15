@@ -65,7 +65,9 @@ inteira**: o cliente passa a usar o executável deste pacote, e variáveis de
 desenvolvimento como `PYTHONPATH`, `NOVOMODELO_MCP_DOCS_DIR` e caminhos de binários saem
 (o backup guarda a entrada anterior). Antes de gravar faz backup `<arquivo>.bak-AAAAMMDD-HHMMSS`;
 rodar de novo sem mudança não grava nada. `--mostrar` imprime só o trecho que mudaria,
-sem tocar em nada.
+sem tocar em nada. Se o cliente não está na máquina (nem o programa nem a pasta de
+configuração dele), o comando avisa e grava mesmo assim: a configuração fica pronta para
+quando o cliente for instalado.
 
 | Cliente | Arquivo | Tools de leitura |
 |---|---|---|
@@ -129,15 +131,23 @@ pergunta vem na mensagem seguinte.
 O MCP conversa com o executável, a biblioteca (`novomodelo-python`) e o bridge da
 mesma versão (o pin exato da biblioteca no pacote). Se alguma peça estiver em outra
 versão, ou faltar, **toda** resposta traz `avisos_de_versao` com o comando para
-corrigir; a chamada continua.
+corrigir; a chamada continua. Nenhum aviso manda rebaixar uma peça: a mais velha que o
+MCP sobe até a versão dele; a mais nova pode ser usada, e o aviso aponta a página do guia
+para conferir se já saiu o MCP dessa versão (o MCP não tem como saber).
 
 A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo e do
-bridge (uma vez por sessão, em poucos segundos), e pelo `instalar_novomodelo`, e
+bridge (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo
+`instalar_novomodelo`, e
 apenas nestes domínios:
 `github.com/ons-ccee-epe/*`, `api.github.com/repos/ons-ccee-epe/*`,
 `pypi.org/pypi/novomodelo-bridge/*` e, como destino de download,
-`release-assets.githubusercontent.com`. A versão nova do MCP é inferida pela do
-novomodelo. O HTTPS usa os certificados do sistema (`truststore`), o que permite
+`release-assets.githubusercontent.com`. Um novomodelo ou um bridge novo aparece em
+`versao_nova` sem comando de instalação: o MCP da mesma versão pode ainda não ter saído
+(o repositório do MCP é privado), e a página do guia avisa quando sair. Junto vêm as
+mudanças da versão nova (as seções "Changed" e "Fixed" das notas do release no GitHub, as
+BREAKING primeiro, com teto de linhas) e o link das notas; o aviso de uma peça mais nova
+que o MCP repete as mudanças dela. O HTTPS usa os
+certificados do sistema (`truststore`), o que permite
 atravessar proxy corporativo. Sem rede, a resposta diz que não foi possível
 verificar e onde conferir. Documentação e schemas são embutidos e não usam a rede.
 
@@ -312,7 +322,7 @@ uv run ruff check src tests
 ```
 
 **Bateria de ponta a ponta** contra os programas reais (fora do CI): sobe o servidor como um
-cliente MCP, confere as anotações que ele anuncia e chama as 33 tools num rascunho dentro do
+cliente MCP, confere as anotações que ele anuncia e chama todas as tools num rascunho dentro do
 workspace (`<workspace>/_e2e/<data-hora>/`). As tools do bridge usam os decks mínimos públicos do
 `novomodelo-bridge` (`tests/decks/newave_mini` e `decomp_mini`); sem `--bridge-repo`, elas ficam como PULADAS:
 

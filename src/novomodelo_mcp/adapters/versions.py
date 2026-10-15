@@ -13,6 +13,7 @@ import json
 import re
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -25,8 +26,15 @@ from .discovery import bridge_origin, tool_version
 CLI_RELEASES = "https://github.com/ons-ccee-epe/novomodelo/releases"
 NOVOMODELO_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo/releases/latest"
 BRIDGE_PYPI = "https://pypi.org/pypi/novomodelo-bridge/json"
+BRIDGE_RELEASES = "https://github.com/ons-ccee-epe/novomodelo-bridge/releases"
+BRIDGE_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo-bridge/releases/latest"
 BRIDGE_PAGE = "https://pypi.org/project/novomodelo-bridge/"
 UPDATE_BUDGET_S = 3.0
+UPDATE_TTL_S = 6 * 3600
+NOTES_MAX_LINES = 6
+NOTES_MAX_LINE_CHARS = 200
+NOTES_MAX_CHARS = 1200
+_NOTES_SECTIONS = ("changed", "fixed")
 _MAX_BYTES = 64 * 1024 * 1024
 
 #: (host, prefixo de caminho) permitidos; o CDN do GitHub só como destino de redirecionamento.
@@ -111,6 +119,12 @@ def cli_install_command(version: str) -> str:
     return f"curl --proto '=https' --tlsv1.2 -LsSf {base}/novomodelo-cli-installer.sh | sh"
 
 
+#: A página de instalação no página de instalação; o teste confere que é a mesma do `guia/index.html`.
+GUIDE_URL = "<endereço interno>"
+ASK_AGENT_TO_INSTALL = ("Peça ao agente: “instale o executável do novomodelo” "
+                        "(tool instalar_novomodelo)")
+
+
 def mcp_install_command(version: str) -> str:
     wheel = f"novomodelo_mcp-{version}-py3-none-any.whl"
     return (f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
@@ -123,39 +137,46 @@ def _bridge_command(version: str, origin: str | None = None) -> str:
     return f"uv tool install --force {BRIDGE_CLI}=={version}"
 
 
-def _piece_warnings(settings, expected: str) -> list[str]:
-    """Avisos com a peça mais nova como alvo: quem está atrás é atualizado, nunca rebaixado.
+def _newer_piece_warning(label: str, version: str, expected: str) -> str:
+    name = label[0].upper() + label[1:]
+    verb = "estão" if label.startswith("as ") else "está"
+    return (f"{name} {verb} na {version} e o MCP na {expected}. Pode usar. Confira na página "
+            f"do guia ({GUIDE_URL}) se já saiu o MCP {version} e, quando sair, atualize as peças "
+            f"juntas. A validação da v1 é na {expected}. Se você atualizar {label}, avise no "
+            "card: os resultados deixam de ser comparáveis com os dos outros validadores.")
 
-    O MCP traz a biblioteca, o bridge do pacote e as docs; se ele é quem está atrás
-    (o executável já é mais novo), o aviso manda atualizar o MCP, não rebaixar a peça.
+
+def _piece_warnings(settings, expected: str) -> list[str]:
+    """Avisos com a versão do MCP como referência, sem nunca mandar rebaixar uma peça.
+
+    A peça mais velha sobe até a versão do MCP. A mais nova pode ser usada: o MCP não
+    sabe se já existe o MCP da versão dela (o repositório do MCP é privado), então o
+    aviso aponta a página do guia em vez de dar um comando.
     """
     pieces = local_versions(settings)
-    found = {key: normalize_version(piece["versao"]) for key, piece in pieces.items()}
-    target = max((v for v in (expected, *found.values()) if v), key=_version_key)
-    texts = {
-        "executavel": ("executável novomodelo",
-                       f"{cli_install_command(target)} (ou a tool instalar_novomodelo)"),
-        "biblioteca": ("biblioteca novomodelo-python", mcp_install_command(target)),
-        "bridge": (BRIDGE_CLI, _bridge_command(target, pieces["bridge"].get("origem"))),
-        "docs": ("docs embutidas", mcp_install_command(target)),
+    actions = {
+        "executavel": ("o executável novomodelo",
+                       f"{ASK_AGENT_TO_INSTALL}. Manual: {cli_install_command(expected)}"),
+        "biblioteca": ("a biblioteca novomodelo-python", mcp_install_command(expected)),
+        "bridge": (f"o {BRIDGE_CLI}", _bridge_command(expected, pieces["bridge"].get("origem"))),
+        "docs": ("as docs embutidas", mcp_install_command(expected)),
     }
-    bundled = {"biblioteca", "docs"} | ({"bridge"} if pieces["bridge"].get("origem") == "pacote"
-                                       else set())
     lines = []
-    if _version_key(expected) < _version_key(target):
-        newer = ", ".join(texts[k][0] for k, v in found.items() if v == target)
-        lines.append(f"o MCP ({expected}) está atrás de {newer} ({target}): atualize o MCP "
-                     f"para {target}: {mcp_install_command(target)}")
-    for key, (label, command) in texts.items():
-        version = found[key]
-        if version is None and key == "docs":
-            continue
+    for key, (label, action) in actions.items():
+        version = normalize_version(pieces[key]["versao"])
+        verb = "" if key == "executavel" else "Instale: "
+        name = label.split(" ", 1)[1]
         if version is None:
-            lines.append(f"{label} {pieces[key]['motivo']}. Instale: {command}")
-        elif _version_key(version) < _version_key(target) and not (
-                key in bundled and version == expected):
-            lines.append(f"{label} na versão {version}; a mais nova encontrada é {target}. "
-                         f"Atualize: {command}")
+            if key != "docs":
+                lines.append(f"{name} {pieces[key]['motivo']}. {verb}{action}")
+        elif _version_key(version) < _version_key(expected):
+            verb = "" if key == "executavel" else "Atualize: "
+            lines.append(f"{name} na versão {version}; a do MCP é {expected}. {verb}{action}")
+        elif _version_key(version) > _version_key(expected):
+            notes = {"executavel": ("novomodelo", CLI_RELEASES),
+                     "bridge": ("bridge", BRIDGE_RELEASES)}.get(key)
+            lines.append(_newer_piece_warning(label, version, expected)
+                         + (_notes_text(notes[0], version, notes[1]) if notes else ""))
     return lines
 
 
@@ -275,20 +296,92 @@ def _newer(current: str | None, fetched: dict[str, Any], extract, manual: str,
     return {"status": "nova", "mais_recente": latest, "comando": command(latest)}
 
 
-def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, Any]:
-    """Uma vez por processo: há versão nova do novomodelo, do bridge e do MCP?
+def _shorten(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit - 1].rsplit(" ", 1)[0] + "…"
 
-    O MCP é inferido pelo novomodelo (o repositório do MCP é privado). Todo o
-    trabalho cabe em `budget_s`; o que não responder a tempo vira aviso.
+
+def release_changes(body: str | None) -> list[str]:
+    """As linhas de "Changed" e "Fixed" das notas do release, as BREAKING primeiro.
+
+    Cada item vira uma linha (as continuações são juntadas), sem o negrito do markdown,
+    com teto de linhas e de caracteres; o que sobra vira "(mais N nas notas)".
     """
-    if "resultado" in _UPDATE:
+    items: list[str] = []
+    section = None
+    for raw in (body or "").splitlines():
+        line = raw.strip()
+        if heading := re.match(r"^#+\s*(.+)$", line):
+            section = heading.group(1).strip().lower()
+            continue
+        if section not in _NOTES_SECTIONS or not line:
+            continue
+        if re.match(r"^[-*]\s+", raw):
+            items.append(re.sub(r"^[-*]\s+", "", line))
+        elif items:
+            items[-1] += " " + line
+    items = [i.replace("**", "") for i in items]
+    items.sort(key=lambda i: "BREAKING" not in i)
+    lines: list[str] = []
+    for item in items:
+        line = _shorten(item, NOTES_MAX_LINE_CHARS)
+        if len(lines) == NOTES_MAX_LINES or sum(map(len, lines)) + len(line) > NOTES_MAX_CHARS:
+            break
+        lines.append(line)
+    if len(lines) < len(items):
+        lines.append(f"(mais {len(items) - len(lines)} nas notas)")
+    return lines
+
+
+def _release_notes(fetched: dict[str, Any], version: str, releases: str) -> dict[str, Any]:
+    """`notas` (o link) e, se o release lido é o da `version`, `mudancas`."""
+    data = fetched.get("dados") if isinstance(fetched, dict) else None
+    if isinstance(data, dict) and normalize_version(data.get("tag_name")) == version:
+        changes = release_changes(data.get("body"))
+        link = data.get("html_url") or f"{releases}/tag/v{version}"
+        return {"notas": link, **({"mudancas": changes} if changes else {})}
+    return {"notas": f"{releases}/tag/v{version}"}
+
+
+def _cached_notes(piece: str, version: str) -> dict[str, Any] | None:
+    if "resultado" not in _UPDATE or time.monotonic() - _UPDATE["quando"] >= UPDATE_TTL_S:
+        return None
+    notes = _UPDATE.get("notas", {}).get(piece)
+    return notes if notes and notes.get("versao") == version else None
+
+
+def _notes_text(piece: str, version: str, releases: str) -> str:
+    notes = _cached_notes(piece, version)
+    if notes and notes.get("mudancas"):
+        bullets = "".join(f"\n- {line}" for line in notes["mudancas"])
+        return f" Mudanças da {version}:{bullets}\nNotas: {notes['notas']}"
+    link = notes["notas"] if notes else f"{releases}/tag/v{version}"
+    return f" Notas da {version}: {link}"
+
+
+def _release_note(piece: str, newest: str, current: str | None) -> str:
+    return (f"o {piece} {newest} saiu; o MCP está na {current}. Confira na página do guia "
+            f"({GUIDE_URL}) se já saiu o MCP {newest} e, quando sair, atualize as peças juntas.")
+
+
+def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, Any]:
+    """Há versão nova do novomodelo, do bridge e do MCP? Consulta no máximo uma vez a
+    cada `UPDATE_TTL_S`: um cliente aberto há horas também vê um lançamento.
+
+    O repositório do MCP é privado: um novomodelo novo não garante o MCP da mesma versão,
+    então nada novo vem com comando de instalação (instalar só uma peça desalinha as
+    outras). Todo o trabalho cabe em `budget_s`; o que não responder a tempo vira aviso.
+    """
+    if "resultado" in _UPDATE and time.monotonic() - _UPDATE["quando"] < UPDATE_TTL_S:
         return _UPDATE["resultado"]
     pieces = local_versions(settings)
     current = expected_version() or pieces["executavel"]["versao"]
     origin = pieces["bridge"].get("origem")
-    pool = ThreadPoolExecutor(max_workers=2)
+    pool = ThreadPoolExecutor(max_workers=3)
     futures = {"novomodelo": pool.submit(fetch_json, NOVOMODELO_LATEST, timeout=budget_s),
-               "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s)}
+               "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s),
+               "bridge_notas": pool.submit(fetch_json, BRIDGE_LATEST, timeout=budget_s)}
     wait(futures.values(), timeout=budget_s)
     pool.shutdown(wait=False, cancel_futures=True)
     late = {"aviso_rede": f"tempo esgotado ({budget_s:g} s)"}
@@ -297,15 +390,28 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
                  cli_install_command)
     bridge = _newer(current, got["bridge"], lambda d: d["info"]["version"], BRIDGE_PAGE,
                     lambda v: _bridge_command(v, origin))
+    notes: dict[str, dict[str, Any]] = {}
+    if cli.get("mais_recente"):
+        notes["novomodelo"] = {"versao": cli["mais_recente"], **_release_notes(
+            got["novomodelo"], cli["mais_recente"], CLI_RELEASES)}
+    if bridge.get("mais_recente"):
+        notes["bridge"] = {"versao": bridge["mais_recente"], **_release_notes(
+            got["bridge_notas"], bridge["mais_recente"], BRIDGE_RELEASES)}
     if cli["status"] == "nova":
-        mcp = {"status": "nova", "mais_recente": cli["mais_recente"],
-               "link": f"{MCP_RELEASE_TAG_URL}v{cli['mais_recente']}",
-               "comando": mcp_install_command(cli["mais_recente"]),
-               "nota": "inferida pela versão do novomodelo; atualize as três peças juntas, "
-                       "na mesma versão"}
+        newest = cli["mais_recente"]
+        note = _release_note("novomodelo", newest, current)
+        cli = {k: v for k, v in cli.items() if k != "comando"} | {"nota": note} | {
+            k: v for k, v in notes["novomodelo"].items() if k != "versao"}
+        mcp = {"status": "a_conferir", "novomodelo": newest, "nota": note}
     else:
         mcp = {"status": cli["status"], "nota": "inferida pela versão do novomodelo"}
+    if bridge["status"] == "nova":
+        bridge = {k: v for k, v in bridge.items() if k != "comando"} | {
+            "nota": _release_note(BRIDGE_CLI, bridge["mais_recente"], current)} | {
+            k: v for k, v in notes["bridge"].items() if k != "versao"}
     _UPDATE["resultado"] = {"novomodelo": cli, "bridge": bridge, "mcp": mcp}
+    _UPDATE["notas"] = notes
+    _UPDATE["quando"] = time.monotonic()
     return _UPDATE["resultado"]
 
 

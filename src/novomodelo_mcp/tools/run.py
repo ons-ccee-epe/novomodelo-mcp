@@ -287,17 +287,19 @@ def register_run(mcp, settings: Settings) -> None:
         if st["state"] == "failed" or (st.get("treino") or {}).get("termination_reason") == "error":
             st.update(numeric_diagnosis(str(out)))
         if st["state"] in ("failed", "lost"):
-            st["stderr_tail"] = (jobs.job_logs(settings, job_id, lines=20) or {}).get("stderr")
+            st["stderr_tail"] = jobs.job_stderr(settings, job_id, lines=20)
         if st["state"] == "succeeded":
             harvest_calibrations(settings)
         return {"status": "ok", **st}
 
     @mcp.tool(annotations=READ_ONLY)
     def run_logs(job_id: str, lines: int = 100) -> dict:
-        """Últimas `lines` linhas de stdout/stderr do run (com teto de caracteres).
+        """Últimas `lines` linhas da saída do run (com teto de caracteres).
 
-        Durante o run, o `stderr` traz as linhas de progresso do novomodelo
-        (iteração, limites, gap), cortadas pelo teto.
+        `saida` junta o stdout e o stderr do novomodelo na ordem de chegada, com as
+        linhas do stderr marcadas `[stderr] `: o relatório do run (banner, progresso,
+        resumos) sai no stderr até a 0.18.0 e no stdout a partir da 0.18.1; avisos e
+        erros saem no stderr. Jobs de antes dessa junção trazem `stdout` e `stderr`.
         """
         logs = jobs.job_logs(settings, job_id, lines=max(1, lines),
                              max_chars=settings.max_summary_chars)

@@ -1,6 +1,6 @@
 [project]
 name = "novomodelo-mcp"
-version = "0.18.0"
+version = "0.18.0.post1"
 description = "Servidor MCP (fachada local) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
