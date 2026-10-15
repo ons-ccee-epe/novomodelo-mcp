@@ -63,7 +63,7 @@ def _tools(tmp_path, monkeypatch, out, state):
     monkeypatch.setattr(run_tools.jobs, "job_state",
                         lambda settings, job_id: {"job_id": job_id, "state": state,
                                                   "output": str(out)})
-    monkeypatch.setattr(run_tools.jobs, "job_logs", lambda *a, **k: {"stderr": "falhou"})
+    monkeypatch.setattr(run_tools.jobs, "job_stderr", lambda *a, **k: "falhou")
     monkeypatch.setattr(run_tools, "harvest_calibrations", lambda settings: 0)
     mcp = _CaptureMCP()
     run_tools.register_run(mcp, settings)

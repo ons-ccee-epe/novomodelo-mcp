@@ -85,6 +85,7 @@ def test_readme_nao_congela_contagem_nem_lista_de_liberacao():
     assert not re.search(r"\| (Só leitura|Escreve arquivos novos|Altera ou interrompe) \(\d+\)",
                          texto)
     assert not re.search(r'"mcp__novomodelo__\w+"', texto) and '"autoApprove": [' not in texto
+    assert not re.search(r"\b\d+ (tools|ferramentas)\b", texto)
 
 
 def test_lista_de_ferramentas_do_readme_bate_com_o_servidor():
