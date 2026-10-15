@@ -26,9 +26,15 @@ from .discovery import bridge_origin, tool_version
 CLI_RELEASES = "https://github.com/ons-ccee-epe/novomodelo/releases"
 NOVOMODELO_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo/releases/latest"
 BRIDGE_PYPI = "https://pypi.org/pypi/novomodelo-bridge/json"
+BRIDGE_RELEASES = "https://github.com/ons-ccee-epe/novomodelo-bridge/releases"
+BRIDGE_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo-bridge/releases/latest"
 BRIDGE_PAGE = "https://pypi.org/project/novomodelo-bridge/"
 UPDATE_BUDGET_S = 3.0
 UPDATE_TTL_S = 6 * 3600
+NOTES_MAX_LINES = 6
+NOTES_MAX_LINE_CHARS = 200
+NOTES_MAX_CHARS = 1200
+_NOTES_SECTIONS = ("changed", "fixed")
 _MAX_BYTES = 64 * 1024 * 1024
 
 #: (host, prefixo de caminho) permitidos; o CDN do GitHub só como destino de redirecionamento.
@@ -167,7 +173,10 @@ def _piece_warnings(settings, expected: str) -> list[str]:
             verb = "" if key == "executavel" else "Atualize: "
             lines.append(f"{name} na versão {version}; a do MCP é {expected}. {verb}{action}")
         elif _version_key(version) > _version_key(expected):
-            lines.append(_newer_piece_warning(label, version, expected))
+            notes = {"executavel": ("novomodelo", CLI_RELEASES),
+                     "bridge": ("bridge", BRIDGE_RELEASES)}.get(key)
+            lines.append(_newer_piece_warning(label, version, expected)
+                         + (_notes_text(notes[0], version, notes[1]) if notes else ""))
     return lines
 
 
@@ -287,6 +296,70 @@ def _newer(current: str | None, fetched: dict[str, Any], extract, manual: str,
     return {"status": "nova", "mais_recente": latest, "comando": command(latest)}
 
 
+def _shorten(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit - 1].rsplit(" ", 1)[0] + "…"
+
+
+def release_changes(body: str | None) -> list[str]:
+    """As linhas de "Changed" e "Fixed" das notas do release, as BREAKING primeiro.
+
+    Cada item vira uma linha (as continuações são juntadas), sem o negrito do markdown,
+    com teto de linhas e de caracteres; o que sobra vira "(mais N nas notas)".
+    """
+    items: list[str] = []
+    section = None
+    for raw in (body or "").splitlines():
+        line = raw.strip()
+        if heading := re.match(r"^#+\s*(.+)$", line):
+            section = heading.group(1).strip().lower()
+            continue
+        if section not in _NOTES_SECTIONS or not line:
+            continue
+        if re.match(r"^[-*]\s+", raw):
+            items.append(re.sub(r"^[-*]\s+", "", line))
+        elif items:
+            items[-1] += " " + line
+    items = [i.replace("**", "") for i in items]
+    items.sort(key=lambda i: "BREAKING" not in i)
+    lines: list[str] = []
+    for item in items:
+        line = _shorten(item, NOTES_MAX_LINE_CHARS)
+        if len(lines) == NOTES_MAX_LINES or sum(map(len, lines)) + len(line) > NOTES_MAX_CHARS:
+            break
+        lines.append(line)
+    if len(lines) < len(items):
+        lines.append(f"(mais {len(items) - len(lines)} nas notas)")
+    return lines
+
+
+def _release_notes(fetched: dict[str, Any], version: str, releases: str) -> dict[str, Any]:
+    """`notas` (o link) e, se o release lido é o da `version`, `mudancas`."""
+    data = fetched.get("dados") if isinstance(fetched, dict) else None
+    if isinstance(data, dict) and normalize_version(data.get("tag_name")) == version:
+        changes = release_changes(data.get("body"))
+        link = data.get("html_url") or f"{releases}/tag/v{version}"
+        return {"notas": link, **({"mudancas": changes} if changes else {})}
+    return {"notas": f"{releases}/tag/v{version}"}
+
+
+def _cached_notes(piece: str, version: str) -> dict[str, Any] | None:
+    if "resultado" not in _UPDATE or time.monotonic() - _UPDATE["quando"] >= UPDATE_TTL_S:
+        return None
+    notes = _UPDATE.get("notas", {}).get(piece)
+    return notes if notes and notes.get("versao") == version else None
+
+
+def _notes_text(piece: str, version: str, releases: str) -> str:
+    notes = _cached_notes(piece, version)
+    if notes and notes.get("mudancas"):
+        bullets = "".join(f"\n- {line}" for line in notes["mudancas"])
+        return f" Mudanças da {version}:{bullets}\nNotas: {notes['notas']}"
+    link = notes["notas"] if notes else f"{releases}/tag/v{version}"
+    return f" Notas da {version}: {link}"
+
+
 def _release_note(piece: str, newest: str, current: str | None) -> str:
     return (f"o {piece} {newest} saiu; o MCP está na {current}. Confira na página do guia "
             f"({GUIDE_URL}) se já saiu o MCP {newest} e, quando sair, atualize as peças juntas.")
@@ -305,9 +378,10 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     pieces = local_versions(settings)
     current = expected_version() or pieces["executavel"]["versao"]
     origin = pieces["bridge"].get("origem")
-    pool = ThreadPoolExecutor(max_workers=2)
+    pool = ThreadPoolExecutor(max_workers=3)
     futures = {"novomodelo": pool.submit(fetch_json, NOVOMODELO_LATEST, timeout=budget_s),
-               "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s)}
+               "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s),
+               "bridge_notas": pool.submit(fetch_json, BRIDGE_LATEST, timeout=budget_s)}
     wait(futures.values(), timeout=budget_s)
     pool.shutdown(wait=False, cancel_futures=True)
     late = {"aviso_rede": f"tempo esgotado ({budget_s:g} s)"}
@@ -316,17 +390,27 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
                  cli_install_command)
     bridge = _newer(current, got["bridge"], lambda d: d["info"]["version"], BRIDGE_PAGE,
                     lambda v: _bridge_command(v, origin))
+    notes: dict[str, dict[str, Any]] = {}
+    if cli.get("mais_recente"):
+        notes["novomodelo"] = {"versao": cli["mais_recente"], **_release_notes(
+            got["novomodelo"], cli["mais_recente"], CLI_RELEASES)}
+    if bridge.get("mais_recente"):
+        notes["bridge"] = {"versao": bridge["mais_recente"], **_release_notes(
+            got["bridge_notas"], bridge["mais_recente"], BRIDGE_RELEASES)}
     if cli["status"] == "nova":
         newest = cli["mais_recente"]
         note = _release_note("novomodelo", newest, current)
-        cli = {k: v for k, v in cli.items() if k != "comando"} | {"nota": note}
+        cli = {k: v for k, v in cli.items() if k != "comando"} | {"nota": note} | {
+            k: v for k, v in notes["novomodelo"].items() if k != "versao"}
         mcp = {"status": "a_conferir", "novomodelo": newest, "nota": note}
     else:
         mcp = {"status": cli["status"], "nota": "inferida pela versão do novomodelo"}
     if bridge["status"] == "nova":
         bridge = {k: v for k, v in bridge.items() if k != "comando"} | {
-            "nota": _release_note(BRIDGE_CLI, bridge["mais_recente"], current)}
+            "nota": _release_note(BRIDGE_CLI, bridge["mais_recente"], current)} | {
+            k: v for k, v in notes["bridge"].items() if k != "versao"}
     _UPDATE["resultado"] = {"novomodelo": cli, "bridge": bridge, "mcp": mcp}
+    _UPDATE["notas"] = notes
     _UPDATE["quando"] = time.monotonic()
     return _UPDATE["resultado"]
 

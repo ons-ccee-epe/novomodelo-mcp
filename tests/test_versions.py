@@ -187,7 +187,8 @@ def test_nenhum_aviso_manda_rebaixar_nem_instalar_um_mcp_novo(pecas, executavel,
     assert not _REBAIXAR.search(texto), texto
     for velha in ("0.17.0",):
         assert f"v{velha}/novomodelo-cli-installer" not in texto and f"=={velha}" not in texto
-    assert "novomodelo_mcp-0.18.1" not in texto and "/releases/tag/v0.18.1" not in texto
+    assert "novomodelo_mcp-0.18.1" not in texto
+    assert f"{V.MCP_RELEASE_TAG_URL}v0.18.1" not in texto
 
 
 def test_leitura_das_pecas_uma_vez_por_processo(pecas):
@@ -311,13 +312,98 @@ def test_falha_de_certificado_vira_aviso_rede(monkeypatch):
 
 # ── versão nova no server_info ────────────────────────────────────────────────
 
-def _respostas(monkeypatch, tag="v0.19.0", bridge="0.19.0", atraso=0.0):
+NOTAS = """## Release Notes
+
+### Added
+
+- A new thing that is not a change.
+
+### Changed
+
+- The training gap is printed with 5 decimals instead of 1.
+- **BREAKING:** the default of `modeling.inflow_non_negativity.method` is now
+  `truncation_with_penalty` (was `penalty`).
+- `novomodelo run` writes its report to stdout; warnings and errors stay on stderr.
+
+### Fixed
+
+- `truncation` no longer produces an infeasible LP.
+
+# novomodelo-cli 0.19.0
+
+## Install novomodelo-cli 0.19.0
+
+- not a change either
+"""
+
+
+def _respostas(monkeypatch, tag="v0.19.0", bridge="0.19.0", atraso=0.0, notas=NOTAS,
+               notas_bridge=NOTAS, tag_bridge=None):
     def _abrir(req, *, timeout, context):
         time.sleep(atraso)
         url = req.full_url
-        corpo = {"tag_name": tag} if "api.github.com" in url else {"info": {"version": bridge}}
+        if "novomodelo-bridge/releases" in url:
+            t = tag_bridge or f"v{bridge}"
+            corpo = {"tag_name": t, "body": notas_bridge,
+                     "html_url": f"https://github.com/ons-ccee-epe/novomodelo-bridge/releases/tag/{t}"}
+        elif "api.github.com" in url:
+            corpo = {"tag_name": tag, "body": notas,
+                     "html_url": f"https://github.com/ons-ccee-epe/novomodelo/releases/tag/{tag}"}
+        else:
+            corpo = {"info": {"version": bridge}}
         return json.dumps(corpo).encode()
     monkeypatch.setattr(V, "_open", _abrir)
+
+
+def test_mudancas_sao_changed_e_fixed_com_breaking_primeiro():
+    linhas = V.release_changes(NOTAS)
+    assert linhas[0] == ("BREAKING: the default of `modeling.inflow_non_negativity.method` is "
+                         "now `truncation_with_penalty` (was `penalty`).")
+    assert linhas[1:] == [
+        "The training gap is printed with 5 decimals instead of 1.",
+        "`novomodelo run` writes its report to stdout; warnings and errors stay on stderr.",
+        "`truncation` no longer produces an infeasible LP."]
+
+
+def test_mudancas_tem_teto_de_linhas_e_de_caracteres():
+    corpo = "### Changed\n\n" + "".join(f"- item {i} " + "x" * 400 + "\n" for i in range(30))
+    linhas = V.release_changes(corpo)
+    assert len(linhas) == V.NOTES_MAX_LINES + 1 and linhas[-1].startswith("(mais ")
+    assert all(len(linha) <= V.NOTES_MAX_LINE_CHARS for linha in linhas)
+    assert sum(len(linha) for linha in linhas) <= V.NOTES_MAX_CHARS
+    assert V.release_changes("") == [] and V.release_changes(None) == []
+
+
+def test_versao_nova_traz_as_mudancas_e_o_link_das_notas(pecas, monkeypatch):
+    _respostas(monkeypatch)
+    nova = V.update_check(object())
+    assert nova["novomodelo"]["mudancas"][0].startswith("BREAKING:")
+    assert nova["novomodelo"]["notas"].endswith("/novomodelo/releases/tag/v0.19.0")
+    assert nova["bridge"]["mudancas"] == V.release_changes(NOTAS)
+    assert nova["bridge"]["notas"].endswith("/novomodelo-bridge/releases/tag/v0.19.0")
+
+
+def test_sem_notas_legiveis_so_o_link(pecas, monkeypatch):
+    _respostas(monkeypatch, notas="", tag_bridge="v0.18.9")
+    nova = V.update_check(object())
+    assert "mudancas" not in nova["novomodelo"]
+    assert nova["novomodelo"]["notas"] == f"{V.CLI_RELEASES}/tag/v0.19.0"
+    assert "mudancas" not in nova["bridge"]
+    assert nova["bridge"]["notas"] == f"{V.BRIDGE_RELEASES}/tag/v0.19.0"
+
+
+def test_aviso_de_peca_mais_nova_traz_as_mudancas_guardadas(pecas, monkeypatch):
+    estado, _ = pecas
+    estado["executavel"] = "0.19.0"
+    [sem_consulta] = V.version_warnings(object())
+    assert f"Notas da 0.19.0: {V.CLI_RELEASES}/tag/v0.19.0" in sem_consulta
+    assert "BREAKING" not in sem_consulta
+    _respostas(monkeypatch)
+    V.update_check(object())
+    [com_consulta] = V.version_warnings(object())
+    assert "Mudanças da 0.19.0:\n- BREAKING: the default" in com_consulta
+    assert "\n- `truncation` no longer produces an infeasible LP." in com_consulta
+    assert f"Notas: {V.CLI_RELEASES}/tag/v0.19.0" in com_consulta
 
 
 def test_release_mais_novo_nao_da_o_mcp_novo_como_existente(pecas, monkeypatch):
@@ -371,10 +457,10 @@ def test_verificacao_de_versao_nova_vale_por_6_horas(pecas, monkeypatch):
     V.update_check(object())
     agora[0] += 6 * 3600 - 1
     V.update_check(object())
-    assert len(chamadas) == 2   # novomodelo + bridge, uma vez só nas 6 h
+    assert len(chamadas) == 3   # novomodelo, bridge no PyPI e notas do bridge, uma vez nas 6 h
     agora[0] += 2
     V.update_check(object())
-    assert len(chamadas) == 4   # passadas as 6 h, consulta de novo
+    assert len(chamadas) == 6   # passadas as 6 h, consulta de novo (e as notas junto)
 
 
 def test_docs_de_outra_versao_avisam_e_sem_manifesto_nao(pecas, monkeypatch):

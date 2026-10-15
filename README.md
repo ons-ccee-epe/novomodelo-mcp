@@ -143,7 +143,10 @@ apenas nestes domínios:
 `pypi.org/pypi/novomodelo-bridge/*` e, como destino de download,
 `release-assets.githubusercontent.com`. Um novomodelo ou um bridge novo aparece em
 `versao_nova` sem comando de instalação: o MCP da mesma versão pode ainda não ter saído
-(o repositório do MCP é privado), e a página do guia avisa quando sair. O HTTPS usa os
+(o repositório do MCP é privado), e a página do guia avisa quando sair. Junto vêm as
+mudanças da versão nova (as seções "Changed" e "Fixed" das notas do release no GitHub, as
+BREAKING primeiro, com teto de linhas) e o link das notas; o aviso de uma peça mais nova
+que o MCP repete as mudanças dela. O HTTPS usa os
 certificados do sistema (`truststore`), o que permite
 atravessar proxy corporativo. Sem rede, a resposta diz que não foi possível
 verificar e onde conferir. Documentação e schemas são embutidos e não usam a rede.
