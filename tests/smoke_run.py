@@ -407,8 +407,24 @@ def test_run_async_lifecycle():
         assert st["state"] == "succeeded" and st["exit_code"] == 0, st
         assert st["milestones"]["training"] is True, st
         logs = t["run_logs"](r["job_id"])
-        assert "fake run: done" in logs["stdout"], logs
+        assert "fake run: done" in logs["saida"], logs
         assert t["run_status"]("../../etc")["status"] == "error"
+
+
+def test_run_logs_mostra_os_dois_canais_em_ordem_sem_duplicar():
+    for canal in ("stderr", "stdout"):   # relatório da 0.18.0 e da 0.18.1
+        with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_RELATORIO=canal) as d:
+            case = _make_case(d, meta_host=None)
+            t = _tools()
+            r = t["run_start"](str(case), threads=1)
+            assert _wait(t, r["job_id"])["state"] == "succeeded"
+            logs = t["run_logs"](r["job_id"])
+            assert "stdout" not in logs and "stderr" not in logs, logs
+            linhas = [x for x in logs["saida"].splitlines() if "relatorio" in x or "aviso" in x]
+            marca = "[stderr] " if canal == "stderr" else ""
+            assert linhas == [f"{marca}relatorio: banner", "[stderr] aviso: limite baixo",
+                              f"{marca}relatorio: iteracao 1", f"{marca}relatorio: iteracao 2",
+                              f"{marca}relatorio: resumo"], (canal, logs)
 
 
 def test_run_async_failure_and_cancel():

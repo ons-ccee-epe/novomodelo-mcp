@@ -8,6 +8,7 @@ pasta do job — sem sinais POSIX, sem `os.kill(pid, 0)` (que no Windows MATA):
   <state_dir>/jobs/<job_id>/
     job.json     metadados (comando, caminhos, horários)
     stdout.log   stderr.log
+    saida.log    os dois canais na ordem de chegada (o stderr marcado `[stderr] `)
     heartbeat    tocado pelo runner a cada ~2 s  -> liveness
     cancel       pedido de cancelamento          -> runner encerra a árvore
     exit_code    gravado pelo runner no fim      -> estado final
@@ -205,8 +206,18 @@ def job_logs(settings: Settings, job_id: str, *, lines: int = 100,
     if read_meta(settings, job_id) is None:
         return None
     d = _job_dir(settings, job_id)
+    if (d / "saida.log").exists():
+        return {"saida": _tail(d / "saida.log", lines, max_chars)}
     return {"stdout": _tail(d / "stdout.log", lines, max_chars),
             "stderr": _tail(d / "stderr.log", lines, max_chars)}
+
+
+def job_stderr(settings: Settings, job_id: str, *, lines: int = 20,
+               max_chars: int = 20000) -> str | None:
+    """Só o stderr do run: os erros e avisos do novomodelo, em qualquer versão."""
+    if read_meta(settings, job_id) is None:
+        return None
+    return _tail(_job_dir(settings, job_id) / "stderr.log", lines, max_chars)
 
 
 def _force_kill_runner(pid: int) -> None:

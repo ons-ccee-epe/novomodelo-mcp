@@ -18,7 +18,9 @@ Subcomandos com comportamento próprio:
 - `init --template T DIR`   : cria DIR/config.json (recusa se existir, salvo --force).
 - `run CASE --output OUT …` : dorme FAKE_NOVOMODELO_SLEEP s, cria OUT/training/_SUCCESS
                               (+ metadata.json = FAKE_NOVOMODELO_META, se definido) e sai
-                              com FAKE_NOVOMODELO_RC (default 0).
+                              com FAKE_NOVOMODELO_RC (default 0). Com
+                              FAKE_NOVOMODELO_RELATORIO=stderr (0.18.0) ou =stdout (0.18.1),
+                              imprime um relatório nesse canal, com um aviso no stderr no meio.
 
 Os demais (ex.: `schema export`) ecoam um envelope `status=ok` com o argv
 recebido (menos o `--color never`), para que o teste afirme o subcomando exato.
@@ -86,6 +88,13 @@ if subargv[:1] == ["init"]:
 if subargv[:1] == ["run"]:
     out = Path(subargv[subargv.index("--output") + 1])
     print("fake run: start", flush=True)
+    canal = {"stdout": sys.stdout, "stderr": sys.stderr}.get(os.environ.get("FAKE_NOVOMODELO_RELATORIO"))
+    if canal:
+        for linha, destino in (("relatorio: banner", canal), ("aviso: limite baixo", sys.stderr),
+                               ("relatorio: iteracao 1", canal), ("relatorio: iteracao 2", canal),
+                               ("relatorio: resumo", canal)):
+            print(linha, file=destino, flush=True)
+            time.sleep(0.05)
     time.sleep(float(os.environ.get("FAKE_NOVOMODELO_SLEEP", "0")))
     rc = int(os.environ.get("FAKE_NOVOMODELO_RC", "0"))
     if rc == 0:
