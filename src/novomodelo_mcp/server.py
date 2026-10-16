@@ -1,0 +1,150 @@
+"""Ponto de entrada do servidor MCP do Novomodelo (transporte stdio)."""
+from __future__ import annotations
+
+import functools
+
+from mcp.server.fastmcp import FastMCP
+
+from . import __version__
+
+from .adapters import versions
+
+from .adapters.discovery import bridge_origin, find_novomodelo, tool_version
+from .adapters.paths import allowed_roots
+from .adapters.reference import docs_origin
+from .adapters.state import state_dir
+from .config import load_settings
+from .names import SERVER_NAME
+from .tools.novomodelo_meta import register_novomodelo_meta
+from .tools.deck import register_deck
+from .tools.post_run import register_post_run
+from .tools.prompts import register_prompts
+from .tools.pre_run import register_pre_run
+from .tools.reference import register_reference
+from .tools.results import register_results
+from .tools.run import register_run
+from .tools.annotations import READ_ONLY_NET
+from .tools.shaping import attach_version_warnings
+
+
+SERVER_INSTRUCTIONS = """\
+Servidor MCP do novomodelo: valida, converte (NEWAVE/DECOMP), roda, compara e lê os
+resultados de casos, e responde sobre a metodologia pelas docs oficiais.
+
+- Comece por `server_info`: versões das peças, workspace e se há versão nova.
+- Se faltar o executável do novomodelo, ofereça a tool `instalar_novomodelo` (a pessoa
+  pode pedir “instale o executável do novomodelo”); o comando manual é a alternativa.
+- As docs embutidas são as oficiais da versão instalada. Para a metodologia e o uso do
+  novomodelo, use `docs_search` antes de responder, e não a web nem a memória: a
+  definição do novomodelo pode diferir da literatura e do NEWAVE.
+- Busque em inglês (as docs estão em inglês); termos em português do glossário das
+  docs são traduzidos. Depois leia a seção com `docs_read(page, secao)`.
+- Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
+- Se as docs não cobrem o assunto, diga isso: não complete de memória.
+- A rede só é usada para versões e para instalar o executável.
+- As tools que gravam ou alteram arquivos pedem aprovação.
+"""
+
+
+class _WithVersionWarnings:
+    """`mcp` cujo `.tool()` faz toda resposta levar `avisos_de_versao` quando houver.
+
+    Embrulhar no registro, e não no `cap_envelope`: parte das tools não passa por ele.
+    """
+
+    def __init__(self, mcp: FastMCP, settings) -> None:
+        self._mcp, self._settings = mcp, settings
+
+    def __getattr__(self, name):
+        return getattr(self._mcp, name)
+
+    def tool(self, *args, **kwargs):
+        register = self._mcp.tool(*args, **kwargs)
+
+        def deco(fn):
+            @functools.wraps(fn)
+            def with_warnings(*a, **k):
+                result = fn(*a, **k)
+                try:
+                    warnings = versions.version_warnings(self._settings)
+                except Exception:  # noqa: BLE001 - never-raise: o aviso é extra, não pode derrubar a tool
+                    warnings = []
+                return attach_version_warnings(result, warnings)
+
+            with_warnings._avisos_de_versao = True
+            return register(with_warnings)
+
+        return deco
+
+
+def build_server() -> FastMCP:
+    """Constrói e configura o servidor com todas as ferramentas registradas."""
+    settings = load_settings()
+    server = FastMCP(SERVER_NAME, instructions=SERVER_INSTRUCTIONS)
+    # O FastMCP não recebe versão: sem isto o `initialize` anuncia a do SDK `mcp`.
+    server._mcp_server.version = __version__
+    mcp = _WithVersionWarnings(server, settings)
+
+    register_pre_run(mcp, settings)     # pré-rodada: check / convert / validate
+    register_post_run(mcp, settings)    # pós-rodada: compare_* / dashboard
+    register_deck(mcp, settings)        # manipulador de decks (JSON/Parquet)
+    register_results(mcp, settings)     # leitura/análise de resultados (pós-rodada)
+    register_reference(mcp, settings)   # schemas + documentação (referência)
+    register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
+    register_run(mcp, settings)         # init / plano / apply / run assíncrono
+    register_prompts(mcp, settings)     # prompts: metodologia
+
+    @mcp.tool(annotations=READ_ONLY_NET)
+    def server_info() -> dict:
+        """Diagnóstico do próprio MCP: binários, versões e se há versão nova.
+
+        `versoes`: executável, biblioteca, bridge e docs, com a versão esperada.
+        `versao_nova`: consulta, no máximo a cada 6 horas e em até alguns segundos, os
+        releases do novomodelo e do bridge (domínios oficiais); sem rede, diz que
+        não foi possível verificar e mostra onde conferir.
+        """
+        bridge, bridge_from = bridge_origin(settings)
+        novomodelo = find_novomodelo(settings)
+        try:
+            pieces = versions.local_versions(settings)
+            newer = versions.update_check(settings)
+        except Exception as exc:  # noqa: BLE001 - never-raise: diagnóstico parcial em vez de derrubar
+            pieces, newer = {"erro": str(exc)}, {"erro": str(exc)}
+        return {
+            "server": f"{SERVER_NAME}-mcp",
+            "versao_mcp": __version__,
+            "versoes": {**pieces, "esperada": versions.expected_version()},
+            "versao_nova": newer,
+            "bridge": {"path": bridge, "version": tool_version(bridge),
+                       "available": bridge is not None, "origem": bridge_from},
+            "novomodelo": {"path": novomodelo, "version": tool_version(novomodelo),
+                      "available": novomodelo is not None},
+            "schemas_dir": settings.schemas_dir,
+            "docs": docs_origin(settings),
+            "workspace": [str(r) for r in allowed_roots(settings)] or "irrestrito (defina NOVOMODELO_MCP_WORKSPACE)",
+            "allow_force": settings.allow_force,
+            "state_dir": str(state_dir(settings)),
+            "max_jobs": settings.max_jobs,
+            "settings": {
+                "default_timeout": settings.default_timeout,
+                "max_diagnostics": settings.max_diagnostics,
+                "max_summary_chars": settings.max_summary_chars,
+                "max_inline_rows": settings.max_inline_rows,
+                "max_query_rows": settings.max_query_rows,
+            },
+        }
+
+    return server
+
+
+def main() -> None:
+    """Executável `novomodelo-mcp`: sobe o servidor no stdio; `configurar` grava o cliente."""
+    import sys
+    if sys.argv[1:2] == ["configurar"]:
+        from .client_config import main as configure
+        raise SystemExit(configure(sys.argv[2:]))
+    build_server().run()
+
+
+if __name__ == "__main__":
+    main()

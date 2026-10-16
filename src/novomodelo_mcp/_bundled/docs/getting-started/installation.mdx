@@ -1,0 +1,255 @@
+---
+title: Installation
+description: Install the Novomodelo command-line program (pre-built binaries, crates.io or source) or the novomodelo-python package, and choose an LP solver backend.
+---
+
+Novomodelo ships as the `novomodelo` command-line program, with pre-built binaries for the
+platforms listed below, and as the `novomodelo-python` package for Python. Choose the
+method that best fits your environment; to install the Python package, go to
+[Python Package](#python-package).
+
+:::tip[Running on an HPC cluster?]
+The methods here install the single-process build (`comm: local`). For
+multi-node runs — MPI-enabled binaries, building MPICH from source, SLURM
+launch, and AWS ParallelCluster — see
+[HPC & Cluster Deployment](/running/hpc-deployment/).
+:::
+
+---
+
+## Pre-built Binaries (Recommended)
+
+No Rust toolchain or C compiler required.
+
+### Linux and macOS
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ons-ccee-epe/novomodelo/releases/latest/download/novomodelo-cli-installer.sh | sh
+```
+
+The installer places the `novomodelo` binary in `$CARGO_HOME/bin` (typically
+`~/.cargo/bin`). Add that directory to your `PATH` if it is not already present.
+
+### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/ons-ccee-epe/novomodelo/releases/latest/download/novomodelo-cli-installer.ps1 | iex"
+```
+
+### Supported Platforms
+
+| Platform              | Target Triple                |
+| ---------------------- | ----------------------------- |
+| macOS (Apple Silicon)  | `aarch64-apple-darwin`        |
+| macOS (Intel)          | `x86_64-apple-darwin`         |
+| Linux (x86-64)         | `x86_64-unknown-linux-gnu`    |
+| Linux (ARM64)          | `aarch64-unknown-linux-gnu`   |
+| Windows (x86-64)       | `x86_64-pc-windows-msvc`      |
+
+You can also download individual archives directly from the
+[GitHub Releases page](https://github.com/ons-ccee-epe/novomodelo/releases/latest).
+
+The x86-64 Linux MPI build `novomodelo-mpi` (see
+[HPC & Cluster Deployment](/running/hpc-deployment/)) uses AVX2 and FMA instructions and
+needs a processor that supports them.
+
+### Verify the Installation
+
+```bash
+novomodelo version
+```
+
+Expected output (exact versions and arch will vary):
+
+```
+novomodelo   v0.18.0
+solver: HiGHS 1.13.1
+comm:   local
+zstd:   enabled
+arch:   x86_64-linux
+build:  release (lto=thin)
+```
+
+---
+
+## Python Package
+
+The `novomodelo-python` package installs the `novomodelo` Python module, which runs
+studies and loads their results from Python. The wheels bundle the HiGHS solver
+and depend on no other Python package.
+
+```bash
+pip install novomodelo-python
+```
+
+The package requires CPython 3.12 or newer. Each wheel is built for the CPython
+stable ABI (`abi3`), so one wheel per platform serves every supported Python
+version; the release smoke-tests the Linux x86-64 (glibc), macOS Apple Silicon
+and Windows wheels on Python 3.12, 3.13 and 3.14. PyPI publishes wheels for the
+platforms below and no source distribution, so on any other platform, or on
+Python 3.11 or older, `pip` reports
+`No matching distribution found for novomodelo-python`:
+
+| Platform              | Wheel platform tag       |
+| --------------------- | ------------------------ |
+| Linux (x86-64, glibc) | `manylinux_2_34_x86_64`  |
+| Linux (ARM64, glibc)  | `manylinux_2_28_aarch64` |
+| Linux (x86-64, musl)  | `musllinux_1_2_x86_64`   |
+| macOS (Apple Silicon) | `macosx_11_0_arm64`      |
+| macOS (Intel)         | `macosx_10_12_x86_64`    |
+| Windows (x86-64)      | `win_amd64`              |
+
+`pip` selects the wheel that matches your system, so you do not choose a tag
+yourself. On Linux with glibc (the C library most distributions use), the x86-64
+wheel needs glibc 2.34 or newer and the ARM64 wheel glibc 2.28 or newer;
+`ldd --version` prints your glibc version. Alpine Linux and other musl systems
+use the `musllinux` wheel.
+
+### Verify the Python Package
+
+```bash
+python -c "import novomodelo; print(novomodelo.__version__); print(novomodelo.version_info())"
+```
+
+```text
+0.18.0
+{'version': '0.18.0', 'solver': 'HiGHS 1.13.1', 'comm': 'local', 'zstd': 'enabled', 'arch': 'x86_64-linux', 'build': 'release'}
+```
+
+If the first line shows the installed version and the second a dictionary, the
+package works. `version_info()` reports the fields that `novomodelo version` prints;
+`comm` is always
+`local`, because the package runs a study in a single process. Next, run a study
+from Python with the [Python Quickstart](/getting-started/python-quickstart/).
+
+---
+
+## From crates.io
+
+```bash
+cargo install novomodelo-cli
+```
+
+Requires Rust 1.88+ and build prerequisites (see Build from Source below).
+Installs to `$CARGO_HOME/bin`.
+
+---
+
+## Build from Source
+
+For contributors or unsupported platforms.
+
+### Prerequisites
+
+| Dependency     | Minimum Version          | Notes                                    |
+| -------------- | ------------------------- | ------------------------------------------ |
+| Rust toolchain | 1.88 (stable)             | Install via [rustup](https://rustup.rs)   |
+| C compiler     | any recent GCC or Clang   | Required for the HiGHS LP solver         |
+| CMake          | 3.15                      | Required for the HiGHS build system      |
+| Git            | any                       | Required for submodule initialization    |
+
+### Steps
+
+```bash
+# Clone the repository
+git clone https://github.com/ons-ccee-epe/novomodelo.git
+cd novomodelo
+
+# Initialize HiGHS submodule (required for the solver backend)
+git submodule update --init --recursive
+
+# Build the release binary
+cargo build --release -p novomodelo-cli
+```
+
+The binary is written to `target/release/novomodelo`. Optionally install to `$CARGO_HOME/bin`:
+
+```bash
+cargo install --path crates/novomodelo-cli
+```
+
+Verify:
+
+```bash
+./target/release/novomodelo version
+```
+
+:::note[Contributors]
+To run the test suite, use `cargo test --workspace` (default HiGHS backend);
+[CONTRIBUTING.md](https://github.com/ons-ccee-epe/novomodelo/blob/main/CONTRIBUTING.md)
+lists the per-crate and per-backend test commands.
+:::
+
+---
+
+## Choosing the LP Backend
+
+Novomodelo supports two LP solver backends, selected at build time via Cargo features.
+Exactly one backend is compiled into any given binary.
+
+| Backend | Feature flag | License | Notes                                                    |
+| ------- | ------------ | ------- | ----------------------------------------------------------- |
+| HiGHS   | `highs`      | MIT     | Default. No extra steps required.                        |
+| CLP     | `clp`        | EPL-2.0 | COIN-OR. Opt-in; requires the CLP/CoinUtils submodules.  |
+
+### Default build (HiGHS)
+
+```bash
+cargo build --release -p novomodelo-cli
+```
+
+No flags are needed. HiGHS is the default backend and the one shipped in
+pre-built binaries.
+
+### CLP build
+
+```bash
+# Initialize the CLP and CoinUtils submodules first
+git submodule update --init --recursive
+
+# Build with CLP, disabling the HiGHS default
+cargo build --release -p novomodelo-cli --no-default-features --features clp
+```
+
+On a CLP build, every `training.solver`/`simulation.solver` override field is
+rejected at study setup — see
+[solver profile validation](/reference/error-codes/#solver-profile-validation)
+for the full rejection rule and error messages.
+
+### Mutual exclusivity
+
+The `highs` and `clp` features are mutually exclusive — exactly one LP backend
+is compiled into a binary, and enabling both at once is a compile error. Because
+`highs` is the default feature, selecting CLP requires `--no-default-features`
+to suppress the default before `--features clp` is applied; a plain
+`--features clp` leaves the `highs` default on and fails the build. Enabling
+neither backend is also a compile error, so a backend is always chosen
+explicitly. The default build (no extra flags) uses HiGHS.
+
+### Identifying the active backend
+
+The `novomodelo version` banner shows which backend is compiled in:
+
+```
+novomodelo   v0.18.0
+solver: CLP 1.17.11
+comm:   local
+...
+```
+
+The `solver` and `solver_version` fields in each run's output metadata record
+the active backend identifier (`"highs"` or `"clp"`) and its library version
+string. These fields are written by both the CLI and the Python bindings.
+
+Results are reproducible per binary: a build with the other backend is a
+different binary, so its results are not promised equal. See
+[Determinism & Provenance](/math/determinism-guarantees/).
+
+---
+
+## Next Steps
+
+- [Quickstart](/getting-started/quickstart) — run a complete study end to end using the built-in `1dtoy` template
+- [Python Quickstart](/getting-started/python-quickstart/) — run a study and read its results from Python
+- [Running Studies](/running/running-studies/) — validate, run, and inspect results for any case directory
+- [CLI Reference](/reference/cli-reference/) — complete flag and subcommand reference

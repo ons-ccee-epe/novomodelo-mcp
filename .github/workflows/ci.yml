@@ -6,12 +6,16 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Instalar uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7.6.0
         with:
           python-version: "3.12"
 
@@ -26,3 +30,51 @@ jobs:
 
       - name: Testes (pytest)
         run: uv run pytest -q
+
+  rename-guard:
+    # TEMPORÁRIO: existe só enquanto o MCP vive fora do repo do novomodelo.
+    # Na migração para o monorepo, apagar este job: o CI do novomodelo já roda o
+    # mesmo check sobre o repositório inteiro.
+    # Falha se o nome antigo do produto reaparecer fora das exceções do mapa.
+    # Usa a ferramenta do upstream (fonte única), fixada numa tag: atualizar o
+    # `ref` junto com o pin do novomodelo-python.
+    name: Trava de nome (rebrand check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Ferramenta de rename do novomodelo (fixada na tag)
+        uses: actions/checkout@v5
+        with:
+          repository: ons-ccee-epe/novomodelo
+          ref: v0.18.0
+          path: _upstream
+          sparse-checkout: scripts/rebrand
+          persist-credentials: false
+
+      - name: rebrand.py check
+        run: python3 _upstream/scripts/rebrand/rebrand.py check --root . --map scripts/rebrand/map.toml
+
+  docs-embutidas:
+    # Falha se `src/novomodelo_mcp/_bundled/` (páginas resolvidas, schemas, índice,
+    # manifesto) divergir do que o sync_bundled gera a partir do commit das docs
+    # gravado no manifesto. Para atualizar: rodar o sync_bundled e commitar o diff.
+    name: Docs embutidas iguais à fonte
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Commit das docs gravado no manifesto
+        id: manifesto
+        run: echo "commit=$(python3 -c "import json;print(json.load(open('src/novomodelo_mcp/_bundled/manifest.json'))['docs_commit'])")" >> "$GITHUB_OUTPUT"
+
+      - name: novomodelo-docs nesse commit
+        uses: actions/checkout@v5
+        with:
+          repository: ons-ccee-epe/novomodelo-docs
+          ref: ${{ steps.manifesto.outputs.commit }}
+          path: _docs
+          persist-credentials: false
+
+      - name: sync_bundled --check
+        run: python3 scripts/sync_bundled.py --source _docs --check

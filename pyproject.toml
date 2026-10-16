@@ -1,38 +1,58 @@
 [project]
-name = "cobre-mcp"
-version = "0.1.0"
-description = "Servidor MCP (fachada offline) sobre as CLIs do Cobre e do cobre-bridge"
+name = "novomodelo-mcp"
+version = "0.18.0.post1"
+description = "Servidor MCP (fachada local) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+authors = [
+    { name = "Operador Nacional do Sistema Elétrico - ONS" },
+    { name = "Câmara de Comercialização de Energia Elétrica - CCEE" },
+    { name = "Empresa de Pesquisa Energética - EPE" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "mcp>=1.2.0,<2",  # mcp 2.x renomeou FastMCP->MCPServer e quebra o import; manter <2
     "polars>=1.0",
     "jsonschema>=4.0",
-    "cobre-python>=0.16",
+    # Pins exatos, como o novomodelo-bridge faz: o solver só carrega uma política
+    # gravada pela mesma versão do binding. Sobem juntos com o release do novomodelo.
+    "novomodelo-python==0.18.0",
+    "novomodelo-bridge==0.18.0",
     "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
+    "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
 ]
 
 [project.scripts]
-cobre-mcp = "cobre_mcp.server:main"
+novomodelo-mcp = "novomodelo_mcp.server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cobre_mcp"]
+packages = ["src/novomodelo_mcp"]
 # Garante que o snapshot embutido (docs .md/.mdx + schemas .json) entre no wheel.
 # Sem isto, o hatch empacota apenas .py e as tools de doc/schema ficariam sem
 # conteudo offline.
 artifacts = [
-    "src/cobre_mcp/_bundled/**/*.md",
-    "src/cobre_mcp/_bundled/**/*.mdx",
-    "src/cobre_mcp/_bundled/**/*.json",
+    "src/novomodelo_mcp/_bundled/**/*.md",
+    "src/novomodelo_mcp/_bundled/**/*.mdx",
+    "src/novomodelo_mcp/_bundled/**/*.json",
+    "src/novomodelo_mcp/_bundled/**/*.sqlite",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "hypothesis>=6"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -44,4 +64,8 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["F", "B", "UP"]
+# PLW1514 (open/read_text/write_text sem `encoding`) só existe em preview; o
+# `explicit-preview-rules` liga essa e nenhuma outra regra de preview.
+select = ["F", "B", "UP", "PLW1514"]
+preview = true
+explicit-preview-rules = true

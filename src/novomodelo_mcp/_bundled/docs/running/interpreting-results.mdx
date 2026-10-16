@@ -1,0 +1,847 @@
+---
+title: Convergence & Diagnostics
+description: Practical analysis patterns for assessing convergence, extracting generation and cost statistics, and troubleshooting simulation results.
+---
+
+The [Output Format](/reference/output/) documents what each
+output file contains. This page goes one level deeper: it provides practical
+analysis patterns for answering domain questions from the data. It assumes you
+are comfortable loading Parquet files in your preferred tool.
+
+The focus is on convergence diagnostics and simulation analysis. By the end
+of this page you will know how to assess whether a run converged, how to
+extract generation and cost statistics across scenarios, and how to identify
+common problems from the output data.
+
+---
+
+## Loading Results in Python
+
+The `novomodelo.results` module of `novomodelo-python` reads a run's output directory
+into Python. [Python Quickstart](/getting-started/python-quickstart/) covers
+the installation. The snippets below read the output of
+`novomodelo run my_study --output results`, where `my_study` is the 1dtoy template
+from `novomodelo init --template 1dtoy my_study`, and run from the directory that
+holds `my_study/` and `results/`.
+
+`load_convergence` returns one dict per iteration, keyed by the columns of
+`training/convergence.parquet`, which
+[Reading Convergence History](#reading-convergence-history) lists.
+`load_convergence_arrow` returns the same table as a `pyarrow.Table`
+(`pyarrow` must be installed), which `polars.from_arrow` consumes.
+
+```python
+import novomodelo
+import polars as pl
+
+last = novomodelo.results.load_convergence("results")[-1]
+for key in ("iteration", "lower_bound", "upper_bound", "gap_percent"):
+    print(f"{key}: {last[key]:.6g}")
+
+conv = pl.from_arrow(novomodelo.results.load_convergence_arrow("results"))
+print(conv.select("iteration", "upper_bound", "upper_bound_kind", "gap_percent").tail(1))
+```
+
+```text
+iteration: 128
+lower_bound: 1.55955e+07
+upper_bound: 579592
+gap_percent: -96.2836
+shape: (1, 4)
+┌───────────┬───────────────┬──────────────────┬─────────────┐
+│ iteration ┆ upper_bound   ┆ upper_bound_kind ┆ gap_percent │
+│ ---       ┆ ---           ┆ ---              ┆ ---         │
+│ i32       ┆ f64           ┆ str              ┆ f64         │
+╞═══════════╪═══════════════╪══════════════════╪═════════════╡
+│ 128       ┆ 579592.198622 ┆ statistical      ┆ -96.283598  │
+└───────────┴───────────────┴──────────────────┴─────────────┘
+```
+
+The upper bound is the mean cost of the latest iteration's sampled forward
+passes (`upper_bound_kind` is `"statistical"`), so it can sit below the lower
+bound, as the negative `gap_percent` shows. [Reading the gap from
+`training/metadata.json`](#reading-the-gap-from-trainingmetadatajson)
+explains how to read a sampled gap.
+
+`load_simulation_arrow` reads one `simulation/` entity type, `hydros` here, as
+a single `pyarrow.Table` over all scenarios, ordered by `scenario_id`. The
+table names a plant by `hydro_id` only; `system/hydros.json` in the case
+directory pairs each plant's `id` with its `name`. The snippet joins the two,
+sums generation over blocks within each (`scenario_id`, `stage_id`,
+`hydro_id`) and averages across scenarios per plant name and stage. That is the
+order of aggregation in the Table grain note of
+[Analyzing Simulation Results](#analyzing-simulation-results). The template has
+one block per stage, so the block sum leaves the values unchanged here.
+
+```python
+import json
+
+import novomodelo
+import polars as pl
+
+with open("my_study/system/hydros.json") as f:
+    names = pl.DataFrame(
+        [{"hydro_id": h["id"], "name": h["name"]} for h in json.load(f)["hydros"]]
+    )
+
+hydros = pl.from_arrow(
+    novomodelo.results.load_simulation_arrow("results", entity_type="hydros")
+)
+mean_generation = (
+    hydros
+    .group_by(["scenario_id", "stage_id", "hydro_id"])
+    .agg(pl.col("generation_mwh").sum())
+    .join(names, on="hydro_id")
+    .group_by(["name", "stage_id"])
+    .agg(pl.col("generation_mwh").mean().alias("mean_generation_mwh"))
+    .sort(["name", "stage_id"])
+)
+print(mean_generation)
+```
+
+```text
+shape: (4, 3)
+┌──────┬──────────┬─────────────────────┐
+│ name ┆ stage_id ┆ mean_generation_mwh │
+│ ---  ┆ ---      ┆ ---                 │
+│ str  ┆ i32      ┆ f64                 │
+╞══════╪══════════╪═════════════════════╡
+│ UHE1 ┆ 0        ┆ 33480.0             │
+│ UHE1 ┆ 1        ┆ 31542.464448        │
+│ UHE1 ┆ 2        ┆ 34696.161217        │
+│ UHE1 ┆ 3        ┆ 33794.388576        │
+└──────┴──────────┴─────────────────────┘
+```
+
+`load_simulation` returns the same rows as Python dicts, a list for one
+`entity_type` or a dict of lists keyed by entity type without one, which suits
+small reads.
+
+The `hydro_id` values are the ids declared in the case's `system/hydros.json`.
+For a case converted from another planning tool, the converter writes `conversion_manifest.json` into
+the converted case directory, beside `config.json`, as its provenance record:
+the converter version, the source directory, the input-file hashes and the
+entity counts. How the converted entity ids relate to the source model's
+plant codes is on [Converting an existing case](/running/case-conversion/).
+
+---
+
+## Convergence Diagnostics
+
+### Reading the gap from `training/metadata.json`
+
+`training/metadata.json` is the first file to check after any run — it is the
+JSON run summary, not to be confused with the binary `policy/manifest.bin`
+checkpoint header. The key fields for convergence assessment are the
+`iterations` and `convergence` objects. The excerpt below is from a `novomodelo run`
+of the 1dtoy template:
+
+```json
+{
+  "iterations": {
+    "completed": 128,
+    "converged_at": null
+  },
+  "convergence": {
+    "achieved": false,
+    "final_gap_percent": -96.28359773344324,
+    "termination_reason": "iteration_limit"
+  }
+}
+```
+
+| Field                            | What to look for                                                                                         |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `convergence.achieved`           | `true` when the stopping rules ended the run and a `gap` or `bound_stalling` rule was satisfied at that iteration; `false` when only `iteration_limit` or `time_limit` triggered, when a shutdown request alone ended training, and after a failure. |
+| `convergence.final_gap_percent`  | The relative gap at termination, in percent: the upper bound minus the lower bound, relative to the lower bound. Negative when the upper bound is below the lower bound; `null` when the final lower bound is not positive. See guidelines below. |
+| `convergence.termination_reason` | The name of the stopping rule that ended the run. The values are listed under [`training/metadata.json`](/reference/output/metadata/#trainingmetadatajson). |
+| `iterations.converged_at`        | Equal to `iterations.completed` when `achieved` is `true`, `null` otherwise.                             |
+
+**Gap guidelines.** There is no universal threshold — acceptable gap depends
+on the decision being made and the study's time horizon. As rough guidance
+for a gap without sampling noise, from an enumerated forward pass
+(`bounds.final_upper_bound_kind` is `"exact"` and the risk measure is the same at every stage):
+
+- Below 1%: acceptable for most decisions.
+- 1% to 5%: acceptable for long-horizon planning studies where model
+  uncertainty is already large.
+- Above 5%: warrants investigation. The policy may be significantly
+  suboptimal.
+
+With a sampled upper bound (`bounds.final_upper_bound_kind` is `"statistical"`)
+the [gap](/math/stopping-rules/#optimality-gap) is an estimate, not a
+certificate: it compares the mean cost of the latest iteration's sampled forward
+passes with the lower bound, carries sampling noise, and is negative whenever
+that mean falls below the lower bound, as in the excerpt above. The thresholds
+above do not apply to a sampled gap, which changes sign and size from one
+iteration to the next: read a sampled run by whether the lower bound has
+plateaued ([Reading Convergence History](#reading-convergence-history)). Under an
+enumerated forward pass (`"exact"`) the upper bound is exact and the gap carries
+no sampling noise, but the gap certifies the policy only when the risk measure
+is the same at every stage;
+see [when bounds and certificates
+hold](/math/cut-management/#when-bounds-and-certificates-hold).
+
+**What to do if the gap is large:**
+
+1. Increase `limit` in the [`iteration_limit`](/running/configuration/#iteration_limit)
+   stopping rule.
+2. Increase `training.selection.forward_passes`
+   ([`training.selection`](/running/configuration/#trainingselection)) to reduce
+   the noise of the upper-bound estimate.
+3. Check `training/convergence.parquet` (see next section) to see whether
+   the lower bound is still rising or has plateaued.
+4. Check `solve_stats.retried` and `solve_stats.failed` in
+   `training/metadata.json`: solves that needed retries point to numerically
+   difficult stages, and a solve that still fails after its retries ends
+   training with an error.
+
+### Reading the `Time split` breakdown
+
+`novomodelo run` prints a `Time split` block in its training summary once training finishes,
+decomposing the total training wall time into three walls — `Forward`,
+`Backward`, and `Serial`. See the [`novomodelo run` Output format
+sample](/reference/cli-reference/#output-format) for the full block this
+section reads. Each phase wall (`Forward`/`Backward`) carries a
+`solve · wait` split; the `Serial` wall carries a
+`bound · selection [· allreduce · sync] · other` split.
+
+**Phase wall vs. worker wait.** A large `wait` relative to its phase wall —
+`forward_wait` or `backward_wait` — signals **load imbalance** across
+workers: some workers finish their share of trial points well before others
+and sit idle waiting for the phase to close. This is exactly what the
+`by_node` backward scheduler ([By-node
+scheduling](/running/performance/#by-node-scheduling)) exists to
+reduce, by shrinking the work unit from a whole trial point to a `(trial
+point, opening block)` pair so an idle worker can steal finer-grained work
+instead of waiting for an entire trial point to free up. Dynamic Cut
+Selection is off by default (`training.cut_selection.selection` is `null`,
+[`training.cut_selection`](/running/configuration/#trainingcut_selection));
+when its `method` is `"dynamic"`, the backward pass schedules by scenario from
+its `start_iteration` on, whatever the `by_node` setting.
+
+**Serial buckets bound achievable speedup.** `bound`, `selection`,
+`allreduce`, `sync`, and `other` do not shrink as you add ranks or threads —
+they are the run's Amdahl's-law serial fraction. `allreduce` and `sync`
+appear only on MPI runs (a single-process run never populates them); `other`
+absorbs rayon scheduling overhead plus any unaccounted residual. A `Serial`
+wall that stays large as parallelism grows means added ranks or threads will
+not help much further — check which serial bucket dominates before adding
+more workers.
+
+**`solve` vs. phase wall.** `solve` is the per-worker mean LP-solve wall for
+that phase. Comparing it to the phase wall shows how much of the phase is
+spent actually solving LPs versus coordination (scheduling, wait, merge): a
+`solve` close to the phase wall means the phase is solve-bound; a `solve`
+well below the phase wall means most of the wall is coordination overhead,
+including the `wait` bucket above.
+
+---
+
+## Reading Convergence History
+
+`training/convergence.parquet` contains one row per training iteration with
+the full convergence history. Its schema:
+
+| Column             | Type    | Description                                                                            |
+| ------------------ | ------- | -------------------------------------------------------------------------------------- |
+| `iteration`        | Int32   | Iteration number (1-based)                                                             |
+| `lower_bound`      | Float64 | Training lower bound on the risk-adjusted cost: the expected cost when the first stage's risk measure is the expectation ([lower bound](/math/upper-bound-evaluation/#lower-bound)) |
+| `upper_bound`      | Float64 | Upper bound estimate — mean over forward passes for a statistical bound; the exact enumerated weighted bound otherwise |
+| `upper_bound_std`  | Float64 | Standard deviation of the upper bound estimate. NULL on exact-bound rows (`upper_bound_kind` = `"exact"`) |
+| `upper_bound_kind` | Utf8    | Bound kind for this row: `"exact"` (enumerated weighted bound) or `"statistical"` (sampled forward-pass mean) |
+| `gap_percent`      | Float64 | Relative gap as a percentage (null when `lower_bound <= 0`)                            |
+| `cuts_added`       | Int32   | Cuts added to the pool in this iteration                                               |
+| `cuts_removed`     | Int32   | Cuts removed by the cut selection strategy                                             |
+| `cuts_active`      | Int64   | Total active cuts across all stages after this iteration                               |
+| `time_forward_ms`  | Int64   | Wall-clock time for the forward pass in milliseconds                                   |
+| `time_backward_ms` | Int64   | Wall-clock time for the backward pass in milliseconds                                  |
+| `time_total_ms`    | Int64   | Total wall-clock time for the iteration in milliseconds                                |
+| `forward_passes`   | Int32   | Number of forward pass scenarios in this iteration                                     |
+| `lp_solves`        | Int64   | Total LP solves across all ranks in this iteration (forward + backward + bound)        |
+| `mean_rows_in_lp`  | Float64 | Mean cuts loaded per LP solve this iteration under dynamic cut selection (0 otherwise) |
+
+### Python (Polars)
+
+```python
+import polars as pl
+import matplotlib.pyplot as plt
+
+df = pl.read_parquet("results/training/convergence.parquet")
+
+# Plot convergence bounds over iterations
+plt.figure(figsize=(10, 4))
+plt.plot(df["iteration"], df["lower_bound"], label="Lower bound")
+plt.plot(df["iteration"], df["upper_bound"], label="Upper bound (mean)")
+# upper_bound_std is NULL on exact-convergence rows (upper_bound_kind == "exact");
+# coalesce it to 0 so the band collapses onto the line instead of producing NaN.
+std = df["upper_bound_std"].fill_null(0.0)
+plt.fill_between(
+    df["iteration"].to_list(),
+    (df["upper_bound"] - std).to_list(),
+    (df["upper_bound"] + std).to_list(),
+    alpha=0.2,
+    label="Upper bound ± 1 std",
+)
+plt.xlabel("Iteration")
+plt.ylabel("Expected discounted cost (horizon total)")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# Check final gap
+final = df.filter(pl.col("iteration") == df["iteration"].max())
+print(final.select(["iteration", "lower_bound", "upper_bound", "gap_percent"]))
+```
+
+```text
+shape: (1, 4)
+┌───────────┬─────────────┬───────────────┬─────────────┐
+│ iteration ┆ lower_bound ┆ upper_bound   ┆ gap_percent │
+│ ---       ┆ ---         ┆ ---           ┆ ---         │
+│ i32       ┆ f64         ┆ f64           ┆ f64         │
+╞═══════════╪═════════════╪═══════════════╪═════════════╡
+│ 128       ┆ 1.5596e7    ┆ 579592.198622 ┆ -96.283598  │
+└───────────┴─────────────┴───────────────┴─────────────┘
+```
+
+### R
+
+```r
+library(arrow)
+library(ggplot2)
+
+df <- read_parquet("results/training/convergence.parquet")
+
+# Plot convergence bounds
+# upper_bound_std is NULL on exact-convergence rows (upper_bound_kind == "exact");
+# coalesce it to 0 so the ribbon collapses onto the line instead of NA.
+ggplot(df, aes(x = iteration)) +
+  geom_line(aes(y = lower_bound, color = "Lower bound")) +
+  geom_line(aes(y = upper_bound, color = "Upper bound")) +
+  geom_ribbon(
+    aes(
+      ymin = upper_bound - dplyr::coalesce(upper_bound_std, 0),
+      ymax = upper_bound + dplyr::coalesce(upper_bound_std, 0)
+    ),
+    alpha = 0.2
+  ) +
+  labs(
+    x = "Iteration",
+    y = "Expected discounted cost (horizon total)",
+    color = NULL
+  ) +
+  theme_minimal()
+
+# Print final gap
+tail(df[, c("iteration", "lower_bound", "upper_bound", "gap_percent")], 1)
+```
+
+**What to look for in the convergence plot:**
+
+- The lower bound rises and levels off. Under a sampled forward pass
+  (`upper_bound_kind` = `"statistical"`) the upper bound is a noisy estimate
+  that can sit below the lower bound, so judge convergence by the lower
+  bound's plateau, not by the two bounds meeting. Under an enumerated forward
+  pass (`"exact"`) the upper bound carries no sampling noise.
+- A lower bound that stays flat after the first few iterations suggests the
+  backward pass cuts are not improving: check `cuts_added` to confirm cuts
+  are being generated.
+- An upper bound that oscillates widely without narrowing suggests the
+  `forward_passes` count is too low to produce a stable estimate.
+
+---
+
+## Analyzing Simulation Results
+
+The simulation output is Hive-partitioned: results are stored in one
+`data.parquet` file per scenario under `simulation/<category>/scenario_id=NNNN/`.
+Polars, Pandas, R arrow, and DuckDB all support reading the entire directory
+as a single table and filtering by `scenario_id` at the storage layer.
+
+:::note[Table grain]
+Each row of a dispatch table (`hydros`, `thermals`, `buses`, `exchanges`,
+`hydro_bus_generation`, and the other per-block families) is one
+(`scenario_id`, `stage_id`, `block_id`, entity id); `hydro_bus_generation`
+adds `bus_id`. `costs` is one row per (`scenario_id`, `stage_id`) with a null
+`block_id`. `node_id` names the visited policy-graph node; `stage_id` and
+`block_id` are the stage and block ids declared in `stages.json`.
+
+Aggregate within a (scenario, stage) first — sum energy and cost over blocks,
+weight a per-block rate such as `water_value_per_hm3` by block hours — and only then take statistics across
+scenarios. Each table's columns are listed in the
+[Output Format](/reference/output/).
+:::
+
+The printed outputs in this section and in
+[Common Analysis Tasks](#common-analysis-tasks) come from one study: a 1dtoy
+case modified to carry two blocks per stage, `PEAK` and `OFFPEAK`, that split
+the stage's hours (an odd hour count gives `OFFPEAK` the extra hour), run with
+100 simulation scenarios. The template as generated has one block per stage, so
+its numbers differ. The snippets run from the
+case directory, which here holds both `results/` and `stages.json`.
+
+### Reading a whole table
+
+Each `simulation/<entity>/` directory reads as one table over all scenarios;
+`scenario_id` is both the partition directory name and an in-file column (see
+[Hive Partitioning](/reference/output/#hive-partitioning)).
+
+```python
+# Polars — reads all scenarios at once, infers scenario_id from directory names
+import polars as pl
+
+df = pl.read_parquet("results/simulation/costs/")
+print(df.head())
+```
+
+```text
+shape: (5, 29)
+┌────────────┬──────────┬─────────┬──────────┬───┬────────────┬────────────┬───────────┬───────────┐
+│ scenario_i ┆ stage_id ┆ node_id ┆ block_id ┆ … ┆ turbined_c ┆ curtailmen ┆ exchange_ ┆ pumping_c │
+│ d          ┆ ---      ┆ ---     ┆ ---      ┆   ┆ ost        ┆ t_cost     ┆ cost      ┆ ost       │
+│ ---        ┆ i32      ┆ i32     ┆ i32      ┆   ┆ ---        ┆ ---        ┆ ---       ┆ ---       │
+│ i32        ┆          ┆         ┆          ┆   ┆ f64        ┆ f64        ┆ f64       ┆ f64       │
+╞════════════╪══════════╪═════════╪══════════╪═══╪════════════╪════════════╪═══════════╪═══════════╡
+│ 0          ┆ 0        ┆ 0       ┆ null     ┆ … ┆ 1674.0     ┆ 0.0        ┆ 0.0       ┆ 0.0       │
+│ 0          ┆ 1        ┆ 1       ┆ null     ┆ … ┆ 1566.0     ┆ 0.0        ┆ 0.0       ┆ 0.0       │
+│ 0          ┆ 2        ┆ 2       ┆ null     ┆ … ┆ 1674.0     ┆ 0.0        ┆ 0.0       ┆ 0.0       │
+│ 0          ┆ 3        ┆ 3       ┆ null     ┆ … ┆ 1563.31441 ┆ 0.0        ┆ 0.0       ┆ 0.0       │
+│            ┆          ┆         ┆          ┆   ┆ 8          ┆            ┆           ┆           │
+│ 1          ┆ 0        ┆ 0       ┆ null     ┆ … ┆ 1674.0     ┆ 0.0        ┆ 0.0       ┆ 0.0       │
+└────────────┴──────────┴─────────┴──────────┴───┴────────────┴────────────┴───────────┴───────────┘
+```
+
+```python
+# Pandas with PyArrow backend
+import pandas as pd
+
+df = pd.read_parquet("results/simulation/costs/")
+```
+
+### Aggregating across scenarios
+
+The most common operation is computing statistics across all scenarios for
+a given entity or stage.
+
+**Python (Polars) — mean and percentiles:**
+
+```python
+import polars as pl
+
+# Load all hydro results across all scenarios
+hydros = pl.read_parquet("results/simulation/hydros/")
+
+# Total generation per hydro plant per stage in each scenario (sum over blocks)
+by_scenario = (
+    hydros
+    .group_by(["scenario_id", "stage_id", "hydro_id"])
+    .agg(pl.col("generation_mwh").sum())
+)
+
+# Mean and percentiles across scenarios per hydro plant per stage
+mean_gen = (
+    by_scenario
+    .group_by(["hydro_id", "stage_id"])
+    .agg(
+        pl.col("generation_mwh").mean().alias("mean_generation_mwh"),
+        pl.col("generation_mwh").quantile(0.10).alias("p10_generation_mwh"),
+        pl.col("generation_mwh").quantile(0.90).alias("p90_generation_mwh"),
+    )
+    .sort(["hydro_id", "stage_id"])
+)
+print(mean_gen)
+```
+
+```text
+shape: (4, 5)
+┌──────────┬──────────┬─────────────────────┬────────────────────┬────────────────────┐
+│ hydro_id ┆ stage_id ┆ mean_generation_mwh ┆ p10_generation_mwh ┆ p90_generation_mwh │
+│ ---      ┆ ---      ┆ ---                 ┆ ---                ┆ ---                │
+│ i32      ┆ i32      ┆ f64                 ┆ f64                ┆ f64                │
+╞══════════╪══════════╪═════════════════════╪════════════════════╪════════════════════╡
+│ 0        ┆ 0        ┆ 33480.0             ┆ 33480.0            ┆ 33480.0            │
+│ 0        ┆ 1        ┆ 31542.464448        ┆ 31320.0            ┆ 31320.0            │
+│ 0        ┆ 2        ┆ 34696.161217        ┆ 33480.0            ┆ 37200.0            │
+│ 0        ┆ 3        ┆ 33794.388576        ┆ 27557.374825       ┆ 36000.0            │
+└──────────┴──────────┴─────────────────────┴────────────────────┴────────────────────┘
+```
+
+**R:**
+
+```r
+library(arrow)
+library(dplyr)
+
+# Load all hydro results
+hydros <- open_dataset("results/simulation/hydros/") |> collect()
+
+# Total generation per hydro plant per stage in each scenario (sum over blocks)
+by_scenario <- hydros |>
+  group_by(scenario_id, stage_id, hydro_id) |>
+  summarise(generation_mwh = sum(generation_mwh), .groups = "drop")
+
+# Mean and percentiles across scenarios per hydro plant per stage
+mean_gen <- by_scenario |>
+  group_by(hydro_id, stage_id) |>
+  summarise(
+    mean_generation_mwh = mean(generation_mwh),
+    p10_generation_mwh  = quantile(generation_mwh, 0.10),
+    p90_generation_mwh  = quantile(generation_mwh, 0.90),
+    .groups = "drop"
+  ) |>
+  arrange(hydro_id, stage_id)
+
+print(mean_gen)
+```
+
+### Filtering to a single scenario
+
+A lazy scan with a predicate on the `scenario_id` partition column lets Polars
+read only the matching partition instead of every scenario's file.
+
+```python
+# Polars — lazy scan; the scenario_id filter selects the scenario 0 partition
+import polars as pl
+
+costs_s0 = (
+    pl.scan_parquet("results/simulation/costs/", hive_partitioning=True)
+    .filter(pl.col("scenario_id") == 0)
+    .select("stage_id", "block_id", "immediate_cost", "future_cost", "total_cost")
+    .collect()
+)
+print(costs_s0)
+```
+
+```text
+shape: (4, 5)
+┌──────────┬──────────┬────────────────┬─────────────┬────────────┐
+│ stage_id ┆ block_id ┆ immediate_cost ┆ future_cost ┆ total_cost │
+│ ---      ┆ ---      ┆ ---            ┆ ---         ┆ ---        │
+│ i32      ┆ i32      ┆ f64            ┆ f64         ┆ f64        │
+╞══════════╪══════════╪════════════════╪═════════════╪════════════╡
+│ 0        ┆ null     ┆ 169074.0       ┆ 3.1011e7    ┆ 3.1180e7   │
+│ 1        ┆ null     ┆ 158166.0       ┆ 4.1088e7    ┆ 4.1246e7   │
+│ 2        ┆ null     ┆ 169074.0       ┆ 1.9806e7    ┆ 1.9975e7   │
+│ 3        ┆ null     ┆ 8.6664e6       ┆ 0.0         ┆ 8.6664e6   │
+└──────────┴──────────┴────────────────┴─────────────┴────────────┘
+```
+
+```sql
+-- DuckDB
+SELECT * FROM read_parquet('results/simulation/costs/**/*.parquet')
+WHERE scenario_id = 0
+ORDER BY stage_id;
+```
+
+```r
+# R with the arrow package
+library(arrow)
+ds <- open_dataset("results/simulation/costs/")
+dplyr::collect(dplyr::filter(ds, scenario_id == 0))
+```
+
+---
+
+## Common Analysis Tasks
+
+### (a) Expected generation by hydro plant
+
+```python
+import polars as pl
+
+hydros = pl.read_parquet("results/simulation/hydros/")
+
+# Sum over stages and blocks within each scenario, then average over scenarios
+expected = (
+    hydros
+    .group_by(["scenario_id", "hydro_id"])
+    .agg(pl.col("generation_mwh").sum().alias("total_generation_mwh"))
+    .group_by("hydro_id")
+    .agg(pl.col("total_generation_mwh").mean().alias("expected_total_generation_mwh"))
+    .sort("hydro_id")
+)
+print(expected)
+```
+
+```text
+shape: (1, 2)
+┌──────────┬───────────────────────────────┐
+│ hydro_id ┆ expected_total_generation_mwh │
+│ ---      ┆ ---                           │
+│ i32      ┆ f64                           │
+╞══════════╪═══════════════════════════════╡
+│ 0        ┆ 133513.014241                 │
+└──────────┴───────────────────────────────┘
+```
+
+### (b) Expected thermal generation cost
+
+```python
+import polars as pl
+
+thermals = pl.read_parquet("results/simulation/thermals/")
+
+# Sum over stages and blocks within each scenario, then average over scenarios
+thermal_cost = (
+    thermals
+    .group_by(["scenario_id", "thermal_id"])
+    .agg(pl.col("generation_cost").sum().alias("total_cost"))
+    .group_by("thermal_id")
+    .agg(pl.col("total_cost").mean().alias("mean_total_cost"))
+    .sort("thermal_id")
+)
+print(thermal_cost)
+```
+
+```text
+shape: (2, 2)
+┌────────────┬─────────────────┐
+│ thermal_id ┆ mean_total_cost │
+│ ---        ┆ ---             │
+│ i32        ┆ f64             │
+╞════════════╪═════════════════╡
+│ 0          ┆ 217800.0        │
+│ 1          ┆ 394859.698389   │
+└────────────┴─────────────────┘
+```
+
+In R:
+
+```r
+library(arrow)
+library(dplyr)
+
+thermals <- open_dataset("results/simulation/thermals/") |> collect()
+
+# Sum over stages and blocks within each scenario, then average over scenarios
+thermal_cost <- thermals |>
+  group_by(scenario_id, thermal_id) |>
+  summarise(total_cost = sum(generation_cost), .groups = "drop") |>
+  group_by(thermal_id) |>
+  summarise(mean_total_cost = mean(total_cost), .groups = "drop") |>
+  arrange(thermal_id)
+
+print(thermal_cost)
+```
+
+### (c) Deficit probability per bus
+
+A scenario has a deficit at a given bus and stage if `deficit_mwh > 0` in any
+block of that stage. The deficit probability is the fraction of scenarios where
+this occurs. Dropping `bus_id` from both `group_by` key lists gives the
+probability that any bus has a deficit.
+
+```python
+import polars as pl
+
+buses = pl.read_parquet("results/simulation/buses/")
+
+# A (scenario, stage, bus) has a deficit if any of its blocks does;
+# the probability is the mean of that flag over scenarios
+deficit_prob = (
+    buses
+    .group_by(["scenario_id", "stage_id", "bus_id"])
+    .agg((pl.col("deficit_mwh") > 0).any().alias("has_deficit"))
+    .group_by(["bus_id", "stage_id"])
+    .agg(pl.col("has_deficit").mean().alias("deficit_probability"))
+    .sort(["bus_id", "stage_id"])
+)
+print(deficit_prob)
+```
+
+```text
+shape: (4, 3)
+┌────────┬──────────┬─────────────────────┐
+│ bus_id ┆ stage_id ┆ deficit_probability │
+│ ---    ┆ ---      ┆ ---                 │
+│ i32    ┆ i32      ┆ f64                 │
+╞════════╪══════════╪═════════════════════╡
+│ 0      ┆ 0        ┆ 0.0                 │
+│ 0      ┆ 1        ┆ 0.03                │
+│ 0      ┆ 2        ┆ 0.05                │
+│ 0      ┆ 3        ┆ 0.22                │
+└────────┴──────────┴─────────────────────┘
+```
+
+### (d) Water value (shadow price) from hydro output
+
+The `water_value_per_hm3` column in `simulation/hydros/` is the dual of the
+plant's water-balance row, in monetary units per hm³: the change in cost from
+one more hm³ of water in the reservoir. On a parallel stage every block row
+carries the stage row's value; on a chronological stage each block row carries
+its own block's value, so to aggregate a chronological stage weight the blocks
+by their duration (the block hours in `stages.json`).
+
+```python
+import json
+
+import polars as pl
+
+# Block hours from the case's stages.json, keyed like the output rows
+with open("stages.json") as f:
+    stages = json.load(f)["stages"]
+hours = pl.DataFrame(
+    [
+        {"stage_id": s["id"], "block_id": b["id"], "hours": b["hours"]}
+        for s in stages
+        for b in s["blocks"]
+    ]
+)
+
+hydros = pl.read_parquet("results/simulation/hydros/")
+
+# Hours-weighted mean over blocks within each (scenario, stage),
+# then the mean across scenarios
+water_value = (
+    hydros
+    .join(hours, on=["stage_id", "block_id"])
+    .group_by(["scenario_id", "stage_id", "hydro_id"])
+    .agg(
+        (
+            (pl.col("water_value_per_hm3") * pl.col("hours")).sum()
+            / pl.col("hours").sum()
+        ).alias("stage_water_value")
+    )
+    .group_by(["hydro_id", "stage_id"])
+    .agg(pl.col("stage_water_value").mean().alias("mean_water_value"))
+    .sort(["hydro_id", "stage_id"])
+)
+print(water_value)
+```
+
+```text
+shape: (4, 3)
+┌──────────┬──────────┬──────────────────┐
+│ hydro_id ┆ stage_id ┆ mean_water_value │
+│ ---      ┆ ---      ┆ ---              │
+│ i32      ┆ i32      ┆ f64              │
+╞══════════╪══════════╪══════════════════╡
+│ 0        ┆ 0        ┆ -520915.887568   │
+│ 0        ┆ 1        ┆ -503157.367425   │
+│ 0        ┆ 2        ┆ -424729.996533   │
+│ 0        ┆ 3        ┆ -458827.777778   │
+└──────────┴──────────┴──────────────────┘
+```
+
+The value is zero or negative wherever one more hm³ lowers the cost, because
+the water displaces thermal generation or deficit now or later; a larger
+magnitude means scarcer water, which the solver conserves for later stages. A
+value near zero means the reservoir is abundant and water has little marginal
+value at that point in time. A positive value appears where extra water can only
+leave the reservoir at a cost, for example through a spillage penalty: one more
+hm³ then raises the cost.
+
+### (e) Per-bus dispatch for a hydro plant split across buses
+
+`simulation/hydros/` reports one row per (`scenario_id`, `stage_id`,
+`block_id`, `hydro_id`) — the plant's total over its unit groups, regardless of
+how many `unit_groups` it declares or how many buses they span. For the split
+by bus, read `simulation/hydro_bus_generation/`, keyed by (`scenario_id`,
+`stage_id`, `block_id`, `hydro_id`, `bus_id`):
+
+```python
+import polars as pl
+
+bus_gen = pl.read_parquet("results/simulation/hydro_bus_generation/")
+
+# Sum the blocks within each (scenario, stage), then average over scenarios
+per_bus = (
+    bus_gen
+    .group_by(["scenario_id", "stage_id", "hydro_id", "bus_id"])
+    .agg(pl.col("generation_mwh").sum())
+    .group_by(["hydro_id", "bus_id", "stage_id"])
+    .agg(pl.col("generation_mwh").mean().alias("mean_generation_mwh"))
+    .sort(["hydro_id", "bus_id", "stage_id"])
+)
+print(per_bus)
+```
+
+```text
+shape: (4, 4)
+┌──────────┬────────┬──────────┬─────────────────────┐
+│ hydro_id ┆ bus_id ┆ stage_id ┆ mean_generation_mwh │
+│ ---      ┆ ---    ┆ ---      ┆ ---                 │
+│ i32      ┆ i32    ┆ i32      ┆ f64                 │
+╞══════════╪════════╪══════════╪═════════════════════╡
+│ 0        ┆ 0      ┆ 0        ┆ 33480.0             │
+│ 0        ┆ 0      ┆ 1        ┆ 31542.464448        │
+│ 0        ┆ 0      ┆ 2        ┆ 34696.161217        │
+│ 0        ┆ 0      ┆ 3        ┆ 33794.388576        │
+└──────────┴────────┴──────────┴─────────────────────┘
+```
+
+`turbined_m3s` rows sum bit-exactly to the plant's `simulation/hydros/` row on
+every production model. `generation_mw` rows sum bit-exactly only for FPHA or
+single-cell plants, and `generation_mwh` rows only for single-cell plants, since
+each row multiplies its own `generation_mw` by the block duration. A split of
+one cell's flow across its same-bus groups has no dual to determine it, so it is
+not reported at all — only the per-bus total is.
+
+---
+
+## Troubleshooting
+
+### Gap not converging
+
+The lower bound is still rising after many iterations, or the gap stays large.
+Under a sampled upper bound the gap is a noisy estimate that can be negative
+(see [Reading the gap from `training/metadata.json`](#reading-the-gap-from-trainingmetadatajson)),
+so check whether the lower bound has plateaued before reading the gap.
+
+Possible causes:
+
+- **Too few iterations.** The most common cause. Increase the `iteration_limit`.
+- **Too few forward passes.** A `forward_passes` count of 1 (as in the
+  1dtoy tutorial) gives high variance in the upper bound estimate. Raising the
+  `forward_passes` count averages the estimate over more scenarios per iteration.
+- **Numerically difficult stages.** Check `training/convergence.parquet` for
+  iterations where `cuts_added` is zero — this can indicate stages where the
+  backward pass is not generating improving cuts.
+- **Policy horizon issues.** Verify `stages.json` has the correct stage
+  ordering and that `policy_graph.type` is set correctly.
+
+### Unexpected deficit
+
+Simulation scenarios show non-zero `deficit_mwh` in `simulation/buses/` but
+the system should have enough capacity.
+
+Possible causes:
+
+- **Insufficient thermal capacity.** Compare total load (`load_mw` summed
+  across buses) against total thermal capacity. If load exceeds generation
+  capacity in some scenarios, deficit is unavoidable.
+- **Hydro reservoir ran dry.** Check `storage_final_hm3` in
+  `simulation/hydros/`. If it hits zero in early stages, subsequent stages
+  have no hydro generation and may resort to deficit.
+- **Very low deficit penalty.** If `deficit_segments` in `penalties.json`
+  are priced below thermal generation cost, the solver will prefer deficit
+  over generation. Increase the deficit cost.
+
+### Zero generation from a plant
+
+A thermal or hydro plant shows zero generation in all scenarios.
+
+Possible causes:
+
+- **Plant is more expensive than deficit.** Check the plant's cost against
+  the bus deficit penalty. If the cost exceeds the penalty, deficit is
+  cheaper and the solver avoids dispatching the plant.
+- **Bus connectivity.** Verify the plant is connected to a bus that actually
+  has load. For a thermal plant, non-controllable source, pumping station, or
+  energy contract, check the entity's top-level `bus_id`; a hydro plant has no
+  top-level `bus_id` — check the `bus_id` on each of its `unit_groups[]`
+  entries instead. A plant connected to a zero-load bus will never be
+  dispatched.
+- **Hydro: reservoir constraints too tight.** If `min_storage_hm3` is close
+  to the initial storage level, the solver cannot turbine water without
+  risking a storage violation. Review `initial_conditions.json` and storage
+  bounds in `hydros.json`.
+
+---
+
+## Related Pages
+
+- **Theory:** [Upper Bound Evaluation](/math/upper-bound-evaluation/) — the statistical upper-bound estimator behind the convergence metrics this page analyzes.
+- [Output Format](/reference/output/) — complete field-by-field schema for all output files
+- [Configuration](/running/configuration/) — all `config.json` fields including stopping rules and seed
