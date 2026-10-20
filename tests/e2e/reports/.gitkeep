@@ -1,0 +1,16 @@
+# Query E2E Test Reports
+#
+# Este diretório armazena os dashboards HTML gerados pelo framework.
+#
+# Estrutura:
+#   - dashboard.html: dashboard interativo com visualizações e comparações
+#   - latest.html: relatório da bateria mais recente (se existir)
+#   - latest.json: dados JSON da bateria mais recente (se existir)
+#
+# O dashboard inclui:
+#   - Lista de baterias com seleção
+#   - Tabela de testes com filtros e detalhes expandíveis
+#   - Gráficos de tendência (Chart.js)
+#   - Métricas por grupo e tag
+#   - Comparação entre baterias
+#   - Alertas de degradação

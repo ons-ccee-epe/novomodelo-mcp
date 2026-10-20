@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import functools
+import time
 
 from mcp.server.fastmcp import FastMCP
 
@@ -12,6 +13,7 @@ from .adapters import versions
 from .adapters.discovery import bridge_origin, find_novomodelo, tool_version
 from .adapters.paths import allowed_roots
 from .adapters.reference import docs_origin
+from .adapters.response_log import log_tool_call
 from .adapters.state import state_dir
 from .config import load_settings
 from .names import SERVER_NAME
@@ -31,15 +33,15 @@ SERVER_INSTRUCTIONS = """\
 Servidor MCP do novomodelo: valida, converte (NEWAVE/DECOMP), roda, compara e lê os
 resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 
-- Comece por `server_info`: versões das peças, workspace e se há versão nova.
-- Se faltar o executável do novomodelo, ofereça a tool `instalar_novomodelo` (a pessoa
-  pode pedir “instale o executável do novomodelo”); o comando manual é a alternativa.
+- Comece por server_info: versões das peças, workspace e se há versão nova.
+- Se faltar o executável do novomodelo, ofereça a tool instalar_novomodelo (a pessoa
+  pode pedir "instale o executável do novomodelo"); o comando manual é a alternativa.
 - As docs embutidas são as oficiais da versão instalada. Para a metodologia e o uso do
-  novomodelo, use `docs_search` antes de responder, e não a web nem a memória: a
+  novomodelo, use docs_search antes de responder, e não a web nem a memória: a
   definição do novomodelo pode diferir da literatura e do NEWAVE.
 - Busque em inglês (as docs estão em inglês); termos em português do glossário das
-  docs são traduzidos. Depois leia a seção com `docs_read(page, secao)`.
-- Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
+  docs são traduzidos. Depois leia a seção com docs_read(page, secao).
+- Toda resposta sobre metodologia cita a página e a seção (pagina#secao) de onde veio.
 - Se as docs não cobrem o assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.
 - As tools que gravam ou alteram arquivos pedem aprovação.
@@ -47,9 +49,10 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 
 
 class _WithVersionWarnings:
-    """`mcp` cujo `.tool()` faz toda resposta levar `avisos_de_versao` quando houver.
+    """mcp cujo .tool() faz toda resposta levar visos_de_versao quando houver.
 
-    Embrulhar no registro, e não no `cap_envelope`: parte das tools não passa por ele.
+    Embrulhar no registro, e não no cap_envelope: parte das tools não passa por ele.
+    Também loga chamadas e respostas quando NOVOMODELO_MCP_RESPONSE_LOG está definido.
     """
 
     def __init__(self, mcp: FastMCP, settings) -> None:
@@ -64,7 +67,18 @@ class _WithVersionWarnings:
         def deco(fn):
             @functools.wraps(fn)
             def with_warnings(*a, **k):
+                start_time = time.perf_counter()
                 result = fn(*a, **k)
+                duration_ms = (time.perf_counter() - start_time) * 1000
+                
+                # Loga a chamada e resposta para validação E2E
+                log_tool_call(
+                    tool_name=fn.__name__,
+                    arguments=k,
+                    result=result,
+                    duration_ms=duration_ms,
+                )
+                
                 try:
                     warnings = versions.version_warnings(self._settings)
                 except Exception:  # noqa: BLE001 - never-raise: o aviso é extra, não pode derrubar a tool
@@ -81,7 +95,7 @@ def build_server() -> FastMCP:
     """Constrói e configura o servidor com todas as ferramentas registradas."""
     settings = load_settings()
     server = FastMCP(SERVER_NAME, instructions=SERVER_INSTRUCTIONS)
-    # O FastMCP não recebe versão: sem isto o `initialize` anuncia a do SDK `mcp`.
+    # O FastMCP não recebe versão: sem isto o initialize anuncia a do SDK mcp.
     server._mcp_server.version = __version__
     mcp = _WithVersionWarnings(server, settings)
 
@@ -98,8 +112,8 @@ def build_server() -> FastMCP:
     def server_info() -> dict:
         """Diagnóstico do próprio MCP: binários, versões e se há versão nova.
 
-        `versoes`: executável, biblioteca, bridge e docs, com a versão esperada.
-        `versao_nova`: consulta, no máximo a cada 6 horas e em até alguns segundos, os
+        ersoes: executável, biblioteca, bridge e docs, com a versão esperada.
+        ersao_nova: consulta, no máximo a cada 6 horas e em até alguns segundos, os
         releases do novomodelo e do bridge (domínios oficiais); sem rede, diz que
         não foi possível verificar e mostra onde conferir.
         """
@@ -138,7 +152,8 @@ def build_server() -> FastMCP:
 
 
 def main() -> None:
-    """Executável `novomodelo-mcp`: sobe o servidor no stdio; `configurar` grava o cliente."""
+    """Executável 
+ovomodelo-mcp: sobe o servidor no stdio; configurar grava o cliente."""
     import sys
     if sys.argv[1:2] == ["configurar"]:
         from .client_config import main as configure
