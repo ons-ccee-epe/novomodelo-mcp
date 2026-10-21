@@ -18,12 +18,12 @@ pacote já se chamam `novomodelo-mcp`.
 |---|---|---|
 | Python | >= 3.12 | — |
 | [`uv`](https://docs.astral.sh/uv/) | — | — |
-| `novomodelo` (CLI Rust) | **0.18.0** | instalador do release: `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ons-ccee-epe/novomodelo/releases/download/v0.18.0/novomodelo-cli-installer.sh \| sh` |
-| `novomodelo-bridge` | **0.18.0** | vem com o `uv sync` deste repo |
-| `novomodelo-python` | **0.18.0** | vem com o `uv sync` deste repo |
+| `novomodelo` (CLI Rust) | **0.18.1** | instalador do release: `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ons-ccee-epe/novomodelo/releases/download/v0.18.1/novomodelo-cli-installer.sh \| sh` |
+| `novomodelo-bridge` | **0.18.1** | vem com o `uv sync` deste repo |
+| `novomodelo-python` | **0.18.1** | vem com o `uv sync` deste repo |
 
 As três peças do novomodelo andam juntas: use a mesma versão em todas. Os pins são exatos
-(`novomodelo-python==0.18.0` e `novomodelo-bridge==0.18.0`), porque o solver só carrega uma política
+(`novomodelo-python==0.18.1` e `novomodelo-bridge==0.18.1`), porque o solver só carrega uma política
 gravada pela mesma versão do binding.
 
 ## Instalação e execução
