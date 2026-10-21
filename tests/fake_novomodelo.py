@@ -94,7 +94,7 @@ if subargv[:1] == ["run"]:
                                ("relatorio: iteracao 1", canal), ("relatorio: iteracao 2", canal),
                                ("relatorio: resumo", canal)):
             print(linha, file=destino, flush=True)
-            time.sleep(0.05)
+            time.sleep(0.2)
     time.sleep(float(os.environ.get("FAKE_NOVOMODELO_SLEEP", "0")))
     rc = int(os.environ.get("FAKE_NOVOMODELO_RC", "0"))
     if rc == 0:

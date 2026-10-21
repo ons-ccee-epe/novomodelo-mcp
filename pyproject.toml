@@ -1,6 +1,6 @@
 [project]
 name = "novomodelo-mcp"
-version = "0.18.0.post1"
+version = "0.18.1"
 description = "Servidor MCP (fachada local) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -26,8 +26,8 @@ dependencies = [
     "jsonschema>=4.0",
     # Pins exatos, como o novomodelo-bridge faz: o solver só carrega uma política
     # gravada pela mesma versão do binding. Sobem juntos com o release do novomodelo.
-    "novomodelo-python==0.18.0",
-    "novomodelo-bridge==0.18.0",
+    "novomodelo-python==0.18.1",
+    "novomodelo-bridge==0.18.1",
     "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
     "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
 ]
