@@ -9,8 +9,8 @@ por ferramentas padronizadas, sem que este servidor contenha regra de negócio.
 > existe) ou um binding oficial (`novomodelo-python`) e repassa o resultado. Nada de
 > reimplementar conversão, validação ou comparação: correções vão para o upstream.
 
-O repositório ainda se chama `<repositório anterior>` (`<repositório anterior>`); o produto e o
-pacote já se chamam `novomodelo-mcp`.
+O repositório, o produto e o pacote se chamam `novomodelo-mcp`
+(`<organização interna>/novomodelo-mcp`).
 
 ## Requisitos
 
@@ -29,7 +29,7 @@ gravada pela mesma versão do binding.
 ## Instalação e execução
 
 ```bash
-cd <repositório anterior>
+cd novomodelo-mcp
 uv sync --system-certs     # --system-certs: redes com proxy que reassina certificados
 uv run novomodelo-mcp      # sobe o servidor no transporte stdio
 ```
