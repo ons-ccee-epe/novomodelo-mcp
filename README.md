@@ -22,9 +22,9 @@ pacote já se chamam `novomodelo-mcp`.
 | `novomodelo-bridge` | **0.18.1** | vem com o `uv sync` deste repo |
 | `novomodelo-python` | **0.18.1** | vem com o `uv sync` deste repo |
 
-As três peças do novomodelo andam juntas: use a mesma versão em todas. Os pins são exatos
-(`novomodelo-python==0.18.1` e `novomodelo-bridge==0.18.1`), porque o solver só carrega uma política
-gravada pela mesma versão do binding.
+As três peças do novomodelo andam juntas: use a mesma versão em todas, porque o solver só
+carrega uma política gravada pela mesma versão do binding. O pin exato fica só no bridge
+(`novomodelo-bridge==0.18.1`), que por sua vez fixa a mesma versão da `novomodelo-python`.
 
 ## Instalação e execução
 
@@ -353,17 +353,17 @@ Para o próximo nome, crie um mapa com `from = "novomodelo"`. As exceções atua
 (`<repositório anterior>`, `cobre_version`, `cobrem`) estão comentadas no próprio mapa.
 
 **Temporário, enquanto o MCP vive fora do repo do novomodelo:** o CI roda o `check` em todo push e PR (job `rename-guard`), com a ferramenta baixada do
-novomodelo na mesma tag do pin do `novomodelo-python`. Se o nome antigo reaparecer, o CI falha.
+novomodelo na mesma tag do pin do `novomodelo-bridge`. Se o nome antigo reaparecer, o CI falha.
 
 ## Atualizar para uma versão nova do novomodelo
 
-**Temporário, enquanto o MCP vive fora do repo do novomodelo:** o Dependabot abre um PR para a `develop` quando sai uma `novomodelo-python` nova. Ao
-aceitar, suba junto o `ref` do job `rename-guard` em `.github/workflows/ci.yml` para a
+**Temporário, enquanto o MCP vive fora do repo do novomodelo:** o Dependabot abre um PR para a `develop` quando sai um `novomodelo-bridge` novo; a
+`novomodelo-python` sobe junto no `uv.lock`. Ao aceitar, suba junto o `ref` do job `rename-guard` em `.github/workflows/ci.yml` para a
 mesma tag, e atualize o novomodelo e o bridge na máquina para a mesma versão.
 
 A versão do MCP (`version` no `pyproject.toml`) é a do novomodelo; uma correção só do MCP
 vira `.postN` (ex.: `0.18.0.post1`). `tests/test_package_metadata.py` confere que a versão
-acompanha o pin da biblioteca e que o `initialize` anuncia a versão do MCP.
+acompanha o pin do bridge e que o `initialize` anuncia a versão do MCP.
 
 ## Release
 

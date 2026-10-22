@@ -17,6 +17,8 @@ SOLVER_CLI = "novomodelo"
 BRIDGE_CLI = "novomodelo-bridge"
 #: Distribuição (PyPI) dos bindings — o que `importlib.metadata.version` consulta.
 BINDING_DIST = "novomodelo-python"
+#: Distribuição (PyPI) do bridge — a única com pin exato no MCP; ela fixa a dos bindings.
+BRIDGE_DIST = "novomodelo-bridge"
 #: Prefixo de todas as variáveis de ambiente do MCP.
 ENV_PREFIX = "NOVOMODELO_MCP_"
 #: Distribuição do próprio MCP (metadados: versão e pin da biblioteca).

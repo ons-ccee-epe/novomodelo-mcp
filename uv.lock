@@ -550,7 +550,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "mcp", specifier = ">=1.2.0,<2" },
     { name = "novomodelo-bridge", specifier = "==0.18.1" },
-    { name = "novomodelo-python", specifier = "==0.18.1" },
+    { name = "novomodelo-python" },
     { name = "polars", specifier = ">=1.0" },
     { name = "truststore", specifier = ">=0.10" },
 ]
