@@ -258,7 +258,7 @@ def test_dominios_permitidos(url):
 @pytest.mark.parametrize("url", [
     "http://github.com/ons-ccee-epe/novomodelo",
     "https://github.com/outra-org/novomodelo",
-    "https://api.github.com/repos/<repositório anterior>/releases/latest",
+    "https://api.github.com/repos/<organização interna>/novomodelo-mcp/releases/latest",
     "https://pypi.org/pypi/outro-pacote/json",
     "https://release-assets.githubusercontent.com/x",
     "https://evil.example/ons-ccee-epe/",

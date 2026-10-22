@@ -9,7 +9,7 @@ from pathlib import Path
 
 import novomodelo_mcp
 from novomodelo_mcp.adapters import versions
-from novomodelo_mcp.names import MCP_DIST
+from novomodelo_mcp.names import BINDING_DIST, BRIDGE_DIST, MCP_DIST
 from novomodelo_mcp.server import build_server
 
 PYPROJECT = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml")
@@ -35,6 +35,13 @@ def test_server_info_mostra_a_versao_do_mcp(monkeypatch):
 def test_versao_do_mcp_acompanha_a_do_novomodelo():
     base = PYPROJECT["version"].split(".post")[0]
     assert base == versions.expected_version()
+
+
+def test_pin_exato_so_no_bridge_e_a_biblioteca_instalada_e_a_mesma():
+    deps = PYPROJECT["dependencies"]
+    assert f"{BRIDGE_DIST}=={versions.expected_version()}" in deps
+    assert BINDING_DIST in deps, "a biblioteca fica sem pin: o bridge fixa a versão dela"
+    assert metadata.version(BINDING_DIST) == metadata.version(BRIDGE_DIST)
 
 
 def test_autores_sao_os_tres_mantenedores_do_novomodelo():

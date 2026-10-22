@@ -23,8 +23,8 @@ keep_files = [
 
 # Regras de endereço, tentadas antes da regra do nome; a primeira que casa vence.
 
-# Nome do repositório no GitHub (<repositório anterior>) e da pasta do clone.
-# O repo continua com esse nome por ora (decisão de 10/out); trocar quando for renomeado.
+# Nome antigo do repositório no GitHub e da pasta do clone; ainda aparece nos títulos das
+# regras de agente (CLAUDE.md, .claude/rules, .kiro/steering) e em caminhos de exemplo.
 [[rule]]
 pattern = '<repositório anterior>'
 keep = true
