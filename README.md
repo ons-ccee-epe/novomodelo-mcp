@@ -55,7 +55,10 @@ novomodelo-mcp configurar --cliente claude-desktop --workspace ~/estudos        
 
 (No checkout, use `uv run novomodelo-mcp configurar …`.) `--cliente` aceita
 `claude-desktop`, `claude-code` e `kiro`; `--workspace` pode ser repetido, e a pasta que ainda não
-existe é criada ao gravar (nunca com `--mostrar`).
+existe é criada ao gravar (nunca com `--mostrar`). A pasta de trabalho não tem padrão: sem
+`--workspace`, o comando pergunta a pasta de estudos quando roda num terminal e sai com
+código 2, sem gravar nada, quando não há terminal. Para gravar sem pasta de trabalho, use
+`--irrestrito` (não combina com `--workspace`).
 
 O comando grava a entrada `novomodelo` com o **caminho absoluto** do executável deste
 pacote (o release do novomodelo publica outro `novomodelo-mcp`, e o nome solto pegaria o
@@ -96,7 +99,7 @@ da organização. A classificação fica em `src/novomodelo_mcp/tools/annotation
 | Tipo | Tools |
 |---|---|
 | Só leitura | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `docs_search`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
-| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
+| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard`, `incluir_pastas` |
 | Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
 
 A lista de liberação das tools de leitura (Claude Code e Kiro) é gravada pelo
@@ -109,8 +112,22 @@ As ferramentas de deck e resultado recebem caminhos controlados pelo agente. Def
 **`NOVOMODELO_MCP_WORKSPACE`** com a(s) raiz(es) permitida(s) (separadas por `:`):
 qualquer caminho fora delas é **recusado** (fail-closed; `resolve()` neutraliza
 symlinks e `..`). Sem essa variável o servidor opera **irrestrito**, e o `server_info`
-sinaliza o estado. Edições com `force=True` (gravar violando o schema) e
-`case_init(force=True)` (sobrescrever arquivos) exigem `NOVOMODELO_MCP_ALLOW_FORCE=1`.
+sinaliza o estado.
+
+A recusa (`exit_code` 13) diz ao agente para não ler o caminho por outras ferramentas,
+traz a pasta do caminho em `pasta_sugerida` e pede que o agente pergunte ao usuário se
+pode incluí-la. Com o sim, o agente chama `incluir_pastas` com todas as pastas de uma
+vez: a inclusão vale na hora, sem reabrir o cliente, e fica em `pastas.json` no state
+dir, somada às raízes de `NOVOMODELO_MCP_WORKSPACE`. `incluir_pastas` nunca entra na
+lista de liberação automática, então o cliente pede aprovação a cada chamada; ela recusa
+o que não é pasta, a pasta pessoal inteira (ou acima dela), a raiz do disco, pastas de
+configuração de programas (as que começam com `.`, `AppData`, `Library`) e o state dir.
+Um `pastas.json` ilegível não libera nada. Sem `NOVOMODELO_MCP_WORKSPACE`, a tool não grava
+nada, porque tudo já é aceito. A mesma instrução está nas instructions do servidor e na
+descrição de toda tool que recebe caminho.
+
+Edições com `force=True` (gravar violando o schema) e `case_init(force=True)`
+(sobrescrever arquivos) exigem `NOVOMODELO_MCP_ALLOW_FORCE=1`.
 
 ## Prompt `metodologia`
 
@@ -272,7 +289,8 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
 **Diagnóstico**
-- `server_info()`: a versão do MCP (`versao_mcp`), binários, versões das peças (`versoes`), se há versão nova (`versao_nova`), workspace, docs, state dir e settings
+- `server_info()`: a versão do MCP (`versao_mcp`), binários, versões das peças (`versoes`), se há versão nova (`versao_nova`), workspace, pastas incluídas (`pastas_incluidas`), docs, state dir e settings
+- `incluir_pastas(pastas)`: acrescenta pastas de estudo às raízes do guard, depois de o usuário aceitar; vale na hora e fica gravado em `pastas.json` no state dir
 
 ## Estrutura
 

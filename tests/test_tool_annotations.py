@@ -21,7 +21,7 @@ READ_ONLY = {
 }
 WRITES = {
     "case_init", "schema_export", "bridge_convert_newave", "bridge_convert_decomp",
-    "bridge_compare_newave", "bridge_compare_decomp", "bridge_dashboard",
+    "bridge_compare_newave", "bridge_compare_decomp", "bridge_dashboard", "incluir_pastas",
 }
 DESTRUCTIVE = {"deck_edit_json", "deck_edit_parquet", "run_apply", "run_start", "run_cancel",
                "instalar_novomodelo"}

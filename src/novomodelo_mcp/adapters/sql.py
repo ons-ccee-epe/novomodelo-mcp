@@ -26,7 +26,7 @@ from typing import Any
 
 from ..config import Settings
 from .envelope import error
-from .paths import allowed_roots
+from .paths import allowed_roots, refuse_outside
 
 #: Comandos que apenas leem.
 _ALLOWED_START = ("SELECT", "WITH")
@@ -179,8 +179,7 @@ def guard_sql(query: str, roots: list[Path]) -> dict | None:
             except OSError as exc:
                 return error(22, f"caminho invalido no SQL: {lit}", str(exc))
             if not any(_within(rp, r) for r in roots):
-                return error(13, f"caminho fora do workspace permitido: {lit}",
-                             f"raizes: {[str(r) for r in roots]}")
+                return refuse_outside(lit, rp, roots)
     return None
 
 
