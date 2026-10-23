@@ -72,7 +72,7 @@ class _Ambiente:
 def test_refusal_tells_agent_not_to_bypass_and_suggests_the_folder():
     from novomodelo_mcp.adapters.paths import NAO_CONTORNE
     with tempfile.TemporaryDirectory() as d:
-        ws, fora = Path(d) / "ws", Path(d) / "COBRE T"
+        ws, fora = Path(d) / "ws", Path(d) / "Meus Estudos"
         ws.mkdir()
         fora.mkdir()
         with _Ambiente([ws], d) as st:

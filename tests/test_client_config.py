@@ -353,7 +353,7 @@ def test_sem_pasta_e_sem_terminal_sai_com_erro_e_nao_grava(home, monkeypatch, ca
 
 
 def test_sem_pasta_com_terminal_grava_as_pastas_digitadas(home, tmp_path, monkeypatch):
-    a, b = tmp_path / "estudos", tmp_path / "COBRE T"
+    a, b = tmp_path / "estudos", tmp_path / "Meus Estudos"
     _respostas(monkeypatch, "", str(a), f'"{b}"', "")
     assert C.main(["--cliente", "kiro"]) == 0
     raizes = _entrada("kiro")["env"]["NOVOMODELO_MCP_WORKSPACE"].split(os.pathsep)
