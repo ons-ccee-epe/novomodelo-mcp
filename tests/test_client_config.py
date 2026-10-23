@@ -43,7 +43,7 @@ def _backups(path: Path):
 
 @pytest.mark.parametrize("cliente", CLIENTES)
 def test_cria_o_arquivo_quando_nao_existe(home, cliente):
-    assert C.main(["--cliente", cliente]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     entrada = _entrada(cliente)
     assert Path(entrada["command"]).is_absolute()
     assert entrada["env"] == {}
@@ -60,7 +60,7 @@ def test_preserva_o_resto_faz_backup_e_e_idempotente(home, cliente):
     path.write_text(json.dumps(original), encoding="utf-8")
     antes = path.read_bytes()
 
-    assert C.main(["--cliente", cliente]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     gravado = json.loads(path.read_text(encoding="utf-8"))
     assert gravado["preferencia"] is True
     assert gravado["mcpServers"]["outro"] == {"command": "x"}
@@ -69,7 +69,7 @@ def test_preserva_o_resto_faz_backup_e_e_idempotente(home, cliente):
     assert backup.read_bytes() == antes
 
     depois = path.read_bytes()
-    assert C.main(["--cliente", cliente]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     assert path.read_bytes() == depois
     assert len(_backups(path)) == 1
 
@@ -77,11 +77,11 @@ def test_preserva_o_resto_faz_backup_e_e_idempotente(home, cliente):
 def test_lista_liberada_e_a_das_tools_de_leitura_do_servidor(home):
     leitura = _leitura_do_servidor()
     assert C.read_only_tools() == leitura
-    C.main(["--cliente", "claude-code"])
+    C.main(["--irrestrito", "--cliente", "claude-code"])
     allow = json.loads((home / ".claude" / "settings.json").read_text(encoding="utf-8"))[
         "permissions"]["allow"]
     assert allow == [f"mcp__novomodelo__{t}" for t in leitura]
-    C.main(["--cliente", "kiro"])
+    C.main(["--irrestrito", "--cliente", "kiro"])
     assert _entrada("kiro")["autoApprove"] == leitura
 
 
@@ -89,7 +89,7 @@ def test_nenhuma_tool_que_grava_entra_na_lista(home):
     tools = {t.name: t for t in build_server()._tool_manager.list_tools()}
     grava = {n for n, t in tools.items() if not t.annotations.readOnlyHint}
     assert grava and not grava & set(C.read_only_tools())
-    C.main(["--cliente", "claude-code"])
+    C.main(["--irrestrito", "--cliente", "claude-code"])
     allow = json.loads((home / ".claude" / "settings.json").read_text(encoding="utf-8"))[
         "permissions"]["allow"]
     assert not any(r.endswith("*") for r in allow)
@@ -101,14 +101,14 @@ def test_liberacao_preserva_as_regras_que_ja_existiam(home):
     settings.parent.mkdir(parents=True)
     settings.write_text(json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}, "x": 1}),
                         encoding="utf-8")
-    C.main(["--cliente", "claude-code"])
+    C.main(["--irrestrito", "--cliente", "claude-code"])
     gravado = json.loads(settings.read_text(encoding="utf-8"))
     assert gravado["x"] == 1 and gravado["permissions"]["allow"][0] == "Bash(ls:*)"
 
 
 @pytest.mark.parametrize("cliente", CLIENTES)
 def test_mostrar_nao_grava_nada(home, cliente, capsys):
-    assert C.main(["--cliente", cliente, "--mostrar", "--instrucoes"]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente, "--mostrar", "--instrucoes"]) == 0
     assert [p for p in home.rglob("*") if p.is_file()] == []
     saida = capsys.readouterr().out
     assert '"novomodelo"' in saida and str(C.config_path(cliente)) in saida
@@ -117,7 +117,7 @@ def test_mostrar_nao_grava_nada(home, cliente, capsys):
 def test_mostrar_imprime_so_o_trecho_e_nao_o_arquivo_inteiro(home, capsys):
     path = C.config_path("claude-code")
     path.write_text(json.dumps({"projects": {"segredo-do-historico": 1}}), encoding="utf-8")
-    C.main(["--cliente", "claude-code", "--mostrar"])
+    C.main(["--irrestrito", "--cliente", "claude-code", "--mostrar"])
     assert "segredo-do-historico" not in capsys.readouterr().out
 
 
@@ -133,7 +133,7 @@ def test_command_e_o_executavel_deste_pacote_mesmo_com_outro_antes_no_path(
     real = sysconfig.get_path
     monkeypatch.setattr(sysconfig, "get_path", lambda key, *a, **k: (
         str(tmp_path / "scripts-deste") if key == "scripts" else real(key, *a, **k)))
-    C.main(["--cliente", "kiro"])
+    C.main(["--irrestrito", "--cliente", "kiro"])
     command = _entrada("kiro")["command"]
     assert os.path.normcase(command) == os.path.normcase(tmp_path / "scripts-deste" / nome)
 
@@ -146,8 +146,8 @@ def test_workspace_vai_para_o_env_e_nada_mais(home, tmp_path):
 
 
 def test_sem_instrucoes_nenhum_arquivo_de_instrucoes_e_tocado(home):
-    C.main(["--cliente", "claude-code"])
-    C.main(["--cliente", "kiro"])
+    C.main(["--irrestrito", "--cliente", "claude-code"])
+    C.main(["--irrestrito", "--cliente", "kiro"])
     assert not (home / ".claude" / "CLAUDE.md").exists()
     assert not (home / ".kiro" / "steering").exists()
 
@@ -157,8 +157,8 @@ def test_instrucoes_aparecem_uma_vez_so(home):
     claude_md.parent.mkdir(parents=True)
     claude_md.write_text("# minhas regras\n", encoding="utf-8")
     for _ in range(2):
-        C.main(["--cliente", "claude-code", "--instrucoes"])
-        C.main(["--cliente", "kiro", "--instrucoes"])
+        C.main(["--irrestrito", "--cliente", "claude-code", "--instrucoes"])
+        C.main(["--irrestrito", "--cliente", "kiro", "--instrucoes"])
     texto = claude_md.read_text(encoding="utf-8")
     assert texto.startswith("# minhas regras\n") and texto.count(C.INSTRUCTIONS_LINE) == 1
     steering = (home / ".kiro" / "steering" / "novomodelo.md").read_text(encoding="utf-8")
@@ -166,7 +166,7 @@ def test_instrucoes_aparecem_uma_vez_so(home):
 
 
 def test_desktop_instrucoes_so_imprime_a_linha(home, capsys):
-    C.main(["--cliente", "claude-desktop", "--instrucoes"])
+    C.main(["--irrestrito", "--cliente", "claude-desktop", "--instrucoes"])
     assert C.INSTRUCTIONS_LINE in capsys.readouterr().out
     assert [p.name for p in home.rglob("*.md")] == []
 
@@ -174,7 +174,7 @@ def test_desktop_instrucoes_so_imprime_a_linha(home, capsys):
 def test_json_invalido_erro_claro_e_nada_gravado(home, capsys):
     path = C.config_path("claude-code")
     path.write_text("{ isto não é json", encoding="utf-8")
-    assert C.main(["--cliente", "claude-code"]) == 1
+    assert C.main(["--irrestrito", "--cliente", "claude-code"]) == 1
     assert "não é um JSON válido" in capsys.readouterr().err
     assert path.read_text(encoding="utf-8") == "{ isto não é json"
     assert _backups(path) == [] and not (home / ".claude").exists()
@@ -192,7 +192,7 @@ def test_sem_subcomando_o_executavel_sobe_o_servidor(monkeypatch):
 
 def test_subcomando_configurar_pelo_executavel(home, monkeypatch):
     from novomodelo_mcp import server
-    monkeypatch.setattr("sys.argv", ["novomodelo-mcp", "configurar", "--cliente", "kiro"])
+    monkeypatch.setattr("sys.argv", ["novomodelo-mcp", "configurar", "--irrestrito", "--cliente", "kiro"])
     with pytest.raises(SystemExit) as saida:
         server.main()
     assert saida.value.code == 0 and C.config_path("kiro").exists()
@@ -233,7 +233,7 @@ REABRIR = "Feche e abra o cliente e peça o server_info."
 
 
 def test_aviso_de_fechar_o_claude_code_sai_antes_de_gravar(home, capsys):
-    assert C.main(["--cliente", "claude-code"]) == 0
+    assert C.main(["--irrestrito", "--cliente", "claude-code"]) == 0
     linhas = capsys.readouterr().out.splitlines()
     aviso = next(i for i, linha in enumerate(linhas) if linha.startswith(FECHAR_CLAUDE_CODE))
     gravou = next(i for i, linha in enumerate(linhas) if linha.startswith(("criado:", "atualizado:")))
@@ -241,7 +241,7 @@ def test_aviso_de_fechar_o_claude_code_sai_antes_de_gravar(home, capsys):
 
 
 def test_mostrar_tambem_avisa_para_fechar_antes_de_gravar(home, capsys):
-    assert C.main(["--cliente", "claude-code", "--mostrar"]) == 0
+    assert C.main(["--irrestrito", "--cliente", "claude-code", "--mostrar"]) == 0
     linhas = capsys.readouterr().out.splitlines()
     assert linhas[0].startswith(FECHAR_CLAUDE_CODE)
     assert REABRIR not in linhas
@@ -249,7 +249,7 @@ def test_mostrar_tambem_avisa_para_fechar_antes_de_gravar(home, capsys):
 
 @pytest.mark.parametrize("cliente", CLIENTES)
 def test_depois_de_gravar_so_pede_para_reabrir_o_cliente(home, cliente, capsys):
-    assert C.main(["--cliente", cliente]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     saida = capsys.readouterr().out
     assert saida.splitlines()[-1] == REABRIR
     assert "Depois, feche o cliente" not in saida
@@ -265,7 +265,7 @@ def _nao_encontrado(cliente):
 
 @pytest.mark.parametrize("cliente", CLIENTES)
 def test_cliente_ausente_avisa_e_grava_mesmo_assim(home, cliente, capsys):
-    assert C.main(["--cliente", cliente]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     linhas = capsys.readouterr().out.splitlines()
     aviso = next(i for i, linha in enumerate(linhas) if linha.startswith(_nao_encontrado(cliente)))
     gravou = next(i for i, linha in enumerate(linhas) if linha.startswith(("criado:", "atualizado:")))
@@ -274,7 +274,7 @@ def test_cliente_ausente_avisa_e_grava_mesmo_assim(home, cliente, capsys):
 
 @pytest.mark.parametrize("cliente", CLIENTES)
 def test_mostrar_tambem_avisa_que_o_cliente_nao_foi_encontrado(home, cliente, capsys):
-    assert C.main(["--cliente", cliente, "--mostrar"]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente, "--mostrar"]) == 0
     assert _nao_encontrado(cliente) in capsys.readouterr().out
     assert [p for p in home.rglob("*") if p.is_file()] == []
 
@@ -283,7 +283,7 @@ def test_mostrar_tambem_avisa_que_o_cliente_nao_foi_encontrado(home, cliente, ca
     ("claude-desktop", None), ("claude-code", ".claude"), ("kiro", ".kiro")])
 def test_pasta_de_configuracao_do_cliente_conta_como_encontrado(home, cliente, pasta, capsys):
     (home / pasta if pasta else C.config_path(cliente).parent).mkdir(parents=True)
-    assert C.main(["--cliente", cliente]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     assert "não encontrado nesta máquina" not in capsys.readouterr().out
 
 
@@ -297,7 +297,7 @@ def test_programa_no_path_conta_como_encontrado(home, tmp_path, monkeypatch, cli
     exe.write_text("#!/bin/sh\n", encoding="utf-8")
     exe.chmod(0o755)
     monkeypatch.setenv("PATH", str(pasta))
-    assert C.main(["--cliente", cliente]) == 0
+    assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     assert "não encontrado nesta máquina" not in capsys.readouterr().out
 
 
@@ -322,3 +322,57 @@ def test_claude_code_instalado_localmente_conta_como_encontrado(home):
     local.mkdir(parents=True)
     (local / "claude").write_text("", encoding="utf-8")
     assert C.client_found("claude-code")
+
+
+class _Terminal:
+    def __init__(self, tty):
+        self.tty = tty
+
+    def isatty(self):
+        return self.tty
+
+
+def _respostas(monkeypatch, *linhas):
+    fila = list(linhas)
+
+    def responder(_prompt=""):
+        if not fila:
+            raise EOFError
+        return fila.pop(0)
+    monkeypatch.setattr(C.sys, "stdin", _Terminal(True))
+    monkeypatch.setattr("builtins.input", responder)
+    return fila
+
+
+@pytest.mark.parametrize("extra", [[], ["--mostrar"]])
+def test_sem_pasta_e_sem_terminal_sai_com_erro_e_nao_grava(home, monkeypatch, capsys, extra):
+    monkeypatch.setattr(C.sys, "stdin", _Terminal(False))
+    assert C.main(["--cliente", "claude-code", *extra]) == 2
+    assert "--workspace <pasta>" in capsys.readouterr().err
+    assert [p for p in home.rglob("*") if p.is_file()] == []
+
+
+def test_sem_pasta_com_terminal_grava_as_pastas_digitadas(home, tmp_path, monkeypatch):
+    a, b = tmp_path / "estudos", tmp_path / "COBRE T"
+    _respostas(monkeypatch, "", str(a), f'"{b}"', "")
+    assert C.main(["--cliente", "kiro"]) == 0
+    raizes = _entrada("kiro")["env"]["NOVOMODELO_MCP_WORKSPACE"].split(os.pathsep)
+    assert raizes == [str(a.resolve()), str(b.resolve())] and a.is_dir() and b.is_dir()
+
+
+def test_pergunta_nunca_grava_a_sugestao_sem_ela_ser_digitada(home, monkeypatch, capsys):
+    _respostas(monkeypatch, "", "")
+    assert C.main(["--cliente", "kiro"]) == 2
+    assert str(home / "novomodelo") in capsys.readouterr().out
+    assert not C.config_path("kiro").exists() and not (home / "novomodelo").exists()
+
+
+def test_irrestrito_grava_sem_workspace(home):
+    assert C.main(["--irrestrito", "--cliente", "claude-desktop"]) == 0
+    assert "NOVOMODELO_MCP_WORKSPACE" not in _entrada("claude-desktop")["env"]
+
+
+def test_irrestrito_com_workspace_e_erro_de_uso(home, tmp_path):
+    with pytest.raises(SystemExit) as saida:
+        C.main(["--irrestrito", "--workspace", str(tmp_path), "--cliente", "kiro"])
+    assert saida.value.code == 2 and not C.config_path("kiro").exists()

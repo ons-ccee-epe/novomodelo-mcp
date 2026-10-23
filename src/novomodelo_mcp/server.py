@@ -10,12 +10,14 @@ from . import __version__
 from .adapters import versions
 
 from .adapters.discovery import bridge_origin, find_novomodelo, tool_version
-from .adapters.paths import allowed_roots
+from .adapters.paths import (AVISO_NA_TOOL, NAO_CONTORNE, allowed_roots, included_roots,
+                             is_guarded_tool)
 from .adapters.reference import docs_origin
 from .adapters.state import state_dir
 from .config import load_settings
 from .names import SERVER_NAME
 from .tools.novomodelo_meta import register_novomodelo_meta
+from .tools.pastas import register_pastas
 from .tools.deck import register_deck
 from .tools.post_run import register_post_run
 from .tools.prompts import register_prompts
@@ -27,7 +29,7 @@ from .tools.annotations import READ_ONLY_NET
 from .tools.shaping import attach_version_warnings
 
 
-SERVER_INSTRUCTIONS = """\
+SERVER_INSTRUCTIONS = f"""\
 Servidor MCP do novomodelo: valida, converte (NEWAVE/DECOMP), roda, compara e lê os
 resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 
@@ -43,11 +45,15 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 - Se as docs não cobrem o assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.
 - As tools que gravam ou alteram arquivos pedem aprovação.
+- Com pasta de trabalho definida (`workspace` no `server_info`), as tools só leem e
+  gravam dentro dela.
+  {NAO_CONTORNE}
 """
 
 
 class _WithVersionWarnings:
-    """`mcp` cujo `.tool()` faz toda resposta levar `avisos_de_versao` quando houver.
+    """`mcp` cujo `.tool()` faz toda resposta levar `avisos_de_versao` quando houver,
+    e põe `AVISO_NA_TOOL` na descrição de toda tool guardada (`is_guarded_tool`).
 
     Embrulhar no registro, e não no `cap_envelope`: parte das tools não passa por ele.
     """
@@ -72,6 +78,8 @@ class _WithVersionWarnings:
                 return attach_version_warnings(result, warnings)
 
             with_warnings._avisos_de_versao = True
+            if is_guarded_tool(fn):
+                with_warnings.__doc__ = f"{(fn.__doc__ or '').rstrip()}\n\n{AVISO_NA_TOOL}"
             return register(with_warnings)
 
         return deco
@@ -93,6 +101,7 @@ def build_server() -> FastMCP:
     register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
     register_run(mcp, settings)         # init / plano / apply / run assíncrono
     register_prompts(mcp, settings)     # prompts: metodologia
+    register_pastas(mcp, settings)      # inclusão de pastas de estudo no guard
 
     @mcp.tool(annotations=READ_ONLY_NET)
     def server_info() -> dict:
@@ -122,6 +131,7 @@ def build_server() -> FastMCP:
             "schemas_dir": settings.schemas_dir,
             "docs": docs_origin(settings),
             "workspace": [str(r) for r in allowed_roots(settings)] or "irrestrito (defina NOVOMODELO_MCP_WORKSPACE)",
+            "pastas_incluidas": [str(r) for r in included_roots(settings)],
             "allow_force": settings.allow_force,
             "state_dir": str(state_dir(settings)),
             "max_jobs": settings.max_jobs,

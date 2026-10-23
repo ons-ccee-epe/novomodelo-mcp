@@ -33,6 +33,13 @@ def test_guard_blocks_path_outside_workspace():
     assert err and err["status"] == "error" and err["exit_code"] == 13, err
 
 
+def test_guard_refusal_brings_no_bypass_and_suggested_folder():
+    from novomodelo_mcp.adapters.paths import NAO_CONTORNE
+    err = S.guard_sql("SELECT * FROM read_parquet('/estudos/x.parquet')", WS)
+    assert err["exit_code"] == 13 and NAO_CONTORNE in err["diagnostics"], err
+    assert err["pasta_sugerida"] == str(Path("/estudos").resolve()), err
+
+
 def test_guard_dotdot_escape_is_resolved_and_blocked():
     q = "SELECT * FROM read_parquet('/work/../etc/x.parquet')"
     err = S.guard_sql(q, WS)
