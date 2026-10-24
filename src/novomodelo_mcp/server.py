@@ -1,6 +1,7 @@
 """Ponto de entrada do servidor MCP do Novomodelo (transporte stdio)."""
 from __future__ import annotations
 
+import asyncio
 import functools
 
 from mcp.server.fastmcp import FastMCP
@@ -8,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from . import __version__
 
 from .adapters import versions
+from .adapters.envelope import as_error
 
 from .adapters.discovery import bridge_origin, bridge_version, find_novomodelo, tool_version
 from .adapters.paths import (AVISO_NA_TOOL, NAO_CONTORNE, allowed_roots, included_roots,
@@ -53,6 +55,24 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 """
 
 
+_PROPAGAR = (KeyboardInterrupt, SystemExit, asyncio.CancelledError, GeneratorExit)
+
+
+def _never_raise(fn):
+    """A falha de uma tool vira envelope, inclusive `BaseException` de biblioteca nativa
+    (o pânico do PyO3 não é `Exception` e derrubaria o stdio); só o que é do próprio
+    processo (interrupção, saída, cancelamento) segue adiante."""
+    @functools.wraps(fn)
+    def guarded(*a, **k):
+        try:
+            return fn(*a, **k)
+        except _PROPAGAR:
+            raise
+        except BaseException as exc:  # noqa: BLE001 - never-raise: envelope em vez de derrubar o servidor
+            return as_error(exc)
+    return guarded
+
+
 class _WithVersionWarnings:
     """`mcp` cujo `.tool()` faz toda resposta levar `avisos_de_versao` quando houver,
     e põe `AVISO_NA_TOOL` na descrição de toda tool guardada (`is_guarded_tool`).
@@ -70,9 +90,11 @@ class _WithVersionWarnings:
         register = self._mcp.tool(*args, **kwargs)
 
         def deco(fn):
+            guarded = _never_raise(fn)
+
             @functools.wraps(fn)
             def with_warnings(*a, **k):
-                result = fn(*a, **k)
+                result = guarded(*a, **k)
                 try:
                     warnings = versions.version_warnings(self._settings)
                 except Exception:  # noqa: BLE001 - never-raise: o aviso é extra, não pode derrubar a tool
