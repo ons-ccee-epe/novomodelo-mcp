@@ -285,8 +285,9 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
   `cabe_com_ajustes` | `nao_cabe` | `indeterminado`) e o aviso de que run local pequeno **pode não convergir**
 - `run_apply(case_dir, overrides, dry_run)`: aplica knobs de **config.json** (`forward_passes`,
   `iteration_limit`, `simulation_scenarios`, `simulation_enabled`) com schema + backup + escrita atômica
-- `run_start(case_dir, threads, output, time_budget_s, override)`: dispara `novomodelo run … --comm-backend local
+- `run_start(case_dir, threads, output, time_budget_s, override, overwrite)`: dispara `novomodelo run … --comm-backend local
   --quiet` em background e devolve `job_id` na hora; recusa se o plano disser `nao_cabe` (salvo `override=True`)
+  e recusa um `output` com rodada concluída, sugerindo outro (`output_sugerido`), salvo `overwrite=True`
 - `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
 **Diagnóstico**
