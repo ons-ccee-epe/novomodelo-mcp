@@ -39,6 +39,7 @@ from tests.e2e.queries.models import (
     QueryResult,
     TestResult,
 )
+from tests.e2e.queries.preconditions import missing_sources, skipped_result
 from tests.e2e.queries.runner import QueryRunner
 from tests.e2e.queries.store import ResultStore
 from tests.e2e.queries.validator import QueryValidator, ValidationResult
@@ -49,23 +50,6 @@ __all__ = ["main"]
 _print_lock = threading.Lock()
 
 
-def _get_env_int(name: str, default: int) -> int:
-    """Obtém variável de ambiente como inteiro.
-
-    Args:
-        name: Nome da variável de ambiente
-        default: Valor padrão se não definida
-
-    Returns:
-        Valor inteiro da variável ou default
-    """
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except ValueError:
-        return default
 
 
 def _get_env_path(name: str, default: Path) -> Path:
@@ -174,7 +158,11 @@ def _build_test_result(
         correct_tool=correct_tool,
         correct_result=validation.valid,
         agent_response=result.agent_response,
-        error_message=validation.failure_reason,
+        error_message=(
+            f"Timeout do teste: sessão do agente encerrada após {result.timeout_s:.0f}s"
+            if result.status == "timeout" and result.timeout_s
+            else validation.failure_reason
+        ),
         tags=list(case.tags),
         validation_checks=validation_checks,
     )
@@ -213,7 +201,10 @@ def main() -> int:
         type=int,
         default=None,
         metavar="SECONDS",
-        help="Timeout por query em segundos (default: 120, configurável via QUERY_TIMEOUT_S)",
+        help=(
+            "Força o mesmo timeout (s) em todos os casos. Sem ele, cada caso usa o "
+            "timeout_s do cases.yaml (por caso/grupo); QUERY_TIMEOUT_S também força."
+        ),
     )
     parser.add_argument(
         "--report",
@@ -246,11 +237,7 @@ def main() -> int:
     # Outros diretórios
     results_dir = base_dir / "results"
     metrics_dir = base_dir / "metrics"
-    reports_dir = base_dir / "reports"
 
-    # Timeout: CLI arg > env var > default (Req 19.3)
-    default_timeout = _get_env_int("QUERY_TIMEOUT_S", 120)
-    timeout = args.timeout if args.timeout is not None else default_timeout
 
     # API key: via KIRO_API_KEY (Req 19.1, 19.4)
     api_key = os.environ.get("KIRO_API_KEY")
@@ -270,7 +257,11 @@ def main() -> int:
     print(f"Carregados {len(cases)} casos de teste")
 
     # Inicializar componentes
-    runner = QueryRunner(timeout_seconds=float(timeout), api_key=api_key)
+    runner = QueryRunner(
+        timeout_seconds=float(args.timeout) if args.timeout is not None else None,
+        api_key=api_key,
+        workspace_dir=fixtures_dir,
+    )
     validator = QueryValidator()
     store = ResultStore(results_dir, metrics_dir)
 
@@ -284,6 +275,12 @@ def main() -> int:
         # Execução sequencial (default)
         for i, case in enumerate(cases, 1):
             print(f"[{i}/{total_cases}] {case.id}...", end=" ", flush=True)
+
+            missing = missing_sources(case)
+            if missing:
+                test_results.append(skipped_result(case, missing))
+                print(f"[SKIP] fonte ausente: {'; '.join(missing)}")
+                continue
 
             result = runner.execute(case)
             validation = validator.validate(case, result)
@@ -319,6 +316,10 @@ def main() -> int:
 
         def execute_test(idx: int, case: QueryTestCase) -> tuple[int, TestResult, ValidationResult]:
             """Executa um único teste e retorna índice, resultado e validação."""
+            missing = missing_sources(case)
+            if missing:
+                skipped = skipped_result(case, missing)
+                return idx, skipped, ValidationResult(valid=False, status="skip", checks=[])
             result = runner.execute(case)
             validation = validator.validate(case, result)
             test_result = _build_test_result(case, result, validation)
@@ -416,18 +417,24 @@ def main() -> int:
     )
     print("=" * 60)
 
-    # Gerar dashboard se solicitado (Req 16.8)
+    # Dados persistidos em JSON (results/*.json + metrics/history.jsonl).
+    # O dashboard agora e o frontend Vite em tests/e2e/frontend, que consome
+    # esses JSON — nao geramos mais HTML por execucao (Req 16.8 reinterpretada).
     if args.report:
-        import webbrowser
-        from tests.e2e.queries.dashboard import QueryDashboard
-        dashboard = QueryDashboard(results_dir, reports_dir)
-        dashboard_path = dashboard.generate(
-            batch_id=batch.batch_id,
-            compare_with=args.compare,
-        )
-        print(f"Dashboard gerado: {dashboard_path}")
-        # Abrir automaticamente no browser
-        webbrowser.open(dashboard_path.as_uri())
+        frontend_dir = base_dir / "frontend"
+        print()
+        print("Dados prontos para o dashboard (frontend Vite consome os JSON):")
+        print(f"  Bateria:   {batch_path}")
+        print(f"  Historico: {metrics_dir / 'history.jsonl'}")
+        print()
+        print("Para visualizar, rode o frontend uma vez:")
+        print(f"  cd {frontend_dir}")
+        print("  npm install        # primeira vez")
+        print("  npm run dev         # abre em http://127.0.0.1:5174")
+        print()
+        print("O dashboard atualiza ao dar refresh apos cada execucao de testes.")
+        if args.compare:
+            print(f"Comparacao: selecione '{args.compare}' no seletor 'Comparar com'.")
 
     # Exit code (Req 16.7)
     # Exit code: 0 se não houve falhas reais (partial conta como sucesso parcial)

@@ -10,9 +10,23 @@
 #
 # Variáveis suportadas:
 #   {FIXTURES} - Expande para o caminho absoluto do diretório de fixtures
+#                (newave/, decomp/, scratch/ — ver tests/e2e/README.md).
+#                O runner confina o MCP novomodelo a esse diretório
+#                (queries/mcp_workspace.py): caminhos fora dele são recusados.
 #
 # Total: ~60 casos cobrindo todas as 37 MCP_Tools
 # ============================================================================
+
+defaults:
+  # Timeout (s) da sessão inteira do agente num caso. Precedência:
+  # timeout_s do caso > timeout_s_by_group (grupo da tool esperada) > timeout_s.
+  # O bridge leva 12-28 s só para subir a CLI, antes de ler o deck; o limite do
+  # grupo cobre uma chamada inteira do MCP (NOVOMODELO_MCP_TIMEOUT, 900 s).
+  timeout_s: 300
+  timeout_s_by_group:
+    bridge: 900
+
+cases:
 
 # ============================================================================
 # BRIDGE GROUP - bridge_check_*, bridge_convert_*, bridge_compare_*, bridge_dashboard
@@ -20,7 +34,9 @@
 
 # --- bridge_check_newave (2 tests) ---
 - id: bridge-check-newave-valid
-  query: Valide o caso NEWAVE em {FIXTURES}/newave-caso-reduzido
+  query: Valide o caso NEWAVE em {FIXTURES}/newave/newave-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/newave-caso-reduzido"
   expected:
     uses_mcp: true
     tool: bridge_check_newave
@@ -38,7 +54,9 @@
 
 # --- bridge_check_decomp (2 tests) ---
 - id: bridge-check-decomp-valid
-  query: Valide o caso DECOMP em {FIXTURES}/decomp-mar-26-rv2-reduzido
+  query: Valide o caso DECOMP em {FIXTURES}/decomp/decomp-mar-26-rv2-reduzido
+  requires:
+    - "{FIXTURES}/decomp/decomp-mar-26-rv2-reduzido"
   expected:
     uses_mcp: true
     tool: bridge_check_decomp
@@ -56,7 +74,9 @@
 
 # --- bridge_convert_newave (1 test) ---
 - id: bridge-convert-newave-valid
-  query: Converta o caso NEWAVE em {FIXTURES}/newave-caso-reduzido para formato novomodelo
+  query: Converta o caso NEWAVE em {FIXTURES}/newave/newave-caso-reduzido para formato novomodelo
+  requires:
+    - "{FIXTURES}/newave/newave-caso-reduzido"
   expected:
     uses_mcp: true
     tool: bridge_convert_newave
@@ -65,7 +85,9 @@
 
 # --- bridge_convert_decomp (1 test) ---
 - id: bridge-convert-decomp-valid
-  query: Converta o caso DECOMP em {FIXTURES}/decomp-mar-26-rv2-reduzido para formato COBRE
+  query: Converta o caso DECOMP em {FIXTURES}/decomp/decomp-mar-26-rv2-reduzido para formato COBRE
+  requires:
+    - "{FIXTURES}/decomp/decomp-mar-26-rv2-reduzido"
   expected:
     uses_mcp: true
     tool: bridge_convert_decomp
@@ -74,7 +96,9 @@
 
 # --- bridge_compare_newave (2 tests) ---
 - id: bridge-compare-newave-valid
-  query: Compare os casos NEWAVE em {FIXTURES}/newave-caso-reduzido e {FIXTURES}/newave-caso-reduzido
+  query: Compare os casos NEWAVE em {FIXTURES}/newave/newave-caso-reduzido e {FIXTURES}/newave/newave-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/newave-caso-reduzido"
   expected:
     uses_mcp: true
     tool: bridge_compare_newave
@@ -82,7 +106,9 @@
   tags: [bridge, newave, comparison]
 
 - id: bridge-compare-newave-invalid
-  query: Compare o caso NEWAVE {FIXTURES}/newave-caso-reduzido com o caso inexistente {FIXTURES}/nonexistent
+  query: Compare o caso NEWAVE {FIXTURES}/newave/newave-caso-reduzido com o caso inexistente {FIXTURES}/nonexistent
+  requires:
+    - "{FIXTURES}/newave/newave-caso-reduzido"
   expected:
     uses_mcp: true
     tool: bridge_compare_newave
@@ -92,7 +118,9 @@
 
 # --- bridge_compare_decomp (1 test) ---
 - id: bridge-compare-decomp-valid
-  query: Compare os casos DECOMP em {FIXTURES}/decomp-mar-26-rv2-reduzido e {FIXTURES}/decomp-mar-26-rv2-reduzido
+  query: Compare os casos DECOMP em {FIXTURES}/decomp/decomp-mar-26-rv2-reduzido e {FIXTURES}/decomp/decomp-mar-26-rv2-reduzido
+  requires:
+    - "{FIXTURES}/decomp/decomp-mar-26-rv2-reduzido"
   expected:
     uses_mcp: true
     tool: bridge_compare_decomp
@@ -101,7 +129,9 @@
 
 # --- bridge_dashboard (1 test) ---
 - id: bridge-dashboard-generate
-  query: Gere um dashboard de comparação para os casos em {FIXTURES}/newave
+  query: Gere um dashboard de comparação do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: bridge_dashboard
@@ -114,7 +144,9 @@
 
 # --- deck_list (2 tests) ---
 - id: deck-list-newave
-  query: Liste os arquivos do deck no caso {FIXTURES}/cobre-caso-reduzido
+  query: Liste os arquivos do deck no caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_list
@@ -123,7 +155,9 @@
   tags: [deck, list]
 
 - id: deck-list-decomp
-  query: Quais arquivos existem no deck do caso {FIXTURES}/cobre-mar-26-rv2-reduzido?
+  query: Quais arquivos existem no deck do caso {FIXTURES}/decomp/cobre-mar-26-rv2-reduzido?
+  requires:
+    - "{FIXTURES}/decomp/cobre-mar-26-rv2-reduzido"
   expected:
     uses_mcp: true
     tool: deck_list
@@ -133,7 +167,9 @@
 
 # --- deck_read_parquet (2 tests) ---
 - id: deck-read-parquet-stages
-  query: Leia o arquivo stages.parquet do caso {FIXTURES}/cobre-caso-reduzido
+  query: Leia o arquivo stages.parquet do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_read_parquet
@@ -142,7 +178,9 @@
   tags: [deck, read, parquet]
 
 - id: deck-read-parquet-invalid
-  query: Leia o arquivo inexistente.parquet do caso {FIXTURES}/cobre-caso-reduzido
+  query: Leia o arquivo inexistente.parquet do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_read_parquet
@@ -152,7 +190,9 @@
 
 # --- deck_describe_parquet (1 test) ---
 - id: deck-describe-parquet
-  query: Descreva o schema do arquivo system/buses.parquet no caso {FIXTURES}/cobre-caso-reduzido
+  query: Descreva o schema do arquivo system/buses.parquet no caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_describe_parquet
@@ -162,7 +202,9 @@
 
 # --- deck_edit_parquet (1 test) ---
 - id: deck-edit-parquet
-  query: No caso {FIXTURES}/cobre-caso-reduzido, altere um valor no arquivo parquet de stages
+  query: No caso {FIXTURES}/newave/cobre-caso-reduzido, altere um valor no arquivo parquet de stages
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_edit_parquet
@@ -171,7 +213,9 @@
 
 # --- deck_read_json (2 tests) ---
 - id: deck-read-json-config
-  query: Leia o arquivo config.json do caso {FIXTURES}/cobre-caso-reduzido
+  query: Leia o arquivo config.json do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_read_json
@@ -180,7 +224,9 @@
   tags: [deck, read, json]
 
 - id: deck-read-json-penalties
-  query: Mostre o conteúdo de penalties.json do caso {FIXTURES}/cobre-caso-reduzido
+  query: Mostre o conteúdo de penalties.json do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_read_json
@@ -190,7 +236,9 @@
 
 # --- deck_edit_json (1 test) ---
 - id: deck-edit-json
-  query: No caso {FIXTURES}/cobre-caso-reduzido, modifique um parâmetro no config.json
+  query: No caso {FIXTURES}/newave/cobre-caso-reduzido, modifique um parâmetro no config.json
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_edit_json
@@ -199,7 +247,9 @@
 
 # --- deck_sql (2 tests) ---
 - id: deck-sql-query
-  query: Execute a query SQL "SELECT * FROM stages LIMIT 10" no caso {FIXTURES}/cobre-caso-reduzido
+  query: Execute a query SQL "SELECT * FROM stages LIMIT 10" no caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_sql
@@ -208,7 +258,9 @@
   tags: [deck, sql]
 
 - id: deck-sql-invalid
-  query: Execute a query SQL "SELECT * FROM tabela_inexistente" no caso {FIXTURES}/cobre-caso-reduzido
+  query: Execute a query SQL "SELECT * FROM tabela_inexistente" no caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: deck_sql
@@ -286,7 +338,9 @@
 
 # --- results_status (2 tests) ---
 - id: results-status-check
-  query: Qual o status da execução do caso {FIXTURES}/cobre-caso-reduzido?
+  query: Qual o status da execução do caso {FIXTURES}/newave/cobre-caso-reduzido?
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: results_status
@@ -304,7 +358,9 @@
 
 # --- results_convergence (1 test) ---
 - id: results-convergence-check
-  query: A execução do caso {FIXTURES}/cobre-caso-reduzido convergiu?
+  query: A execução do caso {FIXTURES}/newave/cobre-caso-reduzido convergiu?
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: results_convergence
@@ -313,7 +369,9 @@
 
 # --- results_query (2 tests) ---
 - id: results-query-cmo
-  query: Consulte o CMO dos resultados do caso {FIXTURES}/cobre-caso-reduzido
+  query: Consulte o CMO dos resultados do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: results_query
@@ -322,7 +380,9 @@
   tags: [results, query]
 
 - id: results-query-generation
-  query: Quais são os resultados de geração do caso {FIXTURES}/cobre-caso-reduzido?
+  query: Quais são os resultados de geração do caso {FIXTURES}/newave/cobre-caso-reduzido?
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: results_query
@@ -332,7 +392,9 @@
 
 # --- results_list_entities (2 tests) ---
 - id: results-list-entities-plants
-  query: Liste as entidades (usinas) disponíveis nos resultados de {FIXTURES}/cobre-caso-reduzido
+  query: Liste as entidades (usinas) disponíveis nos resultados de {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: results_list_entities
@@ -340,7 +402,9 @@
   tags: [results, entities]
 
 - id: results-list-entities-buses
-  query: Quais barramentos existem nos resultados do caso {FIXTURES}/cobre-caso-reduzido?
+  query: Quais barramentos existem nos resultados do caso {FIXTURES}/newave/cobre-caso-reduzido?
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: results_list_entities
@@ -349,7 +413,9 @@
 
 # --- results_policy (1 test) ---
 - id: results-policy-get
-  query: Obtenha a política ótima do caso {FIXTURES}/cobre-caso-reduzido
+  query: Obtenha a política ótima do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: results_policy
@@ -358,7 +424,9 @@
 
 # --- results_stochastic (1 test) ---
 - id: results-stochastic-get
-  query: Mostre os resultados estocásticos do caso {FIXTURES}/cobre-caso-reduzido
+  query: Mostre os resultados estocásticos do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido/output"
   expected:
     uses_mcp: true
     tool: results_stochastic
@@ -413,7 +481,9 @@
 
 # --- run_plan (2 tests) ---
 - id: run-plan-create
-  query: Planeje a execução do caso {FIXTURES}/cobre-caso-reduzido
+  query: Planeje a execução do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: run_plan
@@ -431,7 +501,9 @@
 
 # --- run_apply (1 test) ---
 - id: run-apply
-  query: Aplique o plano de execução para o caso {FIXTURES}/cobre-caso-reduzido
+  query: Aplique o plano de execução para o caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: run_apply
@@ -440,7 +512,9 @@
 
 # --- run_start (1 test) ---
 - id: run-start
-  query: Inicie a execução do caso {FIXTURES}/cobre-caso-reduzido
+  query: Inicie a execução do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: run_start
@@ -449,7 +523,9 @@
 
 # --- run_status (2 tests) ---
 - id: run-status-check
-  query: Qual o status da execução em andamento do caso {FIXTURES}/cobre-caso-reduzido?
+  query: Qual o status da execução em andamento do caso {FIXTURES}/newave/cobre-caso-reduzido?
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: run_status
@@ -466,7 +542,9 @@
 
 # --- run_logs (1 test) ---
 - id: run-logs-get
-  query: Mostre os logs da execução do caso {FIXTURES}/cobre-caso-reduzido
+  query: Mostre os logs da execução do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: run_logs
@@ -475,7 +553,9 @@
 
 # --- run_cancel (1 test) ---
 - id: run-cancel
-  query: Cancele a execução em andamento do caso {FIXTURES}/cobre-caso-reduzido
+  query: Cancele a execução em andamento do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: run_cancel
@@ -488,7 +568,9 @@
 
 # --- case_validate (2 tests) ---
 - id: case-validate-newave
-  query: Valide a estrutura do caso novomodelo em {FIXTURES}/cobre-caso-reduzido
+  query: Valide a estrutura do caso novomodelo em {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: case_validate
@@ -506,7 +588,9 @@
 
 # --- case_summary (1 test) ---
 - id: case-summary-get
-  query: Gere um resumo do caso {FIXTURES}/cobre-caso-reduzido
+  query: Gere um resumo do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tool: case_summary
@@ -515,7 +599,7 @@
 
 # --- case_init (1 test) ---
 - id: case-init-create
-  query: Inicialize um novo caso novomodelo em {FIXTURES}/new-test-case
+  query: Inicialize um novo caso novomodelo em {FIXTURES}/scratch/new-test-case
   expected:
     uses_mcp: true
     tool: case_init
@@ -532,9 +616,8 @@
   expected:
     uses_mcp: true
     tool: server_info
-    status: ok
     content:
-      version: "__any__"
+      versao_mcp: "__any__"
   tags: [meta, info]
 
 # --- solver_version (1 test) ---
@@ -589,7 +672,9 @@
 
 # --- Disambiguation tests (2 tests) ---
 - id: bridge-vs-case-validate
-  query: Verifique se o caso novomodelo {FIXTURES}/cobre-caso-reduzido está válido
+  query: Verifique se o caso novomodelo {FIXTURES}/newave/cobre-caso-reduzido está válido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tools: [case_validate, bridge_check_newave]
@@ -597,7 +682,9 @@
   tags: [disambiguation, validation]
 
 - id: deck-list-vs-results-list
-  query: Liste o conteúdo do caso {FIXTURES}/cobre-caso-reduzido
+  query: Liste o conteúdo do caso {FIXTURES}/newave/cobre-caso-reduzido
+  requires:
+    - "{FIXTURES}/newave/cobre-caso-reduzido"
   expected:
     uses_mcp: true
     tools: [deck_list, results_list_entities]

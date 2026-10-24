@@ -24,7 +24,6 @@ tests/e2e/
 │   ├── validator.py           # QueryValidator - valida resultados
 │   ├── store.py               # ResultStore - persistência de resultados
 │   ├── models.py              # Dataclasses (TestCase, TestResult, etc.)
-│   ├── dashboard.py           # Gerador de dashboard HTML
 │   ├── run_queries.py         # CLI Entry Point
 │   ├── test_runner_unit.py    # Testes unitários do runner
 │   ├── test_store_unit.py     # Testes unitários do store
@@ -42,10 +41,9 @@ tests/e2e/
 │
 ├── metrics/                    # Histórico de métricas
 │   └── history.jsonl          # Métricas de todas as baterias (JSONL)
-│
-└── reports/                    # Dashboards gerados
-    └── dashboard.html         # Dashboard HTML interativo
 ```
+
+O dashboard é o frontend React em `tests/e2e/frontend`, que lê `results/` e `metrics/`.
 
 ## Comandos CLI
 
@@ -85,7 +83,7 @@ python -m tests.e2e.queries.run_queries --tags bridge --parallel 2
 ### Dashboard e Relatórios
 
 ```bash
-# Gerar dashboard HTML após execução
+# Mostrar como abrir o dashboard (frontend) para a bateria executada
 python -m tests.e2e.queries.run_queries --report
 
 # Marcar bateria atual como baseline para comparações
@@ -113,15 +111,14 @@ python -m tests.e2e.queries.run_queries --tags results --timeout 300 --parallel 
 | Variável | Descrição | Default |
 |----------|-----------|---------|
 | `KIRO_API_KEY` | API key para autenticação no Kiro CLI. Se não definida, assume autenticação via `kiro-cli login` | - |
-| `QUERY_TIMEOUT_S` | Timeout por query em segundos | `120` |
+| `QUERY_TIMEOUT_S` | **Força** o mesmo timeout (s) em todos os casos, ignorando o `timeout_s` do `cases.yaml`. Use só para depurar | — (cada caso usa o seu) |
 | `QUERY_FIXTURES_DIR` | Caminho para o diretório de fixtures | `tests/e2e/fixtures` |
 
 ### Exemplo de Uso
 
 ```bash
-# Definir API key e timeout customizado
+# Definir API key (o timeout vem do cases.yaml, por caso/grupo)
 export KIRO_API_KEY="sua-api-key-aqui"
-export QUERY_TIMEOUT_S=180
 
 # Executar testes
 python -m tests.e2e.queries.run_queries
@@ -130,7 +127,6 @@ python -m tests.e2e.queries.run_queries
 ```powershell
 # PowerShell
 $env:KIRO_API_KEY = "sua-api-key-aqui"
-$env:QUERY_TIMEOUT_S = "180"
 
 python -m tests.e2e.queries.run_queries
 ```
@@ -188,6 +184,8 @@ Os casos de teste são definidos em `cases.yaml` usando formato YAML declarativo
 |-------|-------------|-----------|
 | `id` | ✓ | Identificador único do teste |
 | `query` | ✓ | Query em linguagem natural (suporta `{FIXTURES}`) |
+| `timeout_s` | | Timeout (s) do caso. Sem ele, vale `defaults.timeout_s_by_group[<grupo da tool>]` e depois `defaults.timeout_s` (topo do `cases.yaml`) |
+| `requires` | | Fontes que precisam existir (suporta `{FIXTURES}`). Se alguma faltar, ou for pasta vazia, o caso sai como `skip` sem disparar o agente e não entra nos percentuais. Casos que testam caminho inexistente de propósito não declaram `requires`. |
 | `expected.uses_mcp` | ✓ | Se o teste espera que MCP seja usado |
 | `expected.tool` | ✓* | Tool MCP específica esperada |
 | `expected.tools` | ✓* | Lista de tools aceitáveis (qualquer uma) |
@@ -275,7 +273,6 @@ jobs:
       - name: Run Query E2E Tests
         env:
           KIRO_API_KEY: ${{ secrets.KIRO_API_KEY }}
-          QUERY_TIMEOUT_S: 180
         run: |
           python -m tests.e2e.queries.run_queries --parallel 4 --report
       

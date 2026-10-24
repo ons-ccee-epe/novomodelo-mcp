@@ -752,10 +752,12 @@ class ResultStore:
         skipped = sum(1 for r in test_results if r.status == "skip")
         timeout = sum(1 for r in test_results if r.status == "timeout")
 
-        # Calculate all metrics
-        metrics = self._calculate_metrics(test_results)
-        metrics_by_tag = self._calculate_metrics_by_tag(test_results)
-        metrics_by_group = self._calculate_metrics_by_group(test_results)
+        # Percentuais só sobre o que rodou: um skip (fonte ausente) não é falha
+        # do agente e não pode puxar pct_mcp_used/pct_correct_tool para baixo.
+        executed = [r for r in test_results if r.status != "skip"]
+        metrics = self._calculate_metrics(executed)
+        metrics_by_tag = self._calculate_metrics_by_tag(executed)
+        metrics_by_group = self._calculate_metrics_by_group(executed)
 
         return BatchResult(
             batch_id=batch_id,

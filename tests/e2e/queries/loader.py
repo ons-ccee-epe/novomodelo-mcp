@@ -20,6 +20,7 @@ from tests.e2e.queries.models import (
     QueryTestCase,
     ValidationSpec,
 )
+from tests.e2e.queries.store import TOOL_GROUPS
 
 __all__ = ["CasesLoader", "CasesLoaderError"]
 
@@ -102,6 +103,23 @@ class CasesLoader:
                     "type": "array",
                     "items": {"type": "string"},
                 },
+                "requires": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1},
+                },
+                "timeout_s": {"type": "number", "exclusiveMinimum": 0},
+            },
+        },
+    }
+
+    DEFAULTS_SCHEMA: dict[str, Any] = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "timeout_s": {"type": "number", "exclusiveMinimum": 0},
+            "timeout_s_by_group": {
+                "type": "object",
+                "additionalProperties": {"type": "number", "exclusiveMinimum": 0},
             },
         },
     }
@@ -134,7 +152,7 @@ class CasesLoader:
             CasesLoaderError: Se arquivo não existe, YAML inválido,
                 ou schema não passa validação
         """
-        raw_cases = self._load_yaml()
+        self._defaults, raw_cases = self._load_yaml()
         self._validate_schema(raw_cases)
         self._validate_unique_ids(raw_cases)
         self._validate_tool_requirements(raw_cases)
@@ -155,11 +173,13 @@ class CasesLoader:
 
         return cases
 
-    def _load_yaml(self) -> list[dict[str, Any]]:
+    def _load_yaml(self) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """Carrega o arquivo YAML.
 
+        Aceita uma lista de casos ou ``{defaults: {...}, cases: [...]}``.
+
         Returns:
-            Lista de dicts representando os casos de teste
+            (defaults, lista de dicts representando os casos de teste)
 
         Raises:
             CasesLoaderError: Se arquivo não existe ou YAML inválido
@@ -174,14 +194,36 @@ class CasesLoader:
             raise CasesLoaderError(f"Erro ao parsear YAML: {e}") from e
 
         if data is None:
-            return []
+            return {}, []
+
+        defaults: dict[str, Any] = {}
+        if isinstance(data, dict) and "cases" in data:
+            defaults = data.get("defaults") or {}
+            try:
+                json_validate(instance=defaults, schema=self.DEFAULTS_SCHEMA)
+            except JsonSchemaValidationError as e:
+                raise CasesLoaderError(f"defaults inválido: {e.message}") from e
+            data = data["cases"] or []
 
         if not isinstance(data, list):
             raise CasesLoaderError(
                 f"YAML deve ser uma lista de casos de teste, obtido: {type(data).__name__}"
             )
 
-        return data
+        return defaults, data
+
+    def _resolve_timeout(self, raw: dict[str, Any]) -> float | None:
+        """Timeout do caso: o dele, senão o do grupo da tool esperada, senão o default."""
+        if "timeout_s" in raw:
+            return float(raw["timeout_s"])
+        expected = raw["expected"]
+        tool = expected.get("tool") or (expected.get("tools") or [None])[0]
+        group = TOOL_GROUPS.get(tool, "other") if tool else "other"
+        by_group = self._defaults.get("timeout_s_by_group", {})
+        if group in by_group:
+            return float(by_group[group])
+        default = self._defaults.get("timeout_s")
+        return float(default) if default is not None else None
 
     def _validate_schema(self, raw_cases: list[dict[str, Any]]) -> None:
         """Valida o schema JSON dos casos de teste.
@@ -291,4 +333,6 @@ class CasesLoader:
             query=self._expand_fixtures(raw["query"]),
             expected=expected,
             tags=tuple(raw.get("tags", [])),
+            requires=tuple(self._expand_fixtures(r) for r in raw.get("requires", [])),
+            timeout_s=self._resolve_timeout(raw),
         )

@@ -19,12 +19,15 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, ClassVar
 
+from tests.e2e.queries.mcp_workspace import prepare_workspace
 from tests.e2e.queries.models import (
     QueryResult,
     QueryTestCase,
@@ -39,6 +42,29 @@ from tests.e2e.queries.validator import (
 __all__ = [
     "QueryRunner",
 ]
+
+
+_COLLECT_POLL_S = 0.5
+DEFAULT_TIMEOUT_S = 120.0
+
+
+def _kill_process_tree(process: subprocess.Popen[str]) -> None:
+    """Mata o agente e os filhos dele (o servidor MCP sobe como filho do CLI).
+
+    Matar só o pai deixaria o MCP órfão segurando os pipes, e o ``communicate``
+    ficaria esperando.
+    """
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+            capture_output=True,
+            check=False,
+        )
+        return
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 class QueryRunner:
@@ -77,23 +103,31 @@ class QueryRunner:
         timeout_seconds: float | None = None,
         api_key: str | None = None,
         response_log_dir: str | None = None,
+        workspace_dir: str | Path | None = None,
     ) -> None:
         """Inicializa o QueryRunner.
 
         Args:
-            timeout_seconds: Timeout em segundos para execução da query.
-                Se None, usa variável de ambiente QUERY_TIMEOUT_S ou padrão de 120s (Req 2.7).
+            timeout_seconds: Timeout forçado (s) para todos os casos. Se None,
+                usa QUERY_TIMEOUT_S; sem ele, cada caso usa o próprio ``timeout_s``
+                (cases.yaml) e DEFAULT_TIMEOUT_S só quando o caso não tem um.
             api_key: Chave de API opcional para autenticação.
                 Se não fornecida, assume autenticação via kiro-cli login (Req 19.4).
             response_log_dir: Diretório para arquivos de log de respostas MCP.
                 Se None, usa diretório temporário.
+            workspace_dir: Raiz do path guard do MCP e cwd do agente
+                (ver ``mcp_workspace``). Se None, vale a config global do usuário.
 
         Raises:
-            RuntimeError: Se Kiro CLI não está instalado (Req 19.5).
+            RuntimeError: Se Kiro CLI não está instalado (Req 19.5), ou se
+                workspace_dir é dado e o servidor novomodelo não está configurado.
         """
-        if timeout_seconds is None:
-            timeout_seconds = float(os.environ.get("QUERY_TIMEOUT_S", "120"))
-        self.timeout_seconds = timeout_seconds
+        if timeout_seconds is None and os.environ.get("QUERY_TIMEOUT_S"):
+            timeout_seconds = float(os.environ["QUERY_TIMEOUT_S"])
+        # Explícito (argumento ou QUERY_TIMEOUT_S) vale para todos os casos;
+        # senão cada caso usa o seu timeout_s, e este é só o fallback.
+        self._forced_timeout = timeout_seconds
+        self.timeout_seconds = timeout_seconds if timeout_seconds is not None else DEFAULT_TIMEOUT_S
         self.api_key = api_key
         
         # Configurar diretório para logs de resposta MCP
@@ -102,9 +136,15 @@ class QueryRunner:
             self._response_log_dir.mkdir(parents=True, exist_ok=True)
         else:
             self._temp_dir = tempfile.mkdtemp(prefix="mcp_response_log_")
+            self._owns_temp_dir = True
             self._response_log_dir = Path(self._temp_dir)
-        
+
+        self._process: subprocess.Popen[str] | None = None
+        self._process_lock = threading.Lock()
+        self._cancelled = False
+
         self._validate_kiro_cli()
+        self.workspace_dir = prepare_workspace(workspace_dir) if workspace_dir else None
 
     def execute(self, test_case: QueryTestCase) -> QueryResult:
         """Executa uma query via Kiro CLI.
@@ -144,34 +184,12 @@ class QueryRunner:
         # Prepare environment with MCP response logging enabled
         env = os.environ.copy()
         env["NOVOMODELO_MCP_RESPONSE_LOG"] = str(log_file)
+        env.update(self._agent_env())
 
         # Execute with subprocess and measure time (Req 2.2, 2.3, 2.5)
         start_time = time.perf_counter()
-        try:
-            process = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",  # Explicit UTF-8 encoding for Windows compatibility
-                errors="replace",  # Handle any remaining encoding issues gracefully
-                timeout=self.timeout_seconds,
-                env=env,
-            )
-            status = "completed"
-            stdout = process.stdout
-            stderr = process.stderr
-        except subprocess.TimeoutExpired as e:
-            # Req 2.6: Reter dados parciais capturados em caso de timeout
-            status = "timeout"
-            stdout = e.stdout if e.stdout else ""
-            stderr = e.stderr if e.stderr else ""
-            # Ensure stdout/stderr are strings, not bytes
-            # (TimeoutExpired may return bytes when encoding is specified)
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode("utf-8", errors="replace")
-            if isinstance(stderr, bytes):
-                stderr = stderr.decode("utf-8", errors="replace")
-
+        timeout = self.timeout_for(test_case)
+        status, stdout, stderr = self._run_process(cmd, env, timeout)
         end_time = time.perf_counter()
         latency_ms = (end_time - start_time) * 1000
 
@@ -198,8 +216,81 @@ class QueryRunner:
             stdout=stdout,
             stderr=stderr,
             envelope=envelope,
+            timeout_s=timeout,
         )
+
+    def _agent_env(self) -> dict[str, str]:
+        """Variáveis extras para o processo do agente (o kiro-cli não precisa de nenhuma)."""
+        return {}
+
+    def timeout_for(self, test_case: QueryTestCase) -> float:
+        """Timeout aplicado a um caso: o forçado, senão o do caso, senão o fallback."""
+        if self._forced_timeout is not None:
+            return self._forced_timeout
+        return test_case.timeout_s or self.timeout_seconds
     
+    def _run_process(
+        self, cmd: list[str], env: dict[str, str], timeout: float
+    ) -> tuple[str, str, str]:
+        """Roda o agente e devolve (status, stdout, stderr).
+
+        status: "completed", "timeout" (Req 2.6: saída parcial retida) ou
+        "cancelled" (``cancel()`` chamado durante ou antes da execução).
+        """
+        with self._process_lock:
+            if self._cancelled:
+                return "cancelled", "", ""
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,  # headless: nunca ficar pendurado aguardando entrada/confirmacao
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env,
+                cwd=self.workspace_dir,
+                start_new_session=os.name != "nt",
+            )
+            self._process = process
+        try:
+            return self._collect(process, timeout)
+        finally:
+            with self._process_lock:
+                self._process = None
+
+    def _collect(self, process: subprocess.Popen[str], timeout: float) -> tuple[str, str, str]:
+        # Um neto criado durante o kill escapa do taskkill /T e segura os pipes;
+        # com o pai já morto, desistir da saída em vez de esperar o neto.
+        deadline = time.monotonic() + timeout
+        timed_out = False
+        while True:
+            try:
+                stdout, stderr = process.communicate(timeout=_COLLECT_POLL_S)
+                break
+            except subprocess.TimeoutExpired:
+                if (self._cancelled or timed_out) and process.poll() is not None:
+                    return ("timeout" if timed_out else "cancelled"), "", ""
+                if not timed_out and time.monotonic() > deadline:
+                    timed_out = True
+                    _kill_process_tree(process)
+        if timed_out:
+            return "timeout", stdout or "", stderr or ""
+        return ("cancelled" if self._cancelled else "completed"), stdout or "", stderr or ""
+
+    def close(self) -> None:
+        """Remove o diretório temporário de logs criado pelo runner, se houver."""
+        if getattr(self, "_owns_temp_dir", False):
+            shutil.rmtree(self._temp_dir, ignore_errors=True)
+
+    def cancel(self) -> None:
+        """Interrompe a query em andamento e recusa as próximas (definitivo)."""
+        with self._process_lock:
+            self._cancelled = True
+            process = self._process
+        if process is not None and process.poll() is None:
+            _kill_process_tree(process)
+
     def _read_mcp_response_log(self, log_file: Path, offset: int = 0) -> list[dict[str, Any]]:
         """Lê o arquivo de log de respostas MCP.
         
@@ -275,7 +366,23 @@ class QueryRunner:
         return None
 
     def _build_command(self, query: str) -> list[str]:
-        """Constrói comando Kiro CLI.
+        """Constrói comando Kiro CLI (modo verbose legado).
+
+        NOTA DE DESIGN — por que a base NAO delega a
+        ``tests.e2e.launcher.providers.build_command`` (fonte única do comando):
+
+        - O ``QueryRunner`` base é o caminho de compatibilidade: parseia o log
+          *verbose* (``_parse_tool_calls`` com 6 padrões regex) e lê os envelopes
+          do arquivo ``NOVOMODELO_MCP_RESPONSE_LOG`` (``_read_mcp_response_log``).
+          Esse parser exige a saída verbose ``-vvv``, NÃO ``stream-json``.
+        - ``build_command`` já emite ``--output-format stream-json`` para o
+          kiro-cli; delegar aqui quebraria o parser verbose desta classe (o
+          stream-json tem schema totalmente diferente) e o contrato de
+          backward-compat da instanciação direta de ``QueryRunner``.
+        - A unificação "fonte única" é atendida no caminho de produção: o
+          ``ProviderQueryRunner`` (usado pela UI via ``service.py``) delega a
+          ``providers.build_command`` em seu ``_build_command`` e faz o parsing
+          stream-json por provedor. Esta duplicata é intencional e preservada.
 
         Args:
             query: Query em linguagem natural a ser executada.

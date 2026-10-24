@@ -1,0 +1,780 @@
+/* Tokens de tema — unica fonte de cor do dashboard.
+   Regra: nenhum componente usa cor literal; tudo referencia var(--cobre-*). */
+:root {
+  --cobre-pass: #22c55e;
+  --cobre-fail: #ef4444;
+  --cobre-error: #f59e0b;
+  --cobre-skip: #94a3b8;
+  --cobre-timeout: #8b5cf6;
+  --cobre-partial: #eab308;
+
+  --cobre-bg: #f8fafc;
+  --cobre-surface: #ffffff;
+  --cobre-border: #e2e8f0;
+  --cobre-text: #1e293b;
+  --cobre-text-muted: #64748b;
+  --cobre-primary: #3b82f6;
+  --cobre-on-primary: #ffffff;
+  --cobre-secondary: #8b5cf6;
+  --cobre-highlight-bg: #f0f9ff;
+  --cobre-chip-bg: #f1f5f9;
+  --cobre-chip-bg-active: #dbeafe;
+  --cobre-row-detail-bg: #fafbfc;
+
+  --cobre-chart-mcp: #06b6d4;
+  --cobre-chart-tool: #3b82f6;
+  --cobre-chart-result: #22c55e;
+  --cobre-chart-latency: #8b5cf6;
+
+  --cobre-radius: 8px;
+  --cobre-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --cobre-gap: 1rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--cobre-bg);
+  color: var(--cobre-text);
+  line-height: 1.5;
+}
+
+.cobre-shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.cobre-section {
+  margin-bottom: 2rem;
+}
+
+.cobre-section-title {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--cobre-border);
+}
+
+.cobre-muted {
+  color: var(--cobre-text-muted);
+}
+
+.cobre-no-data {
+  text-align: center;
+  padding: 2rem;
+  color: var(--cobre-text-muted);
+  font-style: italic;
+}
+
+/* Cards de sumario */
+.cobre-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--cobre-gap);
+}
+
+.cobre-card {
+  background: var(--cobre-surface);
+  border-radius: var(--cobre-radius);
+  padding: 1.25rem;
+  box-shadow: var(--cobre-shadow);
+  border-left: 4px solid var(--cobre-border);
+}
+
+.cobre-card[data-accent="pass"] { border-left-color: var(--cobre-pass); }
+.cobre-card[data-accent="fail"] { border-left-color: var(--cobre-fail); }
+.cobre-card[data-accent="timeout"] { border-left-color: var(--cobre-timeout); }
+.cobre-card[data-accent="rate"] { border-left-color: var(--cobre-primary); }
+.cobre-card[data-accent="time"] { border-left-color: var(--cobre-secondary); }
+.cobre-card[data-accent="mcp"] { border-left-color: #06b6d4; }
+
+.cobre-card-value {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.cobre-card-label {
+  font-size: 0.875rem;
+  color: var(--cobre-text-muted);
+}
+
+/* Tabelas */
+.cobre-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--cobre-surface);
+  border-radius: var(--cobre-radius);
+  overflow: hidden;
+  box-shadow: var(--cobre-shadow);
+}
+
+.cobre-table th,
+.cobre-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.cobre-table th {
+  background: #f1f5f9;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.cobre-table tr:not(:last-child) td {
+  border-bottom: 1px solid var(--cobre-border);
+}
+
+/* Badges de status */
+.cobre-status {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.cobre-status[data-status="pass"] { background: #dcfce7; color: #166534; }
+.cobre-status[data-status="fail"] { background: #fee2e2; color: #991b1b; }
+.cobre-status[data-status="timeout"] { background: #f3e8ff; color: #6b21a8; }
+.cobre-status[data-status="skip"] { background: #f1f5f9; color: #475569; }
+.cobre-status[data-status="partial"] { background: #fef9c3; color: #854d0e; }
+
+/* Grid de graficos */
+.cobre-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 1.5rem;
+}
+
+.cobre-chart {
+  background: var(--cobre-surface);
+  border-radius: var(--cobre-radius);
+  padding: 1.5rem;
+  box-shadow: var(--cobre-shadow);
+}
+
+.cobre-chart-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Icone de info com disclaimer em hover/foco */
+.cobre-info-icon {
+  display: inline-block;
+  margin-left: 0.4rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  line-height: 1.05rem;
+  text-align: center;
+  font-size: 0.78rem;
+  border-radius: 50%;
+  background: var(--cobre-border);
+  color: var(--cobre-text-muted);
+  cursor: help;
+  vertical-align: middle;
+  outline: none;
+}
+
+.cobre-info-icon:hover,
+.cobre-info-icon:focus {
+  background: var(--cobre-primary);
+  color: #ffffff;
+}
+
+/* Barra de topo / seletor */
+.cobre-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.cobre-select {
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--cobre-border);
+  border-radius: 6px;
+  background: var(--cobre-surface);
+  color: var(--cobre-text);
+  font-family: monospace;
+  min-width: 320px;
+}
+
+.cobre-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--cobre-surface);
+  border-radius: var(--cobre-radius);
+  box-shadow: var(--cobre-shadow);
+}
+
+.cobre-input,
+.cobre-filter-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--cobre-border);
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.cobre-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--cobre-gap);
+}
+
+.cobre-metrics-card {
+  background: var(--cobre-surface);
+  border-radius: var(--cobre-radius);
+  padding: 1rem;
+  box-shadow: var(--cobre-shadow);
+}
+
+.cobre-metric-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+}
+
+.cobre-banner {
+  padding: 1rem;
+  border-radius: var(--cobre-radius);
+  margin-bottom: 1.5rem;
+}
+
+.cobre-banner[data-kind="healthy"] { background: #dcfce7; color: #166534; }
+.cobre-banner[data-kind="warning"] { background: #fef3c7; color: #92400e; }
+.cobre-banner[data-kind="critical"] { background: #fee2e2; color: #991b1b; }
+
+/* ===== Painel de disparo de testes (launcher) ===== */
+.cobre-launcher {
+  background: var(--cobre-surface);
+  border: 1px solid var(--cobre-border);
+  border-radius: var(--cobre-radius);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--cobre-shadow);
+}
+
+.cobre-launcher-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.cobre-launcher-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cobre-launcher-provider select {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--cobre-border);
+  border-radius: 6px;
+  background: var(--cobre-surface);
+  color: var(--cobre-text);
+  font-size: 0.875rem;
+}
+
+.cobre-btn {
+  padding: 0.55rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--cobre-border);
+  background: var(--cobre-surface);
+  color: var(--cobre-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cobre-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cobre-btn-primary {
+  background: var(--cobre-primary);
+  border-color: var(--cobre-primary);
+  color: var(--cobre-on-primary);
+}
+
+.cobre-btn-danger {
+  background: var(--cobre-surface);
+  border-color: var(--cobre-fail);
+  color: var(--cobre-fail);
+}
+
+.cobre-btn-ghost {
+  background: var(--cobre-bg);
+}
+
+.cobre-launcher-groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.cobre-launcher-progress {
+  border: 1px solid var(--cobre-border);
+  border-radius: var(--cobre-radius);
+  padding: 0.9rem;
+  margin-bottom: 1rem;
+  background: var(--cobre-bg);
+}
+
+.cobre-launcher-progress[data-status="done"] { border-left: 4px solid var(--cobre-pass); }
+.cobre-launcher-progress[data-status="running"] { border-left: 4px solid var(--cobre-primary); }
+.cobre-launcher-progress[data-status="error"] { border-left: 4px solid var(--cobre-fail); }
+.cobre-launcher-progress[data-status="cancelled"] { border-left: 4px solid var(--cobre-skip); }
+
+.cobre-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.cobre-progress-bar {
+  height: 8px;
+  background: var(--cobre-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cobre-progress-fill {
+  height: 100%;
+  background: var(--cobre-primary);
+  transition: width 0.3s ease;
+}
+
+.cobre-code {
+  background: var(--cobre-bg);
+  border: 1px solid var(--cobre-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-family: monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  color: var(--cobre-text);
+  overflow-x: auto;
+}
+
+.cobre-progress-log {
+  margin: 0.5rem 0 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* Botao de grupo ativo (filtro selecionado) */
+.cobre-btn-ghost[data-active="true"] {
+  background: var(--cobre-primary);
+  border-color: var(--cobre-primary);
+  color: #ffffff;
+}
+
+.cobre-btn-run-group {
+  margin-left: auto;
+}
+
+/* Layout lista (esquerda) + detalhe (direita) */
+.cobre-launcher-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--cobre-border);
+  padding-top: 1rem;
+}
+
+@media (max-width: 860px) {
+  .cobre-launcher-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cobre-case-list {
+  border: 1px solid var(--cobre-border);
+  border-radius: var(--cobre-radius);
+  background: var(--cobre-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 520px;
+}
+
+.cobre-case-list-head {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--cobre-border);
+  background: var(--cobre-surface);
+}
+
+.cobre-case-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.cobre-case-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.1rem 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--cobre-border);
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cobre-case-item:hover {
+  background: var(--cobre-surface);
+}
+
+.cobre-case-item[data-selected="true"] {
+  background: var(--cobre-surface);
+  border-left-color: var(--cobre-primary);
+}
+
+.cobre-case-item[data-status="pass"] { border-left-color: var(--cobre-pass); }
+.cobre-case-item[data-status="fail"] { border-left-color: var(--cobre-fail); }
+.cobre-case-item[data-status="partial"] { border-left-color: var(--cobre-partial); }
+.cobre-case-item[data-status="timeout"] { border-left-color: var(--cobre-timeout); }
+.cobre-case-item[data-status="running"] { border-left-color: var(--cobre-primary); }
+.cobre-case-item[data-status="skip"] { border-left-color: var(--cobre-skip); }
+
+.cobre-case-item-id {
+  font-family: monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--cobre-text);
+}
+
+.cobre-case-item-query {
+  grid-column: 1 / 2;
+  font-size: 0.72rem;
+  color: var(--cobre-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cobre-case-item-badge {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+/* Painel de detalhe */
+.cobre-case-detail {
+  border: 1px solid var(--cobre-border);
+  border-radius: var(--cobre-radius);
+  background: var(--cobre-surface);
+  padding: 1rem 1.25rem;
+  min-height: 200px;
+}
+
+.cobre-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--cobre-border);
+}
+
+.cobre-detail-id {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.cobre-detail-status {
+  margin-left: 0.6rem;
+}
+
+.cobre-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0 0 0.9rem;
+}
+
+.cobre-detail-meta > div {
+  margin: 0;
+}
+
+.cobre-detail-meta dt {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: var(--cobre-text-muted);
+  margin-bottom: 0.15rem;
+}
+
+.cobre-detail-meta dd {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.cobre-tag-chip {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  margin: 0 0.2rem 0.2rem 0;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  background: var(--cobre-bg);
+  border: 1px solid var(--cobre-border);
+  color: var(--cobre-text-muted);
+}
+
+.cobre-detail-section {
+  margin-bottom: 0.9rem;
+}
+
+.cobre-detail-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.cobre-detail-error {
+  color: var(--cobre-fail);
+}
+
+.cobre-detail-response {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.cobre-detail-hint {
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+/* Spinner "rodando" (respeita reduced-motion) */
+.cobre-spin {
+  display: inline-block;
+  animation: cobre-spin 0.9s linear infinite;
+  color: var(--cobre-primary);
+  font-weight: 700;
+}
+
+@keyframes cobre-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cobre-spin {
+    animation: none;
+  }
+}
+
+/* Campos de formulário (rótulo em cima, controle embaixo) */
+.cobre-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cobre-field-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--cobre-text-muted);
+}
+
+.cobre-reload {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--cobre-border);
+  background: var(--cobre-surface);
+  cursor: pointer;
+}
+
+.cobre-reload:disabled {
+  cursor: wait;
+}
+
+/* Cards de grupo clicáveis (filtram a tabela) */
+.cobre-metrics-card-button {
+  text-align: left;
+  cursor: pointer;
+  border: 2px solid transparent;
+  background: var(--cobre-surface);
+}
+
+.cobre-metrics-card-button[data-active="true"] {
+  border-color: var(--cobre-primary);
+  background: var(--cobre-highlight-bg);
+}
+
+.cobre-metrics-card-title {
+  text-transform: capitalize;
+  margin-bottom: 0.5rem;
+}
+
+.cobre-section-hint {
+  font-weight: normal;
+  font-size: 0.75rem;
+}
+
+/* Filtros da tabela de testes */
+.cobre-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: 600px;
+}
+
+.cobre-tag-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: var(--cobre-chip-bg);
+  color: var(--cobre-text);
+}
+
+.cobre-tag-option[data-active="true"] {
+  background: var(--cobre-chip-bg-active);
+  color: var(--cobre-primary);
+}
+
+.cobre-filter-count {
+  align-self: flex-end;
+  padding: 0.5rem 0;
+}
+
+.cobre-row-clickable {
+  cursor: pointer;
+}
+
+.cobre-row-detail {
+  background: var(--cobre-row-detail-bg);
+}
+
+.cobre-test-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.cobre-pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.cobre-pre-wrap[data-kind="error"] {
+  color: var(--cobre-fail);
+}
+
+.cobre-pre-scroll {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.cobre-tool-call-list {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.cobre-summary-toggle {
+  cursor: pointer;
+}
+
+/* Tendências: seletor de janela */
+.cobre-period-group {
+  margin-left: 1rem;
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.cobre-period-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  border: 1px solid var(--cobre-border);
+  cursor: pointer;
+  background: var(--cobre-surface);
+  color: var(--cobre-text-muted);
+}
+
+.cobre-period-btn[data-active="true"] {
+  background: var(--cobre-primary);
+  color: var(--cobre-on-primary);
+}
+
+/* Comparação entre baterias */
+.cobre-delta {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--cobre-text-muted);
+}
+
+.cobre-delta[data-trend="better"] {
+  color: var(--cobre-pass);
+}
+
+.cobre-delta[data-trend="worse"] {
+  color: var(--cobre-fail);
+}
+
+.cobre-banner-stacked {
+  margin-top: 0.5rem;
+}
+
+.cobre-banner-list {
+  font-size: 0.85rem;
+}
+
+.cobre-banner-note {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.cobre-error-message {
+  margin-top: 0.75rem;
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+}
+
+.cobre-progress-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}

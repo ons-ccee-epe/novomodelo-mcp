@@ -11,12 +11,10 @@ from __future__ import annotations
 
 import argparse
 import sys
-import webbrowser
 from datetime import datetime
 from pathlib import Path
 
 from .client import MCPClient
-from .dashboard import generate_dashboard
 from .metrics import MetricStore
 from .models import ExecutionResult
 from .prerequisites import check_prerequisites, print_prerequisites_status
@@ -248,27 +246,14 @@ Exemplos:
         previous_records=previous if previous else None,
     )
 
-    generate_dashboard(
-        results,
-        REPORTS_DIR / "latest.html",
-        environment=target,
-        comparison=report.get("comparison"),
-    )
-
     # Sumário
     print()
     print(format_summary_text(report))
     print()
-    print(f"📊 Dashboard: {REPORTS_DIR / 'latest.html'}")
-    print(f"📄 Relatório: {REPORTS_DIR / 'latest.json'}")
-
-    # Abrir browser
-    if not args.no_browser:
-        dashboard_path = REPORTS_DIR / "latest.html"
-        try:
-            webbrowser.open(dashboard_path.as_uri())
-        except Exception:
-            pass  # Ignora se não conseguir abrir
+    print(f"Relatorio JSON: {REPORTS_DIR / 'latest.json'}")
+    print()
+    print("Dashboard: frontend Vite em tests/e2e/frontend (consome os JSON).")
+    print("  cd tests/e2e/frontend && npm run dev   # http://127.0.0.1:5174")
 
     # Exit code
     passed = sum(1 for r in results if r.status == "passed")

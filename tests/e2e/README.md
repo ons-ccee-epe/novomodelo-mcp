@@ -13,7 +13,6 @@ tests/e2e/
 │   ├── client.py            # Cliente MCP (local/remoto)
 │   ├── metrics.py           # Persistência JSONL
 │   ├── reporter.py          # Relatórios JSON
-│   ├── dashboard.py         # Dashboard HTML
 │   ├── prerequisites.py     # Verificação de ambiente
 │   └── run.py               # CLI runner
 │
@@ -23,11 +22,12 @@ tests/e2e/
 │   ├── test_reference.py    # docs_list, docs_read
 │   └── test_results.py      # results_convergence, results_query
 │
-├── fixtures/                # Dados reais para testes
-│   ├── newave/              # Casos NEWAVE
-│   ├── decomp/              # Casos DECOMP
+├── fixtures/                # Dados reais para testes (gitignored; workspace do MCP nos testes)
+│   ├── newave/              # newave-caso-reduzido (NEWAVE) + cobre-caso-reduzido (convertido)
+│   ├── decomp/              # decomp-mar-26-rv2-reduzido (DECOMP) + cobre-mar-26-rv2-reduzido (convertido)
 │   ├── newave-determ/       # Casos NEWAVE determinístico
-│   └── results/             # Output de cobre run (opcional)
+│   ├── results/             # Output de cobre run (opcional)
+│   └── scratch/             # Saídas gravadas pelos testes (case_init, schema_export)
 │
 ├── metrics/                 # Histórico de execuções
 │   └── history.jsonl        # Append-only (gitignored)

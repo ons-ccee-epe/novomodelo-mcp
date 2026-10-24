@@ -108,6 +108,11 @@ class QueryTestCase:
     query: str
     expected: ExpectedResult
     tags: tuple[str, ...] = ()
+    # Fontes (decks/casos) que precisam existir para o teste fazer sentido;
+    # caminhos absolutos, com {FIXTURES} já expandido.
+    requires: tuple[str, ...] = ()
+    # Timeout efetivo do caso (s), já resolvido: caso > grupo > default do YAML.
+    timeout_s: float | None = None
 
 
 # =============================================================================
@@ -149,10 +154,11 @@ class QueryResult:
     tool_calls: list[ToolCall]
     agent_response: str
     latency_ms: float
-    status: str  # "completed", "timeout", "error"
+    status: str  # "completed", "timeout", "cancelled", "error"
     stdout: str
     stderr: str
     envelope: dict[str, Any] | None = None
+    timeout_s: float | None = None  # limite aplicado nesta execução
 
 
 # =============================================================================

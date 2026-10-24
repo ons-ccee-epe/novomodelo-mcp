@@ -14,11 +14,9 @@ Módulos:
     - runner.py: QueryRunner para executar queries via Kiro CLI
     - validator.py: QueryValidator para validar resultados contra expectativas
     - store.py: ResultStore para persistir resultados e métricas
-    - dashboard.py: QueryDashboard para gerar relatórios HTML interativos
     - run_queries.py: CLI entry point para executar testes
 """
 
-from tests.e2e.queries.dashboard import QueryDashboard
 from tests.e2e.queries.loader import CasesLoader, CasesLoaderError
 from tests.e2e.queries.models import (
     BatchMetrics,
@@ -71,7 +69,6 @@ __all__ = [
     "ResultStore",
     "TOOL_GROUPS",
     # Dashboard
-    "QueryDashboard",
     # Resultados de bateria
     "TestResult",
     "BatchResult",
