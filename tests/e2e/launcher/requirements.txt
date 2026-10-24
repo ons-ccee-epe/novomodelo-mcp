@@ -5,3 +5,4 @@ fastapi==0.159.1
 starlette==1.9.0
 uvicorn[standard]==0.54.0
 pydantic==2.14.1
+# Opcional: psutil mede CPU/RSS dos servidores no teste de carga (pip install psutil).

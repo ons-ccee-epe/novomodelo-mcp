@@ -10,10 +10,10 @@
  * vite.config.ts). Assim o frontend sempre chama caminhos relativos /api/*.
  */
 
-const API = "api";
+export const API = "api";
 
 /** O launcher recusa POSTs sem este header (anti CSRF/DNS rebinding). */
-const LAUNCHER_HEADERS = { "X-Launcher": "1" };
+export const LAUNCHER_HEADERS = { "X-Launcher": "1" };
 
 export type ProviderId = "kiro-cli" | "claude";
 
@@ -149,7 +149,7 @@ export const POLL_INTERVAL_MS = 1500;
 export const POLL_MAX_MS = 30 * 60 * 1000;
 
 /** Rejeita com AbortError quando o polling é cancelado (ex.: componente desmontado). */
-function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
+export function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason);
     const timer = setTimeout(() => {

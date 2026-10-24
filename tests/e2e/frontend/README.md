@@ -37,14 +37,29 @@ O frontend busca tudo sob `/data`:
 | `/data/results/<id>.json`    | `tests/e2e/results/<id>.json`        | uma bateria completa           |
 | `/data/results/baseline.json`| `tests/e2e/results/baseline.json`    | ponteiro da baseline           |
 | `/data/metrics/history.jsonl`| `tests/e2e/metrics/history.jsonl`    | histórico (tendências)         |
+| `/data/results/load/index.json` | `tests/e2e/results/load/index.json` | lista de cargas (aba Carga)  |
+| `/data/results/load/<id>.json`  | `tests/e2e/results/load/<id>.json`  | uma carga completa           |
 
 - **Em dev**: o plugin `resultsDataPlugin` (em `vite.config.ts`) serve `/data`
   lendo direto do disco — nenhuma cópia, sempre o estado atual.
 - **No build**: `scripts/copy-data.mjs` (hook `postbuild`) copia os JSON para
-  `dist/data/`.
+  `dist/data/`, inclusive `results/load/`.
 
 O contrato de tipos (`src/shared/types.ts`) espelha os dataclasses de
 `tests/e2e/queries/models.py` e o formato de `tests/e2e/queries/store.py`.
+
+## Áreas
+
+A navegação no topo (`navigation/AppNav.tsx`) liga duas áreas (HashRouter):
+
+- **Dashboard** (`/#/`): baterias de teste por agente de IA.
+- **Carga** (`/#/carga`): teste de carga do servidor MCP. Formulário (tools,
+  concorrência, duração ou iterações, timeout), progresso ao vivo com **Parar**,
+  e, para a carga selecionada, cards (vazão, taxa de erro, p50/p95/p99), gráfico de
+  latência e vazão no tempo, tabela por tool, detalhes (subida dos servidores,
+  recursos, erros, chamadas fora do mix) e a comparação com a carga anterior (ou outra
+  à escolha). Com o launcher offline mostra só as cargas gravadas, em leitura.
+  Detalhes do teste em [`../load/README.md`](../load/README.md).
 
 ## O que mudou nos runners
 
@@ -74,12 +89,20 @@ src/
   services/launcherApi.ts        # controle do launcher (polling cancelável)
   services/api/useResults.ts     # carga de index/bateria/comparação/histórico
   services/api/useLauncher.ts    # provedores, casos e disparo de runs
+  services/loadApi.ts            # cargas: leitura de results/load e controle pelo launcher
+  services/api/useLoadResults.ts # index, carga selecionada e comparação
+  services/api/useLoadLauncher.ts# tools/limites, disparo, polling e parada da carga
+  navigation/AppNav.tsx          # barra de navegação e layout das rotas
   features/Dashboard/
-    index.tsx                    # página única
+    index.tsx                    # tela do dashboard
     alertRules.ts                # regras do banner de saúde (limiares nomeados)
     components/                  # SummaryCards, TrendCharts, TestTable, ...
       launcher/                  # partes do TestLauncher
       table/                     # partes do TestTable
+  features/Load/
+    index.tsx                    # tela da carga
+    compare.ts                   # deltas entre duas cargas (melhor/pior por métrica)
+    components/                  # LoadForm, LoadProgress, LoadCharts, LoadToolTable, ...
 ```
 
 ## Configuração

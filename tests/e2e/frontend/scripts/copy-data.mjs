@@ -47,5 +47,7 @@ async function copyBucket(src, destName) {
 
 await mkdir(DIST_DATA, { recursive: true });
 await copyBucket(RESULTS_SRC, "results");
+// As cargas ficam num subdiretório de results/: copyBucket só copia o nível de topo.
+await copyBucket(join(RESULTS_SRC, "load"), join("results", "load"));
 await copyBucket(METRICS_SRC, "metrics");
 console.log(`[copy-data] concluído -> ${DIST_DATA}`);

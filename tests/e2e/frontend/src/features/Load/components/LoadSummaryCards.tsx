@@ -1,0 +1,36 @@
+import type { LoadRun } from "@/shared/types";
+import { fmtMs, fmtPercent, fmtRate, fmtSeconds } from "../format";
+
+interface Props {
+  run: LoadRun;
+}
+
+/** Cards de KPI da carga: vazão, taxa de erro e percentis de latência. */
+export function LoadSummaryCards({ run }: Props) {
+  const t = run.totals;
+  const cards: Array<{ accent: string; value: string; label: string }> = [
+    { accent: "rate", value: fmtRate(t.throughput_cps), label: "Vazão" },
+    {
+      accent: t.error_rate > 0 ? "fail" : "pass",
+      value: fmtPercent(t.error_rate),
+      label: "Taxa de erro",
+    },
+    { accent: "time", value: fmtMs(t.p50_ms), label: "Latência p50" },
+    { accent: "time", value: fmtMs(t.p95_ms), label: "Latência p95" },
+    { accent: "time", value: fmtMs(t.p99_ms), label: "Latência p99" },
+    { accent: "", value: String(t.calls), label: `Chamadas (${t.ok} ok)` },
+    { accent: "timeout", value: String(t.timeouts), label: "Timeouts" },
+    { accent: "mcp", value: fmtSeconds(run.duration_seconds), label: "Duração da carga" },
+  ];
+
+  return (
+    <div className="cobre-summary" aria-label="Resumo da carga">
+      {cards.map((c) => (
+        <div key={c.label} className="cobre-card" data-accent={c.accent || undefined}>
+          <div className="cobre-card-value">{c.value}</div>
+          <div className="cobre-card-label">{c.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}

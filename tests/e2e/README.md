@@ -16,6 +16,8 @@ tests/e2e/
 │   ├── prerequisites.py     # Verificação de ambiente
 │   └── run.py               # CLI runner
 │
+├── load/                    # Teste de carga: N clientes, um servidor MCP por cliente (ver load/README.md)
+│
 ├── cases/                   # Casos de teste (auto-descobertos)
 │   ├── test_bridge.py       # bridge_check_*, bridge_convert_*, bridge_compare_*
 │   ├── test_deck.py         # deck_list, deck_read_parquet, etc
@@ -91,6 +93,18 @@ python -m tests.e2e.eval.run --quiet
 ```bash
 python -m tests.e2e.eval.run --no-browser
 ```
+
+## Teste de carga
+
+Mede latência, vazão e erros do servidor MCP com vários clientes concorrentes,
+chamando só tools somente leitura, sem agente de IA. Detalhes, métricas e o
+formato do resultado em [`load/README.md`](load/README.md).
+
+```bash
+python -m tests.e2e.load.run --concurrency 4 --duration 30
+```
+
+O resultado vai para `results/load/` e aparece na aba **Carga** do dashboard.
 
 ## Tools Cobertas
 

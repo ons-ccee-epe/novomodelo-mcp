@@ -22,6 +22,7 @@ __all__ = [
     "server_config_for_workspace",
     "prepare_workspace",
     "tool_timeout_ms",
+    "workspace_roots",
 ]
 
 SERVER_NAME = "novomodelo"
@@ -103,6 +104,12 @@ def tool_timeout_ms(server: dict[str, Any] | None = None) -> int:
     return int((cli_timeout + TOOL_TIMEOUT_MARGIN_S) * 1000)
 
 
+def workspace_roots(workspace: str | Path) -> list[Path]:
+    """Raízes do path guard para ``workspace``: ele próprio e os alvos dos links dentro dele."""
+    root = Path(workspace).resolve()
+    return [root, *_link_targets(root)]
+
+
 def server_config_for_workspace(workspace: str | Path) -> dict[str, Any] | None:
     """Cópia da definição do servidor com o path guard restrito a ``workspace``.
 
@@ -112,8 +119,7 @@ def server_config_for_workspace(workspace: str | Path) -> dict[str, Any] | None:
     server = load_server_config()
     if server is None:
         return None
-    root = Path(workspace).resolve()
-    roots = [root, *_link_targets(root)]
+    roots = workspace_roots(workspace)
     env = dict(server.get("env") or {})
     env[WORKSPACE_ENV] = os.pathsep.join(str(r) for r in roots)
     # "timeout" (ms) é o limite por tool que o kiro-cli lê do mcp.json.

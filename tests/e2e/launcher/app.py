@@ -6,9 +6,16 @@ Rotas (todas sob /api, exceto o serving de dados):
   POST /api/runs               -> dispara uma bateria (esteira completa / tags / 1 caso)
   GET  /api/runs               -> lista runs desta sessao do launcher
   GET  /api/runs/{run_id}      -> estado de um run (polling)
+  POST /api/runs/{run_id}/cancel -> para o run
+  GET  /api/load-tools         -> tools do mix de carga (somente leitura) e limites
+  POST /api/load-runs          -> dispara um teste de carga
+  GET  /api/load-runs          -> lista cargas desta sessao do launcher
+  GET  /api/load-runs/{id}     -> estado de uma carga (progresso ao vivo, polling)
+  POST /api/load-runs/{id}/cancel -> para a carga e mata os servidores MCP
   GET  /api/health            -> saude do launcher
 
-  GET  /data/results/...       -> JSON das baterias (mesma convencao do plugin Vite)
+  GET  /data/results/...       -> JSON das baterias (mesma convencao do plugin Vite);
+                                  as cargas ficam em /data/results/load/
   GET  /data/metrics/...       -> history.jsonl
 
 Seguranca de dev:
@@ -18,7 +25,7 @@ Seguranca de dev:
     uma pagina que resolve para 127.0.0.1 vira same-origin e dispara agentes).
   - POSTs exigem o header X-Launcher, que um form ou request cross-origin
     simples nao consegue enviar sem preflight.
-  - Um run por vez; timeout por query limitado.
+  - Um run por vez (de agente ou de carga, na mesma trava); timeout por query limitado.
   - Serving de /data confinado as raizes results/ e metrics/ (anti path traversal).
 """
 from __future__ import annotations
@@ -32,10 +39,23 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from tests.e2e.launcher.load_service import LoadRunService
 from tests.e2e.launcher.providers import detect_providers, resolve_provider
+from tests.e2e.launcher.run_gate import RunGate
 from tests.e2e.launcher.service import RunAlreadyActiveError, RunService
+from tests.e2e.load.engine import (
+    DEFAULT_TIMEOUT_S,
+    MAX_CONCURRENCY,
+    MAX_DURATION_S,
+    MAX_ITERATIONS,
+    MAX_TIMEOUT_S,
+    MIN_CONCURRENCY,
+    MIN_DURATION_S,
+    LoadConfig,
+)
+from tests.e2e.load.mix import ALLOWED_TOOLS, describe_catalog, validate_tools
 
 __all__ = ["app", "create_app"]
 
@@ -44,6 +64,7 @@ _BASE_DIR = Path(__file__).resolve().parent.parent
 _RESULTS_DIR = (_BASE_DIR / "results").resolve()
 _METRICS_DIR = (_BASE_DIR / "metrics").resolve()
 _DATA_ROOTS = {"results": _RESULTS_DIR, "metrics": _METRICS_DIR}
+_FIXTURES_DIR = _BASE_DIR / "fixtures"
 
 # Origens permitidas para o dev server do Vite (localhost apenas).
 _ALLOWED_ORIGINS = [
@@ -81,6 +102,35 @@ class RunRequest(BaseModel):
     )
 
 
+class LoadRunRequest(BaseModel):
+    """Corpo de POST /api/load-runs. Campos desconhecidos são recusados."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    concurrency: int = Field(ge=MIN_CONCURRENCY, le=MAX_CONCURRENCY)
+    duration_seconds: float = Field(ge=MIN_DURATION_S, le=MAX_DURATION_S, allow_inf_nan=False)
+    iterations: int | None = Field(default=None, ge=1, le=MAX_ITERATIONS)
+    tools: list[str] | None = Field(default=None, min_length=1, max_length=len(ALLOWED_TOOLS))
+    timeout_seconds: float | None = Field(
+        default=None, gt=0, le=MAX_TIMEOUT_S, allow_inf_nan=False
+    )
+
+    @field_validator("tools")
+    @classmethod
+    def _only_read_only_tools(cls, tools: list[str] | None) -> list[str] | None:
+        # Allow-list aqui, antes de qualquer processo: o body não escolhe o que o motor chama.
+        return validate_tools(tools) if tools is not None else None
+
+    def to_config(self) -> LoadConfig:
+        return LoadConfig(
+            concurrency=self.concurrency,
+            duration_s=self.duration_seconds,
+            iterations=self.iterations,
+            tools=tuple(self.tools) if self.tools is not None else None,
+            timeout_s=self.timeout_seconds if self.timeout_seconds is not None else DEFAULT_TIMEOUT_S,
+        )
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="<repositório anterior> E2E Launcher (dev)",
@@ -102,11 +152,21 @@ def create_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     def validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
         # Sem o "input": o handler padrão ecoa o valor recebido e um inf/NaN
-        # quebra a serialização, virando 500 em vez de 422.
-        errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+        # quebra a serialização, virando 500 em vez de 422. O "ctx" de um
+        # validador que levanta ValueError carrega a exceção, também não serializável.
+        errors = [
+            {
+                k: ({ck: str(cv) for ck, cv in v.items()} if k == "ctx" else v)
+                for k, v in e.items()
+                if k != "input"
+            }
+            for e in exc.errors()
+        ]
         return JSONResponse(status_code=422, content={"detail": errors})
 
-    service = RunService()
+    gate = RunGate()
+    service = RunService(gate=gate)
+    load_service = LoadRunService(gate=gate)
 
     # ---- meta ------------------------------------------------------------
 
@@ -186,6 +246,52 @@ def create_app() -> FastAPI:
         state = service.cancel(run_id)
         if state is None:
             raise HTTPException(status_code=404, detail="run nao encontrado")
+        return state.to_dict()
+
+    # ---- cargas ----------------------------------------------------------
+
+    @app.get("/api/load-tools")
+    def load_tools() -> dict[str, Any]:
+        """Tools do mix de carga (só leitura), se há fonte para elas, e os limites aceitos."""
+        return {
+            "tools": describe_catalog(_FIXTURES_DIR),
+            "limits": {
+                "min_concurrency": MIN_CONCURRENCY,
+                "max_concurrency": MAX_CONCURRENCY,
+                "min_duration_seconds": MIN_DURATION_S,
+                "max_duration_seconds": MAX_DURATION_S,
+                "max_iterations": MAX_ITERATIONS,
+                "max_timeout_seconds": MAX_TIMEOUT_S,
+                "default_timeout_seconds": DEFAULT_TIMEOUT_S,
+            },
+        }
+
+    @app.post("/api/load-runs", dependencies=[Depends(_require_launcher_header)])
+    def start_load_run(req: LoadRunRequest) -> dict[str, Any]:
+        """Dispara um teste de carga; 409 se qualquer outro run estiver ativo."""
+        try:
+            state = load_service.start_run(req.to_config())
+        except RunAlreadyActiveError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return state.to_dict()
+
+    @app.get("/api/load-runs")
+    def list_load_runs() -> dict[str, Any]:
+        return {"runs": load_service.list()}
+
+    @app.get("/api/load-runs/{run_id}")
+    def get_load_run(run_id: str) -> dict[str, Any]:
+        state = load_service.get(run_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="carga nao encontrada")
+        return state.to_dict()
+
+    @app.post("/api/load-runs/{run_id}/cancel", dependencies=[Depends(_require_launcher_header)])
+    def cancel_load_run(run_id: str) -> dict[str, Any]:
+        """Para a carga e encerra todos os processos do servidor; nada é gravado."""
+        state = load_service.cancel(run_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="carga nao encontrada")
         return state.to_dict()
 
     # ---- serving dos dados (mesma convencao do plugin de dev do Vite) ----

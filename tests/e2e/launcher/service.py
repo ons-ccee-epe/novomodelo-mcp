@@ -22,6 +22,7 @@ from typing import Any, Literal
 
 from tests.e2e.launcher.provider_runner import ProviderQueryRunner
 from tests.e2e.launcher.providers import ProviderInfo
+from tests.e2e.launcher.run_gate import RunAlreadyActiveError, RunGate
 from tests.e2e.queries.loader import CasesLoader, CasesLoaderError
 from tests.e2e.queries.models import QueryTestCase, TestResult
 from tests.e2e.queries.preconditions import missing_sources, skipped_result
@@ -98,17 +99,14 @@ class RunState:
         }
 
 
-class RunAlreadyActiveError(RuntimeError):
-    """Já existe um run pendente ou rodando; um por vez."""
-
-
 class RunService:
     """Gerencia runs de bateria em threads de fundo, com estado consultavel."""
 
-    def __init__(self) -> None:
+    def __init__(self, gate: RunGate | None = None) -> None:
         self._runs: dict[str, RunState] = {}
         self._runners: dict[str, ProviderQueryRunner] = {}
         self._lock = threading.Lock()
+        self._gate = gate or RunGate()
 
     # ---- consulta -------------------------------------------------------
 
@@ -179,10 +177,8 @@ class RunService:
             status="pending",
             started_at=datetime.now(timezone.utc).isoformat(),
         )
+        self._gate.acquire(run_id)
         with self._lock:
-            active = next((r for r in self._runs.values() if r.status not in _FINISHED), None)
-            if active is not None:
-                raise RunAlreadyActiveError(f"run {active.run_id} ainda em andamento")
             self._runs[run_id] = state
 
         thread = threading.Thread(
@@ -221,7 +217,24 @@ class RunService:
         case_id: str | None,
         timeout_seconds: float | None,
     ) -> None:
-        """Corpo do run (roda na thread de fundo)."""
+        """Corpo do run (roda na thread de fundo).
+
+        O ``finally`` é a rede de segurança: os fins normais já liberam a vaga ao
+        publicar o estado terminal, e ``release`` é idempotente.
+        """
+        try:
+            self._execute_run(state, provider, tags, case_id, timeout_seconds)
+        finally:
+            self._gate.release(state.run_id)
+
+    def _execute_run(
+        self,
+        state: RunState,
+        provider: ProviderInfo,
+        tags: list[str] | None,
+        case_id: str | None,
+        timeout_seconds: float | None,
+    ) -> None:
         try:
             cases = self.load_cases(tags=tags, case_id=case_id)
         except CasesLoaderError as exc:
@@ -300,6 +313,7 @@ class RunService:
             state.status = "done"
             state.finished_at = datetime.now(timezone.utc).isoformat()
             state.log.append(f"Bateria gravada: {batch.batch_id}")
+        self._gate.release(state.run_id)
 
     def _record(self, state: RunState, case: QueryTestCase, tr: TestResult) -> None:
         """Publica no estado do run o resultado de um caso (pass, fail, skip...)."""
@@ -363,6 +377,7 @@ class RunService:
             state.log.append(
                 f"Parado após {state.completed}/{state.total} caso(s); bateria não gravada."
             )
+        self._gate.release(state.run_id)
 
     def _fail(self, state: RunState, message: str) -> None:
         with self._lock:
@@ -371,3 +386,4 @@ class RunService:
             state.current = None
             state.finished_at = datetime.now(timezone.utc).isoformat()
             state.log.append(f"ERRO: {message}")
+        self._gate.release(state.run_id)

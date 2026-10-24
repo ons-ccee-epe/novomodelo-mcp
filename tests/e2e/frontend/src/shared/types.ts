@@ -110,3 +110,140 @@ export interface MetricsHistoryRecord {
   metrics_by_group?: Record<string, Record<string, number>>;
   alerts?: Record<string, boolean>;
 }
+
+/**
+ * Teste de carga — espelha o JSON de tests/e2e/load/store.py (build_record e index_entry),
+ * gravado em tests/e2e/results/load/. Latências são só das chamadas ok; null quando não houve.
+ */
+export interface LoadStats {
+  calls: number;
+  ok: number;
+  errors: number;
+  timeouts: number;
+  /** (erros + timeouts) / chamadas, de 0 a 1. */
+  error_rate: number;
+  throughput_cps: number;
+  min_ms: number | null;
+  mean_ms: number | null;
+  p50_ms: number | null;
+  p95_ms: number | null;
+  p99_ms: number | null;
+  max_ms: number | null;
+}
+
+export interface LoadSeriesPoint {
+  /** Início do bucket de 1 s, em segundos desde o início da carga. */
+  t: number;
+  calls: number;
+  failed: number;
+  p50_ms: number | null;
+  p95_ms: number | null;
+}
+
+export interface LoadStartupEvent {
+  client: number;
+  kind: "preflight" | "initial" | "respawn";
+  ms: number;
+  warmup_ms: number | null;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface LoadStartup {
+  clients: number;
+  started: number;
+  failed: number;
+  wall_ms: number;
+  min_ms: number | null;
+  mean_ms: number | null;
+  max_ms: number | null;
+  warmup_mean_ms: number | null;
+  preflight_ms: number | null;
+  respawns: number;
+  events: LoadStartupEvent[];
+}
+
+export interface LoadConfigRecord {
+  concurrency: number;
+  duration_seconds: number;
+  iterations: number | null;
+  /** null = todo o mix. */
+  tools: string[] | null;
+  timeout_seconds: number;
+  warmup?: boolean;
+}
+
+export interface LoadResourceSample {
+  t: number;
+  cpu_percent: number;
+  rss_mb: number;
+  processes: number;
+}
+
+export interface LoadResources {
+  available: boolean;
+  reason?: string;
+  samples?: LoadResourceSample[];
+  avg_cpu_percent?: number;
+  peak_cpu_percent?: number;
+  peak_rss_mb?: number;
+  peak_processes?: number;
+}
+
+export interface LoadErrorGroup {
+  tool: string;
+  outcome: "error" | "timeout";
+  message: string;
+  count: number;
+}
+
+export interface LoadRun {
+  load_id: string;
+  timestamp: string;
+  ended_at: string;
+  version: string;
+  git_commit_sha: string;
+  environment: string;
+  /** Interrompida por Ctrl+C na CLI: resultado parcial. */
+  interrupted: boolean;
+  config: LoadConfigRecord;
+  server: { command?: string[]; workspace?: string[] };
+  mix: {
+    calls: Array<{ id: string; tool: string }>;
+    excluded: Array<{ id: string; tool: string; reason: string }>;
+  };
+  startup: LoadStartup;
+  duration_seconds: number;
+  abandoned_calls: number;
+  totals: LoadStats;
+  per_tool: Record<string, LoadStats>;
+  series: LoadSeriesPoint[];
+  errors: LoadErrorGroup[];
+  resources: LoadResources;
+}
+
+/** Resumo de uma carga no results/load/index.json. */
+export interface LoadIndexEntry {
+  load_id: string;
+  timestamp: string;
+  version: string;
+  git_commit_sha: string;
+  interrupted: boolean;
+  config: Omit<LoadConfigRecord, "warmup">;
+  summary: Pick<
+    LoadStats,
+    | "calls"
+    | "ok"
+    | "errors"
+    | "timeouts"
+    | "error_rate"
+    | "throughput_cps"
+    | "p50_ms"
+    | "p95_ms"
+    | "p99_ms"
+  >;
+}
+
+export interface LoadIndex {
+  runs: LoadIndexEntry[];
+}
