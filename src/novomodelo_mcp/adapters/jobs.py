@@ -66,9 +66,13 @@ def read_meta(settings: Settings, job_id: str) -> dict[str, Any] | None:
     if not valid_job_id(job_id):
         return None
     try:
-        return json.loads((_job_dir(settings, job_id) / "job.json").read_text(encoding="utf-8"))
+        meta = json.loads((_job_dir(settings, job_id) / "job.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    # Gravação interrompida ou edição à mão: um job sem o mínimo não pode travar os outros.
+    if not isinstance(meta, dict) or not isinstance(meta.get("started_at"), int | float):
+        return None
+    return meta
 
 
 def update_meta(settings: Settings, job_id: str, **fields: Any) -> None:
