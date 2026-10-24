@@ -193,7 +193,7 @@ def create_workspaces(workspace: list[str]) -> list[Path]:
 def _private_write(path: Path, data: bytes, mode: int) -> None:
     """Grava com o modo pedido desde a criação (a config do cliente guarda o `env` dos
     MCPs e dados de conta; o umask comum a deixaria legível por todos)."""
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), mode)
     with os.fdopen(fd, "wb") as f:
         f.write(data)
     os.chmod(path, mode)

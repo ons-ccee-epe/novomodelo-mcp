@@ -2,11 +2,12 @@
 
 Executado como script (`python _job_runner.py <job_dir> <cmd...>`), destacado do
 servidor — sobrevive a restart/queda do servidor MCP. Stdlib pura; idêntico em
-Windows, macOS e Linux (nenhum sinal POSIX é necessário para o controle):
+Windows, macOS e Linux; o servidor o controla só por arquivos:
 
   heartbeat   tocado a cada HEARTBEAT_S enquanto o comando roda (liveness)
   child_pid   PID do comando (diagnóstico)
-  cancel      se aparecer, o runner encerra o comando (terminate -> kill após GRACE_S)
+  cancel      se aparecer, o runner encerra a árvore do comando (TERM ao grupo no POSIX,
+              taskkill /T no Windows; KILL após GRACE_S)
   exit_code   gravado atomicamente quando o comando termina
   saida.log   stdout e stderr do comando na ordem de chegada, o stderr marcado
               `[stderr] ` (além de stdout.log e stderr.log, cada canal sozinho)

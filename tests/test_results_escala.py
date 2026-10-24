@@ -62,3 +62,18 @@ def test_descricao_e_instrucoes_apontam_o_deck_sql_para_varredura(query):
     results_query, _, _ = query
     assert "deck_sql" in results_query.__doc__ and "**/*.parquet" in results_query.__doc__
     assert "deck_sql" in SERVER_INSTRUCTIONS
+
+
+def test_proximo_passo_com_apostrofo_no_caminho_e_sql_valido(tmp_path):
+    from novomodelo_mcp.adapters.sql import run_readonly_sql
+    out = tmp_path / "Copa d'Água" / "output"
+    part = out / "simulation" / "hydros" / "scenario_id=0"
+    part.mkdir(parents=True)
+    pl.DataFrame({"scenario_id": [0] * 60, "stage_id": list(range(60))}).write_parquet(part / "d.parquet")
+    mcp = _CaptureMCP()
+    settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
+    register_results(mcp, settings)
+    passo = mcp.tools["results_query"](str(out), "hydros")["proximo_passo"]
+    trecho = passo[passo.index("read_parquet("):passo.index(")") + 1]
+    r = run_readonly_sql(f"SELECT count(*) n FROM {trecho}", settings=settings)
+    assert r["status"] == "ok" and r["rows"] == [{"n": 60}]

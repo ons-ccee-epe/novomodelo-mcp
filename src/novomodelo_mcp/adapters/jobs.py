@@ -2,8 +2,9 @@
 
 Multiplataforma (Windows, macOS, Linux) e independente do processo do servidor:
 cada job é supervisionado por `_job_runner.py`, lançado DESTACADO (nova sessão
-no POSIX; novo grupo sem console no Windows). O controle é todo por arquivos na
-pasta do job — sem sinais POSIX, sem `os.kill(pid, 0)` (que no Windows MATA):
+no POSIX; novo grupo sem console no Windows). O servidor controla o runner por
+arquivos na pasta do job (sinal só no último recurso) e nunca usa `os.kill(pid, 0)`
+(que no Windows MATA):
 
   <state_dir>/jobs/<job_id>/
     job.json     metadados (comando, caminhos, horários)

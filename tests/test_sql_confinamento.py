@@ -47,3 +47,10 @@ def test_glob_dentro_do_workspace_continua_funcionando(ws):
     settings, dentro, _ = ws
     r = run_readonly_sql(f"SELECT sum(x) s FROM read_csv('{dentro}/**/*.csv')", settings=settings)
     assert r["status"] == "ok" and r["rows"] == [{"s": 1}]
+
+
+def test_alias_ou_coluna_entre_aspas_com_barra_nao_e_caminho(ws):
+    settings, dentro, _ = ws
+    r = run_readonly_sql(f'SELECT x AS "custo R$/MWh", x AS "total.csv" '
+                         f"FROM read_csv('{dentro}/**/*.csv')", settings=settings)
+    assert r["status"] == "ok" and r["rows"] == [{"custo R$/MWh": 1, "total.csv": 1}]

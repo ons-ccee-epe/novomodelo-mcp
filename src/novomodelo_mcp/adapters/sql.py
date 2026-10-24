@@ -18,7 +18,6 @@ filesystems remotos desabilitados — defesa em profundidade, nao a defesa unica
 from __future__ import annotations
 
 import datetime as _dt
-import os
 import re
 import threading
 from decimal import Decimal
@@ -98,8 +97,9 @@ def _strip_literals_and_comments(sql: str) -> str:
 
 
 def _string_literals(sql: str) -> list[str]:
-    """Conteudo dos literais '...' e dos identificadores "..." (com a aspa dobrada
-    escapada): o DuckDB le um arquivo por qualquer dos dois. Ignora comentarios."""
+    """Conteudo dos literais '...' (com '' escapado). Ignora comentarios e
+    identificadores "..." (nome de coluna e alias; o caminho entre aspas duplas fica
+    com o confinamento da conexao)."""
     lits: list[str] = []
     i, n = 0, len(sql)
     while i < n:
@@ -127,7 +127,8 @@ def _string_literals(sql: str) -> list[str]:
                     break
                 buf.append(sql[i])
                 i += 1
-            lits.append("".join(buf))
+            if c == "'":
+                lits.append("".join(buf))
             continue
         i += 1
     return lits
@@ -217,7 +218,7 @@ def run_readonly_sql(query: str, *, settings: Settings,
         # Confinamento no motor: o guard textual nao enxerga caminho montado por
         # expressao (chr(47) || ...). Fail-closed: sem ele, a query nao roda.
         try:
-            con.execute("SET allowed_directories=?", [[str(r) + os.sep for r in roots]])
+            con.execute("SET allowed_directories=?", [[r.as_posix().rstrip("/") + "/" for r in roots]])
             con.execute("SET enable_external_access=false")
         except Exception as exc:  # noqa: BLE001 - qualquer falha aqui recusa a query
             con.close()
