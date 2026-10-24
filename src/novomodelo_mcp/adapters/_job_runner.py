@@ -48,10 +48,12 @@ def _kill_tree(proc: subprocess.Popen, *, force: bool) -> None:
         # TerminateProcess não alcança netos; taskkill /T derruba a árvore toda.
         subprocess.run([_taskkill(), "/T", "/F", "/PID", str(int(proc.pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                        capture_output=True, check=False)
-    elif force:
-        proc.kill()
-    else:
-        proc.terminate()
+        return
+    # O comando lidera o próprio grupo (start_new_session): o sinal alcança os netos.
+    try:
+        os.killpg(proc.pid, signal.SIGKILL if force else signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 STDERR_MARK = b"[stderr] "
@@ -78,7 +80,8 @@ def main(argv: list[str]) -> int:
     try:
         # argv em lista e sem shell, montada pelo servidor (tools.run) com caminhos absolutos.
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                                stderr=subprocess.PIPE, creationflags=flags)
+                                stderr=subprocess.PIPE, creationflags=flags,
+                                start_new_session=not _WIN)
     except OSError as exc:
         message = f"runner: falha ao iniciar {cmd[:1]}: {exc}\n".encode()
         sys.stderr.buffer.write(message)
@@ -109,6 +112,8 @@ def main(argv: list[str]) -> int:
                 cancel_sent = time.monotonic()
             elif time.monotonic() - cancel_sent > GRACE_S:
                 _kill_tree(proc, force=True)
+    if cancel_sent is not None:
+        _kill_tree(proc, force=True)  # o filho saiu; um neto que ignorou o TERM não fica
     # Um neto que herdou os pipes pode segurá-los abertos: espera pouco e segue.
     for pump in pumps:
         pump.join(timeout=5)

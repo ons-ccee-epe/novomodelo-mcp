@@ -220,16 +220,19 @@ def job_stderr(settings: Settings, job_id: str, *, lines: int = 20,
     return _tail(_job_dir(settings, job_id) / "stderr.log", lines, max_chars)
 
 
-def _force_kill_runner(pid: int) -> None:
+def _force_kill_runner(pid: int, child_pid: int | None = None) -> None:
     """Último recurso, se o runner não responde: derruba o runner E a árvore dele."""
     if _WIN:
         subprocess.run([_job_runner._taskkill(), "/T", "/F", "/PID", str(int(pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                        capture_output=True, check=False)
         return
-    try:
-        os.killpg(int(pid), signal.SIGKILL)  # runner é líder da própria sessão
-    except (ProcessLookupError, PermissionError):
-        pass
+    # O runner e o comando lideram cada um a própria sessão.
+    for leader in (pid, child_pid):
+        if leader:
+            try:
+                os.killpg(int(leader), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
 
 
 def cancel_job(settings: Settings, job_id: str) -> dict[str, Any] | None:
@@ -247,7 +250,8 @@ def cancel_job(settings: Settings, job_id: str) -> dict[str, Any] | None:
         time.sleep(0.1)
     else:
         if st.get("pid"):
-            _force_kill_runner(st["pid"])
+            child = (d / "child_pid").read_text(encoding="utf-8").strip() if (d / "child_pid").exists() else ""
+            _force_kill_runner(st["pid"], int(child) if child.isdigit() else None)
     proc = _PROCS.get(job_id)
     if proc is not None:
         try:
