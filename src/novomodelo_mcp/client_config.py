@@ -13,6 +13,7 @@ import datetime
 import json
 import os
 import shutil
+import stat
 import sys
 import sysconfig
 from pathlib import Path
@@ -189,16 +190,29 @@ def create_workspaces(workspace: list[str]) -> list[Path]:
     return created
 
 
+def _private_write(path: Path, data: bytes, mode: int) -> None:
+    """Grava com o modo pedido desde a criação (a config do cliente guarda o `env` dos
+    MCPs e dados de conta; o umask comum a deixaria legível por todos)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    os.chmod(path, mode)
+
+
+def _mode_of(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600
+
+
 def _backup(path: Path, stamp: str) -> Path:
     backup = path.with_name(f"{path.name}.bak-{stamp}")
-    backup.write_bytes(path.read_bytes())
+    _private_write(backup, path.read_bytes(), _mode_of(path))
     return backup
 
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    tmp.write_bytes(text.encode("utf-8"))
+    _private_write(tmp, text.encode("utf-8"), _mode_of(path))
     os.replace(tmp, path)
     if path.suffix == ".json":
         json.loads(path.read_bytes().decode("utf-8"))
