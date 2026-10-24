@@ -25,7 +25,7 @@ These penalties ensure that the SDDP algorithm has relatively complete recourse 
 | ------------------ | ------ | ------------------------- | ------------------------------- |
 | Deficit ($c^{def}_{b,s}$) | \$/MWh | Unmet load per bus, by segment | Piecewise cost of load shedding |
 | Excess ($c^{exc}_b$) | \$/MWh | Excess generation per bus | Absorb uncontrollable surplus |
-| Inflow non-negativity ($c^{inf}_h$) | \$/(m³/s·h) | Water added to a hydro's water balance (penalty-based inflow methods) | Keep the water balance feasible under a negative inflow realization |
+| Inflow non-negativity ($c^{inf}_h$) | \$/(m³/s·h) | Water added to a hydro's water balance (`penalty` and `truncation_with_penalty` inflow methods) | Keep the water balance feasible under a negative inflow realization |
 
 Deficit and excess are conceptually slack variables on the load balance constraint, but they have special names because of their importance in the hydrothermal dispatch application. Deficit represents the value of lost load; excess is a regularization-level cost to eliminate spurious slack generation.
 
@@ -47,7 +47,7 @@ These penalties provide slack for physical or operational constraints that may b
 | Generation below minimum ($c^{gv-}_h$) | \$/MWh | Generation < min | Contractual or environmental minimum generation |
 | Evaporation above or below target ($c^{ev+}_h$, $c^{ev-}_h$) | \$/(m³/s·h) | Evaporation constraint | Physical constraint (bidirectional, see Section 5) |
 | Withdrawal over- or under-delivery ($c^{wv+}_h$, $c^{wv-}_h$) | \$/(m³/s·h) | Unmet water withdrawal | Human consumption / irrigation commitments |
-| Generic constraint violation (user-set cost) | \$/(constraint unit·h) | Generic constraint violations | User-defined physical or operational constraints |
+| Generic constraint violation (user-set cost) | \$/(constraint unit·h) or \$/constraint unit | Generic constraint violations | User-defined physical or operational constraints |
 
 These penalties create an artificial cost in the objective function that propagates backward through the value function, telling earlier stages to store more water (or dispatch differently) to avoid reaching states where violations are necessary.
 
@@ -69,7 +69,7 @@ These are small costs inserted into the objective function to guide the solver t
 
 The costs carry different units: \$/hm³ for the storage-violation and filling-target slacks; \$/(m³/s·h) for the turbined, outflow, evaporation, withdrawal and inflow non-negativity slacks and the spillage, turbined and diversion costs; and \$/MWh for deficit, excess, the generation-minimum slack and every non-hydro cost. The ordering compares them as energy-equivalent costs in \$/MWh.
 
-Water at hydro $h$ in stage $t$ produces energy at its accumulated productivity $\bar\rho_{acum,h,t}$, the sum of the useful-range mean productivities of the plant and of every plant downstream ([Hydro Production Function Models §5.3](/math/hydro-production-models#53-useful-range-mean-productivity)). One hm³ is $\kappa = 10^6/3600$ (m³/s)·h, so, for a plant with $\bar\rho_{acum,h,t} > 0$, a storage cost $c$ is worth $c/(\kappa\,\bar\rho_{acum,h,t})$ \$/MWh and a flow cost $c$ is worth $c/\bar\rho_{acum,h,t}$ \$/MWh. In these units the tiers are ordered from highest to lowest:
+Water at hydro $h$ in stage $t$ produces energy at its accumulated productivity $\bar\rho_{acum,h,t}$, the sum of the useful-range mean productivities of the plant and of every plant downstream ([Hydro Production Function Models §4.3](/math/hydro-production-models#43-useful-range-mean-productivity)). One hm³ is $\kappa = 10^6/3600$ (m³/s)·h, so, for a plant with $\bar\rho_{acum,h,t} > 0$, a storage cost $c$ is worth $c/(\kappa\,\bar\rho_{acum,h,t})$ \$/MWh and a flow cost $c$ is worth $c/\bar\rho_{acum,h,t}$ \$/MWh. In these units the tiers are ordered from highest to lowest:
 
 $$
 \begin{aligned}
@@ -98,7 +98,7 @@ Novomodelo checks the configured costs when the case loads. The checks compare t
 
 ## 3. Penalty Defaults and Overrides
 
-Each cost has a case-level default and may be overridden per entity and per stage. The evaporation and withdrawal slacks are priced by directional costs whose defaults follow the symmetric costs; the [Configure tab](#implementation-in-novomodelo) lists the fields, the tiers and the fallback order. [Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity) covers the penalty method of the inflow slack.
+Each cost has a case-level default and may be overridden per entity and per stage. The evaporation and withdrawal slacks are priced by directional costs whose defaults follow the symmetric costs; the [Configure tab](#implementation-in-novomodelo) lists the fields, the tiers and the fallback order. [Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity) covers the inflow slack's bounds and price under each inflow method.
 
 ### Piecewise Deficit
 
@@ -122,14 +122,16 @@ This section enumerates all constraints in the LP that use slack variables, orga
 | Minimum storage (filling hydro, from its entry stage) | $\sigma^{v-}_h$ | Lower bound | $c^{sv-}_h$ | Constraint violation |
 | Filling target | $\sigma^{fill}_h$ | Lower bound | $c^{fill}_h$ | Constraint violation |
 | Minimum turbined | $\sigma^{q-}_{h,b,k}$ | Lower bound | $c^{tv-}_h$ | Constraint violation |
+| Plant minimum turbined (residual) | $\sigma^{Q-}_{h,k}$ | Lower bound | $c^{tv-}_h$ | Constraint violation |
 | Minimum outflow | $\sigma^{o-}_{h,k}$ | Lower bound | $c^{ov-}_h$ | Constraint violation |
 | Maximum outflow | $\sigma^{o+}_{h,k}$ | Upper bound | $c^{ov+}_h$ | Constraint violation |
 | Minimum generation | $\sigma^{g-}_{h,b,k}$ | Lower bound | $c^{gv-}_h$ | Constraint violation |
+| Plant minimum generation (residual) | $\sigma^{G-}_{h,k}$ | Lower bound | $c^{gv-}_h$ | Constraint violation |
 | Evaporation | $\sigma^{e+}_h$ | Above target | $c^{ev+}_h$ | Constraint violation |
 | Evaporation | $\sigma^{e-}_h$ | Below target | $c^{ev-}_h$ | Constraint violation |
 | Water withdrawal | $\sigma^{w+}_h$ | Over-delivery | $c^{wv+}_h$ | Constraint violation |
 | Water withdrawal | $\sigma^{w-}_h$ | Under-delivery | $c^{wv-}_h$ | Constraint violation |
-| Water balance (penalty-based inflow methods) | $\sigma^{inf}_h$ | Added water | $c^{inf}_h$ | Recourse |
+| Water balance (`penalty` and `truncation_with_penalty` inflow methods) | $\sigma^{inf}_h$ | Added water | $c^{inf}_h$ | Recourse |
 
 ### Hydro — Storage Bounds
 
@@ -149,7 +151,7 @@ The **maximum storage** $\bar{V}_h$ is a hard physical limit (the reservoir capa
 
 ### Generic Constraints
 
-User-defined generic constraints can optionally have slack variables with user-specified penalty costs. These are typically used for physical or operational directives from the system operator, and fall into the **constraint violation** category. A two-sided generic constraint (both a floor and a cap) carries two slack columns, one per endpoint; the reported violation is their signed net, and both are penalised.
+User-defined generic constraints can optionally have slack variables with user-specified penalty costs. These are typically used for physical or operational directives from the system operator, and fall into the **constraint violation** category. A two-sided generic constraint (both a floor and a cap) carries two slack columns, one per endpoint; the reported violation is their signed net, and both are penalised. The cost is declared on one of two bases: per unit and hour for a row whose quantity is a rate (MW, m³/s), charged over the hours of the row's block or, on a stage-level row, of the stage; or per unit for a row whose quantity is an amount (MWh, hm³), charged once whatever the duration ([LP Formulation §10](/math/lp-formulation#10-generic-constraints)).
 
 ### Non-Controllable Sources
 
@@ -231,7 +233,7 @@ directional costs and `inflow_nonnegativity_cost`) are omitted.
 
 ```json
 {
-  "$schema": "https://docs.novomodelo.invalid/schemas/penalties.schema.json",
+  "$schema": "https://docs.modelossetoreletrico.org.br/schemas/penalties.schema.json",
   "bus": {
     "deficit_segments": [
       { "depth_mw": 500.0, "cost": 7000.0 },
@@ -267,6 +269,14 @@ cost.
 A parallel stage prices its one evaporation slack pair over the stage hours,
 and a chronological stage each block's pair over the block hours
 ([Signed Net Evaporation](#signed-net-evaporation)).
+
+A generic constraint's slack cost is not a `penalties.json` default: each
+constraint in `constraints/generic_constraints.json` sets its own
+`slack.penalty` together with a `slack.penalty_basis`. Under `"per_hour"` the
+penalty is in \$ per row unit per hour and is charged over the hours of the
+row's block or stage; under `"per_unit"` it is in \$ per row unit and is
+charged once. [Generic Constraints — Penalty basis](/reference/generic-constraints/#penalty-basis)
+gives the choice for each row unit.
 
 The entity-level `hydros[].penalties` block that overrides these defaults per
 plant is documented in the
@@ -371,10 +381,10 @@ defaults only; no slack is priced at a symmetric cost.
 | Variable                   | Lower Bound                                                                                                | Upper Bound            | Lower Slack                                    | Upper Slack  |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------- | ------------ |
 | `storage`                  | `min_storage_hm3`; `0` for a filling hydro in every phase and for a hydro outside its commissioning window | `max_storage_hm3`      | Hard (soft for a filling hydro once operating) | Spillage     |
-| `turbined_flow`            | `0`; the `min_turbined_m3s` minimum, summed over a (hydro, bus) cell's unit groups, is a soft row          | `max_turbined_m3s`     | With penalty, when that minimum is `> 0`       | Hard         |
+| `turbined_flow`            | `0`; the `min_turbined_m3s` minimum, summed over a (hydro, bus) cell's unit groups, is a soft row, plus a soft plant-total row where the plant's own `min_turbined_m3s` exceeds that sum | `max_turbined_m3s`, also on the plant's total where it is below the cells' summed capacities | With penalty, when that minimum is `> 0`       | Hard         |
 | `spillage`                 | `min_spillage_m3s` (default `0`)                                                                           | `max_spillage_m3s` (default unbounded) | Hard                                           | Hard         |
 | `outflow`                  | `min_outflow_m3s`                                                                                          | `max_outflow_m3s` (optional) | With penalty, when that minimum is `> 0`       | With penalty, when that maximum is set |
-| `generation`               | `0`; the `min_generation_mw` minimum, summed over a (hydro, bus) cell's unit groups, is a soft row         | `max_generation_mw`    | With penalty, when that minimum is `> 0`       | Hard         |
+| `generation`               | `0`; the `min_generation_mw` minimum, summed over a (hydro, bus) cell's unit groups, is a soft row, plus a soft plant-total row where the plant's own `min_generation_mw` exceeds that sum | `max_generation_mw`, also on the plant's total where it is below the cells' summed capacities | With penalty, when that minimum is `> 0`       | Hard         |
 | `evaporation`              | minus the per-stage bound of [Signed Net Evaporation](#signed-net-evaporation)                             | plus that bound        | With penalty                                   | With penalty |
 | `withdrawal` (stage-level) | `water_withdrawal_m3s`                                                                                     | `water_withdrawal_m3s` | With penalty                                   | With penalty |
 
@@ -387,7 +397,8 @@ not derived from turbined flow bounds, because the production function is not
 always constant productivity. When a complete hydro model is available, the
 installed capacity provides a natural hard upper bound. A positive cell minimum is
 enforced by a soft row whose slack is priced at `generation_violation_below_cost`;
-a zero cell minimum leaves that slack fixed at `0`.
+a zero cell minimum leaves that slack fixed at `0`. A plant-total minimum row
+prices its own slack at the same cost, and a shortfall is charged once.
 :::
 
 Relationship: `outflow = turbined_flow + spillage`,
@@ -505,4 +516,4 @@ corpus.
 ## Cross-References
 
 - [LP Formulation](/math/lp-formulation) — Cost taxonomy (§1) and penalty terms (§9)
-- [Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity) — Penalty method for inflow non-negativity
+- [Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity) — The inflow non-negativity slack under each inflow method, and the effect of truncation on the lower bound
