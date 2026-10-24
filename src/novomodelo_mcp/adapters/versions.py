@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from ..names import BINDING_DIST, BRIDGE_CLI, BRIDGE_DIST, MCP_DIST, MCP_RELEASE_TAG_URL
-from .discovery import bridge_origin, tool_version
+from .discovery import bridge_origin, bridge_version
 
 CLI_RELEASES = "https://github.com/ons-ccee-epe/novomodelo/releases"
 NOVOMODELO_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo/releases/latest"
@@ -84,10 +84,7 @@ def _read_local(settings) -> dict[str, dict[str, Any]]:
     except metadata.PackageNotFoundError:
         lib = None
     bridge_path, origin = bridge_origin(settings)
-    if origin == "pacote":
-        bridge = metadata.version(BRIDGE_CLI)
-    else:
-        bridge = tool_version(bridge_path)
+    bridge = bridge_version(bridge_path, origin)
     return {
         "executavel": _piece(cli.get("version") if cli.get("status") == "ok" else None,
                              "não encontrado"),
@@ -129,7 +126,7 @@ ASK_AGENT_TO_INSTALL = ("Peça ao agente: “instale o executável do novomodelo
 def mcp_install_command(version: str) -> str:
     wheel = f"novomodelo_mcp-{version}-py3-none-any.whl"
     return (f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
-            f"`uv tool install --force ./{wheel}` (o bridge, a biblioteca e as docs vêm junto)")
+            f"`uv tool install --force --compile-bytecode ./{wheel}` (o bridge, a biblioteca e as docs vêm junto)")
 
 
 def _bridge_command(version: str, origin: str | None = None) -> str:

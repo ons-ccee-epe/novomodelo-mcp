@@ -476,3 +476,7 @@ def test_docs_de_outra_versao_avisam_e_sem_manifesto_nao(pecas, monkeypatch):
 def test_docs_embutidas_reais_tem_a_versao_do_manifesto():
     piece = V._docs_piece()
     assert piece["versao"] and piece["commit"]
+
+
+def test_comando_de_instalar_o_mcp_compila_o_bytecode():
+    assert "uv tool install --force --compile-bytecode ./" in V.mcp_install_command("0.19.0")
