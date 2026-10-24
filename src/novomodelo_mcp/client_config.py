@@ -13,7 +13,6 @@ import datetime
 import json
 import os
 import shutil
-import stat
 import sys
 import sysconfig
 from pathlib import Path
@@ -199,20 +198,20 @@ def _private_write(path: Path, data: bytes, mode: int) -> None:
     os.chmod(path, mode)
 
 
-def _mode_of(path: Path) -> int:
-    return stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600
+#: Só a pessoa lê a config do cliente (o cliente roda como ela); no Windows vale a ACL.
+_PRIVATE = 0o600
 
 
 def _backup(path: Path, stamp: str) -> Path:
     backup = path.with_name(f"{path.name}.bak-{stamp}")
-    _private_write(backup, path.read_bytes(), _mode_of(path))
+    _private_write(backup, path.read_bytes(), _PRIVATE)
     return backup
 
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    _private_write(tmp, text.encode("utf-8"), _mode_of(path))
+    _private_write(tmp, text.encode("utf-8"), _PRIVATE)
     os.replace(tmp, path)
     if path.suffix == ".json":
         json.loads(path.read_bytes().decode("utf-8"))

@@ -1,5 +1,5 @@
 """O `configurar` não abre a config do cliente para outros usuários: o arquivo regravado
-e o backup guardam o modo do original (0600 quando o arquivo é novo)."""
+e o backup saem sempre em 0600."""
 import os
 import stat
 import sys
@@ -41,3 +41,14 @@ def test_backup_e_copia_byte_a_byte_e_o_novo_sai_sem_crlf_extra(tmp_path):
     [backup] = tmp_path.glob("claude_desktop_config.json.bak-*")
     assert backup.read_bytes() == original
     assert alvo.read_bytes() == b'{\n  "mcpServers": {}\n}\n'
+
+
+@POSIX
+def test_original_aberto_sai_fechado_em_0600_no_arquivo_e_no_backup(tmp_path):
+    alvo = tmp_path / "claude_desktop_config.json"
+    alvo.write_text("{}", encoding="utf-8")
+    os.chmod(alvo, 0o664)
+    C.apply([(alvo, '{"mcpServers": {}}', "rotulo")])
+    assert _modo(alvo) == 0o600
+    assert all(_modo(b) == 0o600 for b in tmp_path.glob("claude_desktop_config.json.bak-*"))
+    assert alvo.read_text(encoding="utf-8") == '{"mcpServers": {}}'
