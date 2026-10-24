@@ -315,6 +315,15 @@ def simulation_query(output_dir: str, entity: str, *, settings: Settings,
     except (OSError, pl.exceptions.PolarsError) as exc:
         return error(2, f"não foi possível ler simulation/{entity}", _first_line(exc))
 
-    return {"status": "ok", "entity": entity, "columns": df.columns,
-            "row_count": df.height, "truncated": df.height >= cap,
-            "rows": df.to_dicts()}
+    out: dict[str, Any] = {"status": "ok", "entity": entity, "columns": df.columns,
+                           "row_count": df.height, "truncated": df.height >= cap,
+                           "rows": df.to_dicts()}
+    if limit > max_rows:
+        out["limite_aplicado"] = max_rows
+    if out["truncated"]:
+        glob = f"{base.as_posix()}/**/*.parquet"
+        out["proximo_passo"] = (
+            f"o recorte não coube em {cap} linhas. Para varrer todos os cenários, use o "
+            f"deck_sql sobre read_parquet('{glob}'): agregue (GROUP BY) ou filtre (WHERE) "
+            "para achar os casos que interessam e depois detalhe só esses.")
+    return out

@@ -118,7 +118,11 @@ def register_results(mcp, settings: Settings) -> None:
         Agregação entre cenários: passe `group_by` (ex.: ["hydro_id","stage_id"]),
         `agg` (mean|min|max|sum|median|std|p10|p90) e `columns` (colunas a agregar).
         Sem `group_by`: primeiras `limit` linhas, com filtro opcional por `scenario`.
-        Nunca devolve o dataset inteiro.
+        Nunca devolve o dataset inteiro: o teto é NOVOMODELO_MCP_MAX_INLINE_ROWS.
+        Varredura de todos os cenários (ex.: onde uma violação aparece, em que usina e
+        estágio): use o `deck_sql` sobre
+        read_parquet('<output_dir>/simulation/<entity>/**/*.parquet'), que agrega e
+        filtra todas as partições; a resposta truncada traz o caminho pronto.
         """
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
