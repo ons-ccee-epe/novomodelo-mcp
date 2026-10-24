@@ -126,8 +126,9 @@ Um `pastas.json` ilegível não libera nada. Sem `NOVOMODELO_MCP_WORKSPACE`, a t
 nada, porque tudo já é aceito. A mesma instrução está nas instructions do servidor e na
 descrição de toda tool que recebe caminho.
 
-Edições com `force=True` (gravar violando o schema) e `case_init(force=True)`
-(sobrescrever arquivos) exigem `NOVOMODELO_MCP_ALLOW_FORCE=1`.
+Edições com `force=True` (gravar violando o schema), `case_init(force=True)`
+(sobrescrever arquivos) e `bridge_convert_*(force=True)` (apaga o deck de destino) exigem
+`NOVOMODELO_MCP_ALLOW_FORCE=1`.
 
 ## Prompt `metodologia`
 
@@ -179,7 +180,7 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | `NOVOMODELO_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando definida) |
 | `NOVOMODELO_MCP_DOCS_DIR` | — | só desenvolvimento: pasta de páginas de um clone das docs, no lugar das embutidas (gera aviso; ver [Documentação e schemas](#documentação-e-schemas)) |
 | `NOVOMODELO_MCP_SCHEMAS_DIR` | — | pasta com `*.schema.json` (ver [Documentação e schemas](#documentação-e-schemas)) |
-| `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)` e `case_init(force=True)` |
+| `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)`, `case_init(force=True)` e `bridge_convert_*(force=True)`, que apaga o deck de destino |
 | `NOVOMODELO_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
 | `NOVOMODELO_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
 | `NOVOMODELO_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
