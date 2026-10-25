@@ -70,3 +70,21 @@ def test_describe_fora_do_workspace_continua_recusado(ws):
     r = run_readonly_sql(f"DESCRIBE SELECT * FROM read_csv('{fora.as_posix()}/segredo.csv')",
                          settings=settings)
     assert _recusado(r)
+
+
+def test_barra_de_progresso_desligada_porque_ela_sai_no_stdout_do_protocolo(ws):
+    """Num processo com o stdout num pipe (como o servidor MCP roda), o DuckDB liga a barra
+    por padrão; dentro do pytest ela já vem desligada, por isso o teste usa um subprocesso."""
+    import json
+    import subprocess
+    import sys
+    settings, dentro, _ = ws
+    codigo = (
+        "import dataclasses, json\n"
+        "from novomodelo_mcp.config import load_settings\n"
+        "from novomodelo_mcp.adapters.sql import run_readonly_sql\n"
+        f"s = dataclasses.replace(load_settings(), workspace={str(dentro)!r})\n"
+        "r = run_readonly_sql(\"SELECT current_setting('enable_progress_bar') AS barra\", settings=s)\n"
+        "print(json.dumps(r['rows']))\n")
+    out = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout.strip().splitlines()[-1]) == [{"barra": False}], out.stdout

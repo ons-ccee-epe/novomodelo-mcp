@@ -233,6 +233,7 @@ def run_readonly_sql(query: str, *, settings: Settings,
         "SET allow_community_extensions=false",
         "SET disabled_filesystems="
         "'HTTPFileSystem,S3FileSystem,GCSFileSystem,AzureBlobStorageFileSystem'",
+        "SET enable_progress_bar=false",   # a barra sai no stdout, que é o canal do protocolo MCP
         "SET lock_configuration=true",
     ):
         try:
