@@ -7,10 +7,10 @@ reverte se reprovar. `force` só é aceito com NOVOMODELO_MCP_ALLOW_FORCE.
 """
 from __future__ import annotations
 
-from ..adapters import budget
 import os
 from pathlib import Path
 
+from ..adapters import budget
 from ..adapters import deck_io
 from ..adapters import reference as REF
 from ..adapters.novomodelo import validate_deck_binding
@@ -27,6 +27,25 @@ def register_deck(mcp, settings: Settings) -> None:
 
     def _guard(*paths: str) -> dict | None:
         return ensure_in_workspace(*paths, settings=settings)
+
+    def _too_big_to_load(path: str) -> dict | None:
+        """Pasta ou parquet acima de NOVOMODELO_MCP_MAX_READ_BYTES não é carregado inteiro:
+        a pasta de resultados de um caso real passa de dezenas de GB descomprimida e
+        derruba o servidor por falta de memória."""
+        p = Path(path)
+        if not p.exists():
+            return None
+        size = deck_io.parquet_bytes(p)
+        if not p.is_dir() and size <= settings.max_read_bytes:
+            return None
+        alvo = f"{p.as_posix()}/**/*.parquet" if p.is_dir() else p.as_posix()
+        alvo = alvo.replace("'", "''")
+        return error(7, f"grande demais para carregar na memória ({size} bytes"
+                     f"{', pasta' if p.is_dir() else ''})",
+                     f"teto: {settings.max_read_bytes} (NOVOMODELO_MCP_MAX_READ_BYTES)",
+                     proximo_passo=("use o deck_sql, que lê sob demanda: SUMMARIZE SELECT * FROM "
+                                    f"read_parquet('{alvo}') para as estatísticas, ou SELECT com "
+                                    "WHERE/GROUP BY para um recorte"))
 
     @mcp.tool(annotations=READ_ONLY)
     def deck_list(case_dir: str, max_files: int = 500) -> dict:
@@ -87,8 +106,12 @@ def register_deck(mcp, settings: Settings) -> None:
 
     @mcp.tool(annotations=READ_ONLY)
     def deck_describe_parquet(path: str) -> dict:
-        """Estatísticas de um Parquet do deck (schema + describe por coluna)."""
-        if (err := _guard(path)):
+        """Estatísticas de um Parquet do deck (schema + describe por coluna).
+
+        Pasta ou arquivo acima de NOVOMODELO_MCP_MAX_READ_BYTES (resultados de rodada) é
+        recusado sem ler: use o deck_sql com SUMMARIZE, que lê sob demanda.
+        """
+        if (err := _guard(path)) or (err := _too_big_to_load(path)):
             return err
         try:
             out = deck_io.describe_parquet(path)
@@ -166,6 +189,6 @@ def register_deck(mcp, settings: Settings) -> None:
     def deck_edit_parquet(path: str, where: dict, set_values: dict,
                           dry_run: bool = False) -> dict:
         """Edita células de um Parquet do deck PRESERVANDO o schema (colunas/dtypes)."""
-        if (err := _guard(path)):
+        if (err := _guard(path)) or (err := _too_big_to_load(path)):
             return err
         return deck_io.edit_parquet(path, where, set_values, dry_run=dry_run)

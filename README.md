@@ -186,7 +186,7 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | `NOVOMODELO_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
 | `NOVOMODELO_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |
 | `NOVOMODELO_MCP_MAX_RESPONSE_KB` | `50` | teto de tamanho de uma resposta com linhas (`results_query`, `deck_sql`, `deck_read_parquet`, `results_convergence`); acima dele as linhas são cortadas, com `cortado_por_tamanho` |
-| `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes na leitura direta de JSON |
+| `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes do que é carregado inteiro na memória: leitura de JSON e `deck_describe_parquet`/`deck_edit_parquet` (pasta ou parquet maior é recusado e aponta o `deck_sql`) |
 | `NOVOMODELO_MCP_STATE_DIR` | por SO (ver abaixo) | estado persistente: runs assíncronos (`jobs/`) e calibração (`calibration.json`) |
 | `NOVOMODELO_MCP_MAX_JOBS` | `1` | runs simultâneos permitidos pelo `run_start` |
 | `NOVOMODELO_MCP_MAX_POLICY_BYTES` | `1073741824` (1 GiB) | maior política (em disco) que o `results_policy` aceita carregar; a biblioteca lê a política inteira em memória |

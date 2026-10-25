@@ -24,7 +24,7 @@ class Settings:
     default_timeout: float          # NOVOMODELO_MCP_TIMEOUT (segundos)
     max_diagnostics: int            # NOVOMODELO_MCP_MAX_DIAGNOSTICS
     max_summary_chars: int          # NOVOMODELO_MCP_MAX_SUMMARY_CHARS
-    max_read_bytes: int             # NOVOMODELO_MCP_MAX_READ_BYTES (teto de leitura de JSON)
+    max_read_bytes: int             # NOVOMODELO_MCP_MAX_READ_BYTES (teto do que é carregado inteiro: JSON, describe e edit de parquet)
     max_response_kb: int            # NOVOMODELO_MCP_MAX_RESPONSE_KB (teto de tamanho de uma resposta com linhas)
     state_dir: str | None = None    # NOVOMODELO_MCP_STATE_DIR (jobs + calibração; padrão por SO)
     max_jobs: int = 1               # NOVOMODELO_MCP_MAX_JOBS (runs simultâneos permitidos)
