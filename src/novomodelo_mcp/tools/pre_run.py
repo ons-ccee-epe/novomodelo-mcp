@@ -115,7 +115,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(case_dir, settings=settings)):
             return err
-        return cap_envelope(case_summary_binding(case_dir, max_items=settings.max_inline_rows,
+        return cap_envelope(case_summary_binding(case_dir, max_items=settings.max_rows,
                                                  settings=settings), settings)
 
     @mcp.tool(annotations=READ_ONLY)

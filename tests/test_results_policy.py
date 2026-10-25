@@ -64,7 +64,7 @@ def tool(monkeypatch, tmp_path):
     (out / "policy" / "cuts").mkdir(parents=True)
     (out / "policy" / "cuts" / "000.bin").write_bytes(b"x" * 100)
     settings = dataclasses.replace(load_settings(), workspace=str(tmp_path / "ws"),
-                                   max_inline_rows=5, max_policy_bytes=1000)
+                                   max_rows=5, max_policy_bytes=1000)
     mcp = _CaptureMCP()
     register_results(mcp, settings)
     return mcp.tools["results_policy"], str(out), estado

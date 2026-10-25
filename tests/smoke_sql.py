@@ -110,10 +110,10 @@ def _has_exec_libs() -> bool:
 
 def _settings_for(ws: str, max_rows: int = 1000):
     os.environ["NOVOMODELO_MCP_WORKSPACE"] = ws
-    os.environ["NOVOMODELO_MCP_MAX_QUERY_ROWS"] = str(max_rows)
     os.environ["NOVOMODELO_MCP_TIMEOUT"] = "30"
+    import dataclasses
     from novomodelo_mcp.config import load_settings
-    return load_settings()
+    return dataclasses.replace(load_settings(), max_rows=max_rows)
 
 
 def test_exec_group_by_and_conditional_count():

@@ -8,7 +8,7 @@ from __future__ import annotations
 from ..adapters import results as R
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
-from .shaping import cap_envelope
+from .shaping import fit_to_budget, cap_envelope
 from .annotations import READ_ONLY
 
 
@@ -64,7 +64,8 @@ def register_results(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
-        return cap_envelope(R.convergence_summary(output_dir, tail=tail), settings)
+        return cap_envelope(fit_to_budget(R.convergence_summary(output_dir, tail=tail), settings, "tail"),
+                            settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def results_stochastic(output_dir: str, hydro_id: int | None = None,
@@ -83,7 +84,7 @@ def register_results(mcp, settings: Settings) -> None:
             return err
         return cap_envelope(R.stochastic_query(output_dir, hydro_id=hydro_id, stage=stage,
                                                openings_stage=aberturas_do_estagio,
-                                               max_rows=settings.max_inline_rows), settings)
+                                               max_rows=settings.max_rows), settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def results_policy(output_dir: str, stage: int | None = None,
@@ -118,7 +119,8 @@ def register_results(mcp, settings: Settings) -> None:
         Agregação entre cenários: passe `group_by` (ex.: ["hydro_id","stage_id"]),
         `agg` (mean|min|max|sum|median|std|p10|p90) e `columns` (colunas a agregar).
         Sem `group_by`: primeiras `limit` linhas, com filtro opcional por `scenario`.
-        Nunca devolve o dataset inteiro: o teto é NOVOMODELO_MCP_MAX_INLINE_ROWS.
+        Sem `limit`, o que couber; nunca passa de NOVOMODELO_MCP_MAX_RESPONSE_KB
+        (escolha só as colunas que precisa: linhas estreitas cabem às centenas).
         Varredura de todos os cenários (ex.: onde uma violação aparece, em que usina e
         estágio): use o `deck_sql` sobre
         read_parquet('<output_dir>/simulation/<entity>/**/*.parquet'), que agrega e
@@ -126,8 +128,8 @@ def register_results(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
-        n = limit or settings.max_inline_rows
+        n = limit or settings.max_rows
         out = R.simulation_query(output_dir, entity, settings=settings, columns=columns,
                                  group_by=group_by, agg=agg, scenario=scenario,
-                                 limit=n, max_rows=settings.max_inline_rows)
+                                 limit=n, max_rows=settings.max_rows)
         return cap_envelope(out, settings)

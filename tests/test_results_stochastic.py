@@ -55,7 +55,7 @@ def tool(monkeypatch, tmp_path):
     (ws / "output").mkdir(parents=True)
     mcp = _CaptureMCP()
     register_results(mcp, dataclasses.replace(load_settings(), workspace=str(ws),
-                                              max_inline_rows=5))
+                                              max_rows=5))
     return mcp.tools["results_stochastic"], str(ws / "output"), estado
 
 

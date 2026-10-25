@@ -17,7 +17,7 @@ from ..adapters.envelope import error
 from ..adapters.obs import log
 from ..adapters.paths import allowed_roots, ensure_in_workspace
 from ..config import Settings
-from .shaping import cap_envelope
+from .shaping import fit_to_budget, cap_envelope
 from .annotations import DESTRUCTIVE, READ_ONLY
 
 
@@ -76,13 +76,13 @@ def register_deck(mcp, settings: Settings) -> None:
         """Lê um Parquet do deck: schema, nº de linhas e uma AMOSTRA (nunca tudo)."""
         if (err := _guard(path)):
             return err
-        n = min(limit or settings.max_inline_rows, settings.max_inline_rows)
+        n = min(limit or settings.max_rows, settings.max_rows)
         try:
             out = deck_io.read_parquet_summary(path, columns=columns, limit=n)
         except Exception as exc:  # noqa: BLE001
             return error(1, f"falha ao ler Parquet: {exc}")
         out["status"] = "ok"
-        return out
+        return fit_to_budget(out, settings, "head")
 
     @mcp.tool(annotations=READ_ONLY)
     def deck_describe_parquet(path: str) -> dict:
@@ -109,7 +109,7 @@ def register_deck(mcp, settings: Settings) -> None:
         So leitura: apenas SELECT/WITH; COPY/ATTACH/INSTALL/escrita sao recusados.
         Todo caminho referenciado precisa estar dentro do workspace
         (NOVOMODELO_MCP_WORKSPACE); acesso remoto e a caminhos de fora e negado. A saida
-        tem teto de linhas (NOVOMODELO_MCP_MAX_QUERY_ROWS) e `truncated: true` avisa que
+        tem teto de tamanho (NOVOMODELO_MCP_MAX_RESPONSE_KB) e `truncated: true` avisa que
         ha mais — refine com agregacao/LIMIT.
 
         Ex.: SELECT hydro_id, min(value_m3s) AS min_v, max(value_m3s) AS max_v,

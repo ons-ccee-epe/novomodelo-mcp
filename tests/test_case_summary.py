@@ -52,7 +52,7 @@ def tool(monkeypatch, tmp_path):
     (case / "config.json").write_text("{}", encoding="utf-8")
     mcp = _CaptureMCP()
     pre_run.register_pre_run(mcp, dataclasses.replace(load_settings(), workspace=str(tmp_path / "ws"),
-                                                      max_inline_rows=5))
+                                                      max_rows=5))
     return mcp.tools["case_summary"], case, estado
 
 

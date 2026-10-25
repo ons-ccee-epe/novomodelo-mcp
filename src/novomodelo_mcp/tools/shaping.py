@@ -5,6 +5,7 @@ import json
 import re
 from typing import Any
 
+from ..adapters.budget import fit_to_budget, response_bytes  # noqa: F401 - reexporta para as tools
 from ..config import Settings
 
 
