@@ -99,8 +99,8 @@ da organização. A classificação fica em `src/novomodelo_mcp/tools/annotation
 | Tipo | Tools |
 |---|---|
 | Só leitura | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `docs_search`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
-| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard`, `incluir_pastas` |
-| Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo`, `bridge_convert_newave`, `bridge_convert_decomp` (com force, apagam o destino) |
+| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard`, `incluir_pastas` |
+| Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
 
 A lista de liberação das tools de leitura (Claude Code e Kiro) é gravada pelo
 `configurar`, a partir do servidor; para vê-la, rode
