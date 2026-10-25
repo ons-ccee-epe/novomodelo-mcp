@@ -1,0 +1,220 @@
+---
+title: novomodelo changelog
+description: What changed in each novomodelo release, from 0.18.0 on.
+---
+
+## 0.19.0
+
+Released 2026-10-20.
+
+### Added
+
+- `training.cut_selection.selection.lookback_iterations` for `level1` keeps
+  the trial states of only the rows added in the last `lookback_iterations`
+  iterations, which bounds their memory.
+- `simulation.cut_set`, `all` or `active`, chooses which rows of each stage
+  the simulation loads.
+- Generic-constraint expressions accept `+`, `-`, `*`, `/`, parentheses and
+  unary minus over numbers and `@parameters`, on both sides of the relation.
+  They must stay linear in LP variables.
+- A scalar parameter in `constraints/generic_parameters.json` may be
+  `kind: "expression"`, a formula over other parameters.
+- Stored-energy parameters in MWh: `max_stored_energy_mwh`,
+  `integrated_accumulated_productivity_mwh_per_hm3` and
+  `integrated_equivalent_productivity_mwh_per_hm3`. Price the slack of a
+  constraint written with them with `"penalty_basis": "per_unit"`.
+- `integrated_equivalent_productivity_mw_per_m3s` in
+  `system/hydro_energy_productivity.parquet` sets a plant's useful-range mean
+  productivity for the stage outright.
+- A `diversion` channel in `system/hydros.json` may leave out `max_flow_m3s`,
+  or set it to `null`, for a channel with no capacity limit.
+- A resumed run restores the `level1` trial states, the binding counters of
+  `max_active_per_stage` and `dynamic`, and one solver basis per forward pass
+  and node. A warm-started `level1` run restores the trial states, and a warm
+  start restores the bases of a policy trained with a selection method.
+
+### Changed
+
+- **BREAKING:** `level1` keeps exactly the cuts that own a stored trial state:
+  the cut with the highest value at each state. Results change for every study
+  that uses `level1`. Retrain its policies.
+- **BREAKING:** `simulation.cut_set` defaults to `all`, so a run with `level1`
+  or `max_active_per_stage` simulates with every row training added,
+  deactivated and evicted ones included. Set it to `active` for the earlier
+  behaviour. Runs without selection or a cap, and `dynamic` runs, are
+  unchanged.
+- **BREAKING:** `row_activity_tolerance` defaults to 1e-6 instead of 0, so a
+  run with `max_active_per_stage` or `dynamic` that omits it can evict and seed
+  other rows. Set it to 0 for the earlier behaviour.
+- **BREAKING:** `violation_tolerance` of `dynamic` is a relative factor, absent
+  by default. Runs can return different cuts and bounds, and a value written
+  for the earlier absolute tolerance can fail at load: delete the key or raise
+  it.
+- **BREAKING:** a resumed run continues as the uninterrupted run would: every
+  cut keeps its original position, and `level1` and `max_active_per_stage`
+  treat the reloaded cuts as their own. A capped resume used to count only the
+  cuts added after it. Under `warm_start`, `level1` selects a loaded cut its
+  source scored like a generated one.
+- `max_active_per_stage` caps only the rows the current run added, not loaded
+  ones.
+- **BREAKING:** the cut-selection config is checked more strictly. A zero in
+  `check_frequency`, `lookback_iterations`, `start_iteration`,
+  `candidate_recency` or `max_added_per_round`, a `selection` given as an
+  array, and `max_active_per_stage` together with `dynamic` or with
+  `training.selection.method = enumerated` are refused at load.
+- **BREAKING:** policy checkpoints are written with `format_version` 4, and
+  version-3 checkpoints are refused. Re-run the program that produced the
+  policy. Cut values are stored in the run's scaled units, so a resume with the
+  same `modeling.cost_scale_factor` is exact.
+- **BREAKING:** a run that fails writes its partial policy to
+  `<policy.path>.partial` and leaves the last whole checkpoint in
+  `policy.path`.
+- `policy.mode = resume` is refused, with a message naming what is missing,
+  when the checkpoint lacks the `level1` trial states or binding counters the
+  run needs, holds a shorter lookback window, an incomplete basis store or
+  another `training.selection.forward_passes`, or when the rows of
+  `policy.boundary` differ from its terminal pool.
+- A `dynamic` run that simulates with `simulation.cut_set = all` is refused
+  when the policy it loads holds inactive rows that `all` would include. Set
+  `simulation.cut_set` to `active` or use `level1`.
+- **BREAKING:** `training/cut_selection/iterations.parquet` has one row per
+  `(iteration, pool_id)`, `cuts_in_pool` replaces `cuts_populated`, and
+  `pool_id` and `node_id` join `stage_id`. Update readers of the file.
+- **BREAKING:** `exports.states` writes each pool's stored trial states at the
+  pool's state dimension, for every selection setting. The per-stage
+  visited-states export at full dimension is removed.
+- **BREAKING:** a refused policy loaded only to simulate is reported as
+  `SimulationPolicyIncompatible`, by `novomodelo validate --json` and
+  `novomodelo.io.validate`, no longer as `WarmStartIncompatible`. Filter on
+  both kinds to keep the previous behaviour.
+- **BREAKING:** `system/hydro_energy_productivity.parquet` must carry the
+  `integrated_equivalent_productivity_mw_per_m3s` column, and
+  `equivalent_productivity_mw_per_m3s` sets only the reference-point
+  productivity. A plant with VHA geometry now integrates its useful-range mean
+  productivity even with that override, so its stored-energy tags and outputs
+  change where the two differed. To keep a study's values, write the override
+  into the new column too; otherwise add the column as all-NULL.
+- A plant whose geometry gives a non-positive useful-range mean head is
+  rejected at setup even with an `equivalent_productivity_mw_per_m3s` override.
+- **BREAKING:** the `linearized_head` production model is removed: it always
+  ran as `constant_productivity`, which gives the same results. `model` and
+  `default_model` accept only `constant_productivity` and `fpha`; any other
+  name used to run silently as constant productivity.
+- **BREAKING:** a positive `max_diversion_m3s` in
+  `constraints/hydro_bounds.parquet` on a hydro with no `diversion` channel,
+  and a negative `diversion.max_flow_m3s`, are rejected at load. Before, the
+  diverted water left the system without reaching any plant.
+- **BREAKING:** an enabled generic-constraint slack must declare
+  `slack.penalty_basis`: `per_hour` charges every hour the row covers, as
+  before, and `per_unit` charges once per unit of violation. Add
+  `"penalty_basis": "per_hour"` to every enabled slack to keep a study's costs.
+  A disabled slack that sets `penalty` or `penalty_basis`, and a field in
+  `constraints/generic_parameters.json` that does not belong to the entry's
+  kind, are rejected.
+- A generic constraint written without a relational operator drops a variable
+  whose coefficient is exactly zero. A row left with only stage-level terms
+  collapses to one stage-level row, so under `per_unit` a violation costs the
+  penalty once instead of once per block.
+- x86_64 Linux builds from source, `cargo install` included, and the MPI
+  release archive no longer enable AVX2 and FMA, and qhull, HiGHS and CLP
+  compile without FMA on every target. Results no longer depend on the build
+  host or the compiler's default target, and can differ in the last bits from
+  0.18.1's, on aarch64 too. Before, a compiler that targets FMA by default, such as the
+  GCC of Ubuntu 26.04, could fit an FPHA plane with a storage coefficient just
+  below zero, which loading the planes back as precomputed rejected.
+- **BREAKING:** the Linux CLI archives are built on Ubuntu 24.04 and need
+  glibc 2.38 or newer. They no longer run on Ubuntu 22.04, Debian 12 or
+  RHEL 9. The Python wheels keep their manylinux tags.
+
+### Removed
+
+- **BREAKING:** the `lml1` and `domination` values of
+  `training.cut_selection.selection.method` (use `level1`) and `level1`'s
+  `tie_tolerance` (delete the key). A config that names them fails at load.
+
+### Fixed
+
+- A plant's `min_turbined_m3s` or `min_generation_mw` in
+  `constraints/hydro_bounds.parquet` had no effect, and its
+  `max_turbined_m3s` or `max_generation_mw` capped each bus's share of a plant
+  whose unit groups sit on several buses, not the total. Both now bind on the
+  plant's total.
+- A lazy solve under `dynamic` that reached the round cap returned a relaxed
+  result.
+- `cuts_removed` in `training/convergence.parquet` was always 0, and
+  `cuts_active` and `row_pool.peak_active` ignored evictions and
+  reactivations.
+- Training aborted when `max_active_per_stage` was below the number of cuts
+  loaded by `policy.boundary`.
+- A generic constraint whose terms land on the same LP column, such as a
+  repeated variable, aborted the run when HiGHS loaded the LP.
+- A checkpoint over the 2 GiB limit of the policy format, or one a load would
+  reject, is refused when written instead of being written unreadable.
+- A basis-store decode failure at the end of a multi-rank run left the other
+  ranks blocked.
+- Under MPI, the backward `wait` and `bwd_load_imbalance_ms` left out the time
+  a rank spends waiting for the other ranks.
+
+## 0.18.1
+
+Released 2026-10-14.
+
+### Changed
+
+- **BREAKING:** the default of `modeling.inflow_non_negativity.method` is now
+  `truncation_with_penalty` (was `penalty`). Set `"penalty"` to keep the old
+  default.
+- **BREAKING:** `truncation` and `truncation_with_penalty` follow Larroyd et al.
+  (2022). The PAR inflow is no longer raised to zero: it stays raw, may be
+  negative, and carries into the next stage's lag. A per-hydro correction lifts
+  the inflow that enters the water balance to zero. Under `truncation` it equals
+  the shortfall and costs nothing; under `truncation_with_penalty` it lies
+  between zero and the shortfall and is priced by
+  `hydro.inflow_nonnegativity_cost` in `penalties.json`.
+  `incremental_inflow_m3s` reports the raw inflow and
+  `inflow_nonnegativity_slack_m3s` the correction. Results change for studies
+  whose inflow draws go negative. Under either method the lower bound can exceed
+  the upper bound, so a `gap` stopping rule can report convergence too early.
+- Under `penalty` and `truncation_with_penalty`, the inflow slack of a plant
+  that has not started filling enters the water balance of the plant that
+  receives its inflow; it used to enter none.
+- Under the truncation methods, a generic constraint's `hydro_inflow` term
+  includes the correction, so it matches the inflow in the water balance.
+- HiGHS forward and simulation solves start cold by default; backward solves
+  still warm-start. Set `"use_warm_start": true` in `training.solver.forward` or
+  `simulation.solver` to warm-start that phase. Retries keep the phase's
+  setting. A cold solve can stop at a different, equally optimal vertex, so
+  simulated duals and the final lower bound may differ slightly from 0.18.0.
+- `novomodelo run` writes its report (banner, progress and summaries) to stdout;
+  warnings and errors stay on stderr. Scripts and job logs that read the report
+  from stderr must read stdout. `--color` applies to both streams.
+- The training gap is printed with 5 decimals instead of 1.
+
+### Fixed
+
+- `truncation` no longer produces an infeasible LP when an inflow's standard
+  deviation is zero.
+- `novomodelo run` under MPI no longer panics and hangs when the forward passes
+  do not divide evenly across ranks.
+- A rank that panics under MPI aborts the whole job with exit code 101, instead
+  of leaving the other ranks waiting until the job is killed.
+- Under MPI, the training summary and `solve_stats` in `training/metadata.json`
+  no longer multiply the LP-solve counts and the forward solve time by the
+  number of ranks.
+
+## 0.18.0
+
+Released 2026-10-07.
+
+### Changed
+
+- **BREAKING:** the product is renamed. The CLI is `novomodelo`
+  (`novomodelo-mpi` for the MPI build), the Rust crates are `novomodelo-*`, the
+  Python package is `novomodelo-python` (`import novomodelo`), and environment
+  variables such as `COBRE_TCP_COORDINATOR` are now `NOVOMODELO_TCP_COORDINATOR`.
+  Everything else behaves as in Cobre 0.18.0.
+- **BREAKING:** outputs and policy checkpoints record `software` as
+  `novomodelo`. A policy loads only in the software that wrote it, so policies
+  written by Cobre are refused, and Cobre refuses this fork's.
+- The `$schema` URLs in examples, `init` templates and the schemas point at this
+  repository's `schemas/` directory.

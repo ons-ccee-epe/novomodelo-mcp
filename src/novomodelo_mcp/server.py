@@ -45,6 +45,9 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
   definição do novomodelo pode diferir da literatura e do NEWAVE.
 - Busque em inglês (as docs estão em inglês); termos em português do glossário das
   docs são traduzidos. Depois leia a seção com `docs_read(page, secao)`.
+- O que mudou entre versões do novomodelo e do bridge está em `changelog/novomodelo` e
+  `changelog/novomodelo-bridge`: leia a seção de cada versão com
+  `docs_read(pagina, "<versão>")`.
 - Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
 - Se as docs não tratam do assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.

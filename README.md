@@ -217,9 +217,16 @@ As docs e os schemas são lidos do disco, sem rede.
 ### Atualizar as docs embutidas (desenvolvimento)
 
 ```bash
-uv run python scripts/sync_bundled.py --source /caminho/para/clone/do/novomodelo-docs
-uv run python scripts/sync_bundled.py --source /caminho/para/clone/do/novomodelo-docs --check
+uv run python scripts/sync_bundled.py --source /caminho/para/clone/do/novomodelo-docs \
+  --changelog novomodelo=/caminho/para/clone/do/novomodelo \
+  --changelog novomodelo-bridge=/caminho/para/clone/do/novomodelo-bridge
+# o mesmo comando com --check só confere
 ```
+
+Os clones ficam na tag da versão. Os `CHANGELOG.md` do novomodelo e do bridge viram as
+páginas `changelog/novomodelo` e `changelog/novomodelo-bridge`, com uma seção por versão
+a partir da 0.18.0, que o agente lê com `docs_read(pagina, "<versão>")`. O commit de cada
+clone fica no `manifest.json`.
 
 O script grava as páginas já resolvidas (os trechos `_impl` entram no lugar dos
 componentes, e a marcação MDX sai), os schemas, o índice de busca
