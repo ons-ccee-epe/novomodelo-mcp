@@ -44,6 +44,8 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 - Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
 - Se as docs não cobrem o assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.
+- Resultados de muitos cenários: agregue ou filtre com o `deck_sql` sobre as partições
+  de `simulation/` e só depois detalhe; não leia os parquets por outras ferramentas.
 - As tools que gravam ou alteram arquivos pedem aprovação.
 - Com pasta de trabalho definida (`workspace` no `server_info`), as tools só leem e
   gravam dentro dela.
