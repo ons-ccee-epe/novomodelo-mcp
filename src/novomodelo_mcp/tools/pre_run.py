@@ -11,7 +11,7 @@ from ..adapters.envelope import error
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope, group_diagnostics
-from .annotations import READ_ONLY, WRITES
+from .annotations import DESTRUCTIVE, READ_ONLY
 
 
 def _force_gate(force: bool, dry_run: bool, settings: Settings) -> dict | None:
@@ -38,7 +38,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         env = run_bridge(["check", "newave", src], settings=settings)
         return cap_envelope(env, settings)
 
-    @mcp.tool(annotations=WRITES)
+    @mcp.tool(annotations=DESTRUCTIVE)
     def bridge_convert_newave(
         src: str,
         dst: str,
@@ -130,7 +130,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         env = run_bridge(["check", "decomp", src], settings=settings)
         return cap_envelope(env, settings)
 
-    @mcp.tool(annotations=WRITES)
+    @mcp.tool(annotations=DESTRUCTIVE)
     def bridge_convert_decomp(
         src: str,
         dst: str,
