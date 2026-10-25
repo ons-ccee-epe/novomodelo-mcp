@@ -97,7 +97,9 @@ def _strip_literals_and_comments(sql: str) -> str:
 
 
 def _string_literals(sql: str) -> list[str]:
-    """Conteudo de todos os literais '...' (com '' escapado). Ignora comentarios."""
+    """Conteudo dos literais '...' (com '' escapado). Ignora comentarios e
+    identificadores "..." (nome de coluna e alias; o caminho entre aspas duplas fica
+    com o confinamento da conexao)."""
     lits: list[str] = []
     i, n = 0, len(sql)
     while i < n:
@@ -112,26 +114,21 @@ def _string_literals(sql: str) -> list[str]:
                 i += 1
             i += 2
             continue
-        if c == "'":
+        if c in "'\"":
             i += 1
             buf: list[str] = []
             while i < n:
-                if sql[i] == "'" and i + 1 < n and sql[i + 1] == "'":
-                    buf.append("'")
+                if sql[i] == c and i + 1 < n and sql[i + 1] == c:
+                    buf.append(c)
                     i += 2
                     continue
-                if sql[i] == "'":
+                if sql[i] == c:
                     i += 1
                     break
                 buf.append(sql[i])
                 i += 1
-            lits.append("".join(buf))
-            continue
-        if c == '"':
-            i += 1
-            while i < n and sql[i] != '"':
-                i += 1
-            i += 1
+            if c == "'":
+                lits.append("".join(buf))
             continue
         i += 1
     return lits
@@ -217,6 +214,15 @@ def run_readonly_sql(query: str, *, settings: Settings,
 
     cap = max(1, min(max_rows or settings.max_query_rows, settings.max_query_rows))
     con = duckdb.connect(database=":memory:")
+    if roots:
+        # Confinamento no motor: o guard textual nao enxerga caminho montado por
+        # expressao (chr(47) || ...). Fail-closed: sem ele, a query nao roda.
+        try:
+            con.execute("SET allowed_directories=?", [[r.as_posix().rstrip("/") + "/" for r in roots]])
+            con.execute("SET enable_external_access=false")
+        except Exception as exc:  # noqa: BLE001 - qualquer falha aqui recusa a query
+            con.close()
+            return error(13, "nao foi possivel confinar o SQL ao workspace", str(exc))
     for pragma in (
         "SET autoinstall_known_extensions=false",
         "SET autoload_known_extensions=false",

@@ -14,6 +14,8 @@ entrada como não confiável.
 """
 from __future__ import annotations
 
+import re
+
 import inspect
 import json
 import os
@@ -111,10 +113,20 @@ def refuse_outside(text: str, resolved: Path, roots: list[Path]) -> dict[str, An
     return env
 
 
+#: Esquema de URL (`http://`, `s3://`, `hf://`); dois caracteres ou mais, para não
+#: confundir com a letra de unidade do Windows (`C:/`).
+_URL = re.compile(r"^\s*[A-Za-z][A-Za-z0-9+.\-]+://")
+
+
 def ensure_in_workspace(*paths: str | None, settings: Settings) -> dict | None:
     """None se todos os caminhos estão dentro da raiz (ou se não há raiz);
     senão, um envelope de erro. Chamada no topo de toda tool que recebe caminho.
     """
+    for p in paths:
+        if p is not None and _URL.match(p):
+            # Vale também sem workspace: polars e DuckDB leem URL, e a única saída de
+            # rede do MCP é a checagem de versões.
+            return error(22, f"caminho invalido: {p}", "o MCP só lê arquivos locais, não URL")
     roots = allowed_roots(settings)
     if not roots:
         return None  # irrestrito
@@ -123,8 +135,8 @@ def ensure_in_workspace(*paths: str | None, settings: Settings) -> dict | None:
             continue
         try:
             rp = Path(p).expanduser().resolve()
-        except OSError as exc:
-            return error(22, f"caminho invalido: {p}", str(exc))
+        except (OSError, ValueError) as exc:
+            return error(22, f"caminho invalido: {p!r}", str(exc))
         if not any(_within(rp, root) for root in roots):
             return refuse_outside(p, rp, roots)
     return None

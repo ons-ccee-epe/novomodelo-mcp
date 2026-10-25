@@ -321,7 +321,7 @@ def simulation_query(output_dir: str, entity: str, *, settings: Settings,
     if limit > max_rows:
         out["limite_aplicado"] = max_rows
     if out["truncated"]:
-        glob = f"{base.as_posix()}/**/*.parquet"
+        glob = f"{base.as_posix()}/**/*.parquet".replace("'", "''")
         out["proximo_passo"] = (
             f"o recorte não coube em {cap} linhas. Para varrer todos os cenários, use o "
             f"deck_sql sobre read_parquet('{glob}'): agregue (GROUP BY) ou filtre (WHERE) "

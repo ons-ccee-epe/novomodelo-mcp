@@ -99,8 +99,8 @@ da organização. A classificação fica em `src/novomodelo_mcp/tools/annotation
 | Tipo | Tools |
 |---|---|
 | Só leitura | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `docs_search`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
-| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard`, `incluir_pastas` |
-| Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
+| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard`, `incluir_pastas` |
+| Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo`, `bridge_convert_newave`, `bridge_convert_decomp` (com force, apagam o destino) |
 
 A lista de liberação das tools de leitura (Claude Code e Kiro) é gravada pelo
 `configurar`, a partir do servidor; para vê-la, rode
@@ -126,8 +126,9 @@ Um `pastas.json` ilegível não libera nada. Sem `NOVOMODELO_MCP_WORKSPACE`, a t
 nada, porque tudo já é aceito. A mesma instrução está nas instructions do servidor e na
 descrição de toda tool que recebe caminho.
 
-Edições com `force=True` (gravar violando o schema) e `case_init(force=True)`
-(sobrescrever arquivos) exigem `NOVOMODELO_MCP_ALLOW_FORCE=1`.
+Edições com `force=True` (gravar violando o schema), `case_init(force=True)`
+(sobrescrever arquivos) e `bridge_convert_*(force=True)` (apaga o deck de destino) exigem
+`NOVOMODELO_MCP_ALLOW_FORCE=1`.
 
 ## Prompt `metodologia`
 
@@ -179,7 +180,7 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | `NOVOMODELO_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando definida) |
 | `NOVOMODELO_MCP_DOCS_DIR` | — | só desenvolvimento: pasta de páginas de um clone das docs, no lugar das embutidas (gera aviso; ver [Documentação e schemas](#documentação-e-schemas)) |
 | `NOVOMODELO_MCP_SCHEMAS_DIR` | — | pasta com `*.schema.json` (ver [Documentação e schemas](#documentação-e-schemas)) |
-| `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)` e `case_init(force=True)` |
+| `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)`, `case_init(force=True)` e `bridge_convert_*(force=True)`, que apaga o deck de destino |
 | `NOVOMODELO_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
 | `NOVOMODELO_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
 | `NOVOMODELO_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
@@ -284,8 +285,9 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
   `cabe_com_ajustes` | `nao_cabe` | `indeterminado`) e o aviso de que run local pequeno **pode não convergir**
 - `run_apply(case_dir, overrides, dry_run)`: aplica knobs de **config.json** (`forward_passes`,
   `iteration_limit`, `simulation_scenarios`, `simulation_enabled`) com schema + backup + escrita atômica
-- `run_start(case_dir, threads, output, time_budget_s, override)`: dispara `novomodelo run … --comm-backend local
+- `run_start(case_dir, threads, output, time_budget_s, override, overwrite)`: dispara `novomodelo run … --comm-backend local
   --quiet` em background e devolve `job_id` na hora; recusa se o plano disser `nao_cabe` (salvo `override=True`)
+  e recusa um `output` com rodada concluída, sugerindo outro (`output_sugerido`), salvo `overwrite=True`
 - `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
 **Diagnóstico**
