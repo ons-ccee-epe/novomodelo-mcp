@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ..adapters import deck_io, jobs, run_registry, runtime
+from ..adapters import deck_io, jobs, runtime
 from ..adapters.results import numeric_diagnosis, read_metadata, termination_fields
 from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.discovery import find_novomodelo
@@ -88,19 +88,6 @@ def make_plan(case_dir: str, settings: Settings, *, time_budget_s: float = 900,
     plan["case_dir"] = case_dir
     plan["reference_candidates"] = len(points)
     return plan
-
-
-def _sobre_o_caso(c: dict) -> str:
-    if c["caso_igual"] is None:
-        return ("não há registro desta rodada no MCP (feita por fora, ou registro apagado): "
-                "não dá para dizer se o caso é o mesmo")
-    if c["caso_igual"]:
-        return "o caso e a versão do novomodelo são os mesmos da rodada anterior: rodar de novo a repete"
-    partes = [f"{nome}: {', '.join(c[nome][:10])}" for nome in ("alterados", "novos", "removidos")
-              if c[nome]]
-    if c["versao_anterior"] and c["versao_atual"] and c["versao_anterior"] != c["versao_atual"]:
-        partes.append(f"versão do novomodelo: {c['versao_anterior']} → {c['versao_atual']}")
-    return "o caso mudou desde a rodada anterior (" + "; ".join(partes) + ")"
 
 
 def _completed_run(output: Path) -> bool:
@@ -242,8 +229,7 @@ def register_run(mcp, settings: Settings) -> None:
         CPU híbrida, ou o nº medido mais rápido); `output` default =
         `<case_dir>/output`. Antes de lançar roda o run_plan: se o veredito
         for `nao_cabe`, RECUSA (salvo `override=True`). Um `output` com rodada
-        concluída também é RECUSADO, com `output_sugerido` e `comparacao` (o caso é
-        o mesmo da rodada anterior, ou quais arquivos mudaram): rodar de novo nele
+        concluída também é RECUSADO, com `output_sugerido`: rodar de novo nele
         apaga a rodada anterior. `overwrite=True` só quando a pessoa pediu para
         substituir (ou para `resume`/`warm_start`/simulação da política salva nele).
         Acompanhe com run_status / run_logs; interrompa com run_cancel.
@@ -251,23 +237,14 @@ def register_run(mcp, settings: Settings) -> None:
         output = output or str(Path(case_dir) / "output")
         if (err := ensure_in_workspace(case_dir, output, settings=settings)):
             return err
+        if not overwrite and _completed_run(Path(output)):
+            return error(17, f"já há uma rodada concluída em {output}",
+                         "rodar de novo nela apaga a rodada anterior: use output_sugerido, ou "
+                         "overwrite=True se a pessoa pediu para substituir",
+                         output_sugerido=str(_free_output(Path(output))))
         binpath = find_novomodelo(settings)
         if binpath is None:
             return error(127, "novomodelo não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN).")
-        try:
-            entradas = run_registry.input_fingerprint(case_dir)
-        except OSError as exc:
-            return as_error(exc)
-        versao = run_registry.plain_version(version_cli(settings=settings).get("version"))
-        if not overwrite and _completed_run(Path(output)):
-            comparacao = run_registry.compare(settings, output=output, entradas=entradas,
-                                              versao=versao)
-            env = error(17, f"já há uma rodada concluída em {output}", _sobre_o_caso(comparacao),
-                        comparacao=comparacao, output_sugerido=str(_free_output(Path(output))))
-            env["diagnostics"].append("rodar de novo nela apaga a rodada anterior: pergunte à "
-                                      "pessoa; para manter as duas, use output_sugerido; para "
-                                      "substituir, overwrite=True")
-            return env
         if threads is not None and threads < 1:
             return error(22, "threads deve ser >= 1")
         machine = detect_machine()
@@ -298,11 +275,6 @@ def register_run(mcp, settings: Settings) -> None:
                          f"{settings.max_jobs})", f"em andamento: {busy}")
         except (OSError, TimeoutError) as exc:
             return as_error(exc)
-        try:
-            run_registry.record(settings, output=output, case_dir=case_dir, entradas=entradas,
-                                versao=versao)
-        except OSError as exc:
-            log(settings, "run_start_registro", job_id=meta["job_id"], erro=str(exc))
         log(settings, "run_start", job_id=meta["job_id"], cmd=cmd)
         return {"status": "ok", **meta, "warnings": plan.get("warnings", [])}
 
