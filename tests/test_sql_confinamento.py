@@ -54,3 +54,19 @@ def test_alias_ou_coluna_entre_aspas_com_barra_nao_e_caminho(ws):
     r = run_readonly_sql(f'SELECT x AS "custo R$/MWh", x AS "total.csv" '
                          f"FROM read_csv('{dentro}/**/*.csv')", settings=settings)
     assert r["status"] == "ok" and r["rows"] == [{"custo R$/MWh": 1, "total.csv": 1}]
+
+
+def test_describe_e_summarize_sao_leitura_e_rodam(ws):
+    settings, dentro, _ = ws
+    csv = (dentro / "caso" / "output" / "a.csv").as_posix()
+    d = run_readonly_sql(f"DESCRIBE SELECT * FROM read_csv('{csv}')", settings=settings)
+    assert d["status"] == "ok" and d["rows"][0]["column_name"] == "x", d
+    s = run_readonly_sql(f"SUMMARIZE SELECT * FROM read_csv('{csv}')", settings=settings)
+    assert s["status"] == "ok" and s["rows"][0]["column_name"] == "x", s
+
+
+def test_describe_fora_do_workspace_continua_recusado(ws):
+    settings, _, fora = ws
+    r = run_readonly_sql(f"DESCRIBE SELECT * FROM read_csv('{fora.as_posix()}/segredo.csv')",
+                         settings=settings)
+    assert _recusado(r)

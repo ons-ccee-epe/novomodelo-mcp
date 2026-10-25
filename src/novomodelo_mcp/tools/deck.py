@@ -106,7 +106,8 @@ def register_deck(mcp, settings: Settings) -> None:
         Aponte os arquivos por CAMINHO ABSOLUTO em read_parquet('/caminho/arq.parquet')
         (tambem read_csv/read_json).
 
-        So leitura: apenas SELECT/WITH; COPY/ATTACH/INSTALL/escrita sao recusados.
+        So leitura: SELECT/WITH, e DESCRIBE/SUMMARIZE para o schema e as estatisticas;
+        COPY/ATTACH/INSTALL/escrita sao recusados.
         Todo caminho referenciado precisa estar dentro do workspace
         (NOVOMODELO_MCP_WORKSPACE); acesso remoto e a caminhos de fora e negado. A saida
         tem teto de tamanho (NOVOMODELO_MCP_MAX_RESPONSE_KB) e `truncated: true` avisa que

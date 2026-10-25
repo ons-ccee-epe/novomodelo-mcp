@@ -6,7 +6,7 @@ espelhando o tratamento do Polars em adapters/results.py.
 
 Modelo de ameaca (o mesmo de adapters/paths): o agente controla a query. O guard
 e fail-closed e roda ANTES de executar:
-  1. um unico comando, comecando por SELECT ou WITH (CTE);
+  1. um unico comando, comecando por SELECT, WITH (CTE), DESCRIBE ou SUMMARIZE;
   2. nenhuma palavra-chave que escreva/anexe/carregue extensao/mude config
      (COPY, ATTACH, DETACH, INSTALL, LOAD, PRAGMA, SET, CALL, INSERT, UPDATE,
       DELETE, DROP, CREATE, ALTER, EXPORT, IMPORT, VACUUM, CHECKPOINT);
@@ -29,8 +29,8 @@ from .envelope import error
 from .budget import fit_to_budget
 from .paths import allowed_roots, refuse_outside
 
-#: Comandos que apenas leem.
-_ALLOWED_START = ("SELECT", "WITH")
+#: Comandos que apenas leem (DESCRIBE e SUMMARIZE: schema e estatísticas de uma consulta).
+_ALLOWED_START = ("SELECT", "WITH", "DESCRIBE", "SUMMARIZE")
 
 #: Palavras proibidas em qualquer posicao (fora de literais/comentarios).
 #: REPLACE fica de fora de proposito: `SELECT * REPLACE (...)` e leitura valida
@@ -159,7 +159,8 @@ def guard_sql(query: str, roots: list[Path]) -> dict | None:
     m = re.match(r"[A-Za-z_]+", scrubbed.lstrip())
     kw = m.group(0).upper() if m else ""
     if kw not in _ALLOWED_START:
-        return error(13, f"apenas SELECT/WITH (read-only) e permitido; comando: {kw or '?'}")
+        return error(13, "apenas SELECT/WITH/DESCRIBE/SUMMARIZE (read-only) e permitido; "
+                         f"comando: {kw or '?'}")
 
     words = set(re.findall(r"[A-Za-z_]+", scrubbed.upper()))
     hit = sorted(words & _FORBIDDEN)

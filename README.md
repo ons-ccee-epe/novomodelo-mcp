@@ -258,7 +258,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `deck_read_json` · `deck_read_parquet` · `deck_describe_parquet`
 - `deck_edit_json(path, changes, dry_run, ensure_valid, force)`: backup + escrita atômica; `ensure_valid=True` revalida o caso e reverte se reprovar
 - `deck_edit_parquet(path, where, set_values, dry_run)`: preserva colunas e dtypes
-- `deck_sql(query, max_rows)`: SQL **read-only** (DuckDB) sobre parquet/csv/json do deck ou dos resultados; caminhos confinados ao workspace
+- `deck_sql(query, max_rows)`: SQL **read-only** (DuckDB: `SELECT`, `WITH`, `DESCRIBE`, `SUMMARIZE`) sobre parquet/csv/json do deck ou dos resultados; caminhos confinados ao workspace
 
 **Referência** (`tools/reference.py`)
 - `schema_list()` / `schema_get(tipo)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{tipo}`
