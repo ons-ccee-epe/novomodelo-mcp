@@ -1,6 +1,7 @@
 """Teto de tamanho das respostas com linhas (`NOVOMODELO_MCP_MAX_RESPONSE_KB`)."""
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -48,3 +49,48 @@ def fit_to_budget(envelope: dict[str, Any], settings: Settings, key: str,
         else:
             hi = mid - 1
     return cut(lo)
+
+
+def _lists(obj: Any) -> list[tuple[dict[str, Any], str]]:
+    """(dict dono, chave) de cada lista dentro de dicts, sem entrar nos itens das listas."""
+    found: list[tuple[dict[str, Any], str]] = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(v, list):
+                found.append((obj, k))
+            elif isinstance(v, dict):
+                found.extend(_lists(v))
+    return found
+
+
+def shrink_to_budget(envelope: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    """Encolhe a maior lista aninhada até a resposta caber em `max_response_kb`.
+
+    Para as respostas com várias listas (cortes da política, PAR(p), itens do resumo do
+    caso): cada lista cortada ganha `truncado: true` no dict que a contém.
+    """
+    budget = settings.max_response_kb * 1024
+    if response_bytes(envelope) <= budget:
+        return envelope
+    out = copy.deepcopy(envelope)
+    out["cortado_por_tamanho"] = {"teto_kb": settings.max_response_kb}
+    cortadas: set[int] = set()
+    while response_bytes(out) > budget:
+        candidatas = [(dono, k) for dono, k in _lists(out) if out.get("cortado_por_tamanho") is not dono
+                      and dono[k] and id(dono[k]) not in cortadas]
+        if not candidatas:
+            break
+        dono, k = max(candidatas, key=lambda c: response_bytes(c[0][c[1]]))
+        rows = dono[k]
+        lo, hi = 0, len(rows)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            dono[k] = rows[:mid]
+            if response_bytes(out) <= budget:
+                lo = mid
+            else:
+                hi = mid - 1
+        dono[k] = rows[:lo]
+        dono["truncado"] = True
+        cortadas.add(id(dono[k]))
+    return out

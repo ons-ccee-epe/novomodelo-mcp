@@ -83,9 +83,9 @@ def register_results(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
-        return cap_envelope(R.stochastic_query(output_dir, hydro_id=hydro_id, stage=stage,
-                                               openings_stage=aberturas_do_estagio,
-                                               max_rows=budget.row_limit(settings)), settings)
+        return cap_envelope(budget.shrink_to_budget(R.stochastic_query(
+            output_dir, hydro_id=hydro_id, stage=stage, openings_stage=aberturas_do_estagio,
+            max_rows=budget.row_limit(settings)), settings), settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def results_policy(output_dir: str, stage: int | None = None,
@@ -100,8 +100,9 @@ def register_results(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
-        return cap_envelope(R.policy_summary(output_dir, settings=settings, stage=stage,
-                                             policy_subdir=policy_subdir), settings)
+        return cap_envelope(budget.shrink_to_budget(R.policy_summary(
+            output_dir, settings=settings, stage=stage, policy_subdir=policy_subdir), settings),
+            settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def results_list_entities(output_dir: str) -> dict:

@@ -116,8 +116,8 @@ def register_pre_run(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(case_dir, settings=settings)):
             return err
-        return cap_envelope(case_summary_binding(case_dir, max_items=budget.row_limit(settings),
-                                                 settings=settings), settings)
+        return cap_envelope(budget.shrink_to_budget(case_summary_binding(
+            case_dir, max_items=budget.row_limit(settings), settings=settings), settings), settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def bridge_check_decomp(src: str) -> dict:
