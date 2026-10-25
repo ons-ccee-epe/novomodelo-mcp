@@ -20,11 +20,11 @@ READ_ONLY = {
     "run_plan", "run_status", "run_logs",
 }
 WRITES = {
-    "case_init", "schema_export",
+    "case_init", "schema_export", "bridge_convert_newave", "bridge_convert_decomp",
     "bridge_compare_newave", "bridge_compare_decomp", "bridge_dashboard", "incluir_pastas",
 }
 DESTRUCTIVE = {"deck_edit_json", "deck_edit_parquet", "run_apply", "run_start", "run_cancel",
-               "instalar_novomodelo", "bridge_convert_newave", "bridge_convert_decomp"}
+               "instalar_novomodelo"}
 
 
 def _tools():
