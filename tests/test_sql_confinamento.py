@@ -16,12 +16,12 @@ def ws(tmp_path):
     (dentro / "caso" / "output").mkdir(parents=True)
     fora.mkdir()
     (dentro / "caso" / "output" / "a.csv").write_text("x\n1\n", encoding="utf-8")
-    (fora / "segredo.csv").write_text("s\n42\n", encoding="utf-8")
+    (fora / "segredo.csv").write_text("s\nvalor-secreto-q7\n", encoding="utf-8")
     return dataclasses.replace(load_settings(), workspace=str(dentro)), dentro, fora
 
 
 def _recusado(r):
-    return r["status"] == "error" and "42" not in str(r)
+    return r["status"] == "error" and "valor-secreto-q7" not in str(r)
 
 
 def test_identificador_entre_aspas_fora_do_workspace_e_recusado(ws):
