@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from ..adapters import budget
 from ..adapters import deck_io
 from ..adapters import reference as REF
 from ..adapters.novomodelo import validate_deck_binding
@@ -17,7 +18,7 @@ from ..adapters.envelope import error
 from ..adapters.obs import log
 from ..adapters.paths import allowed_roots, ensure_in_workspace
 from ..config import Settings
-from .shaping import cap_envelope
+from .shaping import fit_to_budget, cap_envelope
 from .annotations import DESTRUCTIVE, READ_ONLY
 
 
@@ -26,6 +27,25 @@ def register_deck(mcp, settings: Settings) -> None:
 
     def _guard(*paths: str) -> dict | None:
         return ensure_in_workspace(*paths, settings=settings)
+
+    def _too_big_to_load(path: str) -> dict | None:
+        """Pasta ou parquet acima de NOVOMODELO_MCP_MAX_READ_BYTES não é carregado inteiro:
+        a pasta de resultados de um caso real passa de dezenas de GB descomprimida e
+        derruba o servidor por falta de memória."""
+        p = Path(path)
+        if not p.exists():
+            return None
+        size = deck_io.parquet_bytes(p)
+        if not p.is_dir() and size <= settings.max_read_bytes:
+            return None
+        alvo = f"{p.as_posix()}/**/*.parquet" if p.is_dir() else p.as_posix()
+        alvo = alvo.replace("'", "''")
+        return error(7, f"grande demais para carregar na memória ({size} bytes"
+                     f"{', pasta' if p.is_dir() else ''})",
+                     f"teto: {settings.max_read_bytes} (NOVOMODELO_MCP_MAX_READ_BYTES)",
+                     proximo_passo=("use o deck_sql, que lê sob demanda: SUMMARIZE SELECT * FROM "
+                                    f"read_parquet('{alvo}') para as estatísticas, ou SELECT com "
+                                    "WHERE/GROUP BY para um recorte"))
 
     @mcp.tool(annotations=READ_ONLY)
     def deck_list(case_dir: str, max_files: int = 500) -> dict:
@@ -76,18 +96,22 @@ def register_deck(mcp, settings: Settings) -> None:
         """Lê um Parquet do deck: schema, nº de linhas e uma AMOSTRA (nunca tudo)."""
         if (err := _guard(path)):
             return err
-        n = min(limit or settings.max_inline_rows, settings.max_inline_rows)
+        n = min(limit or budget.row_limit(settings), budget.row_limit(settings))
         try:
             out = deck_io.read_parquet_summary(path, columns=columns, limit=n)
         except Exception as exc:  # noqa: BLE001
             return error(1, f"falha ao ler Parquet: {exc}")
         out["status"] = "ok"
-        return out
+        return fit_to_budget(out, settings, "head")
 
     @mcp.tool(annotations=READ_ONLY)
     def deck_describe_parquet(path: str) -> dict:
-        """Estatísticas de um Parquet do deck (schema + describe por coluna)."""
-        if (err := _guard(path)):
+        """Estatísticas de um Parquet do deck (schema + describe por coluna).
+
+        Pasta ou arquivo acima de NOVOMODELO_MCP_MAX_READ_BYTES (resultados de rodada) é
+        recusado sem ler: use o deck_sql com SUMMARIZE, que lê sob demanda.
+        """
+        if (err := _guard(path)) or (err := _too_big_to_load(path)):
             return err
         try:
             out = deck_io.describe_parquet(path)
@@ -106,10 +130,11 @@ def register_deck(mcp, settings: Settings) -> None:
         Aponte os arquivos por CAMINHO ABSOLUTO em read_parquet('/caminho/arq.parquet')
         (tambem read_csv/read_json).
 
-        So leitura: apenas SELECT/WITH; COPY/ATTACH/INSTALL/escrita sao recusados.
+        So leitura: SELECT/WITH, e DESCRIBE/SUMMARIZE para o schema e as estatisticas;
+        COPY/ATTACH/INSTALL/escrita sao recusados.
         Todo caminho referenciado precisa estar dentro do workspace
         (NOVOMODELO_MCP_WORKSPACE); acesso remoto e a caminhos de fora e negado. A saida
-        tem teto de linhas (NOVOMODELO_MCP_MAX_QUERY_ROWS) e `truncated: true` avisa que
+        tem teto de tamanho (NOVOMODELO_MCP_MAX_RESPONSE_KB) e `truncated: true` avisa que
         ha mais — refine com agregacao/LIMIT.
 
         Ex.: SELECT hydro_id, min(value_m3s) AS min_v, max(value_m3s) AS max_v,
@@ -164,6 +189,6 @@ def register_deck(mcp, settings: Settings) -> None:
     def deck_edit_parquet(path: str, where: dict, set_values: dict,
                           dry_run: bool = False) -> dict:
         """Edita células de um Parquet do deck PRESERVANDO o schema (colunas/dtypes)."""
-        if (err := _guard(path)):
+        if (err := _guard(path)) or (err := _too_big_to_load(path)):
             return err
         return deck_io.edit_parquet(path, where, set_values, dry_run=dry_run)

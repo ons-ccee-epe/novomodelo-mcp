@@ -6,7 +6,7 @@ espelhando o tratamento do Polars em adapters/results.py.
 
 Modelo de ameaca (o mesmo de adapters/paths): o agente controla a query. O guard
 e fail-closed e roda ANTES de executar:
-  1. um unico comando, comecando por SELECT ou WITH (CTE);
+  1. um unico comando, comecando por SELECT, WITH (CTE), DESCRIBE ou SUMMARIZE;
   2. nenhuma palavra-chave que escreva/anexe/carregue extensao/mude config
      (COPY, ATTACH, DETACH, INSTALL, LOAD, PRAGMA, SET, CALL, INSERT, UPDATE,
       DELETE, DROP, CREATE, ALTER, EXPORT, IMPORT, VACUUM, CHECKPOINT);
@@ -26,10 +26,12 @@ from typing import Any
 
 from ..config import Settings
 from .envelope import error
+from . import budget
+from .budget import fit_to_budget
 from .paths import allowed_roots, refuse_outside
 
-#: Comandos que apenas leem.
-_ALLOWED_START = ("SELECT", "WITH")
+#: Comandos que apenas leem (DESCRIBE e SUMMARIZE: schema e estatísticas de uma consulta).
+_ALLOWED_START = ("SELECT", "WITH", "DESCRIBE", "SUMMARIZE")
 
 #: Palavras proibidas em qualquer posicao (fora de literais/comentarios).
 #: REPLACE fica de fora de proposito: `SELECT * REPLACE (...)` e leitura valida
@@ -158,7 +160,8 @@ def guard_sql(query: str, roots: list[Path]) -> dict | None:
     m = re.match(r"[A-Za-z_]+", scrubbed.lstrip())
     kw = m.group(0).upper() if m else ""
     if kw not in _ALLOWED_START:
-        return error(13, f"apenas SELECT/WITH (read-only) e permitido; comando: {kw or '?'}")
+        return error(13, "apenas SELECT/WITH/DESCRIBE/SUMMARIZE (read-only) e permitido; "
+                         f"comando: {kw or '?'}")
 
     words = set(re.findall(r"[A-Za-z_]+", scrubbed.upper()))
     hit = sorted(words & _FORBIDDEN)
@@ -212,7 +215,8 @@ def run_readonly_sql(query: str, *, settings: Settings,
         return error(127, "duckdb nao instalado no ambiente do servidor",
                      "adicione 'duckdb' as dependencias e rode `uv sync`")
 
-    cap = max(1, min(max_rows or settings.max_query_rows, settings.max_query_rows))
+    limite = budget.row_limit(settings)
+    cap = max(1, min(max_rows or limite, limite))
     con = duckdb.connect(database=":memory:")
     if roots:
         # Confinamento no motor: o guard textual nao enxerga caminho montado por
@@ -229,6 +233,7 @@ def run_readonly_sql(query: str, *, settings: Settings,
         "SET allow_community_extensions=false",
         "SET disabled_filesystems="
         "'HTTPFileSystem,S3FileSystem,GCSFileSystem,AzureBlobStorageFileSystem'",
+        "SET enable_progress_bar=false",   # a barra sai no stdout, que é o canal do protocolo MCP
         "SET lock_configuration=true",
     ):
         try:
@@ -250,10 +255,10 @@ def run_readonly_sql(query: str, *, settings: Settings,
 
     truncated = len(rows) > cap
     rows = rows[:cap]
-    return {
+    return fit_to_budget({
         "status": "ok",
         "columns": columns,
         "row_count": len(rows),
         "truncated": truncated,
         "rows": [dict(zip(columns, (_jsonable(v) for v in r), strict=True)) for r in rows],
-    }
+    }, settings, "rows")

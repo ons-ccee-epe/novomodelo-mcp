@@ -163,8 +163,7 @@ def build_server() -> FastMCP:
                 "default_timeout": settings.default_timeout,
                 "max_diagnostics": settings.max_diagnostics,
                 "max_summary_chars": settings.max_summary_chars,
-                "max_inline_rows": settings.max_inline_rows,
-                "max_query_rows": settings.max_query_rows,
+                "max_response_kb": settings.max_response_kb,
             },
         }
 

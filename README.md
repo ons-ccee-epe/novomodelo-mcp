@@ -185,9 +185,8 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | `NOVOMODELO_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
 | `NOVOMODELO_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
 | `NOVOMODELO_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |
-| `NOVOMODELO_MCP_MAX_INLINE_ROWS` | `50` | teto de linhas de amostra (parquet) |
-| `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes na leitura direta de JSON |
-| `NOVOMODELO_MCP_MAX_QUERY_ROWS` | `1000` | teto de linhas do `deck_sql` |
+| `NOVOMODELO_MCP_MAX_RESPONSE_KB` | `50` | teto de tamanho de uma resposta com linhas ou listas (`results_query`, `deck_sql`, `deck_read_parquet`, `results_convergence`, `results_policy`, `results_stochastic`, `case_summary`); acima dele as linhas são cortadas, com `cortado_por_tamanho` |
+| `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes do que é carregado inteiro na memória: leitura de JSON e `deck_describe_parquet`/`deck_edit_parquet` (pasta ou parquet maior é recusado e aponta o `deck_sql`) |
 | `NOVOMODELO_MCP_STATE_DIR` | por SO (ver abaixo) | estado persistente: runs assíncronos (`jobs/`) e calibração (`calibration.json`) |
 | `NOVOMODELO_MCP_MAX_JOBS` | `1` | runs simultâneos permitidos pelo `run_start` |
 | `NOVOMODELO_MCP_MAX_POLICY_BYTES` | `1073741824` (1 GiB) | maior política (em disco) que o `results_policy` aceita carregar; a biblioteca lê a política inteira em memória |
@@ -259,12 +258,12 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `deck_read_json` · `deck_read_parquet` · `deck_describe_parquet`
 - `deck_edit_json(path, changes, dry_run, ensure_valid, force)`: backup + escrita atômica; `ensure_valid=True` revalida o caso e reverte se reprovar
 - `deck_edit_parquet(path, where, set_values, dry_run)`: preserva colunas e dtypes
-- `deck_sql(query, max_rows)`: SQL **read-only** (DuckDB) sobre parquet/csv/json do deck ou dos resultados; caminhos confinados ao workspace
+- `deck_sql(query, max_rows)`: SQL **read-only** (DuckDB: `SELECT`, `WITH`, `DESCRIBE`, `SUMMARIZE`) sobre parquet/csv/json do deck ou dos resultados; caminhos confinados ao workspace
 
 **Referência** (`tools/reference.py`)
 - `schema_list()` / `schema_get(tipo)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{tipo}`
 - `docs_list(section)`: páginas das docs embutidas, com título e descrição
-- `docs_read(page, secao)`: uma página das docs embutidas; com `secao` (âncora devolvida pelo `docs_search`, ou título), só aquela seção
+- `docs_read(page, secao)`: uma página das docs embutidas; com `secao` (âncora devolvida pelo `docs_search`, ou título), só aquela seção; sem `page`, a lista de páginas (a do `docs_list`)
 - `docs_search(consulta, k)`: busca por palavra nas docs embutidas (de preferência em inglês; os termos em português do glossário das docs são traduzidos); devolve página, seção e trecho
 
 **Solver** (`tools/novomodelo_meta.py`)

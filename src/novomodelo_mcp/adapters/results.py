@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Settings
+from . import budget
+from .budget import fit_to_budget
 from .envelope import error
 from .paths import ensure_in_workspace
 
@@ -219,7 +221,7 @@ def policy_summary(output_dir: str, *, settings: Settings, stage: int | None = N
              "n_cortes": len(s.get("cuts") or []),
              "n_ativos": sum(1 for c in s.get("cuts") or [] if c.get("is_active"))}
             for s in stages]
-    cap = settings.max_query_rows
+    cap = budget.row_limit(settings)
     out: dict[str, Any] = {"status": "ok", "metadata": meta, "estagios": rows[:cap],
                            "estagios_truncado": len(rows) > cap}
     if stage is not None:
@@ -227,7 +229,7 @@ def policy_summary(output_dir: str, *, settings: Settings, stage: int | None = N
         if chosen is None:
             return error(22, f"estágio inexistente na política: {stage}")
         cuts = chosen.get("cuts") or []
-        n = settings.max_inline_rows
+        n = budget.row_limit(settings)
         out["cortes"] = {"estagio": stage, "linhas": [_cut_row(c) for c in cuts[:n]],
                          "total": len(cuts), "truncado": len(cuts) > n}
     return out
@@ -320,10 +322,12 @@ def simulation_query(output_dir: str, entity: str, *, settings: Settings,
                            "rows": df.to_dicts()}
     if limit > max_rows:
         out["limite_aplicado"] = max_rows
+    glob = f"{base.as_posix()}/**/*.parquet".replace("'", "''")
+    next_step = (
+        "o recorte não coube na resposta. Escolha menos colunas ou, para varrer todos os "
+        f"cenários, use o deck_sql sobre read_parquet('{glob}'): agregue (GROUP BY) ou filtre "
+        "(WHERE) para achar os casos que interessam e depois detalhe só esses.")
+    out = fit_to_budget(out, settings, "rows", reserve=len(next_step.encode("utf-8")) + 64)
     if out["truncated"]:
-        glob = f"{base.as_posix()}/**/*.parquet".replace("'", "''")
-        out["proximo_passo"] = (
-            f"o recorte não coube em {cap} linhas. Para varrer todos os cenários, use o "
-            f"deck_sql sobre read_parquet('{glob}'): agregue (GROUP BY) ou filtre (WHERE) "
-            "para achar os casos que interessam e depois detalhe só esses.")
+        out["proximo_passo"] = next_step
     return out
