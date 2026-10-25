@@ -7,6 +7,12 @@ from typing import Any
 from ..config import Settings
 
 
+def row_limit(settings: Settings) -> int:
+    """Linhas que caberiam no teto se cada uma tivesse o mínimo de 16 bytes: o máximo
+    que vale buscar (um `limit` enorme não traz milhões de linhas para a memória)."""
+    return max(1, settings.max_response_kb * 1024 // 16)
+
+
 def response_bytes(envelope: Any) -> int:
     """Tamanho da resposta como o cliente a recebe (o FastMCP serializa com indent=2)."""
     return len(json.dumps(envelope, ensure_ascii=False, indent=2, default=str).encode("utf-8"))

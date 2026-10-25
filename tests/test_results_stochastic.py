@@ -5,6 +5,8 @@ import types
 
 import pytest
 
+from novomodelo_mcp.adapters import budget
+
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
 
@@ -47,6 +49,7 @@ def tool(monkeypatch, tmp_path):
             raise estado["erro"]
         return _Stochastic()
 
+    monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
     pkg = types.ModuleType("novomodelo")
     pkg.results = types.SimpleNamespace(load_stochastic=load_stochastic)
     monkeypatch.setitem(sys.modules, "novomodelo", pkg)
@@ -54,8 +57,7 @@ def tool(monkeypatch, tmp_path):
     ws = tmp_path / "ws"
     (ws / "output").mkdir(parents=True)
     mcp = _CaptureMCP()
-    register_results(mcp, dataclasses.replace(load_settings(), workspace=str(ws),
-                                              max_rows=5))
+    register_results(mcp, dataclasses.replace(load_settings(), workspace=str(ws)))
     return mcp.tools["results_stochastic"], str(ws / "output"), estado
 
 

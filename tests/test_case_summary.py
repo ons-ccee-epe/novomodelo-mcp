@@ -6,6 +6,8 @@ import types
 
 import pytest
 
+from novomodelo_mcp.adapters import budget
+
 import novomodelo_mcp.tools.pre_run as pre_run
 from novomodelo_mcp.config import load_settings
 
@@ -43,6 +45,7 @@ def tool(monkeypatch, tmp_path):
             raise estado["erro"]
         return _system()
 
+    monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
     pkg = types.ModuleType("novomodelo")
     pkg.io = types.SimpleNamespace(load_case=load_case)
     monkeypatch.setitem(sys.modules, "novomodelo", pkg)
@@ -51,8 +54,7 @@ def tool(monkeypatch, tmp_path):
     case.mkdir(parents=True)
     (case / "config.json").write_text("{}", encoding="utf-8")
     mcp = _CaptureMCP()
-    pre_run.register_pre_run(mcp, dataclasses.replace(load_settings(), workspace=str(tmp_path / "ws"),
-                                                      max_rows=5))
+    pre_run.register_pre_run(mcp, dataclasses.replace(load_settings(), workspace=str(tmp_path / "ws")))
     return mcp.tools["case_summary"], case, estado
 
 

@@ -26,6 +26,7 @@ from typing import Any
 
 from ..config import Settings
 from .envelope import error
+from . import budget
 from .budget import fit_to_budget
 from .paths import allowed_roots, refuse_outside
 
@@ -214,7 +215,8 @@ def run_readonly_sql(query: str, *, settings: Settings,
         return error(127, "duckdb nao instalado no ambiente do servidor",
                      "adicione 'duckdb' as dependencias e rode `uv sync`")
 
-    cap = max(1, min(max_rows or settings.max_rows, settings.max_rows))
+    limite = budget.row_limit(settings)
+    cap = max(1, min(max_rows or limite, limite))
     con = duckdb.connect(database=":memory:")
     if roots:
         # Confinamento no motor: o guard textual nao enxerga caminho montado por

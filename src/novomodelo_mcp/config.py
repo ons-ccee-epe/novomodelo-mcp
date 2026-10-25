@@ -26,7 +26,6 @@ class Settings:
     max_summary_chars: int          # NOVOMODELO_MCP_MAX_SUMMARY_CHARS
     max_read_bytes: int             # NOVOMODELO_MCP_MAX_READ_BYTES (teto de leitura de JSON)
     max_response_kb: int            # NOVOMODELO_MCP_MAX_RESPONSE_KB (teto de tamanho de uma resposta com linhas)
-    max_rows: int                   # derivado: linhas que caberiam no teto a 16 bytes cada (teto de busca)
     state_dir: str | None = None    # NOVOMODELO_MCP_STATE_DIR (jobs + calibração; padrão por SO)
     max_jobs: int = 1               # NOVOMODELO_MCP_MAX_JOBS (runs simultâneos permitidos)
     max_policy_bytes: int = 1024 ** 3   # NOVOMODELO_MCP_MAX_POLICY_BYTES (teto do results_policy)
@@ -65,7 +64,6 @@ def _env_bool(suffix: str, default: bool = False) -> bool:
 
 
 def load_settings() -> Settings:
-    response_kb = max(1, _env_int("MAX_RESPONSE_KB", 50))
     return Settings(
         bridge_bin=_env_str("BRIDGE_BIN"),
         solver_bin=_env_str("SOLVER_BIN"),
@@ -78,8 +76,7 @@ def load_settings() -> Settings:
         max_diagnostics=_env_int("MAX_DIAGNOSTICS", 50),
         max_summary_chars=_env_int("MAX_SUMMARY_CHARS", 20000),
         max_read_bytes=_env_int("MAX_READ_BYTES", 5_000_000),
-        max_response_kb=response_kb,
-        max_rows=max(1, response_kb * 1024 // 16),
+        max_response_kb=max(1, _env_int("MAX_RESPONSE_KB", 50)),
         state_dir=_env_str("STATE_DIR"),
         max_jobs=_env_int("MAX_JOBS", 1),
         max_policy_bytes=_env_int("MAX_POLICY_BYTES", 1024 ** 3),

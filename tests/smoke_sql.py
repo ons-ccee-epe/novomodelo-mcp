@@ -108,12 +108,11 @@ def _has_exec_libs() -> bool:
         return False
 
 
-def _settings_for(ws: str, max_rows: int = 1000):
+def _settings_for(ws: str):
     os.environ["NOVOMODELO_MCP_WORKSPACE"] = ws
     os.environ["NOVOMODELO_MCP_TIMEOUT"] = "30"
-    import dataclasses
     from novomodelo_mcp.config import load_settings
-    return dataclasses.replace(load_settings(), max_rows=max_rows)
+    return load_settings()
 
 
 def test_exec_group_by_and_conditional_count():
@@ -146,8 +145,8 @@ def test_exec_truncation_flag():
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "t.parquet"
         pl.DataFrame({"x": list(range(10))}).write_parquet(p)
-        st = _settings_for(d, max_rows=3)
-        out = S.run_readonly_sql(f"SELECT x FROM read_parquet('{p}')", settings=st)
+        st = _settings_for(d)
+        out = S.run_readonly_sql(f"SELECT x FROM read_parquet('{p}')", settings=st, max_rows=3)
         assert out["status"] == "ok" and out["row_count"] == 3, out
         assert out["truncated"] is True, out
 

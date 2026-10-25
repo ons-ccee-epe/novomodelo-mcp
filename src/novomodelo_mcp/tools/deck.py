@@ -7,6 +7,7 @@ reverte se reprovar. `force` só é aceito com NOVOMODELO_MCP_ALLOW_FORCE.
 """
 from __future__ import annotations
 
+from ..adapters import budget
 import os
 from pathlib import Path
 
@@ -76,7 +77,7 @@ def register_deck(mcp, settings: Settings) -> None:
         """Lê um Parquet do deck: schema, nº de linhas e uma AMOSTRA (nunca tudo)."""
         if (err := _guard(path)):
             return err
-        n = min(limit or settings.max_rows, settings.max_rows)
+        n = min(limit or budget.row_limit(settings), budget.row_limit(settings))
         try:
             out = deck_io.read_parquet_summary(path, columns=columns, limit=n)
         except Exception as exc:  # noqa: BLE001

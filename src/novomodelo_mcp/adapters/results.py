@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Settings
+from . import budget
 from .budget import fit_to_budget
 from .envelope import error
 from .paths import ensure_in_workspace
@@ -220,7 +221,7 @@ def policy_summary(output_dir: str, *, settings: Settings, stage: int | None = N
              "n_cortes": len(s.get("cuts") or []),
              "n_ativos": sum(1 for c in s.get("cuts") or [] if c.get("is_active"))}
             for s in stages]
-    cap = settings.max_rows
+    cap = budget.row_limit(settings)
     out: dict[str, Any] = {"status": "ok", "metadata": meta, "estagios": rows[:cap],
                            "estagios_truncado": len(rows) > cap}
     if stage is not None:
@@ -228,7 +229,7 @@ def policy_summary(output_dir: str, *, settings: Settings, stage: int | None = N
         if chosen is None:
             return error(22, f"estágio inexistente na política: {stage}")
         cuts = chosen.get("cuts") or []
-        n = settings.max_rows
+        n = budget.row_limit(settings)
         out["cortes"] = {"estagio": stage, "linhas": [_cut_row(c) for c in cuts[:n]],
                          "total": len(cuts), "truncado": len(cuts) > n}
     return out

@@ -4,6 +4,7 @@ Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 """
 from __future__ import annotations
 
+from ..adapters import budget
 from ..adapters.bridge import run_bridge
 from ..adapters.novomodelo import case_summary_binding, validate_deck_binding, validate_deck_cli
 from ..adapters.discovery import find_novomodelo
@@ -115,7 +116,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(case_dir, settings=settings)):
             return err
-        return cap_envelope(case_summary_binding(case_dir, max_items=settings.max_rows,
+        return cap_envelope(case_summary_binding(case_dir, max_items=budget.row_limit(settings),
                                                  settings=settings), settings)
 
     @mcp.tool(annotations=READ_ONLY)

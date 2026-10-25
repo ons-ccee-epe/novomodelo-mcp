@@ -5,6 +5,7 @@ resultado moldado ao teto de saída. Sem regra de negócio.
 """
 from __future__ import annotations
 
+from ..adapters import budget
 from ..adapters import results as R
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
@@ -84,7 +85,7 @@ def register_results(mcp, settings: Settings) -> None:
             return err
         return cap_envelope(R.stochastic_query(output_dir, hydro_id=hydro_id, stage=stage,
                                                openings_stage=aberturas_do_estagio,
-                                               max_rows=settings.max_rows), settings)
+                                               max_rows=budget.row_limit(settings)), settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def results_policy(output_dir: str, stage: int | None = None,
@@ -128,8 +129,8 @@ def register_results(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(output_dir, settings=settings)):
             return err
-        n = limit or settings.max_rows
+        n = limit or budget.row_limit(settings)
         out = R.simulation_query(output_dir, entity, settings=settings, columns=columns,
                                  group_by=group_by, agg=agg, scenario=scenario,
-                                 limit=n, max_rows=settings.max_rows)
+                                 limit=n, max_rows=budget.row_limit(settings))
         return cap_envelope(out, settings)

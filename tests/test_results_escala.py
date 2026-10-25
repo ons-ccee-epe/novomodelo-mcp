@@ -4,6 +4,7 @@ import dataclasses
 
 import pytest
 
+from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.server import SERVER_INSTRUCTIONS
 from novomodelo_mcp.tools.results import register_results
@@ -23,7 +24,7 @@ class _CaptureMCP:
 
 
 @pytest.fixture
-def query(tmp_path):
+def query(tmp_path, monkeypatch):
     out = tmp_path / "estudo ação" / "output"
     for cen in range(3):
         part = out / "simulation" / "hydros" / f"scenario_id={cen}"
@@ -31,7 +32,8 @@ def query(tmp_path):
         pl.DataFrame({"scenario_id": [cen] * 40, "stage_id": list(range(40)), "hydro_id": [1] * 40,
                       "storage_final_hm3": [float(i) for i in range(40)]}).write_parquet(part / "d.parquet")
     mcp = _CaptureMCP()
-    settings = dataclasses.replace(load_settings(), workspace=str(tmp_path), max_rows=50)
+    monkeypatch.setattr(budget, "row_limit", lambda settings: 50)
+    settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
     register_results(mcp, settings)
     return mcp.tools["results_query"], out, settings
 
@@ -39,7 +41,7 @@ def query(tmp_path):
 def test_truncado_traz_o_proximo_passo_com_o_glob_das_particoes(query):
     results_query, out, settings = query
     r = results_query(str(out), "hydros", limit=1000)
-    assert r["truncated"] is True and r["row_count"] == settings.max_rows
+    assert r["truncated"] is True and r["row_count"] == 50
     glob = (out.resolve() / "simulation" / "hydros").as_posix() + "/**/*.parquet"
     assert "deck_sql" in r["proximo_passo"] and f"read_parquet('{glob}')" in r["proximo_passo"]
 
@@ -47,7 +49,7 @@ def test_truncado_traz_o_proximo_passo_com_o_glob_das_particoes(query):
 def test_limit_acima_do_teto_avisa_o_limite_aplicado(query):
     results_query, out, settings = query
     r = results_query(str(out), "hydros", limit=1000)
-    assert r["limite_aplicado"] == settings.max_rows
+    assert r["limite_aplicado"] == 50
 
 
 def test_so_a_resposta_truncada_traz_proximo_passo(query):
@@ -64,14 +66,15 @@ def test_descricao_e_instrucoes_apontam_o_deck_sql_para_varredura(query):
     assert "deck_sql" in SERVER_INSTRUCTIONS
 
 
-def test_proximo_passo_com_apostrofo_no_caminho_e_sql_valido(tmp_path):
+def test_proximo_passo_com_apostrofo_no_caminho_e_sql_valido(tmp_path, monkeypatch):
     from novomodelo_mcp.adapters.sql import run_readonly_sql
     out = tmp_path / "Copa d'Água" / "output"
     part = out / "simulation" / "hydros" / "scenario_id=0"
     part.mkdir(parents=True)
     pl.DataFrame({"scenario_id": [0] * 60, "stage_id": list(range(60))}).write_parquet(part / "d.parquet")
     mcp = _CaptureMCP()
-    settings = dataclasses.replace(load_settings(), workspace=str(tmp_path), max_rows=50)
+    monkeypatch.setattr(budget, "row_limit", lambda settings: 50)
+    settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
     register_results(mcp, settings)
     passo = mcp.tools["results_query"](str(out), "hydros")["proximo_passo"]
     trecho = passo[passo.index("read_parquet("):passo.index(")") + 1]

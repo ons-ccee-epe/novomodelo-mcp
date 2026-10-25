@@ -5,6 +5,7 @@ import json
 
 import pytest
 
+from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
 from novomodelo_mcp.tools.shaping import fit_to_budget, response_bytes
@@ -27,7 +28,7 @@ def test_padrao_e_50_kb_e_a_variavel_muda(monkeypatch):
     assert load_settings().max_response_kb == 50
     monkeypatch.setenv("NOVOMODELO_MCP_MAX_RESPONSE_KB", "20")
     s = load_settings()
-    assert s.max_response_kb == 20 and s.max_rows == 20 * 1024 // 16
+    assert s.max_response_kb == 20 and budget.row_limit(s) == 20 * 1024 // 16
 
 
 def test_corta_pelo_tamanho_e_diz_quanto_veio():
