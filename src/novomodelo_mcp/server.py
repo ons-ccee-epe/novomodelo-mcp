@@ -9,7 +9,7 @@ from . import __version__
 
 from .adapters import versions
 
-from .adapters.discovery import bridge_origin, find_novomodelo, tool_version
+from .adapters.discovery import bridge_origin, bridge_version, find_novomodelo, tool_version
 from .adapters.paths import (AVISO_NA_TOOL, NAO_CONTORNE, allowed_roots, included_roots,
                              is_guarded_tool)
 from .adapters.reference import docs_origin
@@ -124,7 +124,7 @@ def build_server() -> FastMCP:
             "versao_mcp": __version__,
             "versoes": {**pieces, "esperada": versions.expected_version()},
             "versao_nova": newer,
-            "bridge": {"path": bridge, "version": tool_version(bridge),
+            "bridge": {"path": bridge, "version": bridge_version(bridge, bridge_from),
                        "available": bridge is not None, "origem": bridge_from},
             "novomodelo": {"path": novomodelo, "version": tool_version(novomodelo),
                       "available": novomodelo is not None},
