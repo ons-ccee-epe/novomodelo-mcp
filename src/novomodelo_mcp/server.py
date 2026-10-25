@@ -36,6 +36,8 @@ Servidor MCP do novomodelo: valida, converte (NEWAVE/DECOMP), roda, compara e l�
 resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 
 - Comece por `server_info`: versões das peças, workspace e se há versão nova.
+- Se uma resposta trouxer `avisos_de_versao`, avise a pessoa e ofereça rodar os comandos
+  dele, com o ok dela; o MCP continua funcionando.
 - Se faltar o executável do novomodelo, ofereça a tool `instalar_novomodelo` (a pessoa
   pode pedir “instale o executável do novomodelo”); o comando manual é a alternativa.
 - As docs embutidas são as oficiais da versão instalada. Para a metodologia e o uso do

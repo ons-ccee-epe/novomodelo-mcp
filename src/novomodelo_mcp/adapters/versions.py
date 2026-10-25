@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..names import BINDING_DIST, BRIDGE_CLI, BRIDGE_DIST, MCP_DIST, MCP_RELEASE_TAG_URL
+from ..names import BINDING_DIST, BRIDGE_CLI, BRIDGE_DIST, MCP_DIST
 from .discovery import bridge_origin, bridge_version
 
 CLI_RELEASES = "https://github.com/ons-ccee-epe/novomodelo/releases"
@@ -117,16 +117,13 @@ def cli_install_command(version: str) -> str:
     return f"curl --proto '=https' --tlsv1.2 -LsSf {base}/novomodelo-cli-installer.sh | sh"
 
 
-#: A página de instalação no página de instalação; o teste confere que é a mesma do `guia/index.html`.
-GUIDE_URL = "<endereço interno>"
+MCP_UPGRADE_COMMAND = f"uv tool upgrade {MCP_DIST}"
 ASK_AGENT_TO_INSTALL = ("Peça ao agente: “instale o executável do novomodelo” "
                         "(tool instalar_novomodelo)")
 
 
 def mcp_install_command(version: str) -> str:
-    wheel = f"novomodelo_mcp-{version}-py3-none-any.whl"
-    return (f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
-            f"`uv tool install --force --compile-bytecode ./{wheel}` (o bridge, a biblioteca e as docs vêm junto)")
+    return f"uv tool install --force --compile-bytecode {MCP_DIST}=={version}"
 
 
 def _bridge_command(version: str, origin: str | None = None) -> str:
@@ -135,21 +132,20 @@ def _bridge_command(version: str, origin: str | None = None) -> str:
     return f"uv tool install --force {BRIDGE_CLI}=={version}"
 
 
-def _newer_piece_warning(label: str, version: str, expected: str) -> str:
+def _newer_piece_warning(label: str, version: str, expected: str, align: str) -> str:
     name = label[0].upper() + label[1:]
     verb = "estão" if label.startswith("as ") else "está"
-    return (f"{name} {verb} na {version} e o MCP na {expected}. Pode usar. Confira na página "
-            f"do guia ({GUIDE_URL}) se já saiu o MCP {version} e, quando sair, atualize as peças "
-            f"juntas. A validação da v1 é na {expected}. Se você atualizar {label}, avise no "
-            "card: os resultados deixam de ser comparáveis com os dos outros validadores.")
+    return (f"{name} {verb} na {version} e o MCP na {expected}; o MCP foi testado com as peças "
+            f"na versão dele. Para alinhar, atualize o MCP ({MCP_UPGRADE_COMMAND}), se já houver "
+            f"o MCP {version}, ou volte {label} para a {expected}: {align}.")
 
 
 def _piece_warnings(settings, expected: str) -> list[str]:
-    """Avisos com a versão do MCP como referência, sem nunca mandar rebaixar uma peça.
+    """Avisos com a versão do MCP como referência, cada um com os comandos para alinhar.
 
-    A peça mais velha sobe até a versão do MCP. A mais nova pode ser usada: o MCP não
-    sabe se já existe o MCP da versão dela (o repositório do MCP é privado), então o
-    aviso aponta a página do guia em vez de dar um comando.
+    A peça mais velha sobe até a versão do MCP. Para a mais nova há dois caminhos, porque
+    sem rede o MCP não sabe se já saiu o MCP da versão dela: atualizar o MCP ou voltar a
+    peça para a versão do MCP.
     """
     pieces = local_versions(settings)
     actions = {
@@ -164,6 +160,8 @@ def _piece_warnings(settings, expected: str) -> list[str]:
         version = normalize_version(pieces[key]["versao"])
         verb = "" if key == "executavel" else "Instale: "
         name = label.split(" ", 1)[1]
+        if version is not None and not _version_key(version):
+            continue
         if version is None:
             if key != "docs":
                 lines.append(f"{name} {pieces[key]['motivo']}. {verb}{action}")
@@ -173,7 +171,7 @@ def _piece_warnings(settings, expected: str) -> list[str]:
         elif _version_key(version) > _version_key(expected):
             notes = {"executavel": ("novomodelo", CLI_RELEASES),
                      "bridge": ("bridge", BRIDGE_RELEASES)}.get(key)
-            lines.append(_newer_piece_warning(label, version, expected)
+            lines.append(_newer_piece_warning(label, version, expected, action)
                          + (_notes_text(notes[0], version, notes[1]) if notes else ""))
     return lines
 
@@ -359,17 +357,17 @@ def _notes_text(piece: str, version: str, releases: str) -> str:
 
 
 def _release_note(piece: str, newest: str, current: str | None) -> str:
-    return (f"o {piece} {newest} saiu; o MCP está na {current}. Confira na página do guia "
-            f"({GUIDE_URL}) se já saiu o MCP {newest} e, quando sair, atualize as peças juntas.")
+    return (f"o {piece} {newest} saiu; o MCP está na {current}. Quando sair o MCP {newest}, "
+            f"atualize as peças juntas: {MCP_UPGRADE_COMMAND}.")
 
 
 def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, Any]:
     """Há versão nova do novomodelo, do bridge e do MCP? Consulta no máximo uma vez a
     cada `UPDATE_TTL_S`: um cliente aberto há horas também vê um lançamento.
 
-    O repositório do MCP é privado: um novomodelo novo não garante o MCP da mesma versão,
-    então nada novo vem com comando de instalação (instalar só uma peça desalinha as
-    outras). Todo o trabalho cabe em `budget_s`; o que não responder a tempo vira aviso.
+    Um novomodelo novo não garante o MCP da mesma versão, então nenhuma peça nova vem
+    com comando próprio (instalar só uma peça desalinha as outras); a nota diz como
+    atualizar o MCP, que traz as peças juntas. Todo o trabalho cabe em `budget_s`; o que não responder a tempo vira aviso.
     """
     if "resultado" in _UPDATE and time.monotonic() - _UPDATE["quando"] < UPDATE_TTL_S:
         return _UPDATE["resultado"]

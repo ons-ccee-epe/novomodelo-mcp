@@ -148,10 +148,11 @@ pergunta vem na mensagem seguinte.
 
 O MCP conversa com o executável, a biblioteca (`novomodelo-python`) e o bridge da
 mesma versão (o pin exato da biblioteca no pacote). Se alguma peça estiver em outra
-versão, ou faltar, **toda** resposta traz `avisos_de_versao` com o comando para
-corrigir; a chamada continua. Nenhum aviso manda rebaixar uma peça: a mais velha que o
-MCP sobe até a versão dele; a mais nova pode ser usada, e o aviso aponta a página do guia
-para conferir se já saiu o MCP dessa versão (o MCP não tem como saber).
+versão, ou faltar, **toda** resposta traz `avisos_de_versao` com os comandos para
+alinhar; a chamada continua, e a instrução do servidor pede ao agente que ofereça rodar
+os comandos, com o ok da pessoa. A peça mais velha que o MCP sobe até a versão dele. Para
+a mais nova há dois caminhos, porque sem rede o MCP não sabe se já saiu o MCP dessa
+versão: `uv tool upgrade novomodelo-mcp`, ou voltar a peça para a versão do MCP.
 
 A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo e do
 bridge (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo
