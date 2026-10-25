@@ -472,6 +472,48 @@ def test_run_start_nao_sobrescreve_rodada_concluida():
         assert t["run_start"](str(case), override=True, overwrite=True)["status"] == "ok"
 
 
+def test_run_start_diz_se_o_caso_e_igual_ou_mudou_desde_a_rodada():
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE) as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        _wait(t, t["run_start"](str(case), override=True)["job_id"])
+        igual = t["run_start"](str(case), override=True)["comparacao"]
+        assert igual["caso_igual"] is True and igual["versao_atual"] == "9.9.9", igual
+        assert igual["alterados"] == igual["novos"] == igual["removidos"] == [], igual
+        cfg = json.loads((case / "config.json").read_text(encoding="utf-8"))
+        cfg["mudou"] = 1
+        (case / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        (case / "system" / "novo.json").write_text("{}", encoding="utf-8")
+        mudou = t["run_start"](str(case), override=True)
+        assert mudou["comparacao"]["caso_igual"] is False, mudou
+        assert mudou["comparacao"]["alterados"] == ["config.json"], mudou
+        assert mudou["comparacao"]["novos"] == ["system/novo.json"], mudou
+        assert any("mudou" in x for x in mudou["diagnostics"]), mudou
+
+
+def test_run_start_sem_registro_da_rodada_diz_que_nao_sabe():
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE) as d:
+        case = _make_case(d, meta_host=None)
+        (case / "output" / "simulation").mkdir(parents=True)
+        (case / "output" / "simulation" / "_SUCCESS").write_text("", encoding="utf-8")
+        r = _tools()["run_start"](str(case), override=True)
+        assert r["exit_code"] == 17 and r["comparacao"]["caso_igual"] is None, r
+        assert any("não há registro" in x for x in r["diagnostics"]), r
+
+
+def test_run_start_avisa_quando_a_versao_do_novomodelo_mudou():
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE) as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        _wait(t, t["run_start"](str(case), override=True)["job_id"])
+        reg = next((Path(d) / "state" / "rodadas").glob("*.json"))
+        dado = json.loads(reg.read_text(encoding="utf-8"))
+        dado["versao"] = "9.9.8"
+        reg.write_text(json.dumps(dado), encoding="utf-8")
+        cmp_ = t["run_start"](str(case), override=True)["comparacao"]
+        assert cmp_["caso_igual"] is False and cmp_["versao_anterior"] == "9.9.8", cmp_
+
+
 def test_calibration_registry_by_machine_id():
     """Run via run_start alimenta o registro; o plano o usa mesmo se o hostname mudar."""
     with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_META=json.dumps(REF_META)) as d:

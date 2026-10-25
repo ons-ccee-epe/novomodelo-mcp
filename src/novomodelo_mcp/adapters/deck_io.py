@@ -288,7 +288,7 @@ def find_case_dir(path: str, stop_at: list[Path] | None = None) -> str | None:
 # ── Mapa do caso: entradas listadas, rodadas resumidas (deck_list) ─────────────
 
 #: Arquivos que contam como entrada do caso.
-_INPUT_SUFFIXES = (".json", ".parquet")
+INPUT_SUFFIXES = (".json", ".parquet")
 
 
 def is_run_output(d: Path) -> bool:
@@ -347,7 +347,7 @@ def case_map(case_dir: str, schema_types: set[str], max_files: int,
                 continue
             p = here / f
             rel = p.relative_to(root).as_posix()
-            if p.suffix in _INPUT_SUFFIXES:
+            if p.suffix in INPUT_SUFFIXES:
                 n_inputs += 1
                 if len(inputs) < max_files:
                     item = {"path": str(p), "rel": rel, "kind": p.suffix.lstrip("."),
