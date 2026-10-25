@@ -55,7 +55,10 @@ novomodelo-mcp configurar --cliente claude-desktop --workspace ~/estudos        
 
 (No checkout, use `uv run novomodelo-mcp configurar …`.) `--cliente` aceita
 `claude-desktop`, `claude-code` e `kiro`; `--workspace` pode ser repetido, e a pasta que ainda não
-existe é criada ao gravar (nunca com `--mostrar`).
+existe é criada ao gravar (nunca com `--mostrar`). A pasta de trabalho não tem padrão: sem
+`--workspace`, o comando pergunta a pasta de estudos quando roda num terminal e sai com
+código 2, sem gravar nada, quando não há terminal. Para gravar sem pasta de trabalho, use
+`--irrestrito` (não combina com `--workspace`).
 
 O comando grava a entrada `novomodelo` com o **caminho absoluto** do executável deste
 pacote (o release do novomodelo publica outro `novomodelo-mcp`, e o nome solto pegaria o
@@ -73,7 +76,7 @@ quando o cliente for instalado.
 |---|---|---|
 | Claude Desktop | macOS `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows `%APPDATA%\Claude\claude_desktop_config.json`; Linux `~/.config/Claude/claude_desktop_config.json` | sem lista: escolha "sempre permitir" na primeira chamada |
 | Claude Code | `~/.claude.json` (escopo de usuário) | `permissions.allow` em `~/.claude/settings.json`, uma regra por tool |
-| Kiro | `~/.kiro/settings/mcp.json` (o `.kiro/settings/mcp.json` do workspace vence) | `autoApprove` na entrada do servidor |
+| Kiro | `~/.kiro/settings/mcp.json` (o `.kiro/settings/mcp.json` do workspace vence) | pede aprovação; o `autoApprove` gravado na entrada do servidor é ignorado pelo Kiro atual |
 
 Feche o Claude Code antes de gravar: ele reescreve o `~/.claude.json` enquanto está
 aberto. `--instrucoes` (desligado por padrão) também grava uma linha que orienta o
@@ -96,7 +99,7 @@ da organização. A classificação fica em `src/novomodelo_mcp/tools/annotation
 | Tipo | Tools |
 |---|---|
 | Só leitura | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `docs_search`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
-| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard` |
+| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard`, `incluir_pastas` |
 | Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
 
 A lista de liberação das tools de leitura (Claude Code e Kiro) é gravada pelo
@@ -109,8 +112,23 @@ As ferramentas de deck e resultado recebem caminhos controlados pelo agente. Def
 **`NOVOMODELO_MCP_WORKSPACE`** com a(s) raiz(es) permitida(s) (separadas por `:`):
 qualquer caminho fora delas é **recusado** (fail-closed; `resolve()` neutraliza
 symlinks e `..`). Sem essa variável o servidor opera **irrestrito**, e o `server_info`
-sinaliza o estado. Edições com `force=True` (gravar violando o schema) e
-`case_init(force=True)` (sobrescrever arquivos) exigem `NOVOMODELO_MCP_ALLOW_FORCE=1`.
+sinaliza o estado.
+
+A recusa (`exit_code` 13) diz ao agente para não ler o caminho por outras ferramentas,
+traz a pasta do caminho em `pasta_sugerida` e pede que o agente pergunte ao usuário se
+pode incluí-la. Com o sim, o agente chama `incluir_pastas` com todas as pastas de uma
+vez: a inclusão vale na hora, sem reabrir o cliente, e fica em `pastas.json` no state
+dir, somada às raízes de `NOVOMODELO_MCP_WORKSPACE`. `incluir_pastas` nunca entra na
+lista de liberação automática, então o cliente pede aprovação a cada chamada; ela recusa
+o que não é pasta, a pasta pessoal inteira (ou acima dela), a raiz do disco, pastas de
+configuração de programas (as que começam com `.`, `AppData`, `Library`) e o state dir.
+Um `pastas.json` ilegível não libera nada. Sem `NOVOMODELO_MCP_WORKSPACE`, a tool não grava
+nada, porque tudo já é aceito. A mesma instrução está nas instructions do servidor e na
+descrição de toda tool que recebe caminho.
+
+Edições com `force=True` (gravar violando o schema), `case_init(force=True)`
+(sobrescrever arquivos) e `bridge_convert_*(force=True)` (apaga o deck de destino) exigem
+`NOVOMODELO_MCP_ALLOW_FORCE=1`.
 
 ## Prompt `metodologia`
 
@@ -162,14 +180,13 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | `NOVOMODELO_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando definida) |
 | `NOVOMODELO_MCP_DOCS_DIR` | — | só desenvolvimento: pasta de páginas de um clone das docs, no lugar das embutidas (gera aviso; ver [Documentação e schemas](#documentação-e-schemas)) |
 | `NOVOMODELO_MCP_SCHEMAS_DIR` | — | pasta com `*.schema.json` (ver [Documentação e schemas](#documentação-e-schemas)) |
-| `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)` e `case_init(force=True)` |
+| `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)`, `case_init(force=True)` e `bridge_convert_*(force=True)`, que apaga o deck de destino |
 | `NOVOMODELO_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
 | `NOVOMODELO_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
 | `NOVOMODELO_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
 | `NOVOMODELO_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |
-| `NOVOMODELO_MCP_MAX_INLINE_ROWS` | `50` | teto de linhas de amostra (parquet) |
-| `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes na leitura direta de JSON |
-| `NOVOMODELO_MCP_MAX_QUERY_ROWS` | `1000` | teto de linhas do `deck_sql` |
+| `NOVOMODELO_MCP_MAX_RESPONSE_KB` | `50` | teto de tamanho de uma resposta com linhas ou listas (`results_query`, `deck_sql`, `deck_read_parquet`, `results_convergence`, `results_policy`, `results_stochastic`, `case_summary`); acima dele as linhas são cortadas, com `cortado_por_tamanho` |
+| `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes do que é carregado inteiro na memória: leitura de JSON e `deck_describe_parquet`/`deck_edit_parquet` (pasta ou parquet maior é recusado e aponta o `deck_sql`) |
 | `NOVOMODELO_MCP_STATE_DIR` | por SO (ver abaixo) | estado persistente: runs assíncronos (`jobs/`) e calibração (`calibration.json`) |
 | `NOVOMODELO_MCP_MAX_JOBS` | `1` | runs simultâneos permitidos pelo `run_start` |
 | `NOVOMODELO_MCP_MAX_POLICY_BYTES` | `1073741824` (1 GiB) | maior política (em disco) que o `results_policy` aceita carregar; a biblioteca lê a política inteira em memória |
@@ -241,12 +258,12 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `deck_read_json` · `deck_read_parquet` · `deck_describe_parquet`
 - `deck_edit_json(path, changes, dry_run, ensure_valid, force)`: backup + escrita atômica; `ensure_valid=True` revalida o caso e reverte se reprovar
 - `deck_edit_parquet(path, where, set_values, dry_run)`: preserva colunas e dtypes
-- `deck_sql(query, max_rows)`: SQL **read-only** (DuckDB) sobre parquet/csv/json do deck ou dos resultados; caminhos confinados ao workspace
+- `deck_sql(query, max_rows)`: SQL **read-only** (DuckDB: `SELECT`, `WITH`, `DESCRIBE`, `SUMMARIZE`) sobre parquet/csv/json do deck ou dos resultados; caminhos confinados ao workspace
 
 **Referência** (`tools/reference.py`)
 - `schema_list()` / `schema_get(tipo)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{tipo}`
 - `docs_list(section)`: páginas das docs embutidas, com título e descrição
-- `docs_read(page, secao)`: uma página das docs embutidas; com `secao` (âncora devolvida pelo `docs_search`, ou título), só aquela seção
+- `docs_read(page, secao)`: uma página das docs embutidas; com `secao` (âncora devolvida pelo `docs_search`, ou título), só aquela seção; sem `page`, a lista de páginas (a do `docs_list`)
 - `docs_search(consulta, k)`: busca por palavra nas docs embutidas (de preferência em inglês; os termos em português do glossário das docs são traduzidos); devolve página, seção e trecho
 
 **Solver** (`tools/novomodelo_meta.py`)
@@ -267,12 +284,14 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
   `cabe_com_ajustes` | `nao_cabe` | `indeterminado`) e o aviso de que run local pequeno **pode não convergir**
 - `run_apply(case_dir, overrides, dry_run)`: aplica knobs de **config.json** (`forward_passes`,
   `iteration_limit`, `simulation_scenarios`, `simulation_enabled`) com schema + backup + escrita atômica
-- `run_start(case_dir, threads, output, time_budget_s, override)`: dispara `novomodelo run … --comm-backend local
+- `run_start(case_dir, threads, output, time_budget_s, override, overwrite)`: dispara `novomodelo run … --comm-backend local
   --quiet` em background e devolve `job_id` na hora; recusa se o plano disser `nao_cabe` (salvo `override=True`)
+  e recusa um `output` com rodada concluída, sugerindo outro (`output_sugerido`), salvo `overwrite=True`
 - `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
 **Diagnóstico**
-- `server_info()`: a versão do MCP (`versao_mcp`), binários, versões das peças (`versoes`), se há versão nova (`versao_nova`), workspace, docs, state dir e settings
+- `server_info()`: a versão do MCP (`versao_mcp`), binários, versões das peças (`versoes`), se há versão nova (`versao_nova`), workspace, pastas incluídas (`pastas_incluidas`), docs, state dir e settings
+- `incluir_pastas(pastas)`: acrescenta pastas de estudo às raízes do guard, depois de o usuário aceitar; vale na hora e fica gravado em `pastas.json` no state dir
 
 ## Estrutura
 

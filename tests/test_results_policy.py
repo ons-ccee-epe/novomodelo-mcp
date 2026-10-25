@@ -9,6 +9,8 @@ import types
 
 import pytest
 
+from novomodelo_mcp.adapters import budget
+
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
 
@@ -56,6 +58,7 @@ def tool(monkeypatch, tmp_path):
             raise estado["erro"]
         return _policy()
 
+    monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
     pkg = types.ModuleType("novomodelo")
     pkg.results = types.SimpleNamespace(load_policy=load_policy)
     monkeypatch.setitem(sys.modules, "novomodelo", pkg)
@@ -64,7 +67,7 @@ def tool(monkeypatch, tmp_path):
     (out / "policy" / "cuts").mkdir(parents=True)
     (out / "policy" / "cuts" / "000.bin").write_bytes(b"x" * 100)
     settings = dataclasses.replace(load_settings(), workspace=str(tmp_path / "ws"),
-                                   max_inline_rows=5, max_policy_bytes=1000)
+                                   max_policy_bytes=1000)
     mcp = _CaptureMCP()
     register_results(mcp, settings)
     return mcp.tools["results_policy"], str(out), estado

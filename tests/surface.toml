@@ -43,7 +43,7 @@ ignoradas = { "--help" = "ajuda" }
 # ── novomodelo-bridge (CLI) ───────────────────────────────────────────────────
 
 [bridge]
-ignorados = {}
+ignorados = { "export dessem" = "exportação da FCF para o DESSEM, nova na 0.19; sem tool nesta versão" }
 
 [bridge.raiz]
 expostas = ["--version"]

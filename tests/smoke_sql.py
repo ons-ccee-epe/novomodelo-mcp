@@ -33,6 +33,13 @@ def test_guard_blocks_path_outside_workspace():
     assert err and err["status"] == "error" and err["exit_code"] == 13, err
 
 
+def test_guard_refusal_brings_no_bypass_and_suggested_folder():
+    from novomodelo_mcp.adapters.paths import NAO_CONTORNE
+    err = S.guard_sql("SELECT * FROM read_parquet('/estudos/x.parquet')", WS)
+    assert err["exit_code"] == 13 and NAO_CONTORNE in err["diagnostics"], err
+    assert err["pasta_sugerida"] == str(Path("/estudos").resolve()), err
+
+
 def test_guard_dotdot_escape_is_resolved_and_blocked():
     q = "SELECT * FROM read_parquet('/work/../etc/x.parquet')"
     err = S.guard_sql(q, WS)
@@ -101,9 +108,8 @@ def _has_exec_libs() -> bool:
         return False
 
 
-def _settings_for(ws: str, max_rows: int = 1000):
+def _settings_for(ws: str):
     os.environ["NOVOMODELO_MCP_WORKSPACE"] = ws
-    os.environ["NOVOMODELO_MCP_MAX_QUERY_ROWS"] = str(max_rows)
     os.environ["NOVOMODELO_MCP_TIMEOUT"] = "30"
     from novomodelo_mcp.config import load_settings
     return load_settings()
@@ -139,8 +145,8 @@ def test_exec_truncation_flag():
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "t.parquet"
         pl.DataFrame({"x": list(range(10))}).write_parquet(p)
-        st = _settings_for(d, max_rows=3)
-        out = S.run_readonly_sql(f"SELECT x FROM read_parquet('{p}')", settings=st)
+        st = _settings_for(d)
+        out = S.run_readonly_sql(f"SELECT x FROM read_parquet('{p}')", settings=st, max_rows=3)
         assert out["status"] == "ok" and out["row_count"] == 3, out
         assert out["truncated"] is True, out
 

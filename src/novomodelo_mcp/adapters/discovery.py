@@ -1,6 +1,7 @@
 """Descoberta de binários e versões. Nenhuma lógica de domínio."""
 from __future__ import annotations
 
+import importlib.metadata as metadata
 import shutil
 import subprocess
 import sysconfig
@@ -22,6 +23,17 @@ def bridge_origin(settings: Settings) -> tuple[str | None, str | None]:
         return packaged, "pacote"
     on_path = shutil.which(BRIDGE_CLI)
     return on_path, "path" if on_path else None
+
+
+def bridge_version(path: str | None, origin: str | None) -> str | None:
+    """Versão do bridge no formato do `--version`; a do pacote vem dos metadados, sem
+    lançar um processo que carrega o polars e a biblioteca só para dizê-la."""
+    if origin == "pacote":
+        try:
+            return f"{BRIDGE_CLI} {metadata.version(BRIDGE_CLI)}"
+        except metadata.PackageNotFoundError:
+            pass
+    return tool_version(path)
 
 
 def find_bridge(settings: Settings) -> str | None:

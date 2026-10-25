@@ -2,8 +2,9 @@
 
 Multiplataforma (Windows, macOS, Linux) e independente do processo do servidor:
 cada job é supervisionado por `_job_runner.py`, lançado DESTACADO (nova sessão
-no POSIX; novo grupo sem console no Windows). O controle é todo por arquivos na
-pasta do job — sem sinais POSIX, sem `os.kill(pid, 0)` (que no Windows MATA):
+no POSIX; novo grupo sem console no Windows). O servidor controla o runner por
+arquivos na pasta do job (sinal só no último recurso) e nunca usa `os.kill(pid, 0)`
+(que no Windows MATA):
 
   <state_dir>/jobs/<job_id>/
     job.json     metadados (comando, caminhos, horários)
@@ -66,9 +67,13 @@ def read_meta(settings: Settings, job_id: str) -> dict[str, Any] | None:
     if not valid_job_id(job_id):
         return None
     try:
-        return json.loads((_job_dir(settings, job_id) / "job.json").read_text(encoding="utf-8"))
+        meta = json.loads((_job_dir(settings, job_id) / "job.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    # Gravação interrompida ou edição à mão: um job sem o mínimo não pode travar os outros.
+    if not isinstance(meta, dict) or not isinstance(meta.get("started_at"), int | float):
+        return None
+    return meta
 
 
 def update_meta(settings: Settings, job_id: str, **fields: Any) -> None:
@@ -220,16 +225,19 @@ def job_stderr(settings: Settings, job_id: str, *, lines: int = 20,
     return _tail(_job_dir(settings, job_id) / "stderr.log", lines, max_chars)
 
 
-def _force_kill_runner(pid: int) -> None:
+def _force_kill_runner(pid: int, child_pid: int | None = None) -> None:
     """Último recurso, se o runner não responde: derruba o runner E a árvore dele."""
     if _WIN:
         subprocess.run([_job_runner._taskkill(), "/T", "/F", "/PID", str(int(pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                        capture_output=True, check=False)
         return
-    try:
-        os.killpg(int(pid), signal.SIGKILL)  # runner é líder da própria sessão
-    except (ProcessLookupError, PermissionError):
-        pass
+    # O runner e o comando lideram cada um a própria sessão.
+    for leader in (pid, child_pid):
+        if leader:
+            try:
+                os.killpg(int(leader), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
 
 
 def cancel_job(settings: Settings, job_id: str) -> dict[str, Any] | None:
@@ -247,7 +255,8 @@ def cancel_job(settings: Settings, job_id: str) -> dict[str, Any] | None:
         time.sleep(0.1)
     else:
         if st.get("pid"):
-            _force_kill_runner(st["pid"])
+            child = (d / "child_pid").read_text(encoding="utf-8").strip() if (d / "child_pid").exists() else ""
+            _force_kill_runner(st["pid"], int(child) if child.isdigit() else None)
     proc = _PROCS.get(job_id)
     if proc is not None:
         try:

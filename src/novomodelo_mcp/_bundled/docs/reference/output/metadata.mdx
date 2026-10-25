@@ -49,13 +49,13 @@ single file. The `convergence` block records how the run stopped.
 ```json
 {
   "software": "novomodelo",
-  "software_version": "0.18.0",
+  "software_version": "0.19.0",
   "hostname": "<hostname>",
   "solver": "highs",
   "solver_version": "1.13.1",
   "started_at": "<timestamp>",
   "completed_at": "<timestamp>",
-  "duration_seconds": 0.468,
+  "duration_seconds": 0.684,
   "status": "complete",
   "configuration": {
     "seed": null,
@@ -91,8 +91,8 @@ single file. The `convergence` block records how the run stopped.
     "total_loaded": 0
   },
   "bounds": {
-    "final_lower_bound": 15595518.381798636,
-    "final_upper_bound": 579592.1986224409,
+    "final_lower_bound": 15595518.381798638,
+    "final_upper_bound": 579592.1986224408,
     "final_upper_bound_std": 0.0,
     "final_upper_bound_kind": "statistical"
   },
@@ -101,16 +101,16 @@ single file. The `convergence` block records how the run stopped.
     "first_try": 5632,
     "retried": 0,
     "failed": 0,
-    "forward_solve_seconds": 0.05161780600000029,
-    "backward_solve_seconds": 0.24256579799999914,
+    "forward_solve_seconds": 0.24650456700000023,
+    "backward_solve_seconds": 0.25314835200000024,
     "parallelism": 1
   },
   "setup": {
-    "load_seconds": 0.001174509,
-    "stochastic_fit_seconds": 0.000100001,
-    "production_fit_seconds": 0.000026218,
-    "evaporation_fit_seconds": 4.48e-7,
-    "broadcast_seconds": 0.000202196
+    "load_seconds": 0.001276093,
+    "stochastic_fit_seconds": 0.000112616,
+    "production_fit_seconds": 0.000018543,
+    "evaporation_fit_seconds": 4.229e-6,
+    "broadcast_seconds": 0.000214832
   },
   "distribution": {
     "backend": "local",
@@ -133,7 +133,7 @@ single file. The `convergence` block records how the run stopped.
 | Name                       | Type   | Nullable | Units | Description                                                                                                                                                        |
 | -------------------------- | ------ | -------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `software`                 | string | No       | —     | Name of the software that produced this output: `"novomodelo"`.                                                                                                         |
-| `software_version`         | string | No       | —     | Version of that software, for example `"0.18.0"`.                                                                                                                  |
+| `software_version`         | string | No       | —     | Version of that software, for example `"0.19.0"`.                                                                                                                  |
 | `hostname`                 | string | No       | —     | Hostname of the machine that ran training.                                                                                                                         |
 | `solver`                   | string | No       | —     | LP solver backend: `"highs"` or `"clp"`.                                                                                                                           |
 | `solver_version`           | string | Yes      | —     | Version string of the linked LP solver library. Omitted when not available.                                                                                        |
@@ -212,6 +212,13 @@ single file. The `convergence` block records how the run stopped.
 | `solve_stats.backward_solve_seconds` | number  | Yes      | s     | Cumulative wall-clock seconds in backward-phase LP solves.    |
 | `solve_stats.parallelism`            | integer | Yes      | —     | Degree of parallelism (worker count) used during training.    |
 
+Each LP solve of the run is counted once, whichever rank and worker ran it, so a
+study reports the same `total_lp_solves`, `first_try`, `retried` and `failed` for
+any number of MPI ranks, and `first_try + retried + failed` equals
+`total_lp_solves`. The training summary's `LP solves` line prints the same counts.
+Under MPI each solve time is likewise the total over all ranks, with each solve
+counted once.
+
 **`distribution` fields:**
 
 | Name                              | Type    | Nullable | Units | Description                                                                                                                      |
@@ -280,13 +287,13 @@ LP solver statistics, and distribution information.
 ```json
 {
   "software": "novomodelo",
-  "software_version": "0.18.0",
+  "software_version": "0.19.0",
   "hostname": "<hostname>",
   "solver": "highs",
   "solver_version": "1.13.1",
   "started_at": "<timestamp>",
   "completed_at": "<timestamp>",
-  "duration_seconds": 0.324,
+  "duration_seconds": 0.379,
   "status": "complete",
   "scenarios": {
     "total": 100,
@@ -294,15 +301,15 @@ LP solver statistics, and distribution information.
     "failed": 0
   },
   "cost": {
-    "mean_cost": 9679385.922404818,
-    "std_cost": 23696548.3646435
+    "mean_cost": 9679385.922404816,
+    "std_cost": 23696548.364643496
   },
   "solve_stats": {
     "total_lp_solves": 400,
     "first_try": 400,
     "retried": 0,
     "failed": 0,
-    "solve_seconds": 0.053534688,
+    "solve_seconds": 0.2814000140000004,
     "parallelism": 1
   },
   "distribution": {
@@ -326,7 +333,7 @@ LP solver statistics, and distribution information.
 | Name               | Type   | Nullable | Units | Description                                                                 |
 | ------------------ | ------ | -------- | ----- | --------------------------------------------------------------------------- |
 | `software`         | string | No       | —     | Name of the software that produced this output: `"novomodelo"`.                  |
-| `software_version` | string | No       | —     | Version of that software, for example `"0.18.0"`.                           |
+| `software_version` | string | No       | —     | Version of that software, for example `"0.19.0"`.                           |
 | `hostname`         | string | No       | —     | Hostname of the machine that ran simulation.                                |
 | `solver`           | string | No       | —     | LP solver backend: `"highs"` or `"clp"`.                                    |
 | `solver_version`   | string | Yes      | —     | LP solver library version string. Omitted when not available.               |
