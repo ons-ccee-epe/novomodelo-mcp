@@ -44,7 +44,7 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 - Busque em inglês (as docs estão em inglês); termos em português do glossário das
   docs são traduzidos. Depois leia a seção com `docs_read(page, secao)`.
 - Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
-- Se as docs não cobrem o assunto, diga isso: não complete de memória.
+- Se as docs não tratam do assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.
 - Pedido sobre resultados de um caso (status, convergência, CMO, geração, política):
   vá direto às tools `results_*`. Se não souber a pasta da rodada, passe a do caso: a

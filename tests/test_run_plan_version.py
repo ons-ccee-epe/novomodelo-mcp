@@ -51,10 +51,10 @@ def test_sem_versao_instalada_o_resultado_nao_muda():
         runtime.select_reference([V17, V18], DIMS, "sig")
 
 
-def test_point_from_run_le_cobre_version_de_runs_antigos():
+def test_point_from_run_so_le_software_version():
     meta = {"duration_seconds": 10.0, "solve_stats": {"total_lp_solves": 100},
-            "cobre_version": "0.17.0"}
-    assert runtime.point_from_run(meta)["software_version"] == "0.17.0"
+            "versao_antiga": "0.17.0"}
+    assert runtime.point_from_run(meta)["software_version"] is None
     meta["software_version"] = "0.18.0"
     assert runtime.point_from_run(meta)["software_version"] == "0.18.0"
 

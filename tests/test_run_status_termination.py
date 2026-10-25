@@ -16,7 +16,7 @@ LIMITE_018 = {"status": "complete", "software_version": "0.18.0",
               "iterations": {"completed": 5, "converged_at": None},
               "convergence": {"achieved": False, "final_gap_percent": 12.5,
                               "termination_reason": "iteration_limit"}}
-ANTIGO_017 = {"status": "complete", "cobre_version": "0.17.0", "iterations": 5}
+SEM_CAMPOS = {"status": "complete", "iterations": 5}
 
 
 class _CaptureMCP:
@@ -67,7 +67,7 @@ def test_rodada_parada_no_limite_repassa_o_motivo(tmp_path, monkeypatch, tool):
 
 @pytest.mark.parametrize("tool", [0, 1], ids=["run_status", "results_status"])
 def test_metadata_antigo_sem_os_campos_vira_null(tmp_path, monkeypatch, tool):
-    out = _output(tmp_path, ANTIGO_017)
+    out = _output(tmp_path, SEM_CAMPOS)
     env = _tools(tmp_path, monkeypatch, out)[tool]()
     assert env["status"] == "ok"
     assert env["treino"] == {"status": "complete", "termination_reason": None,

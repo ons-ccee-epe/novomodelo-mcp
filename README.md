@@ -135,7 +135,7 @@ Edições com `force=True` (gravar violando o schema), `case_init(force=True)`
 O servidor oferece o prompt MCP `metodologia(tema)`: uma conversa sobre a metodologia do
 novomodelo ancorada nas docs embutidas (busca em inglês com `docs_search`, leitura da
 seção com `docs_read` e resposta em português citando `pagina#secao`; quando as docs não
-cobrem o assunto, a resposta diz isso). `tema` é opcional e de uma palavra; sem ele, a
+tratam do assunto, a resposta diz isso). `tema` é opcional e de uma palavra; sem ele, a
 pergunta vem na mensagem seguinte.
 
 | Cliente | Onde aparece |
@@ -249,7 +249,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 
 `output_dir` é a pasta de uma rodada: a que tem `training/metadata.json`, com qualquer nome. Uma pasta acima dela (a do caso, a do estudo) é recusada, e a recusa traz as rodadas encontradas abaixo: com uma só, em `output_sugerido`; com várias, só a lista em `rodadas`, para o usuário escolher. A busca desce alguns níveis, não entra numa rodada e não segue links simbólicos.
 
-- `results_status(output_dir)`: status, bounds, gap, iterações, custo e `software_version` (lê os `metadata.json`; em runs ≤ 0.17 usa o campo antigo `cobre_version`)
+- `results_status(output_dir)`: status, bounds, gap, iterações, custo e `software_version` (lê os `metadata.json`)
 - `results_convergence(output_dir, tail)`: trajetória de convergência (`convergence.parquet`)
 - `results_list_entities(output_dir)`: entidades de simulação disponíveis
 - `results_query(output_dir, entity, columns, group_by, agg, scenario, limit)`: consulta agregada da simulação
@@ -372,7 +372,7 @@ uv run --no-sync python $R check  --root . --map $M   # 0 ocorrências = pronto
 ```
 
 Para o próximo nome, crie um mapa com `from = "novomodelo"`. As exceções atuais
-(`<repositório anterior>`, `cobre_version`, `cobrem`) estão comentadas no próprio mapa.
+estão comentadas no próprio mapa.
 
 **Temporário, enquanto o MCP vive fora do repo do novomodelo:** o CI roda o `check` em todo push e PR (job `rename-guard`), com a ferramenta baixada do
 novomodelo na mesma tag do pin do `novomodelo-bridge`. Se o nome antigo reaparecer, o CI falha.

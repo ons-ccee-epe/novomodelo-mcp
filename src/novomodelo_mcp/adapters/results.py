@@ -138,7 +138,7 @@ def termination_fields(training: dict[str, Any] | None,
     """`treino`/`simulacao`: como a rodada terminou, copiado do metadata sem interpretar.
 
     Nomes da 0.18: `convergence.termination_reason`, `iterations.converged_at` e
-    `iterations.completed`; campo ausente (runs ≤ 0.17) vira None.
+    `iterations.completed`; campo ausente vira None.
     """
     t = training if isinstance(training, dict) else {}
     conv = t.get("convergence") if isinstance(t.get("convergence"), dict) else {}
