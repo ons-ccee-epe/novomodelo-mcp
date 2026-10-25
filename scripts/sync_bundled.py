@@ -123,8 +123,10 @@ def generate(source: Path, dest: Path, changelogs: dict[str, Path] | None = None
     index = dest / INDEX_FILE
     index.unlink(missing_ok=True)
     con = build_docs_index(dest / "docs", index)
-    sections = con.execute("SELECT count(*) FROM secoes").fetchone()[0]
-    con.execute("INSERT INTO secoes(secoes) VALUES('optimize')")
+    sections = sum(con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
+                   for t in ("secoes", "changelog"))
+    for table in ("secoes", "changelog"):
+        con.execute(f"INSERT INTO {table}({table}) VALUES('optimize')")
     con.commit()
     con.execute("VACUUM")
     con.close()
@@ -151,6 +153,7 @@ def _index_rows(path: Path) -> list:
     try:
         return [con.execute(q).fetchall() for q in (
             "SELECT pagina, titulo, ancora, texto FROM secoes ORDER BY pagina, rowid",
+            "SELECT pagina, titulo, ancora, texto FROM changelog ORDER BY pagina, rowid",
             "SELECT * FROM paginas ORDER BY pagina", "SELECT * FROM glossario ORDER BY pt, en")]
     finally:
         con.close()

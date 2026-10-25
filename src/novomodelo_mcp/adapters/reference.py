@@ -394,11 +394,21 @@ def glossary_pairs(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
+CHANGELOG_PREFIX = "changelog/"
+
+
 def build_docs_index(docs_dir: Path, db_path: str | Path) -> sqlite3.Connection:
-    """Índice FTS5 das seções (+ títulos das páginas e glossário) em `db_path`."""
+    """Índice FTS5 das seções (+ títulos das páginas e glossário) em `db_path`.
+
+    Os changelogs ficam numa tabela à parte: o texto denso deles não muda a ordem da
+    busca de metodologia, e só entram quando a consulta é sobre versões.
+    """
     con = sqlite3.connect(str(db_path))
     con.executescript("""
         CREATE VIRTUAL TABLE secoes USING fts5(
+            pagina, titulo, ancora UNINDEXED, texto,
+            tokenize = 'porter unicode61 remove_diacritics 2');
+        CREATE VIRTUAL TABLE changelog USING fts5(
             pagina, titulo, ancora UNINDEXED, texto,
             tokenize = 'porter unicode61 remove_diacritics 2');
         CREATE TABLE paginas (pagina TEXT PRIMARY KEY, titulo TEXT, descricao TEXT);
@@ -409,7 +419,8 @@ def build_docs_index(docs_dir: Path, db_path: str | Path) -> sqlite3.Connection:
         fields = frontmatter_fields(text)
         con.execute("INSERT INTO paginas VALUES (?, ?, ?)",
                     (page, fields["title"], fields["description"]))
-        con.executemany("INSERT INTO secoes VALUES (?, ?, ?, ?)",
+        table = "changelog" if page.startswith(CHANGELOG_PREFIX) else "secoes"
+        con.executemany(f"INSERT INTO {table} VALUES (?, ?, ?, ?)",
                         [(s["pagina"], s["titulo"], s["ancora"], s["texto"])
                          for s in split_sections(page, text)])
     glossary = Path(docs_dir) / "reference" / "glossary.md"
@@ -434,6 +445,8 @@ def bundled_manifest() -> dict | None:
 # ---------------------------------------------------------------- busca
 
 _SEARCH_MAX_K = 20
+_VERSION_INTENT = re.compile(r"\d+\.\d+|\b(changelog|release|releases|version|versions|versao|"
+                             r"versoes|mudou|mudancas|novidades|breaking)\b")
 _SNIPPET_CHARS = 300
 #: Palavras de consulta em português que não ajudam a achar nada nas docs (em inglês).
 _PT_STOPWORDS = frozenset(
@@ -482,11 +495,16 @@ def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
         return error(22, "consulta vazia: informe termos da documentação (de preferência em inglês)")
     match = " OR ".join(f'"{t}"' for t in terms)
     limit = max(1, min(int(k), _SEARCH_MAX_K))
+    sql = ("SELECT pagina, titulo, ancora, snippet({t}, 3, '', '', '…', 48), "
+           "bm25({t}, 0.0, 5.0, 0.0, 1.0) AS r FROM {t} WHERE {t} MATCH ? ORDER BY r LIMIT ?")
     try:
-        rows = con.execute(
-            "SELECT pagina, titulo, ancora, snippet(secoes, 3, '', '', '…', 48), "
-            "bm25(secoes, 0.0, 5.0, 0.0, 1.0) AS r FROM secoes WHERE secoes MATCH ? "
-            "ORDER BY r LIMIT ?", (match, limit)).fetchall()
+        rows = []
+        if _VERSION_INTENT.search(normalized) and con.execute(
+                "SELECT 1 FROM sqlite_master WHERE name = 'changelog'").fetchone():
+            # Os escores das duas tabelas não se comparam: o changelog vem na frente,
+            # com até metade das vagas, quando a consulta é sobre versões.
+            rows = con.execute(sql.format(t="changelog"), (match, (limit + 1) // 2)).fetchall()
+        rows += con.execute(sql.format(t="secoes"), (match, limit - len(rows))).fetchall()
     except sqlite3.Error as exc:
         return error(2, "falha na busca do índice de docs", str(exc))
     return {"status": "ok", "consulta_usada": match, "termos_do_glossario": glossary,

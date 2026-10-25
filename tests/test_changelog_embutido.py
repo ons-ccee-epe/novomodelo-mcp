@@ -112,8 +112,9 @@ def test_sync_com_changelog_grava_manifesto_e_indice(tmp_path):
     entrada = manifest["changelogs"]["novomodelo"]
     assert entrada["versoes"] == ["0.19.0", "0.18.0"] and len(entrada["commit"]) == 40
     con = REF.sqlite3.connect(str(dest / "docs_index.sqlite"))
-    paginas = {r[0] for r in con.execute("SELECT pagina FROM secoes")}
-    assert "changelog/novomodelo" in paginas
+    paginas = {r[0] for r in con.execute("SELECT pagina FROM changelog")}
+    assert paginas == {"changelog/novomodelo"}
+    assert not con.execute("SELECT 1 FROM secoes WHERE pagina LIKE 'changelog/%'").fetchone()
 
 
 def test_check_com_changelog_mudado_diverge(tmp_path):
@@ -143,3 +144,20 @@ def test_instrucoes_apontam_o_changelog():
     assert "`changelog/novomodelo`" in SERVER_INSTRUCTIONS
     assert "`changelog/novomodelo-bridge`" in SERVER_INSTRUCTIONS
     assert "docs_read(pagina, \"<versão>\")" in SERVER_INSTRUCTIONS
+
+
+def _busca(consulta: str, k: int = 10) -> list[str]:
+    from novomodelo_mcp.config import load_settings
+    return [h["pagina"] for h in REF.search_docs(load_settings(), consulta, k)["resultados"]]
+
+
+@pytest.mark.parametrize("consulta", ["inflow non-negativity", "negative inflow", "CVaR",
+                                      "cut selection level1"])
+def test_busca_sem_intencao_de_versao_nao_traz_changelog(consulta):
+    assert not [p for p in _busca(consulta) if p.startswith("changelog/")]
+
+
+@pytest.mark.parametrize("consulta", ["what changed in 0.19.0", "changelog cut selection",
+                                      "breaking changes release"])
+def test_busca_sobre_versao_traz_changelog(consulta):
+    assert any(p.startswith("changelog/") for p in _busca(consulta, 5))
