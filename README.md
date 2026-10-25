@@ -76,7 +76,7 @@ quando o cliente for instalado.
 |---|---|---|
 | Claude Desktop | macOS `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows `%APPDATA%\Claude\claude_desktop_config.json`; Linux `~/.config/Claude/claude_desktop_config.json` | sem lista: escolha "sempre permitir" na primeira chamada |
 | Claude Code | `~/.claude.json` (escopo de usuário) | `permissions.allow` em `~/.claude/settings.json`, uma regra por tool |
-| Kiro | `~/.kiro/settings/mcp.json` (o `.kiro/settings/mcp.json` do workspace vence) | `autoApprove` na entrada do servidor |
+| Kiro | `~/.kiro/settings/mcp.json` (o `.kiro/settings/mcp.json` do workspace vence) | pede aprovação; o `autoApprove` gravado na entrada do servidor é ignorado pelo Kiro atual |
 
 Feche o Claude Code antes de gravar: ele reescreve o `~/.claude.json` enquanto está
 aberto. `--instrucoes` (desligado por padrão) também grava uma linha que orienta o
