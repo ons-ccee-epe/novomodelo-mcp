@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { Functional } from "@/features/Functional";
+import { History } from "@/features/History";
 import { Load } from "@/features/Load";
 import { ROUTES } from "@/shared/constants/Routes";
 import { AppLayout } from "./AppNav";
@@ -12,8 +13,8 @@ export function AppRoutes() {
       <Route element={<AppLayout />}>
         <Route path={ROUTES.functional.path} element={<Functional />} />
         <Route path={ROUTES.load.path} element={<Load />} />
-        <Route path={ROUTES.history.path} element={<div>Histórico</div>} />
-        <Route path={`${ROUTES.history.path}/:batchId`} element={<div>Histórico</div>} />
+        <Route path={ROUTES.history.path} element={<History />} />
+        <Route path={`${ROUTES.history.path}/:batchId`} element={<History />} />
       </Route>
       <Route path="*" element={<Navigate to={ROUTES.functional.path} replace />} />
     </Routes>
