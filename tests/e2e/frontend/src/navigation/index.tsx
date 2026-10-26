@@ -10,10 +10,12 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path={ROUTES.dashboard.path} element={<Dashboard />} />
+        <Route path={ROUTES.functional.path} element={<Dashboard />} />
         <Route path={ROUTES.load.path} element={<Load />} />
+        <Route path={ROUTES.history.path} element={<div>Histórico</div>} />
+        <Route path={`${ROUTES.history.path}/:batchId`} element={<div>Histórico</div>} />
       </Route>
-      <Route path="*" element={<Navigate to={ROUTES.dashboard.path} replace />} />
+      <Route path="*" element={<Navigate to={ROUTES.functional.path} replace />} />
     </Routes>
   );
 }

@@ -794,6 +794,34 @@ body {
 }
 
 /* Navegação entre áreas */
+.cobre-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--cobre-surface);
+}
+
+.cobre-header-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.75rem 1.5rem 0;
+}
+
+.cobre-header-title {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--cobre-text);
+}
+
+.cobre-header-batch {
+  color: var(--cobre-text-muted);
+  font-size: 0.85rem;
+}
+
 .cobre-nav {
   display: flex;
   gap: 0.25rem;

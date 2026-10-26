@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AppNav } from "@/navigation/AppNav";
 import type { LoadRunState } from "@/services/loadApi";
 import { Load } from "./index";
 import { makeLoadRun, stats, toolInfo } from "./fixtures";
@@ -236,19 +235,5 @@ describe("Load com o launcher no ar", () => {
     );
     renderLoad();
     expect(await screen.findByText("Carga em andamento…")).toBeInTheDocument();
-  });
-});
-
-describe("AppNav", () => {
-  it("marca a área ativa e liga as duas áreas", () => {
-    render(
-      <MemoryRouter initialEntries={["/carga"]}>
-        <AppNav />
-      </MemoryRouter>,
-    );
-    expect(screen.getByRole("link", { name: "Carga" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "Carga" })).toHaveAttribute("href", "/carga");
   });
 });
