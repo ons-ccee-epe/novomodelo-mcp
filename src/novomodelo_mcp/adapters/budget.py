@@ -1,4 +1,5 @@
 """Teto de tamanho das respostas com linhas (`NOVOMODELO_MCP_MAX_RESPONSE_KB`)."""
+
 from __future__ import annotations
 
 import copy
@@ -19,8 +20,9 @@ def response_bytes(envelope: Any) -> int:
     return len(json.dumps(envelope, ensure_ascii=False, indent=2, default=str).encode("utf-8"))
 
 
-def fit_to_budget(envelope: dict[str, Any], settings: Settings, key: str,
-                  reserve: int = 0) -> dict[str, Any]:
+def fit_to_budget(
+    envelope: dict[str, Any], settings: Settings, key: str, reserve: int = 0
+) -> dict[str, Any]:
     """Corta `envelope[key]` (lista de linhas) até a resposta caber em `max_response_kb`.
 
     O teto é de tamanho, não de linhas: o cliente recusa a resposta grande inteira (o
@@ -34,9 +36,16 @@ def fit_to_budget(envelope: dict[str, Any], settings: Settings, key: str,
         return envelope
 
     def cut(n: int) -> dict[str, Any]:
-        out = {**envelope, key: rows[:n], "truncated": True,
-               "cortado_por_tamanho": {"teto_kb": settings.max_response_kb,
-                                       "linhas_devolvidas": n, "linhas_antes_do_corte": len(rows)}}
+        out = {
+            **envelope,
+            key: rows[:n],
+            "truncated": True,
+            "cortado_por_tamanho": {
+                "teto_kb": settings.max_response_kb,
+                "linhas_devolvidas": n,
+                "linhas_antes_do_corte": len(rows),
+            },
+        }
         if "row_count" in out:
             out["row_count"] = n
         return out
@@ -76,8 +85,13 @@ def shrink_to_budget(envelope: dict[str, Any], settings: Settings) -> dict[str, 
     out["cortado_por_tamanho"] = {"teto_kb": settings.max_response_kb}
     cortadas: set[int] = set()
     while response_bytes(out) > budget:
-        candidatas = [(dono, k) for dono, k in _lists(out) if out.get("cortado_por_tamanho") is not dono
-                      and dono[k] and id(dono[k]) not in cortadas]
+        candidatas = [
+            (dono, k)
+            for dono, k in _lists(out)
+            if out.get("cortado_por_tamanho") is not dono
+            and dono[k]
+            and id(dono[k]) not in cortadas
+        ]
         if not candidatas:
             break
         dono, k = max(candidatas, key=lambda c: response_bytes(c[0][c[1]]))

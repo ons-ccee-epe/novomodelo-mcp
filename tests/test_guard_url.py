@@ -1,5 +1,6 @@
 """Caminho nunca é URL: o guard recusa esquema remoto, com ou sem workspace, porque a
 única saída de rede do MCP é a checagem de versões."""
+
 import dataclasses
 
 import pytest
@@ -7,8 +8,12 @@ import pytest
 from novomodelo_mcp.adapters.paths import ensure_in_workspace
 from novomodelo_mcp.config import load_settings
 
-URLS = ["http://127.0.0.1:9/exfil?dado=x", "https://exemplo.org/a.parquet", "s3://bucket/k.parquet",
-        "hf://datasets/x/y.parquet"]
+URLS = [
+    "http://127.0.0.1:9/exfil?dado=x",
+    "https://exemplo.org/a.parquet",
+    "s3://bucket/k.parquet",
+    "hf://datasets/x/y.parquet",
+]
 
 
 @pytest.mark.parametrize("workspace", [None, "ws"])
@@ -58,6 +63,7 @@ def test_deck_read_parquet_com_url_nao_sai_para_a_rede(tmp_path, monkeypatch):
             def deco(fn):
                 self.tools[fn.__name__] = fn
                 return fn
+
             return deco
 
     monkeypatch.chdir(tmp_path)

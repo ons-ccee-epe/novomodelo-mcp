@@ -1,4 +1,5 @@
 """`results_query`: `entity` é um nome dentro de `simulation/`; nada fora do workspace é lido."""
+
 import dataclasses
 import os
 
@@ -18,6 +19,7 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -27,7 +29,8 @@ def setup(tmp_path):
     out = ws / "output"
     (out / "simulation" / "hydros" / "scenario_id=0").mkdir(parents=True)
     pl.DataFrame({"stage_id": [0], "x": [1.0]}).write_parquet(
-        out / "simulation" / "hydros" / "scenario_id=0" / "data.parquet")
+        out / "simulation" / "hydros" / "scenario_id=0" / "data.parquet"
+    )
     fora.mkdir()
     pl.DataFrame({"segredo": [42]}).write_parquet(fora / "x.parquet")
     mcp = _CaptureMCP()

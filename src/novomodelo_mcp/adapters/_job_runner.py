@@ -12,6 +12,7 @@ Windows, macOS e Linux; o servidor o controla só por arquivos:
   saida.log   stdout e stderr do comando na ordem de chegada, o stderr marcado
               `[stderr] ` (além de stdout.log e stderr.log, cada canal sozinho)
 """
+
 from __future__ import annotations
 
 import os
@@ -47,9 +48,19 @@ def _taskkill() -> str:
 def _kill_tree(proc: subprocess.Popen, *, force: bool) -> None:
     if _WIN:
         # TerminateProcess não alcança netos; taskkill /T derruba a árvore toda.
-        subprocess.run([_taskkill(), "/T", "/F", "/PID", str(int(proc.pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                       stdin=subprocess.DEVNULL, capture_output=True, check=False,
-                       creationflags=subprocess.CREATE_NO_WINDOW)  # type: ignore[attr-defined]  # só existe no Windows
+        subprocess.run(
+            [
+                _taskkill(),
+                "/T",
+                "/F",
+                "/PID",
+                str(int(proc.pid)),
+            ],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )  # type: ignore[attr-defined]  # só existe no Windows
         return
     # O comando lidera o próprio grupo (start_new_session): o sinal alcança os netos.
     try:
@@ -81,9 +92,14 @@ def main(argv: list[str]) -> int:
     flags = subprocess.CREATE_NO_WINDOW if _WIN else 0  # type: ignore[attr-defined]
     try:
         # argv em lista e sem shell, montada pelo servidor (tools.run) com caminhos absolutos.
-        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                                stderr=subprocess.PIPE, creationflags=flags,
-                                start_new_session=not _WIN)
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+            stderr=subprocess.PIPE,
+            creationflags=flags,
+            start_new_session=not _WIN,
+        )
     except OSError as exc:
         message = f"runner: falha ao iniciar {cmd[:1]}: {exc}\n".encode()
         sys.stderr.buffer.write(message)
@@ -93,10 +109,16 @@ def main(argv: list[str]) -> int:
         return 127
     _write(job_dir / "child_pid", str(proc.pid))
     merged, lock = open(job_dir / "saida.log", "ab"), threading.Lock()
-    pumps = [threading.Thread(target=_pump, args=(proc.stdout, sys.stdout.buffer, merged, lock, b""),
-                              daemon=True),
-             threading.Thread(target=_pump, args=(proc.stderr, sys.stderr.buffer, merged, lock,
-                                                  STDERR_MARK), daemon=True)]
+    pumps = [
+        threading.Thread(
+            target=_pump, args=(proc.stdout, sys.stdout.buffer, merged, lock, b""), daemon=True
+        ),
+        threading.Thread(
+            target=_pump,
+            args=(proc.stderr, sys.stderr.buffer, merged, lock, STDERR_MARK),
+            daemon=True,
+        ),
+    ]
     for pump in pumps:
         pump.start()
 

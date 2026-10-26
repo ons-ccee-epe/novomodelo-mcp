@@ -2,6 +2,7 @@
 
 Tudo num HOME temporário: nenhum arquivo de cliente real é tocado.
 """
+
 import json
 import os
 import sysconfig
@@ -29,12 +30,15 @@ def home(tmp_path, monkeypatch):
 
 
 def _leitura_do_servidor():
-    return sorted(t.name for t in build_server()._tool_manager.list_tools()
-                  if t.annotations.readOnlyHint)
+    return sorted(
+        t.name for t in build_server()._tool_manager.list_tools() if t.annotations.readOnlyHint
+    )
 
 
 def _entrada(cliente):
-    return json.loads(C.config_path(cliente).read_text(encoding="utf-8"))["mcpServers"]["novomodelo"]
+    return json.loads(C.config_path(cliente).read_text(encoding="utf-8"))["mcpServers"][
+        "novomodelo"
+    ]
 
 
 def _backups(path: Path):
@@ -55,8 +59,10 @@ def test_cria_o_arquivo_quando_nao_existe(home, cliente):
 def test_preserva_o_resto_faz_backup_e_e_idempotente(home, cliente):
     path = C.config_path(cliente)
     path.parent.mkdir(parents=True, exist_ok=True)
-    original = {"mcpServers": {"outro": {"command": "x"}, "novomodelo": {"command": "velho"}},
-                "preferencia": True}
+    original = {
+        "mcpServers": {"outro": {"command": "x"}, "novomodelo": {"command": "velho"}},
+        "preferencia": True,
+    }
     path.write_text(json.dumps(original), encoding="utf-8")
     antes = path.read_bytes()
 
@@ -79,7 +85,8 @@ def test_lista_liberada_e_a_das_tools_de_leitura_do_servidor(home):
     assert C.read_only_tools() == leitura
     C.main(["--irrestrito", "--cliente", "claude-code"])
     allow = json.loads((home / ".claude" / "settings.json").read_text(encoding="utf-8"))[
-        "permissions"]["allow"]
+        "permissions"
+    ]["allow"]
     assert allow == [f"mcp__novomodelo__{t}" for t in leitura]
     C.main(["--irrestrito", "--cliente", "kiro"])
     assert _entrada("kiro")["autoApprove"] == leitura
@@ -91,7 +98,8 @@ def test_nenhuma_tool_que_grava_entra_na_lista(home):
     assert grava and not grava & set(C.read_only_tools())
     C.main(["--irrestrito", "--cliente", "claude-code"])
     allow = json.loads((home / ".claude" / "settings.json").read_text(encoding="utf-8"))[
-        "permissions"]["allow"]
+        "permissions"
+    ]["allow"]
     assert not any(r.endswith("*") for r in allow)
     assert not {r.removeprefix("mcp__novomodelo__") for r in allow} & grava
 
@@ -99,8 +107,9 @@ def test_nenhuma_tool_que_grava_entra_na_lista(home):
 def test_liberacao_preserva_as_regras_que_ja_existiam(home):
     settings = home / ".claude" / "settings.json"
     settings.parent.mkdir(parents=True)
-    settings.write_text(json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}, "x": 1}),
-                        encoding="utf-8")
+    settings.write_text(
+        json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}, "x": 1}), encoding="utf-8"
+    )
     C.main(["--irrestrito", "--cliente", "claude-code"])
     gravado = json.loads(settings.read_text(encoding="utf-8"))
     assert gravado["x"] == 1 and gravado["permissions"]["allow"][0] == "Bash(ls:*)"
@@ -122,7 +131,8 @@ def test_mostrar_imprime_so_o_trecho_e_nao_o_arquivo_inteiro(home, capsys):
 
 
 def test_command_e_o_executavel_deste_pacote_mesmo_com_outro_antes_no_path(
-        home, tmp_path, monkeypatch):
+    home, tmp_path, monkeypatch
+):
     nome = "novomodelo-mcp.exe" if os.name == "nt" else "novomodelo-mcp"
     for pasta in ("outro-no-path", "scripts-deste"):
         (tmp_path / pasta).mkdir()
@@ -131,8 +141,13 @@ def test_command_e_o_executavel_deste_pacote_mesmo_com_outro_antes_no_path(
         exe.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path / "outro-no-path"))
     real = sysconfig.get_path
-    monkeypatch.setattr(sysconfig, "get_path", lambda key, *a, **k: (
-        str(tmp_path / "scripts-deste") if key == "scripts" else real(key, *a, **k)))
+    monkeypatch.setattr(
+        sysconfig,
+        "get_path",
+        lambda key, *a, **k: (
+            str(tmp_path / "scripts-deste") if key == "scripts" else real(key, *a, **k)
+        ),
+    )
     C.main(["--irrestrito", "--cliente", "kiro"])
     command = _entrada("kiro")["command"]
     assert os.path.normcase(command) == os.path.normcase(tmp_path / "scripts-deste" / nome)
@@ -182,9 +197,11 @@ def test_json_invalido_erro_claro_e_nada_gravado(home, capsys):
 
 def test_sem_subcomando_o_executavel_sobe_o_servidor(monkeypatch):
     from novomodelo_mcp import server
+
     chamado = []
-    monkeypatch.setattr(server, "build_server", lambda: type("S", (), {
-        "run": lambda self: chamado.append("run")})())
+    monkeypatch.setattr(
+        server, "build_server", lambda: type("S", (), {"run": lambda self: chamado.append("run")})()
+    )
     monkeypatch.setattr("sys.argv", ["novomodelo-mcp"])
     server.main()
     assert chamado == ["run"]
@@ -192,7 +209,10 @@ def test_sem_subcomando_o_executavel_sobe_o_servidor(monkeypatch):
 
 def test_subcomando_configurar_pelo_executavel(home, monkeypatch):
     from novomodelo_mcp import server
-    monkeypatch.setattr("sys.argv", ["novomodelo-mcp", "configurar", "--irrestrito", "--cliente", "kiro"])
+
+    monkeypatch.setattr(
+        "sys.argv", ["novomodelo-mcp", "configurar", "--irrestrito", "--cliente", "kiro"]
+    )
     with pytest.raises(SystemExit) as saida:
         server.main()
     assert saida.value.code == 0 and C.config_path("kiro").exists()
@@ -236,7 +256,9 @@ def test_aviso_de_fechar_o_claude_code_sai_antes_de_gravar(home, capsys):
     assert C.main(["--irrestrito", "--cliente", "claude-code"]) == 0
     linhas = capsys.readouterr().out.splitlines()
     aviso = next(i for i, linha in enumerate(linhas) if linha.startswith(FECHAR_CLAUDE_CODE))
-    gravou = next(i for i, linha in enumerate(linhas) if linha.startswith(("criado:", "atualizado:")))
+    gravou = next(
+        i for i, linha in enumerate(linhas) if linha.startswith(("criado:", "atualizado:"))
+    )
     assert aviso < gravou
 
 
@@ -259,8 +281,10 @@ NOMES = {"claude-desktop": "Claude Desktop", "claude-code": "Claude Code", "kiro
 
 
 def _nao_encontrado(cliente):
-    return (f"{NOMES[cliente]} não encontrado nesta máquina; a configuração fica pronta para "
-            "quando você instalar")
+    return (
+        f"{NOMES[cliente]} não encontrado nesta máquina; a configuração fica pronta para "
+        "quando você instalar"
+    )
 
 
 @pytest.mark.parametrize("cliente", CLIENTES)
@@ -268,7 +292,9 @@ def test_cliente_ausente_avisa_e_grava_mesmo_assim(home, cliente, capsys):
     assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     linhas = capsys.readouterr().out.splitlines()
     aviso = next(i for i, linha in enumerate(linhas) if linha.startswith(_nao_encontrado(cliente)))
-    gravou = next(i for i, linha in enumerate(linhas) if linha.startswith(("criado:", "atualizado:")))
+    gravou = next(
+        i for i, linha in enumerate(linhas) if linha.startswith(("criado:", "atualizado:"))
+    )
     assert aviso < gravou and C.config_path(cliente).exists()
 
 
@@ -279,18 +305,21 @@ def test_mostrar_tambem_avisa_que_o_cliente_nao_foi_encontrado(home, cliente, ca
     assert [p for p in home.rglob("*") if p.is_file()] == []
 
 
-@pytest.mark.parametrize("cliente,pasta", [
-    ("claude-desktop", None), ("claude-code", ".claude"), ("kiro", ".kiro")])
+@pytest.mark.parametrize(
+    "cliente,pasta", [("claude-desktop", None), ("claude-code", ".claude"), ("kiro", ".kiro")]
+)
 def test_pasta_de_configuracao_do_cliente_conta_como_encontrado(home, cliente, pasta, capsys):
     (home / pasta if pasta else C.config_path(cliente).parent).mkdir(parents=True)
     assert C.main(["--irrestrito", "--cliente", cliente]) == 0
     assert "não encontrado nesta máquina" not in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("cliente,programa", [("claude-code", "claude"), ("kiro", "kiro"),
-                                              ("kiro", "kiro-cli")])
-def test_programa_no_path_conta_como_encontrado(home, tmp_path, monkeypatch, cliente, programa,
-                                                capsys):
+@pytest.mark.parametrize(
+    "cliente,programa", [("claude-code", "claude"), ("kiro", "kiro"), ("kiro", "kiro-cli")]
+)
+def test_programa_no_path_conta_como_encontrado(
+    home, tmp_path, monkeypatch, cliente, programa, capsys
+):
     pasta = tmp_path / "bin"
     pasta.mkdir()
     exe = pasta / (f"{programa}.exe" if os.name == "nt" else programa)
@@ -301,14 +330,19 @@ def test_programa_no_path_conta_como_encontrado(home, tmp_path, monkeypatch, cli
     assert "não encontrado nesta máquina" not in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("plataforma,cliente,instalado", [
-    ("darwin", "claude-desktop", "Applications/Claude.app"),
-    ("darwin", "kiro", "Applications/Kiro.app"),
-    ("win32", "claude-desktop", "AppData/Local/AnthropicClaude"),
-    ("win32", "claude-desktop", "AppData/Local/Programs/Claude"),
-    ("win32", "kiro", "AppData/Local/Programs/Kiro")])
-def test_programa_instalado_conta_como_encontrado(home, tmp_path, monkeypatch, plataforma,
-                                                  cliente, instalado, capsys):
+@pytest.mark.parametrize(
+    "plataforma,cliente,instalado",
+    [
+        ("darwin", "claude-desktop", "Applications/Claude.app"),
+        ("darwin", "kiro", "Applications/Kiro.app"),
+        ("win32", "claude-desktop", "AppData/Local/AnthropicClaude"),
+        ("win32", "claude-desktop", "AppData/Local/Programs/Claude"),
+        ("win32", "kiro", "AppData/Local/Programs/Kiro"),
+    ],
+)
+def test_programa_instalado_conta_como_encontrado(
+    home, tmp_path, monkeypatch, plataforma, cliente, instalado, capsys
+):
     monkeypatch.setattr(C.sys, "platform", plataforma)
     monkeypatch.setattr(C.shutil, "which", lambda name: None)
     assert not C.client_found(cliente)
@@ -339,6 +373,7 @@ def _respostas(monkeypatch, *linhas):
         if not fila:
             raise EOFError
         return fila.pop(0)
+
     monkeypatch.setattr(C.sys, "stdin", _Terminal(True))
     monkeypatch.setattr("builtins.input", responder)
     return fila

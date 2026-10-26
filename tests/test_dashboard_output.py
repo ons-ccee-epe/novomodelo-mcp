@@ -1,4 +1,5 @@
 """`bridge_dashboard(output)`: o arquivo HTML vai em `--output` e volta em `artifacts.dashboard`."""
+
 import dataclasses
 from pathlib import Path
 
@@ -14,13 +15,19 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
 def _dashboard(monkeypatch, workspace=None):
     argvs = []
-    monkeypatch.setattr(post_run, "run_bridge", lambda argv, **kw: argvs.append(argv)
-                        or {"status": "ok", "exit_code": 0, "diagnostics": []})
+    monkeypatch.setattr(
+        post_run,
+        "run_bridge",
+        lambda argv, **kw: (
+            argvs.append(argv) or {"status": "ok", "exit_code": 0, "diagnostics": []}
+        ),
+    )
     mcp = _CaptureMCP()
     post_run.register_post_run(mcp, dataclasses.replace(load_settings(), workspace=workspace))
     return mcp.tools["bridge_dashboard"], argvs

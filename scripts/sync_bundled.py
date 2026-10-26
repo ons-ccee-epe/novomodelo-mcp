@@ -17,6 +17,7 @@ Uso (a partir do repositório):
 
 Nada é baixado da rede: a fonte é sempre um diretório local.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,7 +35,12 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT / "src"))
 
 from novomodelo_mcp.adapters.reference import (  # noqa: E402
-    INDEX_FILE, MANIFEST_FILE, build_docs_index, iter_doc_pages, resolve_mdx)
+    INDEX_FILE,
+    MANIFEST_FILE,
+    build_docs_index,
+    iter_doc_pages,
+    resolve_mdx,
+)
 
 _PKG_BUNDLED = _ROOT / "src" / "novomodelo_mcp" / "_bundled"
 _DOCS_SUBPATH = Path("src") / "content" / "docs"
@@ -68,8 +74,10 @@ def _secoes_de_versao(texto: str, desde: str) -> list[tuple[str, str | None, lis
 
 def changelog_page(produto: str, texto: str, desde: str = CHANGELOG_DESDE) -> str:
     """A página `changelog/<produto>`: uma seção `## <versão>` por versão >= `desde`."""
-    partes = [f"---\ntitle: {produto} changelog\ndescription: What changed in each {produto} "
-              f"release, from {desde} on.\n---\n"]
+    partes = [
+        f"---\ntitle: {produto} changelog\ndescription: What changed in each {produto} "
+        f"release, from {desde} on.\n---\n"
+    ]
     for versao, data, corpo in _secoes_de_versao(texto, desde):
         cabeca = f"## {versao}\n\nReleased {data}." if data else f"## {versao}"
         partes.append(f"{cabeca}\n\n" + "\n".join(corpo).strip() + "\n")
@@ -90,9 +98,13 @@ def _docs_version(source: Path) -> str | None:
 
 def _git_commit(source: Path) -> str | None:
     try:
-        proc = subprocess.run(["git", "-C", str(source), "rev-parse", "HEAD"],
-                              capture_output=True, encoding="utf-8", errors="replace",
-                              timeout=30)
+        proc = subprocess.run(
+            ["git", "-C", str(source), "rev-parse", "HEAD"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
     except (OSError, subprocess.SubprocessError):
         return None
     return proc.stdout.strip() or None if proc.returncode == 0 else None
@@ -124,26 +136,36 @@ def generate(source: Path, dest: Path, changelogs: dict[str, Path] | None = None
     index.unlink(missing_ok=True)
     con = build_docs_index(dest / "docs", index)
     sections = con.execute(
-        "SELECT (SELECT count(*) FROM secoes) + (SELECT count(*) FROM changelog)").fetchone()[0]
+        "SELECT (SELECT count(*) FROM secoes) + (SELECT count(*) FROM changelog)"
+    ).fetchone()[0]
     con.execute("INSERT INTO secoes(secoes) VALUES('optimize')")
     con.execute("INSERT INTO changelog(changelog) VALUES('optimize')")
     con.commit()
     con.execute("VACUUM")
     con.close()
-    manifest = {"docs_versao": _docs_version(source), "docs_commit": _git_commit(source),
-                "gerado_em": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "paginas": len(pages) + len(origens), "secoes": sections}
+    manifest = {
+        "docs_versao": _docs_version(source),
+        "docs_commit": _git_commit(source),
+        "gerado_em": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "paginas": len(pages) + len(origens),
+        "secoes": sections,
+    }
     if origens:
         manifest["changelogs"] = origens
-    (dest / MANIFEST_FILE).write_text(json.dumps(manifest, indent=1, ensure_ascii=False) + "\n",
-                                      encoding="utf-8")
+    (dest / MANIFEST_FILE).write_text(
+        json.dumps(manifest, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     return manifest
 
 
 def _files(root: Path) -> dict[str, bytes]:
-    return {p.relative_to(root).as_posix(): p.read_bytes()
-            for sub in ("docs", "schemas") if (root / sub).is_dir()
-            for p in sorted((root / sub).rglob("*")) if p.is_file()}
+    return {
+        p.relative_to(root).as_posix(): p.read_bytes()
+        for sub in ("docs", "schemas")
+        if (root / sub).is_dir()
+        for p in sorted((root / sub).rglob("*"))
+        if p.is_file()
+    }
 
 
 def _index_rows(path: Path) -> list:
@@ -151,10 +173,15 @@ def _index_rows(path: Path) -> list:
         return []
     con = sqlite3.connect(str(path))
     try:
-        return [con.execute(q).fetchall() for q in (
-            "SELECT pagina, titulo, ancora, texto FROM secoes ORDER BY pagina, rowid",
-            "SELECT pagina, titulo, ancora, texto FROM changelog ORDER BY pagina, rowid",
-            "SELECT * FROM paginas ORDER BY pagina", "SELECT * FROM glossario ORDER BY pt, en")]
+        return [
+            con.execute(q).fetchall()
+            for q in (
+                "SELECT pagina, titulo, ancora, texto FROM secoes ORDER BY pagina, rowid",
+                "SELECT pagina, titulo, ancora, texto FROM changelog ORDER BY pagina, rowid",
+                "SELECT * FROM paginas ORDER BY pagina",
+                "SELECT * FROM glossario ORDER BY pt, en",
+            )
+        ]
     finally:
         con.close()
 
@@ -175,6 +202,7 @@ def differences(expected: Path, current: Path) -> list[str]:
             return None
         data.pop("gerado_em", None)
         return data
+
     if _manifest(expected) != _manifest(current):
         diffs.append(f"diferente: {MANIFEST_FILE}")
     return diffs
@@ -182,22 +210,36 @@ def differences(expected: Path, current: Path) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--source", required=True, type=Path,
-                    help="Raiz do clone do novomodelo-docs.")
-    ap.add_argument("--dest", type=Path, default=_PKG_BUNDLED,
-                    help="Pasta de destino (padrão: src/novomodelo_mcp/_bundled).")
-    ap.add_argument("--changelog", action="append", default=[], metavar="PRODUTO=CLONE",
-                    help=f"Clone com o CHANGELOG.md de um produto ({', '.join(CHANGELOG_PRODUTOS)}).")
-    ap.add_argument("--check", action="store_true",
-                    help="Não grava: sai 1 se o destino divergir do que seria gerado.")
+    ap.add_argument("--source", required=True, type=Path, help="Raiz do clone do novomodelo-docs.")
+    ap.add_argument(
+        "--dest",
+        type=Path,
+        default=_PKG_BUNDLED,
+        help="Pasta de destino (padrão: src/novomodelo_mcp/_bundled).",
+    )
+    ap.add_argument(
+        "--changelog",
+        action="append",
+        default=[],
+        metavar="PRODUTO=CLONE",
+        help=f"Clone com o CHANGELOG.md de um produto ({', '.join(CHANGELOG_PRODUTOS)}).",
+    )
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="Não grava: sai 1 se o destino divergir do que seria gerado.",
+    )
     args = ap.parse_args(argv)
     changelogs: dict[str, Path] = {}
     for item in args.changelog:
         produto, _, clone = item.partition("=")
         path = Path(clone).expanduser().resolve()
         if produto not in CHANGELOG_PRODUTOS or not (path / "CHANGELOG.md").is_file():
-            print(f"erro: --changelog {item}: produto em {CHANGELOG_PRODUTOS} e clone com "
-                  "CHANGELOG.md", file=sys.stderr)
+            print(
+                f"erro: --changelog {item}: produto em {CHANGELOG_PRODUTOS} e clone com "
+                "CHANGELOG.md",
+                file=sys.stderr,
+            )
             return 2
         changelogs[produto] = path
 
@@ -215,8 +257,10 @@ def main(argv: list[str] | None = None) -> int:
         print("embutido igual à fonte" if not diffs else f"{len(diffs)} diferença(s)")
         return 1 if diffs else 0
     manifest = generate(source, args.dest.resolve(), changelogs)
-    print(f"snapshot atualizado: {manifest['paginas']} páginas, {manifest['secoes']} seções, "
-          f"docs {manifest['docs_versao']} @ {manifest['docs_commit']} -> {args.dest}")
+    print(
+        f"snapshot atualizado: {manifest['paginas']} páginas, {manifest['secoes']} seções, "
+        f"docs {manifest['docs_versao']} @ {manifest['docs_commit']} -> {args.dest}"
+    )
     return 0 if manifest["paginas"] else 1
 
 

@@ -4,6 +4,7 @@
 sem depender de rodar o smoke certo. Requer as deps instaladas (mcp etc.), o que
 o CI garante via `uv sync`.
 """
+
 import importlib
 import pkgutil
 
@@ -17,10 +18,17 @@ def test_all_submodules_import():
 
 def test_servidor_expoe_instructions_em_portugues():
     from novomodelo_mcp.server import build_server
+
     server = build_server()
     texto = server.instructions or ""
     enviado = server._mcp_server.create_initialization_options().instructions
     assert texto and enviado == texto
-    for trecho in ("server_info", "docs_search", "em inglês", "página e a seção",
-                   "não complete de memória", "aprovação"):
+    for trecho in (
+        "server_info",
+        "docs_search",
+        "em inglês",
+        "página e a seção",
+        "não complete de memória",
+        "aprovação",
+    ):
         assert trecho in texto, trecho

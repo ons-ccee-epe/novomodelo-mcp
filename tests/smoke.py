@@ -4,6 +4,7 @@
 Roda com: python3 tests/smoke.py   (a partir da raiz do projeto)
 Não importa `mcp`; valida a lógica compartilhada contra o novomodelo-bridge falso.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -12,10 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from novomodelo_mcp.adapters.bridge import run_bridge          # noqa: E402
-from novomodelo_mcp.config import load_settings                # noqa: E402
-from novomodelo_mcp.tools.shaping import cap_envelope          # noqa: E402
-from _fakes import fake_bin                                # noqa: E402
+from novomodelo_mcp.adapters.bridge import run_bridge  # noqa: E402
+from novomodelo_mcp.config import load_settings  # noqa: E402
+from novomodelo_mcp.tools.shaping import cap_envelope  # noqa: E402
+from _fakes import fake_bin  # noqa: E402
 
 FAKE = fake_bin("fake_novomodelo_bridge.py")
 
@@ -59,8 +60,7 @@ def test_cap_diagnostics():
 
 
 def main():
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
     for t in tests:
         try:

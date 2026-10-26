@@ -3,6 +3,7 @@
 Sob um cliente MCP gráfico o servidor não tem console; um CLI de console lançado sem
 `CREATE_NO_WINDOW` abre uma janela a cada chamada de tool.
 """
+
 import ast
 import subprocess
 import sys
@@ -17,8 +18,12 @@ _KWARGS_SEM_JANELA = {"NO_WINDOW", "_spawn_kwargs"}
 
 def _e_chamada_de_subprocesso(node: ast.Call) -> bool:
     f = node.func
-    return (isinstance(f, ast.Attribute) and f.attr in ("run", "Popen")
-            and isinstance(f.value, ast.Name) and f.value.id == "subprocess")
+    return (
+        isinstance(f, ast.Attribute)
+        and f.attr in ("run", "Popen")
+        and isinstance(f.value, ast.Name)
+        and f.value.id == "subprocess"
+    )
 
 
 def _passa_sem_janela(node: ast.Call) -> bool:
@@ -37,8 +42,11 @@ def test_toda_chamada_de_subprocesso_em_src_passa_a_flag_sem_janela():
     for path in SRC.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Call) and _e_chamada_de_subprocesso(node)
-                    and not _passa_sem_janela(node)):
+            if (
+                isinstance(node, ast.Call)
+                and _e_chamada_de_subprocesso(node)
+                and not _passa_sem_janela(node)
+            ):
                 faltando.append(f"{path.relative_to(SRC)}:{node.lineno}")
     assert not faltando, f"subprocesso sem CREATE_NO_WINDOW: {faltando}"
 

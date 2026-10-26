@@ -15,6 +15,7 @@ e fail-closed e roda ANTES de executar:
 Alem do guard textual, a conexao e :memory:, sem autoload de extensao e com
 filesystems remotos desabilitados — defesa em profundidade, nao a defesa unica.
 """
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -37,9 +38,24 @@ _ALLOWED_START = ("SELECT", "WITH", "DESCRIBE", "SUMMARIZE")
 #: REPLACE fica de fora de proposito: `SELECT * REPLACE (...)` e leitura valida
 #: no DuckDB, e a forma perigosa (CREATE/INSERT OR REPLACE) ja cai em CREATE/INSERT.
 _FORBIDDEN = {
-    "ATTACH", "DETACH", "COPY", "INSTALL", "LOAD", "PRAGMA", "SET", "CALL",
-    "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER",
-    "EXPORT", "IMPORT", "VACUUM", "CHECKPOINT",
+    "ATTACH",
+    "DETACH",
+    "COPY",
+    "INSTALL",
+    "LOAD",
+    "PRAGMA",
+    "SET",
+    "CALL",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "DROP",
+    "CREATE",
+    "ALTER",
+    "EXPORT",
+    "IMPORT",
+    "VACUUM",
+    "CHECKPOINT",
 }
 
 #: Extensoes que marcam um literal como caminho de arquivo.
@@ -160,8 +176,10 @@ def guard_sql(query: str, roots: list[Path]) -> dict | None:
     m = re.match(r"[A-Za-z_]+", scrubbed.lstrip())
     kw = m.group(0).upper() if m else ""
     if kw not in _ALLOWED_START:
-        return error(13, "apenas SELECT/WITH/DESCRIBE/SUMMARIZE (read-only) e permitido; "
-                         f"comando: {kw or '?'}")
+        return error(
+            13,
+            f"apenas SELECT/WITH/DESCRIBE/SUMMARIZE (read-only) e permitido; comando: {kw or '?'}",
+        )
 
     words = set(re.findall(r"[A-Za-z_]+", scrubbed.upper()))
     hit = sorted(words & _FORBIDDEN)
@@ -199,21 +217,25 @@ def _jsonable(v: Any) -> Any:
     return v
 
 
-def run_readonly_sql(query: str, *, settings: Settings,
-                     max_rows: int | None = None) -> dict[str, Any]:
+def run_readonly_sql(
+    query: str, *, settings: Settings, max_rows: int | None = None
+) -> dict[str, Any]:
     """Roda a query (apos o guard) numa conexao DuckDB :memory: endurecida.
 
     Devolve sempre com teto de linhas; `truncated: true` sinaliza que ha mais.
     """
     roots = allowed_roots(settings)
-    if (err := guard_sql(query, roots)):
+    if err := guard_sql(query, roots):
         return err
 
     try:
         import duckdb
     except ModuleNotFoundError:
-        return error(127, "duckdb nao instalado no ambiente do servidor",
-                     "adicione 'duckdb' as dependencias e rode `uv sync`")
+        return error(
+            127,
+            "duckdb nao instalado no ambiente do servidor",
+            "adicione 'duckdb' as dependencias e rode `uv sync`",
+        )
 
     limite = budget.row_limit(settings)
     cap = max(1, min(max_rows or limite, limite))
@@ -222,7 +244,9 @@ def run_readonly_sql(query: str, *, settings: Settings,
         # Confinamento no motor: o guard textual nao enxerga caminho montado por
         # expressao (chr(47) || ...). Fail-closed: sem ele, a query nao roda.
         try:
-            con.execute("SET allowed_directories=?", [[r.as_posix().rstrip("/") + "/" for r in roots]])
+            con.execute(
+                "SET allowed_directories=?", [[r.as_posix().rstrip("/") + "/" for r in roots]]
+            )
             con.execute("SET enable_external_access=false")
         except Exception as exc:  # noqa: BLE001 - qualquer falha aqui recusa a query
             con.close()
@@ -233,7 +257,7 @@ def run_readonly_sql(query: str, *, settings: Settings,
         "SET allow_community_extensions=false",
         "SET disabled_filesystems="
         "'HTTPFileSystem,S3FileSystem,GCSFileSystem,AzureBlobStorageFileSystem'",
-        "SET enable_progress_bar=false",   # a barra sai no stdout, que é o canal do protocolo MCP
+        "SET enable_progress_bar=false",  # a barra sai no stdout, que é o canal do protocolo MCP
         "SET lock_configuration=true",
     ):
         try:
@@ -255,10 +279,14 @@ def run_readonly_sql(query: str, *, settings: Settings,
 
     truncated = len(rows) > cap
     rows = rows[:cap]
-    return fit_to_budget({
-        "status": "ok",
-        "columns": columns,
-        "row_count": len(rows),
-        "truncated": truncated,
-        "rows": [dict(zip(columns, (_jsonable(v) for v in r), strict=True)) for r in rows],
-    }, settings, "rows")
+    return fit_to_budget(
+        {
+            "status": "ok",
+            "columns": columns,
+            "row_count": len(rows),
+            "truncated": truncated,
+            "rows": [dict(zip(columns, (_jsonable(v) for v in r), strict=True)) for r in rows],
+        },
+        settings,
+        "rows",
+    )

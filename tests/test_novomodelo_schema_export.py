@@ -104,7 +104,9 @@ def test_missing_binary_returns_127(monkeypatch):
 
 def test_timeout_returns_minus_one(monkeypatch, fake_novomodelo_bin):
     monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_novomodelo_bin)
-    monkeypatch.setattr(novomodelo_meta, "run_novomodelo", _run_novomodelo_with_mode("timeout", timeout=2.0))
+    monkeypatch.setattr(
+        novomodelo_meta, "run_novomodelo", _run_novomodelo_with_mode("timeout", timeout=2.0)
+    )
     env = _schema_export_tool(load_settings())()
     assert env["status"] == "error"
     assert env["exit_code"] == -1

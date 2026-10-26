@@ -1,4 +1,5 @@
 """`case_validate(output_dir)` chega à biblioteca (`output_dir=`) e ao CLI de reserva (`--output`)."""
+
 import dataclasses
 import sys
 import types
@@ -16,6 +17,7 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -50,8 +52,7 @@ def test_cli_de_reserva_recebe_output_so_quando_informado(tmp_path, monkeypatch)
     class _Proc:
         returncode, stdout, stderr = 0, "0 errors, 0 warnings", ""
 
-    monkeypatch.setattr(adapter.subprocess, "run",
-                        lambda cmd, **kw: argvs.append(cmd) or _Proc())
+    monkeypatch.setattr(adapter.subprocess, "run", lambda cmd, **kw: argvs.append(cmd) or _Proc())
     settings = dataclasses.replace(load_settings(), solver_bin="/bin/novomodelo-falso")
     adapter.validate_deck_cli(str(tmp_path), output_dir="/saida", settings=settings)
     adapter.validate_deck_cli(str(tmp_path), settings=settings)
@@ -61,9 +62,13 @@ def test_cli_de_reserva_recebe_output_so_quando_informado(tmp_path, monkeypatch)
 
 def _case_validate(tmp_path, monkeypatch, workspace=None):
     calls = []
-    monkeypatch.setattr(pre_run, "validate_deck_binding",
-                        lambda case, *, output_dir=None, settings=None:
-                        calls.append(output_dir) or {"status": "ok", "valid": True})
+    monkeypatch.setattr(
+        pre_run,
+        "validate_deck_binding",
+        lambda case, *, output_dir=None, settings=None: (
+            calls.append(output_dir) or {"status": "ok", "valid": True}
+        ),
+    )
     settings = dataclasses.replace(load_settings(), workspace=workspace)
     mcp = _CaptureMCP()
     pre_run.register_pre_run(mcp, settings)

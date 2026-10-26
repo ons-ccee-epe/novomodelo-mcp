@@ -5,6 +5,7 @@ Novomodelo: caminhos de campo (get/set), edição de JSON com backup + escrita a
 dry_run, resolução de schema e localização da raiz do caso.
 Roda com: python3 tests/smoke_deck.py
 """
+
 import json
 import sys
 import tempfile
@@ -28,19 +29,24 @@ def test_edit_json_dry_run_and_write():
         f = Path(d) / "config.json"
         f.write_text(json.dumps({"training": {"limit": 50}}), encoding="utf-8")
         # dry_run: nada gravado
-        r = deck_io.edit_json(str(f), [{"path": "training.limit", "value": 99}],
-                              dry_run=True)
+        r = deck_io.edit_json(str(f), [{"path": "training.limit", "value": 99}], dry_run=True)
         assert r["status"] == "ok" and r["written"] is False, r
-        assert json.loads(f.read_text(encoding="utf-8"))["training"]["limit"] == 50, "dry_run gravou!"
+        assert json.loads(f.read_text(encoding="utf-8"))["training"]["limit"] == 50, (
+            "dry_run gravou!"
+        )
         # write real: grava + backup
         r = deck_io.edit_json(str(f), [{"path": "training.limit", "value": 99}])
         assert r["status"] == "ok" and r["written"] is True, r
         assert json.loads(f.read_text(encoding="utf-8"))["training"]["limit"] == 99, r
         assert Path(str(f) + ".bak").exists(), "backup não criado"
-        assert json.loads(Path(str(f) + ".bak").read_text(encoding="utf-8"))["training"]["limit"] == 50
+        assert (
+            json.loads(Path(str(f) + ".bak").read_text(encoding="utf-8"))["training"]["limit"] == 50
+        )
         # restaura do backup
         assert deck_io.restore_backup(str(f)) is True
-        assert json.loads(f.read_text(encoding="utf-8"))["training"]["limit"] == 50, "restore falhou"
+        assert json.loads(f.read_text(encoding="utf-8"))["training"]["limit"] == 50, (
+            "restore falhou"
+        )
 
 
 def test_edit_json_bad_path():
@@ -68,8 +74,7 @@ def test_resolve_schema_and_case_dir():
 
 
 def main():
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
     for t in tests:
         try:

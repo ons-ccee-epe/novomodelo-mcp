@@ -3,6 +3,7 @@
 Ligado por NOVOMODELO_MCP_LOG=1. Serve para ver, na fase de teste, o que o servidor
 de fato executou e o que voltou (visível via `--debug` ou nos logs do app).
 """
+
 from __future__ import annotations
 
 import sys

@@ -5,6 +5,7 @@ Prova os contratos de transporte e de guarda sem binário `novomodelo` real e se
 rede: binário ausente -> 127; saída não-JSON -> envelope com texto bruto;
 output_dir fora do workspace -> recusa 13 pelo guard. Roda:
 python3 tests/smoke_novomodelo_meta.py"""
+
 import os
 import sys
 import tempfile
@@ -13,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from novomodelo_mcp.config import load_settings            # noqa: E402
+from novomodelo_mcp.config import load_settings  # noqa: E402
 from novomodelo_mcp.tools.novomodelo_meta import register_novomodelo_meta  # noqa: E402
 
 
@@ -27,6 +28,7 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -43,8 +45,7 @@ def _write_fake_novomodelo(dir_path: Path, body: str) -> str:
         "import sys\n"
         "argv = sys.argv[1:]\n"
         "if argv[:2] == ['--color', 'never']:\n"
-        "    argv = argv[2:]\n"
-        + body,
+        "    argv = argv[2:]\n" + body,
         encoding="utf-8",
     )
     launcher = dir_path / ("novomodelo.cmd" if os.name == "nt" else "novomodelo")
@@ -87,8 +88,7 @@ def test_nonjson_output_lands_in_diagnostics():
     with tempfile.TemporaryDirectory() as d:
         binpath = _write_fake_novomodelo(
             Path(d),
-            "print('isto nao e json: falha simulada da CLI')\n"
-            "sys.exit(1)\n",
+            "print('isto nao e json: falha simulada da CLI')\nsys.exit(1)\n",
         )
         old_bin = os.environ.get("NOVOMODELO_MCP_SOLVER_BIN")
         os.environ["NOVOMODELO_MCP_SOLVER_BIN"] = binpath
@@ -122,14 +122,15 @@ def test_output_dir_outside_workspace_refused_13():
 
 
 def main():
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
     for t in tests:
         try:
-            t(); print(f"  PASS {t.__name__}")
+            t()
+            print(f"  PASS {t.__name__}")
         except AssertionError as e:
-            failed += 1; print(f"  FAIL {t.__name__}: {e}")
+            failed += 1
+            print(f"  FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passaram")
     sys.exit(1 if failed else 0)
 

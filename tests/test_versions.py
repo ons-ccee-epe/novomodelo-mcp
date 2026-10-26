@@ -1,4 +1,5 @@
 """Versões das peças, aviso em toda resposta e verificação de versão nova (sem rede real)."""
+
 import json
 import re
 import ssl
@@ -30,8 +31,10 @@ def pecas(monkeypatch):
 
     def _ler(settings):
         chamadas["n"] += 1
-        return {k: ({"versao": v} if v else {"versao": None, "motivo": "não encontrado"})
-                for k, v in estado.items()} | {"docs": {"versao": None, "motivo": "sem manifesto"}}
+        return {
+            k: ({"versao": v} if v else {"versao": None, "motivo": "não encontrado"})
+            for k, v in estado.items()
+        } | {"docs": {"versao": None, "motivo": "sem manifesto"}}
 
     monkeypatch.setattr(V, "_read_local", _ler)
     monkeypatch.setattr(V, "expected_version", lambda: "0.18.0")
@@ -53,8 +56,17 @@ def sem_rede(monkeypatch):
 
 # ── normalização e versão esperada ────────────────────────────────────────────
 
-@pytest.mark.parametrize("texto,esperado", [("v0.18.0", "0.18.0"), ("0.18.0.post2", "0.18.0"),
-                                            (" 0.18.0 ", "0.18.0"), ("", None), (None, None)])
+
+@pytest.mark.parametrize(
+    "texto,esperado",
+    [
+        ("v0.18.0", "0.18.0"),
+        ("0.18.0.post2", "0.18.0"),
+        (" 0.18.0 ", "0.18.0"),
+        ("", None),
+        (None, None),
+    ],
+)
 def test_normalize_version(texto, esperado):
     assert V.normalize_version(texto) == esperado
 
@@ -66,6 +78,7 @@ def test_mcp_em_post_casa_com_as_pecas(pecas):
 
 
 # ── avisos locais ─────────────────────────────────────────────────────────────
+
 
 def test_tudo_na_mesma_versao_sem_aviso(pecas):
     assert V.version_warnings(object()) == []
@@ -114,14 +127,18 @@ def test_executavel_em_outra_versao_sugere_primeiro_pedir_ao_agente(pecas):
 
 def test_instrucoes_do_servidor_usam_a_mesma_frase():
     from novomodelo_mcp.server import SERVER_INSTRUCTIONS
+
     assert "“instale o executável do novomodelo”" in SERVER_INSTRUCTIONS
     assert "`instalar_novomodelo`" in SERVER_INSTRUCTIONS
 
 
 def _bridge_do_pacote(monkeypatch):
     ler = V._read_local
-    monkeypatch.setattr(V, "_read_local", lambda s: ler(s) | {
-        "bridge": {"versao": ler(s)["bridge"]["versao"], "origem": "pacote"}})
+    monkeypatch.setattr(
+        V,
+        "_read_local",
+        lambda s: ler(s) | {"bridge": {"versao": ler(s)["bridge"]["versao"], "origem": "pacote"}},
+    )
 
 
 def test_caso_da_decisora_executavel_0_19_com_mcp_0_18(pecas, monkeypatch):
@@ -172,6 +189,7 @@ def test_versao_ilegivel_sem_aviso_e_sem_excecao(pecas):
 
 def test_instrucoes_mandam_oferecer_os_comandos():
     from novomodelo_mcp.server import SERVER_INSTRUCTIONS
+
     assert "`avisos_de_versao`" in SERVER_INSTRUCTIONS
     assert "ofereça rodar os comandos" in SERVER_INSTRUCTIONS
     assert "o MCP continua funcionando" in SERVER_INSTRUCTIONS
@@ -195,7 +213,9 @@ def test_produto_sem_referencia_interna(pecas, monkeypatch, executavel):
     estado.update(executavel=executavel, bridge="0.18.1")
     _respostas(monkeypatch)
     nova = V.update_check(object())
-    texto = " ".join(V.version_warnings(object())) + " ".join(p.get("nota", "") for p in nova.values())
+    texto = " ".join(V.version_warnings(object())) + " ".join(
+        p.get("nota", "") for p in nova.values()
+    )
     assert not _INTERNO.search(texto.replace(V.MCP_RELEASE_TAG_URL, "")), texto
 
 
@@ -252,15 +272,21 @@ def test_sem_versao_esperada_nao_avisa(pecas, monkeypatch):
 
 # ── aviso em toda tool ────────────────────────────────────────────────────────
 
+
 def test_toda_tool_registrada_passa_pelo_aviso():
     tools = build_server()._tool_manager.list_tools()
     sem = sorted(t.name for t in tools if not getattr(t.fn, "_avisos_de_versao", False))
     assert sem == []
 
 
-@pytest.mark.parametrize("tool,args", [("run_status", {"job_id": "nao-existe"}),
-                                       ("schema_list", {}),
-                                       ("results_list_entities", {"output_dir": "/nao/existe"})])
+@pytest.mark.parametrize(
+    "tool,args",
+    [
+        ("run_status", {"job_id": "nao-existe"}),
+        ("schema_list", {}),
+        ("results_list_entities", {"output_dir": "/nao/existe"}),
+    ],
+)
 def test_bridge_017_aparece_em_tools_sem_cap_envelope(pecas, sem_rede, monkeypatch, tool, args):
     estado, _ = pecas
     estado["bridge"] = "0.17.0"
@@ -290,23 +316,30 @@ def test_aviso_que_quebra_nao_derruba_a_tool(monkeypatch):
 
 # ── rede: domínios, contexto TLS, falhas ──────────────────────────────────────
 
-@pytest.mark.parametrize("url", [
-    "https://github.com/ons-ccee-epe/novomodelo/releases/download/v0.18.0/x",
-    "https://api.github.com/repos/ons-ccee-epe/novomodelo/releases/latest",
-    "https://pypi.org/pypi/novomodelo-bridge/json",
-])
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/ons-ccee-epe/novomodelo/releases/download/v0.18.0/x",
+        "https://api.github.com/repos/ons-ccee-epe/novomodelo/releases/latest",
+        "https://pypi.org/pypi/novomodelo-bridge/json",
+    ],
+)
 def test_dominios_permitidos(url):
     assert V.allowed_url(url)
 
 
-@pytest.mark.parametrize("url", [
-    "http://github.com/ons-ccee-epe/novomodelo",
-    "https://github.com/outra-org/novomodelo",
-    "https://api.github.com/repos/<organização interna>/novomodelo-mcp/releases/latest",
-    "https://pypi.org/pypi/outro-pacote/json",
-    "https://release-assets.githubusercontent.com/x",
-    "https://evil.example/ons-ccee-epe/",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://github.com/ons-ccee-epe/novomodelo",
+        "https://github.com/outra-org/novomodelo",
+        "https://api.github.com/repos/<organização interna>/novomodelo-mcp/releases/latest",
+        "https://pypi.org/pypi/outro-pacote/json",
+        "https://release-assets.githubusercontent.com/x",
+        "https://evil.example/ons-ccee-epe/",
+    ],
+)
 def test_dominios_recusados(url):
     assert not V.allowed_url(url)
 
@@ -341,6 +374,7 @@ def test_sem_truststore_cai_no_contexto_padrao(monkeypatch):
 def test_truststore_nao_e_injetado_no_processo():
     import ast
     import inspect
+
     tree = ast.parse(inspect.getsource(V))
     nomes = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
     assert "inject_into_ssl" not in nomes
@@ -349,6 +383,7 @@ def test_truststore_nao_e_injetado_no_processo():
 def test_falha_de_certificado_vira_aviso_rede(monkeypatch):
     def _cert(req, *, timeout, context):
         raise urllib.error.URLError(ssl.SSLCertVerificationError("self-signed certificate"))
+
     monkeypatch.setattr(V, "_open", _cert)
     r = V.fetch_json("https://pypi.org/pypi/novomodelo-bridge/json", timeout=1)
     assert "certificado" in r["aviso_rede"]
@@ -381,32 +416,49 @@ NOTAS = """## Release Notes
 """
 
 
-def _respostas(monkeypatch, tag="v0.19.0", bridge="0.19.0", atraso=0.0, notas=NOTAS,
-               notas_bridge=NOTAS, tag_bridge=None):
+def _respostas(
+    monkeypatch,
+    tag="v0.19.0",
+    bridge="0.19.0",
+    atraso=0.0,
+    notas=NOTAS,
+    notas_bridge=NOTAS,
+    tag_bridge=None,
+):
     def _abrir(req, *, timeout, context):
         time.sleep(atraso)
         url = req.full_url
         if "novomodelo-bridge/releases" in url:
             t = tag_bridge or f"v{bridge}"
-            corpo = {"tag_name": t, "body": notas_bridge,
-                     "html_url": f"https://github.com/ons-ccee-epe/novomodelo-bridge/releases/tag/{t}"}
+            corpo = {
+                "tag_name": t,
+                "body": notas_bridge,
+                "html_url": f"https://github.com/ons-ccee-epe/novomodelo-bridge/releases/tag/{t}",
+            }
         elif "api.github.com" in url:
-            corpo = {"tag_name": tag, "body": notas,
-                     "html_url": f"https://github.com/ons-ccee-epe/novomodelo/releases/tag/{tag}"}
+            corpo = {
+                "tag_name": tag,
+                "body": notas,
+                "html_url": f"https://github.com/ons-ccee-epe/novomodelo/releases/tag/{tag}",
+            }
         else:
             corpo = {"info": {"version": bridge}}
         return json.dumps(corpo).encode()
+
     monkeypatch.setattr(V, "_open", _abrir)
 
 
 def test_mudancas_sao_changed_e_fixed_com_breaking_primeiro():
     linhas = V.release_changes(NOTAS)
-    assert linhas[0] == ("BREAKING: the default of `modeling.inflow_non_negativity.method` is "
-                         "now `truncation_with_penalty` (was `penalty`).")
+    assert linhas[0] == (
+        "BREAKING: the default of `modeling.inflow_non_negativity.method` is "
+        "now `truncation_with_penalty` (was `penalty`)."
+    )
     assert linhas[1:] == [
         "The training gap is printed with 5 decimals instead of 1.",
         "`novomodelo run` writes its report to stdout; warnings and errors stay on stderr.",
-        "`truncation` no longer produces an infeasible LP."]
+        "`truncation` no longer produces an infeasible LP.",
+    ]
 
 
 def test_mudancas_tem_teto_de_linhas_e_de_caracteres():
@@ -476,6 +528,7 @@ def test_versao_atual_nao_sugere_atualizar(pecas, monkeypatch):
 def test_sem_rede_nao_foi_possivel_verificar_em_menos_de_3s(pecas, monkeypatch):
     def _cai(req, *, timeout, context):
         raise urllib.error.URLError("sem rede")
+
     monkeypatch.setattr(V, "_open", _cai)
     t0 = time.perf_counter()
     nova = V.update_check(object())
@@ -501,10 +554,10 @@ def test_verificacao_de_versao_nova_vale_por_6_horas(pecas, monkeypatch):
     V.update_check(object())
     agora[0] += 6 * 3600 - 1
     V.update_check(object())
-    assert len(chamadas) == 3   # novomodelo, bridge no PyPI e notas do bridge, uma vez nas 6 h
+    assert len(chamadas) == 3  # novomodelo, bridge no PyPI e notas do bridge, uma vez nas 6 h
     agora[0] += 2
     V.update_check(object())
-    assert len(chamadas) == 6   # passadas as 6 h, consulta de novo (e as notas junto)
+    assert len(chamadas) == 6  # passadas as 6 h, consulta de novo (e as notas junto)
 
 
 def test_docs_de_outra_versao_avisam_e_sem_manifesto_nao(pecas, monkeypatch):
@@ -527,4 +580,5 @@ def test_comando_de_instalar_o_mcp_compila_o_bytecode():
         "baixe o novomodelo_mcp-0.19.0-py3-none-any.whl de "
         "https://github.com/<organização interna>/novomodelo-mcp/releases/tag/v0.19.0 e rode "
         "`uv tool install --force --compile-bytecode ./novomodelo_mcp-0.19.0-py3-none-any.whl` "
-        "(o bridge, a biblioteca e as docs vêm junto)")
+        "(o bridge, a biblioteca e as docs vêm junto)"
+    )

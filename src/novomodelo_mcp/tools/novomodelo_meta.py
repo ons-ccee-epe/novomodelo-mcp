@@ -2,6 +2,7 @@
 
 Cada função envelopa exatamente um subcomando `novomodelo`. Zero regra de negócio.
 """
+
 from __future__ import annotations
 
 from ..adapters import installer
@@ -57,7 +58,7 @@ def register_novomodelo_meta(mcp, settings: Settings) -> None:
         conteúdo dos arquivos.
         """
         # Fail-closed antes de qualquer FS: caminho fora das raízes vira envelope 13.
-        if (err := ensure_in_workspace(output_dir, settings=settings)):
+        if err := ensure_in_workspace(output_dir, settings=settings):
             return err
         try:
             argv = ["schema", "export"]

@@ -1,5 +1,6 @@
 """O primeiro uso não paga trabalho evitável: boot sem processo nem rede, e o
 `server_info` sem lançar o bridge só para saber a versão."""
+
 import subprocess
 import urllib.error
 from importlib import metadata
@@ -15,6 +16,7 @@ from novomodelo_mcp.names import BRIDGE_CLI
 def sem_processo_nem_rede(monkeypatch):
     def proibido(*a, **k):
         raise AssertionError(f"trabalho no boot: {a[:1]}")
+
     monkeypatch.setattr(subprocess, "Popen", proibido)
     monkeypatch.setattr(versions, "fetch_bytes", proibido)
 
@@ -30,8 +32,11 @@ def test_server_info_nao_lanca_o_bridge_do_pacote(monkeypatch, tmp_path):
     monkeypatch.setattr(versions, "update_check", lambda settings: {})
     lancados = []
     real = discovery.subprocess.run
-    monkeypatch.setattr(discovery.subprocess, "run",
-                        lambda cmd, *a, **k: (lancados.append(cmd[0]), real(cmd, *a, **k))[1])
+    monkeypatch.setattr(
+        discovery.subprocess,
+        "run",
+        lambda cmd, *a, **k: (lancados.append(cmd[0]), real(cmd, *a, **k))[1],
+    )
     tools = {t.name: t.fn for t in S.build_server()._tool_manager.list_tools()}
     info = tools["server_info"]()
     assert bridge not in lancados
@@ -41,6 +46,7 @@ def test_server_info_nao_lanca_o_bridge_do_pacote(monkeypatch, tmp_path):
 def test_primeira_tool_sem_rede_responde(monkeypatch):
     def sem_dns(*a, **k):
         raise urllib.error.URLError("sem DNS")
+
     monkeypatch.setattr(versions, "_open", sem_dns)
     versions._UPDATE.clear()
     tools = {t.name: t.fn for t in S.build_server()._tool_manager.list_tools()}

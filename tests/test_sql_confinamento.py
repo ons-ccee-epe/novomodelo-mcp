@@ -1,5 +1,6 @@
 """`deck_sql` confinado ao workspace também no motor (DuckDB), e não só no texto:
 identificador entre aspas e caminho montado por expressão não saem da pasta."""
+
 import dataclasses
 
 import pytest
@@ -40,7 +41,9 @@ def test_caminho_montado_por_expressao_e_recusado(ws):
 def test_link_simbolico_dentro_do_workspace_para_fora_e_recusado(ws):
     settings, dentro, fora = ws
     (dentro / "atalho").symlink_to(fora, target_is_directory=True)
-    assert _recusado(run_readonly_sql(f'SELECT * FROM "{dentro}/atalho/segredo.csv"', settings=settings))
+    assert _recusado(
+        run_readonly_sql(f'SELECT * FROM "{dentro}/atalho/segredo.csv"', settings=settings)
+    )
 
 
 def test_glob_dentro_do_workspace_continua_funcionando(ws):
@@ -51,8 +54,10 @@ def test_glob_dentro_do_workspace_continua_funcionando(ws):
 
 def test_alias_ou_coluna_entre_aspas_com_barra_nao_e_caminho(ws):
     settings, dentro, _ = ws
-    r = run_readonly_sql(f'SELECT x AS "custo R$/MWh", x AS "total.csv" '
-                         f"FROM read_csv('{dentro}/**/*.csv')", settings=settings)
+    r = run_readonly_sql(
+        f'SELECT x AS "custo R$/MWh", x AS "total.csv" FROM read_csv(\'{dentro}/**/*.csv\')',
+        settings=settings,
+    )
     assert r["status"] == "ok" and r["rows"] == [{"custo R$/MWh": 1, "total.csv": 1}]
 
 
@@ -67,8 +72,9 @@ def test_describe_e_summarize_sao_leitura_e_rodam(ws):
 
 def test_describe_fora_do_workspace_continua_recusado(ws):
     settings, _, fora = ws
-    r = run_readonly_sql(f"DESCRIBE SELECT * FROM read_csv('{fora.as_posix()}/segredo.csv')",
-                         settings=settings)
+    r = run_readonly_sql(
+        f"DESCRIBE SELECT * FROM read_csv('{fora.as_posix()}/segredo.csv')", settings=settings
+    )
     assert _recusado(r)
 
 
@@ -78,6 +84,7 @@ def test_barra_de_progresso_desligada_porque_ela_sai_no_stdout_do_protocolo(ws):
     import json
     import subprocess
     import sys
+
     settings, dentro, _ = ws
     codigo = (
         "import dataclasses, json\n"
@@ -85,6 +92,7 @@ def test_barra_de_progresso_desligada_porque_ela_sai_no_stdout_do_protocolo(ws):
         "from novomodelo_mcp.adapters.sql import run_readonly_sql\n"
         f"s = dataclasses.replace(load_settings(), workspace={str(dentro)!r})\n"
         "r = run_readonly_sql(\"SELECT current_setting('enable_progress_bar') AS barra\", settings=s)\n"
-        "print(json.dumps(r['rows']))\n")
+        "print(json.dumps(r['rows']))\n"
+    )
     out = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout.strip().splitlines()[-1]) == [{"barra": False}], out.stdout

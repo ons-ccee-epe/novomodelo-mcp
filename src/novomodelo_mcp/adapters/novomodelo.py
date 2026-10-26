@@ -3,6 +3,7 @@
 Mesma filosofia do adaptador do bridge: transporte puro, sem regra de domínio.
 O flag global `--color never` vem ANTES do subcomando (contrato da CLI do novomodelo).
 """
+
 from __future__ import annotations
 
 import json
@@ -20,8 +21,13 @@ from .subproc import NO_WINDOW
 _NOT_FOUND = f"{SOLVER_CLI} não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN)."
 
 
-def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
-              settings: Settings | None = None, parse_json: bool = True) -> dict[str, Any]:
+def run_novomodelo(
+    subargv: list[str],
+    *,
+    timeout: float | None = None,
+    settings: Settings | None = None,
+    parse_json: bool = True,
+) -> dict[str, Any]:
     """Executa `novomodelo --color never <subargv>` esperando saída JSON (use --json).
 
     `parse_json=False` para subcomandos sem `--json` (ex.: `init`): devolve o
@@ -36,9 +42,16 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
     try:
         # argv em lista e sem shell: os caminhos do agente, já validados pelo guard, chegam
         # como argumentos literais, nunca interpretados.
-        proc = subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-            cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
-            timeout=timeout if timeout is not None else settings.default_timeout, **NO_WINDOW,
+        proc = (
+            subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout if timeout is not None else settings.default_timeout,
+                **NO_WINDOW,
+            )
         )
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
@@ -48,10 +61,12 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
     text = (proc.stdout or "").strip()
     env: dict[str, Any]
     if not parse_json:
-        env = {"status": "ok" if proc.returncode == 0 else "error",
-               "stdout": text[:MAX_DETAIL_CHARS],
-               "stderr": (proc.stderr or "").strip()[:MAX_DETAIL_CHARS],
-               "diagnostics": []}
+        env = {
+            "status": "ok" if proc.returncode == 0 else "error",
+            "stdout": text[:MAX_DETAIL_CHARS],
+            "stderr": (proc.stderr or "").strip()[:MAX_DETAIL_CHARS],
+            "diagnostics": [],
+        }
     elif not text:
         env = {
             "status": "ok" if proc.returncode == 0 else "error",
@@ -61,15 +76,18 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
         try:
             env = json.loads(text)
         except json.JSONDecodeError:
-            env = {"status": "error",
-                   "diagnostics": ["saída não-JSON da CLI", text[:MAX_DETAIL_CHARS]]}
+            env = {
+                "status": "error",
+                "diagnostics": ["saída não-JSON da CLI", text[:MAX_DETAIL_CHARS]],
+            }
     env["exit_code"] = proc.returncode
     log(settings, "novomodelo.done", exit_code=env.get("exit_code"), status=env.get("status"))
     return env
 
 
-def validate_deck_binding(case_dir: str, *, output_dir: str | None = None,
-                          settings: Settings | None = None) -> dict[str, Any]:
+def validate_deck_binding(
+    case_dir: str, *, output_dir: str | None = None, settings: Settings | None = None
+) -> dict[str, Any]:
     """Valida um deck pelo binding `novomodelo.io.validate` — saida ESTRUTURADA.
 
     Retorna {"valid": bool, "errors": [{kind,message,file,entity}], "warnings": [...]}.
@@ -87,28 +105,38 @@ def validate_deck_binding(case_dir: str, *, output_dir: str | None = None,
     except FileNotFoundError as exc:
         return _error(2, f"caso nao encontrado: {exc}")
     except Exception as exc:  # noqa: BLE001 - repassa como erro, nao derruba o servidor
-        return {"status": "error", "exit_code": 1,
-                "diagnostics": [f"{type(exc).__name__}: {exc}"]}
+        return {"status": "error", "exit_code": 1, "diagnostics": [f"{type(exc).__name__}: {exc}"]}
     if not isinstance(report, dict):
         return {"status": "ok", "exit_code": 0, "report": report}
     valid = bool(report.get("valid", True))
     errors = report.get("errors", []) or []
     warnings = report.get("warnings", []) or []
-    return {"status": "ok" if valid else "error", "exit_code": 0 if valid else 1,
-            "valid": valid, "n_errors": len(errors), "n_warnings": len(warnings),
-            "errors": errors, "warnings": warnings}
+    return {
+        "status": "ok" if valid else "error",
+        "exit_code": 0 if valid else 1,
+        "valid": valid,
+        "n_errors": len(errors),
+        "n_warnings": len(warnings),
+        "errors": errors,
+        "warnings": warnings,
+    }
+
 
 #: Nome na resposta → (atributo de contagem do `model.System`, lista de itens).
 _SYSTEM_KINDS = {
-    "barras": ("n_buses", "buses"), "linhas": ("n_lines", "lines"),
-    "hidros": ("n_hydros", "hydros"), "termicas": ("n_thermals", "thermals"),
-    "contratos": (None, "contracts"), "bombeamento": (None, "pumping_stations"),
+    "barras": ("n_buses", "buses"),
+    "linhas": ("n_lines", "lines"),
+    "hidros": ("n_hydros", "hydros"),
+    "termicas": ("n_thermals", "thermals"),
+    "contratos": (None, "contracts"),
+    "bombeamento": (None, "pumping_stations"),
     "fontes_nao_controlaveis": (None, "non_controllable_sources"),
 }
 
 
-def case_summary_binding(case_dir: str, *, max_items: int,
-                         settings: Settings | None = None) -> dict[str, Any]:
+def case_summary_binding(
+    case_dir: str, *, max_items: int, settings: Settings | None = None
+) -> dict[str, Any]:
     """O caso lido por `novomodelo.io.load_case`: contagens e `{id, name}` por tipo.
 
     Só `load_case`, nunca `Study`: o `Study` grava arquivos na pasta de saída do caso.
@@ -128,14 +156,17 @@ def case_summary_binding(case_dir: str, *, max_items: int,
     for kind, (count_attr, list_attr) in _SYSTEM_KINDS.items():
         entries = list(getattr(system, list_attr, None) or [])
         counts[kind] = getattr(system, count_attr) if count_attr else len(entries)
-        items[kind] = {"lista": [{"id": e.id, "name": e.name} for e in entries[:max_items]],
-                       "truncado": len(entries) > max_items}
+        items[kind] = {
+            "lista": [{"id": e.id, "name": e.name} for e in entries[:max_items]],
+            "truncado": len(entries) > max_items,
+        }
     counts["estagios"] = getattr(system, "n_stages", None)
     return {"status": "ok", "exit_code": 0, "contagens": counts, "itens": items}
 
 
-def validate_deck_cli(case_dir: str, *, output_dir: str | None = None,
-                      settings: Settings | None = None) -> dict[str, Any]:
+def validate_deck_cli(
+    case_dir: str, *, output_dir: str | None = None, settings: Settings | None = None
+) -> dict[str, Any]:
     """Valida um deck rodando `novomodelo validate` em modo TEXTO (relatorio completo).
 
     O `--json` do novomodelo devolve apenas a reconciliacao de boundary; o relatorio
@@ -151,16 +182,23 @@ def validate_deck_cli(case_dir: str, *, output_dir: str | None = None,
         cmd += ["--output", output_dir]
     try:
         # argv em lista e sem shell; case_dir e output_dir já passaram pelo guard.
-        proc = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                              timeout=settings.default_timeout, **NO_WINDOW)
+        proc = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+            timeout=settings.default_timeout,
+            **NO_WINDOW,
+        )
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
     except OSError as exc:
         return _error(-1, f"erro ao executar novomodelo: {exc}")
 
-    text = (proc.stdout or "")
+    text = proc.stdout or ""
     if proc.stderr:
-        text += ("\n" + proc.stderr)
+        text += "\n" + proc.stderr
     text = text.strip()
 
     def _count(pattern: str) -> int | None:
@@ -196,8 +234,15 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
     # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout), nunca propagam ao stdio.
     try:
         # argv fixa, sem shell: nada vem do agente.
-        proc = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                              timeout=settings.default_timeout, **NO_WINDOW)
+        proc = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+            timeout=settings.default_timeout,
+            **NO_WINDOW,
+        )
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
     except OSError as exc:

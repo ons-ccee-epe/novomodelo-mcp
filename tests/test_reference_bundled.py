@@ -5,6 +5,7 @@ que o MCP e conectado, sem ``NOVOMODELO_MCP_DOCS_DIR``/``NOVOMODELO_MCP_SCHEMAS_
 ``novomodelo-docs`` e sem o binario ``novomodelo``. Estes testes forcam esse cenario e
 verificam que o conteudo vem do snapshot embutido em ``novomodelo_mcp/_bundled``.
 """
+
 import pytest
 
 from novomodelo_mcp.adapters import reference as R
@@ -23,12 +24,14 @@ def offline_settings(monkeypatch):
 
 # --- o snapshot embutido existe e e localizavel --------------------------- #
 
+
 def test_bundled_dirs_present():
     assert R._bundled_dir("docs") is not None, "snapshot de docs ausente no pacote"
     assert R._bundled_dir("schemas") is not None, "snapshot de schemas ausente no pacote"
 
 
 # --- schemas: funcionam offline ------------------------------------------- #
+
 
 def test_schema_list_offline_uses_bundled(offline_settings):
     types = R.list_schema_types(offline_settings)
@@ -46,6 +49,7 @@ def test_schema_get_offline_returns_valid_json(offline_settings):
 
 
 # --- docs: funcionam offline ---------------------------------------------- #
+
 
 def test_docs_list_offline_uses_bundled(offline_settings):
     d = R.list_docs(offline_settings)

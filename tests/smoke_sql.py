@@ -7,6 +7,7 @@ Duas camadas:
 
 Roda: python3 tests/smoke_sql.py
 """
+
 import os
 import sys
 import tempfile
@@ -22,6 +23,7 @@ WS = [Path("/work").resolve()]
 
 # ---------- GUARD (sem duckdb) ----------
 
+
 def test_guard_ok_select_within_workspace():
     q = "SELECT hydro_id, min(value_m3s) FROM read_parquet('/work/a.parquet') GROUP BY 1"
     assert S.guard_sql(q, WS) is None
@@ -35,6 +37,7 @@ def test_guard_blocks_path_outside_workspace():
 
 def test_guard_refusal_brings_no_bypass_and_suggested_folder():
     from novomodelo_mcp.adapters.paths import NAO_CONTORNE
+
     err = S.guard_sql("SELECT * FROM read_parquet('/estudos/x.parquet')", WS)
     assert err["exit_code"] == 13 and NAO_CONTORNE in err["diagnostics"], err
     assert err["pasta_sugerida"] == str(Path("/estudos").resolve()), err
@@ -99,10 +102,12 @@ def test_guard_unrestricted_allows_any_local_path():
 
 # ---------- EXECUCAO (precisa de duckdb + polars) ----------
 
+
 def _has_exec_libs() -> bool:
     try:
         import duckdb  # noqa: F401
         import polars  # noqa: F401
+
         return True
     except ModuleNotFoundError:
         return False
@@ -112,6 +117,7 @@ def _settings_for(ws: str):
     os.environ["NOVOMODELO_MCP_WORKSPACE"] = ws
     os.environ["NOVOMODELO_MCP_TIMEOUT"] = "30"
     from novomodelo_mcp.config import load_settings
+
     return load_settings()
 
 
@@ -120,16 +126,21 @@ def test_exec_group_by_and_conditional_count():
         print("  SKIP test_exec_group_by_and_conditional_count (sem duckdb/polars)")
         return
     import polars as pl
+
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "inflow.parquet"
-        pl.DataFrame({
-            "hydro_id": [0, 0, 0, 1, 1],
-            "value_m3s": [-5.0, 10.0, 20.0, 3.0, -1.0],
-        }).write_parquet(p)
+        pl.DataFrame(
+            {
+                "hydro_id": [0, 0, 0, 1, 1],
+                "value_m3s": [-5.0, 10.0, 20.0, 3.0, -1.0],
+            }
+        ).write_parquet(p)
         st = _settings_for(d)
-        q = (f"SELECT hydro_id, min(value_m3s) AS mn, "
-             f"count(*) FILTER (WHERE value_m3s < 0) AS n_neg "
-             f"FROM read_parquet('{p}') GROUP BY hydro_id ORDER BY hydro_id")
+        q = (
+            f"SELECT hydro_id, min(value_m3s) AS mn, "
+            f"count(*) FILTER (WHERE value_m3s < 0) AS n_neg "
+            f"FROM read_parquet('{p}') GROUP BY hydro_id ORDER BY hydro_id"
+        )
         out = S.run_readonly_sql(q, settings=st)
         assert out["status"] == "ok", out
         rows = {r["hydro_id"]: r for r in out["rows"]}
@@ -142,6 +153,7 @@ def test_exec_truncation_flag():
         print("  SKIP test_exec_truncation_flag (sem duckdb/polars)")
         return
     import polars as pl
+
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "t.parquet"
         pl.DataFrame({"x": list(range(10))}).write_parquet(p)
@@ -168,6 +180,7 @@ def test_exec_date_is_jsonable():
     import json
 
     import polars as pl
+
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "dt.parquet"
         pl.DataFrame({"d": [pl.date(2026, 1, 1)]}).select(
@@ -180,8 +193,7 @@ def test_exec_date_is_jsonable():
 
 
 def main():
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
     for t in tests:
         try:

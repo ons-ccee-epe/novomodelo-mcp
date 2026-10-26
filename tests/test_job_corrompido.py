@@ -1,5 +1,6 @@
 """Um `job.json` corrompido (gravação interrompida, edição à mão) não trava os runs:
 o job inválido é ignorado e `run_start`/`run_plan` seguem listando os demais."""
+
 import dataclasses
 import json
 
@@ -14,8 +15,9 @@ def settings(tmp_path):
     return dataclasses.replace(load_settings(), state_dir=str(tmp_path))
 
 
-@pytest.mark.parametrize("conteudo", ['{"status": "running"}', "[1, 2]", '"texto"',
-                                      '{"started_at": "ontem"}', "{"])
+@pytest.mark.parametrize(
+    "conteudo", ['{"status": "running"}', "[1, 2]", '"texto"', '{"started_at": "ontem"}', "{"]
+)
 def test_job_json_invalido_nao_trava_a_listagem(settings, conteudo):
     d = jobs.jobs_root(settings) / "20261024-000000-abcdef"
     d.mkdir()

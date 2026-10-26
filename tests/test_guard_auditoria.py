@@ -1,4 +1,5 @@
 """Caminhos derivados de parâmetros não escapam do workspace nem da raiz de schemas e docs."""
+
 import dataclasses
 import json
 
@@ -17,18 +18,24 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
 # ── deck_edit_json(ensure_valid=True): a raiz do caso fica dentro do workspace ─
 
+
 def _edit_with_validation(monkeypatch, workspace, path):
     validated = []
-    monkeypatch.setattr(deck_tools, "validate_deck_binding",
-                        lambda case, settings: validated.append(case) or {"status": "ok"})
+    monkeypatch.setattr(
+        deck_tools,
+        "validate_deck_binding",
+        lambda case, settings: validated.append(case) or {"status": "ok"},
+    )
     mcp = _CaptureMCP()
-    deck_tools.register_deck(mcp, dataclasses.replace(load_settings(), workspace=workspace,
-                                                      schemas_dir=None))
+    deck_tools.register_deck(
+        mcp, dataclasses.replace(load_settings(), workspace=workspace, schemas_dir=None)
+    )
     env = mcp.tools["deck_edit_json"](str(path), [{"path": "a", "value": 2}], ensure_valid=True)
     return env, validated
 
@@ -48,12 +55,14 @@ def test_caso_dentro_do_workspace_continua_validado(tmp_path, monkeypatch):
     (case / "system").mkdir(parents=True)
     (case / "config.json").write_text("{}", encoding="utf-8")
     (case / "system" / "x.json").write_text(json.dumps({"a": 1}), encoding="utf-8")
-    env, validated = _edit_with_validation(monkeypatch, str(tmp_path / "ws"),
-                                           case / "system" / "x.json")
+    env, validated = _edit_with_validation(
+        monkeypatch, str(tmp_path / "ws"), case / "system" / "x.json"
+    )
     assert validated == [str(case.resolve())] and env["case_validation"] == "ok"
 
 
 # ── schema_get(tipo): só nome simples, e o arquivo dentro da raiz dos schemas ───
+
 
 @pytest.fixture
 def offline(monkeypatch):
@@ -79,6 +88,7 @@ def test_schema_real_continua_lido(offline):
 
 
 # ── docs_read(page): fora da raiz, exista ou não, a resposta é a mesma ─────────
+
 
 def test_fora_da_raiz_das_docs_nao_revela_se_o_arquivo_existe(offline, tmp_path):
     existe = tmp_path / "existe.md"

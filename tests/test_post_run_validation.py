@@ -3,6 +3,7 @@
 Registra as tools num ``FastMCP`` real e recupera a funcao via ToolManager,
 com ``run_bridge`` substituido por um espiao (nao depende de duckdb/polars).
 """
+
 import pytest
 
 from mcp.server.fastmcp import FastMCP
@@ -19,8 +20,14 @@ def _build(monkeypatch):
     def _spy(argv, **kwargs):
         calls["n"] += 1
         calls["argv"] = argv
-        return {"schema_version": "1", "command": " ".join(argv[:2]),
-                "status": "ok", "summary": {}, "diagnostics": [], "exit_code": 0}
+        return {
+            "schema_version": "1",
+            "command": " ".join(argv[:2]),
+            "status": "ok",
+            "summary": {},
+            "diagnostics": [],
+            "exit_code": 0,
+        }
 
     monkeypatch.setattr(post_run_mod, "run_bridge", _spy)
     monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)

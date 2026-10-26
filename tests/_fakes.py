@@ -4,6 +4,7 @@ No POSIX o próprio script (shebang + bit de execução) serve. No Windows um `.
 não é executável por CreateProcess: geramos um lançador `.cmd` que chama o
 interpretador atual com o script.
 """
+
 import os
 import sys
 import tempfile

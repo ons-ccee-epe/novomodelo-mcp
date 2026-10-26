@@ -1,4 +1,5 @@
 """Tools de resultados devolvem envelope de erro, nunca exceção, com arquivo ilegível."""
+
 import dataclasses
 import json
 
@@ -16,6 +17,7 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -49,8 +51,9 @@ def test_metadata_de_treino_ilegivel_vira_envelope(tools, tmp_path, training):
 
 
 def test_metadata_de_simulacao_ilegivel_vira_aviso(tools, tmp_path):
-    env = tools["results_status"](_output(tmp_path, training=json.dumps({"status": "complete"}),
-                                          simulation="{"))
+    env = tools["results_status"](
+        _output(tmp_path, training=json.dumps({"status": "complete"}), simulation="{")
+    )
     assert env["status"] == "ok"
     assert env["simulation_ran"] is False and env["simulation_cost"] is None
     assert len(env["warnings"]) == 1 and "simulation/metadata.json" in env["warnings"][0]
