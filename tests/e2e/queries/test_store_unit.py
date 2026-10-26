@@ -20,7 +20,12 @@ from tests.e2e.queries.models import (
     TagMetrics,
     TestResult,
 )
-from tests.e2e.queries.store import ResultStore, TOOL_GROUPS
+from tests.e2e.queries.store import (
+    ResultStore,
+    TOOL_GROUPS,
+    conjunto_from_filters,
+    infer_conjunto,
+)
 
 
 @pytest.fixture
@@ -90,6 +95,7 @@ def sample_batch() -> BatchResult:
         environment="test",
         total_tests=2,
         passed=1,
+        partial=0,
         failed=1,
         skipped=0,
         timeout=0,
@@ -240,6 +246,7 @@ class TestListBatches:
             environment="test",
             total_tests=1,
             passed=1,
+            partial=0,
             failed=0,
             skipped=0,
             timeout=0,
@@ -282,7 +289,9 @@ class TestSetBaseline:
         with open(store.baseline_path, "r", encoding="utf-8") as f:
             baseline_data = json.load(f)
 
-        assert baseline_data["batch_id"] == sample_batch.batch_id
+        assert baseline_data == {
+            "baselines": {"todos": sample_batch.batch_id}
+        }
 
     def test_set_baseline_replaces_previous(self, store: ResultStore, sample_batch: BatchResult):
         """set_baseline substitui baseline anterior (Req 10.5)."""
@@ -298,6 +307,7 @@ class TestSetBaseline:
             environment="test",
             total_tests=1,
             passed=1,
+            partial=0,
             failed=0,
             skipped=0,
             timeout=0,
@@ -318,7 +328,7 @@ class TestSetBaseline:
         with open(store.baseline_path, "r", encoding="utf-8") as f:
             baseline_data = json.load(f)
 
-        assert baseline_data["batch_id"] == batch2.batch_id
+        assert baseline_data == {"baselines": {"todos": batch2.batch_id}}
 
     def test_set_baseline_batch_not_found(self, store: ResultStore):
         """set_baseline levanta FileNotFoundError para batch inexistente."""
@@ -356,6 +366,128 @@ class TestGetBaseline:
 
         with pytest.raises(FileNotFoundError, match="Batch not found"):
             store.get_baseline()
+
+
+def _result(test_id: str, tool: str | None) -> TestResult:
+    return TestResult(
+        test_id=test_id,
+        query="q",
+        expected_tool=tool,
+        expected_tools=None,
+        actual_tool=tool,
+        all_tool_calls=[],
+        status="pass",
+        latency_ms=1.0,
+        tool_latency_ms=None,
+        mcp_used=True,
+        correct_tool=True,
+        correct_result=True,
+        agent_response="",
+        error_message=None,
+        tags=[],
+        validation_checks=[],
+    )
+
+
+def _stored_batch(
+    store: ResultStore, batch_id: str, results: list[TestResult], **kwargs
+) -> BatchResult:
+    batch = store.create_batch(results, **kwargs)
+    batch.batch_id = batch_id
+    store.save_batch(batch)
+    return batch
+
+
+def test_conjunto_from_filters():
+    assert conjunto_from_filters(None, None) == "todos"
+    assert conjunto_from_filters([], None) == "todos"
+    assert conjunto_from_filters(["docs"], None) == "grupo:docs"
+    assert conjunto_from_filters(["deck", "bridge", "deck"], None) == "grupo:bridge+deck"
+    assert conjunto_from_filters(["docs"], "x") == "pergunta:x"
+
+
+def test_infer_conjunto():
+    assert infer_conjunto([_result("q1", "docs_list")]) == "pergunta:q1"
+    assert (
+        infer_conjunto([_result("a", "docs_list"), _result("b", "docs_read")])
+        == "grupo:docs"
+    )
+    assert (
+        infer_conjunto([_result("a", "docs_list"), _result("b", "deck_list")])
+        == "todos"
+    )
+
+
+def test_create_batch_records_conjunto_in_batch_and_index(store: ResultStore):
+    batch = store.create_batch([_result("a", "docs_list")], conjunto="grupo:docs")
+    store.save_batch(batch)
+
+    assert store.load_batch(batch.batch_id).conjunto == "grupo:docs"
+    assert store.list_batches()[0]["conjunto"] == "grupo:docs"
+
+
+def test_set_baseline_per_conjunto_keeps_other_conjuntos(store: ResultStore):
+    todos = _stored_batch(
+        store, "b_todos", [_result("a", "docs_list"), _result("b", "deck_list")]
+    )
+    docs = _stored_batch(
+        store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs"
+    )
+
+    assert store.set_baseline(todos.batch_id) == "todos"
+    assert store.set_baseline(docs.batch_id) == "grupo:docs"
+
+    assert store.get_baselines() == {"todos": "b_todos", "grupo:docs": "b_docs"}
+    assert store.get_baseline("grupo:docs").batch_id == "b_docs"
+    assert store.get_baseline("todos").batch_id == "b_todos"
+    assert store.get_baseline("grupo:deck") is None
+
+
+def test_legacy_baseline_file_maps_to_batch_conjunto(store: ResultStore):
+    batch = _stored_batch(
+        store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs"
+    )
+    store.baseline_path.write_text(
+        json.dumps({"batch_id": batch.batch_id}), encoding="utf-8"
+    )
+
+    assert store.get_baselines() == {"grupo:docs": "b_docs"}
+    assert store.get_baseline().batch_id == "b_docs"
+
+
+def test_baseline_to_missing_batch_is_ignored(store: ResultStore):
+    store.baseline_path.write_text(
+        json.dumps({"batch_id": "sumiu"}), encoding="utf-8"
+    )
+    assert store.get_baselines() == {}
+
+    store.baseline_path.write_text(
+        json.dumps({"baselines": {"todos": "sumiu"}}), encoding="utf-8"
+    )
+    assert store.get_baselines() == {}
+
+
+def test_get_baselines_without_file_is_empty(store: ResultStore):
+    assert store.get_baselines() == {}
+
+
+def test_set_baseline_rejects_conjunto_mismatch(store: ResultStore):
+    batch = _stored_batch(
+        store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs"
+    )
+    with pytest.raises(ValueError):
+        store.set_baseline(batch.batch_id, "todos")
+
+
+def test_clear_baseline(store: ResultStore):
+    batch = _stored_batch(
+        store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs"
+    )
+    store.set_baseline(batch.batch_id)
+
+    assert store.clear_baseline("grupo:docs") is True
+    assert store.get_baselines() == {}
+    assert store.clear_baseline("grupo:docs") is False
 
 
 if __name__ == "__main__":

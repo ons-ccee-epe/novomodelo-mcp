@@ -347,6 +347,8 @@ class BatchResult:
         metrics: Métricas agregadas da bateria
         metrics_by_tag: Métricas agregadas por tag
         metrics_by_group: Métricas agregadas por grupo de tools
+        conjunto: Escopo da bateria ("todos", "grupo:<g>" ou "pergunta:<id>");
+            None em baterias antigas
     """
 
     batch_id: str
@@ -364,3 +366,4 @@ class BatchResult:
     metrics: BatchMetrics
     metrics_by_tag: dict[str, TagMetrics]
     metrics_by_group: dict[str, GroupMetrics]
+    conjunto: str | None = None

@@ -28,6 +28,8 @@ from tests.e2e.queries.models import (
 __all__ = [
     "ResultStore",
     "TOOL_GROUPS",
+    "conjunto_from_filters",
+    "infer_conjunto",
 ]
 
 
@@ -80,6 +82,34 @@ TOOL_GROUPS: dict[str, str] = {
     "solver_version": "meta",
     "instalar_novomodelo": "meta",
 }
+
+CONJUNTO_TODOS = "todos"
+
+
+def conjunto_from_filters(tags: list[str] | None, case_id: str | None) -> str:
+    """Conjunto de uma bateria a partir dos filtros com que ela rodou."""
+    if case_id:
+        return f"pergunta:{case_id}"
+    if tags:
+        return "grupo:" + "+".join(sorted(set(tags)))
+    return CONJUNTO_TODOS
+
+
+def _group_of(result: TestResult) -> str:
+    tool = result.expected_tool
+    if tool is None and result.expected_tools:
+        tool = result.expected_tools[0]
+    return TOOL_GROUPS.get(tool, "other") if tool else "other"
+
+
+def infer_conjunto(test_results: list[TestResult]) -> str:
+    """Conjunto de uma bateria gravada sem o campo, deduzido dos resultados."""
+    if len(test_results) == 1:
+        return f"pergunta:{test_results[0].test_id}"
+    groups = {_group_of(r) for r in test_results}
+    if len(groups) == 1:
+        return f"grupo:{groups.pop()}"
+    return CONJUNTO_TODOS
 
 
 class ResultStore:
@@ -199,56 +229,103 @@ class ResultStore:
         batches = index.get("batches", [])
         return sorted(batches, key=lambda b: b.get("timestamp", ""), reverse=True)
 
-    def set_baseline(self, batch_id: str) -> None:
-        """Define uma bateria como baseline para comparações.
+    def conjunto_of(self, batch: BatchResult) -> str:
+        """Conjunto gravado na bateria, ou deduzido dos resultados."""
+        return batch.conjunto or infer_conjunto(batch.test_results)
 
-        Implements:
-        - Req 10.5: Permitir marcar uma bateria como "baseline"
-        - Req 10.6: Persistir baseline em tests/e2e/results/baseline.json
+    def _read_baseline_map(self) -> dict[str, str]:
+        """Mapa conjunto -> batch_id do baseline.json, sem checar as baterias."""
+        if not self.baseline_path.exists():
+            return {}
 
-        O baseline é substituído automaticamente sem aviso, mantendo apenas
-        uma baseline ativa por vez.
+        with open(self.baseline_path, encoding="utf-8") as f:
+            data = json.load(f)
+
+        baselines = data.get("baselines")
+        if isinstance(baselines, dict):
+            return {str(k): str(v) for k, v in baselines.items() if v}
+
+        batch_id = data.get("batch_id")
+        if not batch_id:
+            return {}
+        try:
+            return {self.conjunto_of(self.load_batch(batch_id)): batch_id}
+        except FileNotFoundError:
+            return {}
+
+    def _write_baseline_map(self, baselines: dict[str, str]) -> None:
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        with open(self.baseline_path, "w", encoding="utf-8") as f:
+            json.dump({"baselines": baselines}, f, ensure_ascii=False, indent=2)
+
+    def get_baselines(self) -> dict[str, str]:
+        """Mapa conjunto -> batch_id; omite baselines cuja bateria não existe."""
+        return {
+            conjunto: batch_id
+            for conjunto, batch_id in self._read_baseline_map().items()
+            if (self.results_dir / f"{batch_id}.json").exists()
+        }
+
+    def set_baseline(self, batch_id: str, conjunto: str | None = None) -> str:
+        """Define uma bateria como baseline do seu conjunto.
+
+        Baselines de outros conjuntos são preservadas.
 
         Args:
             batch_id: ID da bateria a marcar como baseline.
+            conjunto: Conjunto da baseline; default é o da própria bateria.
+
+        Returns:
+            O conjunto cuja baseline foi definida.
 
         Raises:
             FileNotFoundError: Se a bateria especificada não existe.
+            ValueError: Se conjunto diverge do conjunto da bateria.
         """
-        # Verify batch exists before setting as baseline
-        batch_path = self.results_dir / f"{batch_id}.json"
-        if not batch_path.exists():
-            raise FileNotFoundError(f"Batch not found: {batch_id}")
+        batch = self.load_batch(batch_id)
+        batch_conjunto = self.conjunto_of(batch)
+        if conjunto is not None and conjunto != batch_conjunto:
+            raise ValueError(
+                f"Bateria {batch_id} é do conjunto {batch_conjunto}, "
+                f"não de {conjunto}"
+            )
 
-        # Ensure results directory exists
-        self.results_dir.mkdir(parents=True, exist_ok=True)
+        baselines = self._read_baseline_map()
+        baselines[batch_conjunto] = batch_id
+        self._write_baseline_map(baselines)
+        return batch_conjunto
 
-        # Save baseline reference
-        baseline_data = {"batch_id": batch_id}
-        with open(self.baseline_path, "w", encoding="utf-8") as f:
-            json.dump(baseline_data, f, ensure_ascii=False, indent=2)
+    def clear_baseline(self, conjunto: str) -> bool:
+        """Remove a baseline do conjunto; False se não havia."""
+        baselines = self._read_baseline_map()
+        if conjunto not in baselines:
+            return False
+        del baselines[conjunto]
+        self._write_baseline_map(baselines)
+        return True
 
-    def get_baseline(self) -> BatchResult | None:
+    def get_baseline(self, conjunto: str | None = None) -> BatchResult | None:
         """Retorna a bateria baseline, se definida.
 
-        Implements:
-        - Req 10.5: Permitir marcar uma bateria como "baseline"
-        - Req 10.6: Carregar baseline de tests/e2e/results/baseline.json
-
-        Returns:
-            BatchResult da baseline ou None se não houver baseline definida.
+        Sem conjunto, usa `todos` (ou a única baseline do formato antigo).
 
         Raises:
-            FileNotFoundError: Se o arquivo de baseline referencia uma bateria
-                que não existe mais.
+            FileNotFoundError: Se o baseline referencia uma bateria que não
+                existe mais.
         """
         if not self.baseline_path.exists():
             return None
 
-        with open(self.baseline_path, "r", encoding="utf-8") as f:
-            baseline_data = json.load(f)
+        with open(self.baseline_path, encoding="utf-8") as f:
+            data = json.load(f)
 
-        batch_id = baseline_data.get("batch_id")
+        if isinstance(data.get("baselines"), dict):
+            batch_id = data["baselines"].get(conjunto or CONJUNTO_TODOS)
+        else:
+            batch_id = data.get("batch_id")
+            if batch_id and conjunto is not None:
+                if self.conjunto_of(self.load_batch(batch_id)) != conjunto:
+                    return None
         if not batch_id:
             return None
 
@@ -323,6 +400,7 @@ class ResultStore:
             "batch_id": batch.batch_id,
             "timestamp": batch.timestamp,
             "version": batch.cobre_mcp_version,
+            "conjunto": self.conjunto_of(batch),
             "summary": {
                 "total": batch.total_tests,
                 "passed": batch.passed,
@@ -360,6 +438,7 @@ class ResultStore:
             "cobre_mcp_version": batch.cobre_mcp_version,
             "git_commit_sha": batch.git_commit_sha,
             "environment": batch.environment,
+            "conjunto": batch.conjunto,
             "total_tests": batch.total_tests,
             "passed": batch.passed,
             "partial": batch.partial,
@@ -474,6 +553,7 @@ class ResultStore:
             metrics=metrics,
             metrics_by_tag=metrics_by_tag,
             metrics_by_group=metrics_by_group,
+            conjunto=data.get("conjunto"),
         )
 
     def _dict_to_test_result(self, data: dict[str, Any]) -> TestResult:
@@ -725,6 +805,7 @@ class ResultStore:
         self,
         test_results: list[TestResult],
         environment: str = "local",
+        conjunto: str | None = None,
     ) -> BatchResult:
         """Cria um BatchResult completo a partir de resultados de testes.
 
@@ -738,6 +819,7 @@ class ResultStore:
         Args:
             test_results: Lista de resultados de testes individuais.
             environment: Identificador do ambiente (default: "local").
+            conjunto: Escopo da bateria; None deixa conjunto_of deduzir.
 
         Returns:
             BatchResult completo com métricas calculadas.
@@ -775,6 +857,7 @@ class ResultStore:
             metrics=metrics,
             metrics_by_tag=metrics_by_tag,
             metrics_by_group=metrics_by_group,
+            conjunto=conjunto,
         )
 
     def _calculate_metrics(self, results: list[TestResult]) -> BatchMetrics:

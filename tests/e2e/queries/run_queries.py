@@ -41,7 +41,7 @@ from tests.e2e.queries.models import (
 )
 from tests.e2e.queries.preconditions import missing_sources, skipped_result
 from tests.e2e.queries.runner import QueryRunner
-from tests.e2e.queries.store import ResultStore
+from tests.e2e.queries.store import ResultStore, conjunto_from_filters
 from tests.e2e.queries.validator import QueryValidator, ValidationResult
 
 __all__ = ["main"]
@@ -391,14 +391,16 @@ def main() -> int:
         test_results = [results_by_index[i] for i in range(total_cases)]
 
     # Criar e salvar batch
-    batch = store.create_batch(test_results)
+    batch = store.create_batch(
+        test_results, conjunto=conjunto_from_filters(args.tags, args.case)
+    )
     batch_path = store.save_batch(batch)
     store.append_metrics(batch)
 
     # Set baseline se solicitado (Req 16.9)
     if args.set_baseline:
-        store.set_baseline(batch.batch_id)
-        print(f"Bateria {batch.batch_id} definida como baseline")
+        conjunto = store.set_baseline(batch.batch_id)
+        print(f"Bateria {batch.batch_id} definida como baseline de {conjunto}")
 
     # Exibir sumário (Req 16.6)
     print()
