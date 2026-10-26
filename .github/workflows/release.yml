@@ -96,6 +96,12 @@ jobs:
           uv build --out-dir dist
           cd dist && sha256sum ./*.whl ./*.tar.gz | sed 's# \./# #' > SHA256SUMS && cat SHA256SUMS
 
+      - name: Sdist sem regras de agente, caches nem checkouts
+        run: |
+          sobra=$(tar -tzf dist/*.tar.gz | cut -d/ -f2 | sort -u \
+            | grep -E '^([._]|CLAUDE\.md$|AGENTS\.md$)' | grep -vx '.gitignore' || true)
+          if [ -n "$sobra" ]; then echo "::error::no sdist: $sobra"; exit 1; fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: novomodelo-mcp-${{ steps.versao.outputs.version }}

@@ -53,6 +53,11 @@ artifacts = [
     "src/novomodelo_mcp/_bundled/**/*.sqlite",
 ]
 
+[tool.hatch.build.targets.sdist]
+# Fora do sdist: regras de agente, caches e os checkouts que a release faz na raiz
+# (_docs, _novomodelo, _bridge). O hatchling inclui o .gitignore de qualquer jeito.
+exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md"]
+
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6", "hypothesis>=6"]
 
