@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { CaseMeta, RunResultItem } from "@/services/launcherApi";
 import type { LauncherData } from "@/services/api/useLauncher";
@@ -7,7 +7,11 @@ import { CaseDetail, type CaseSummary } from "./launcher/CaseDetail";
 import { CaseList } from "./launcher/CaseList";
 import { GroupFilter } from "./launcher/GroupFilter";
 import { LauncherControls } from "./launcher/LauncherControls";
-import { RunProgress } from "./launcher/RunProgress";
+
+export interface LauncherScope {
+  tags?: string[];
+  caseId?: string;
+}
 
 function groupCases(cases: CaseMeta[]): Array<[string, string[]]> {
   const map = new Map<string, string[]>();
@@ -46,7 +50,13 @@ function LauncherOffline() {
  * Painel de disparo dos testes das tools MCP num provedor de IA: esteira
  * completa, por grupo ou um caso, com o progresso e o resultado ao vivo.
  */
-export function TestLauncher({ launcher }: { launcher: LauncherData }) {
+export function TestLauncher({
+  launcher,
+  onScopeChange,
+}: {
+  launcher: LauncherData;
+  onScopeChange?: (scope: LauncherScope) => void;
+}) {
   const { cases, run, busy, error } = launcher;
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -61,6 +71,14 @@ export function TestLauncher({ launcher }: { launcher: LauncherData }) {
     [run],
   );
   const selectedCase = visibleCases.find((c) => c.id === selectedCaseId) ?? null;
+  const selectedCaseKey = selectedCase?.id ?? null;
+
+  useEffect(() => {
+    if (!onScopeChange) return;
+    if (selectedCaseKey) onScopeChange({ caseId: selectedCaseKey });
+    else if (selectedGroup) onScopeChange({ tags: [selectedGroup] });
+    else onScopeChange({});
+  }, [selectedGroup, selectedCaseKey, onScopeChange]);
 
   if (launcher.checking) {
     return (
@@ -101,9 +119,6 @@ export function TestLauncher({ launcher }: { launcher: LauncherData }) {
         onSelectGroup={setSelectedGroup}
         onRunGroup={(g) => launcher.runTags([g])}
       />
-      {run && (busy || run.status !== "pending") && (
-        <RunProgress run={run} stopping={launcher.stopping} onStop={launcher.stop} />
-      )}
       {error && (
         <div className="cobre-banner" data-kind="critical">
           {error}

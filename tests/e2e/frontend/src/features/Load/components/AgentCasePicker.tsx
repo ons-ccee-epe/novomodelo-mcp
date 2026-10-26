@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 
 import type { CaseMeta, RunResultItem } from "@/services/launcherApi";
 import type { LoadCaseInfo } from "@/services/loadApi";
-import { CaseList } from "@/features/Dashboard/components/launcher/CaseList";
+import { CaseList } from "@/features/Functional/components/launcher/CaseList";
 import { LoadBadges } from "./LoadBadges";
 
 export type CaseScope = "all" | "group" | "case";

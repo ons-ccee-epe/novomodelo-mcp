@@ -8,8 +8,8 @@ import { fetchIndex } from "@/services/resultsApi";
 vi.mock("@/services/resultsApi", () => ({
   fetchIndex: vi.fn(),
 }));
-vi.mock("@/features/Dashboard", () => ({
-  Dashboard: () => <div>tela funcional</div>,
+vi.mock("@/features/Functional", () => ({
+  Functional: () => <div>tela funcional</div>,
 }));
 vi.mock("@/features/Load", () => ({
   Load: () => <div>tela carga</div>,

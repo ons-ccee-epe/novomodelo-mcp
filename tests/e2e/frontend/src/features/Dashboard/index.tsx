@@ -8,7 +8,8 @@ import { ComparisonPanel } from "./components/ComparisonPanel";
 import { MetricsByGroup } from "./components/MetricsByGroup";
 import { MetricsByTag } from "./components/MetricsByTag";
 import { TestTable } from "./components/TestTable";
-import { TestLauncher } from "./components/TestLauncher";
+import { TestLauncher } from "@/features/Functional/components/TestLauncher";
+import { RunProgress } from "@/features/Functional/components/launcher/RunProgress";
 import { useLauncher } from "@/services/api/useLauncher";
 import type { BatchResult } from "@/shared/types";
 import { fetchBatch } from "@/services/resultsApi";
@@ -62,6 +63,9 @@ export function Dashboard() {
     return (
       <div className="cobre-shell">
         <h1><repositório anterior> — Dashboard de Testes E2E</h1>
+        {launcher.run && (launcher.busy || launcher.run.status !== "pending") && (
+          <RunProgress run={launcher.run} stopping={launcher.stopping} onStop={launcher.stop} />
+        )}
         <TestLauncher launcher={launcher} />
         <div className="cobre-no-data">
           Nenhuma bateria de teste encontrada. Dispare os testes acima (esteira completa,
@@ -79,6 +83,9 @@ export function Dashboard() {
         {d.batch.cobre_mcp_version}
       </p>
 
+      {launcher.run && (launcher.busy || launcher.run.status !== "pending") && (
+        <RunProgress run={launcher.run} stopping={launcher.stopping} onStop={launcher.stop} />
+      )}
       <TestLauncher launcher={launcher} />
 
       <BatchSelector
