@@ -62,3 +62,5 @@ export function funnel(
     { step: "Resultado certo", pct: m?.pct_correct_result ?? 0 },
   ];
 }
+
+export const statusColor = (status: TestStatus) => `var(--cobre-${status})`;

@@ -34,6 +34,7 @@ export function BatchDashboard({
 }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const rootRef = useRef<HTMLElement>(null);
 
   const reference = useMemo(() => pickReference(batch, all, baselines), [batch, all, baselines]);
@@ -65,7 +66,7 @@ export function BatchDashboard({
   const downloadSummary = async () => {
     const root = rootRef.current;
     if (!root) return;
-    setToggleError(null);
+    setSummaryError(null);
     try {
       const cards = [...root.querySelectorAll(".cobre-summary .cobre-card")].map((c) => ({
         label: c.querySelector(".cobre-card-label")?.textContent ?? "",
@@ -77,7 +78,7 @@ export function BatchDashboard({
       const title = `${formatDate(batch.timestamp)} · ${batch.batch_id}`;
       downloadBlob(await summaryPngBlob(title, cards, svgs), `${batch.batch_id}-resumo.png`);
     } catch (e) {
-      setToggleError(e instanceof Error ? e.message : String(e));
+      setSummaryError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -90,9 +91,9 @@ export function BatchDashboard({
         onToggleBaseline={toggle}
         onDownloadSummary={onDownloadSummary ?? downloadSummary}
       />
-      {toggleError && (
+      {(toggleError ?? summaryError) && (
         <p role="alert" className="cobre-run-finished-error">
-          {toggleError}
+          {toggleError ?? summaryError}
         </p>
       )}
       <ChangesStrip broke={broke} fixed={fixed} onSelect={setOpenId} />
