@@ -145,6 +145,60 @@ export async function cancelRun(runId: string): Promise<RunState> {
   return (await res.json()) as RunState;
 }
 
+async function failWithDetail(res: Response, prefix: string): Promise<never> {
+  let detail = `HTTP ${res.status}`;
+  try {
+    const err = (await res.json()) as { detail?: string };
+    if (err.detail) detail = err.detail;
+  } catch {
+    /* ignora corpo nao-JSON */
+  }
+  throw new Error(`${prefix}: ${detail}`);
+}
+
+/** Marca a bateria como baseline do conjunto. */
+export async function setBaseline(conjunto: string, batchId: string): Promise<void> {
+  const res = await fetch(`${API}/baselines/${encodeURIComponent(conjunto)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...LAUNCHER_HEADERS },
+    body: JSON.stringify({ batch_id: batchId }),
+  });
+  if (!res.ok) await failWithDetail(res, "Falha ao definir a baseline");
+}
+
+/** Remove a baseline do conjunto. */
+export async function clearBaseline(conjunto: string): Promise<void> {
+  const res = await fetch(`${API}/baselines/${encodeURIComponent(conjunto)}`, {
+    method: "DELETE",
+    headers: LAUNCHER_HEADERS,
+  });
+  if (!res.ok) await failWithDetail(res, "Falha ao remover a baseline");
+}
+
+export type CommandPreview = {
+  conjunto: string;
+  total: number;
+  terminal: string | null;
+  terminal_note: string | null;
+  agent: string;
+};
+
+export async function fetchCommandPreview(p: {
+  provider: string | null;
+  tags?: string[];
+  caseId?: string;
+}): Promise<CommandPreview> {
+  const params = new URLSearchParams();
+  if (p.provider) params.set("provider", p.provider);
+  if (p.tags && p.tags.length > 0) params.set("tags", p.tags.join(","));
+  if (p.caseId) params.set("case_id", p.caseId);
+  const res = await fetch(`${API}/command-preview?${params.toString()}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) await failWithDetail(res, "Falha ao montar o comando");
+  return (await res.json()) as CommandPreview;
+}
+
 export const POLL_INTERVAL_MS = 1500;
 export const POLL_MAX_MS = 30 * 60 * 1000;
 

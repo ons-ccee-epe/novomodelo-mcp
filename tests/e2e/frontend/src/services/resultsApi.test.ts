@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fetchMetricsHistory } from "@/services/resultsApi";
+import { fetchBaselineFile, fetchMetricsHistory } from "@/services/resultsApi";
 
 describe("fetchMetricsHistory", () => {
   beforeEach(() => {
@@ -32,5 +32,36 @@ describe("fetchMetricsHistory", () => {
     );
     const records = await fetchMetricsHistory();
     expect(records).toEqual([]);
+  });
+});
+
+describe("fetchBaselineFile", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function stubJson(body: unknown, ok = true) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok, status: ok ? 200 : 404, json: async () => body }) as unknown as Response),
+    );
+  }
+
+  it("le o formato novo por conjunto", async () => {
+    stubJson({ baselines: { todos: "b1", "grupo:deck": "b2" } });
+    expect(await fetchBaselineFile()).toEqual({
+      baselines: { todos: "b1", "grupo:deck": "b2" },
+      legacyId: null,
+    });
+  });
+
+  it("le o formato antigo como legacyId", async () => {
+    stubJson({ batch_id: "b0" });
+    expect(await fetchBaselineFile()).toEqual({ baselines: {}, legacyId: "b0" });
+  });
+
+  it("arquivo ausente vira vazio", async () => {
+    stubJson({}, false);
+    expect(await fetchBaselineFile()).toEqual({ baselines: {}, legacyId: null });
   });
 });

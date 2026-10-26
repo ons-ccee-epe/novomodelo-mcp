@@ -35,15 +35,22 @@ export async function fetchBatch(batchId: string): Promise<BatchResult> {
   return getJson<BatchResult>(`results/${batchId}.json`);
 }
 
-/** batch_id da baseline, se definida (baseline.json). */
-export async function fetchBaselineId(): Promise<string | null> {
+/** Baselines por conjunto; aceita o formato antigo (`batch_id` unico) e arquivo ausente. */
+export async function fetchBaselineFile(): Promise<{
+  baselines: Record<string, string>;
+  legacyId: string | null;
+}> {
   try {
-    const data = await getJson<{ batch_id?: string }>("results/baseline.json");
-    return data.batch_id ?? null;
+    const data = await getJson<{
+      baselines?: Record<string, string>;
+      batch_id?: string;
+    }>("results/baseline.json");
+    return { baselines: data.baselines ?? {}, legacyId: data.batch_id ?? null };
   } catch {
-    return null;
+    return { baselines: {}, legacyId: null };
   }
 }
+
 
 /**
  * Historico de metricas (metrics/history.jsonl), mais antigo primeiro,

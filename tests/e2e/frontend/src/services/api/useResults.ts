@@ -5,7 +5,7 @@ import type {
   MetricsHistoryRecord,
 } from "@/shared/types";
 import {
-  fetchBaselineId,
+  fetchBaselineFile,
   fetchBatch,
   fetchIndex,
   fetchMetricsHistory,
@@ -51,11 +51,13 @@ export function useResults(): ResultsData {
     setLoading(true);
     setError(null);
 
-    Promise.all([fetchIndex(), fetchBaselineId(), fetchMetricsHistory()])
-      .then(([index, baseline, hist]) => {
+    Promise.all([fetchIndex(), fetchBaselineFile(), fetchMetricsHistory()])
+      .then(([index, baselineFile, hist]) => {
         if (!alive) return;
         setBatches(index.batches);
-        setBaselineId(baseline);
+        setBaselineId(
+          baselineFile.legacyId ?? baselineFile.baselines["todos"] ?? null,
+        );
         setHistory(hist);
         setSelectedId((cur) => {
           if (cur && index.batches.some((b) => b.batch_id === cur)) return cur;
