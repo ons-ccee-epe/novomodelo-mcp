@@ -19,6 +19,9 @@ keep = []
 keep_files = [
   "LICENSE",          # texto de licença e atribuição: fica como está
   "scripts/rebrand/*",
+  # cópias dos CHANGELOG.md do novomodelo e do bridge: o texto upstream fica como está
+  "src/novomodelo_mcp/_bundled/docs/changelog/novomodelo.mdx",
+  "src/novomodelo_mcp/_bundled/docs/changelog/novomodelo-bridge.mdx",
 ]
 
 # Regras de endereço, tentadas antes da regra do nome; a primeira que casa vence.
