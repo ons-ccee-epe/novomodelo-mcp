@@ -122,7 +122,7 @@ class RunRequest(BaseModel):
 class BaselineRequest(BaseModel):
     """Corpo de PUT /api/baselines/{conjunto}."""
 
-    batch_id: str = Field(min_length=1, max_length=200)
+    batch_id: str = Field(min_length=1, max_length=200, pattern=_CASE_ID_PATTERN)
 
 
 class LoadRunRequest(BaseModel):

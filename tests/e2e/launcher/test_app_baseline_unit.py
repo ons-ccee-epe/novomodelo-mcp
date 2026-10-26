@@ -83,6 +83,13 @@ def test_put_baseline_unknown_batch_is_404(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
+@pytest.mark.parametrize("batch_id", ["../x", "C:/x", "a/b"])
+def test_put_baseline_rejects_path_like_batch_id(client: TestClient, batch_id: str) -> None:
+    resp = client.put("/api/baselines/todos", json={"batch_id": batch_id}, headers=HEADER)
+    assert resp.status_code == 422
+    assert client.get("/api/baselines").json() == {"baselines": {}}
+
+
 def test_put_baseline_wrong_conjunto_is_409(client: TestClient, store: ResultStore) -> None:
     batch_id = _save(store, CONJUNTO)
 
@@ -140,7 +147,7 @@ def test_run_saves_batch_with_conjunto(tags, case_id, expected) -> None:
         provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
         state = svc.start_run(provider=provider, tags=tags, case_id=case_id)  # type: ignore[arg-type]
         deadline = time.monotonic() + 10
-        while state.status not in ("done", "failed") and time.monotonic() < deadline:
+        while state.status not in ("done", "error", "cancelled") and time.monotonic() < deadline:
             time.sleep(0.05)
 
     assert state.status == "done"

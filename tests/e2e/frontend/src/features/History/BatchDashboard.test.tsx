@@ -13,7 +13,9 @@ function detailed(b: BatchResult): BatchResult {
         ...r,
         query: `pergunta do ${r.test_id}`,
         actual_tool: "case_summary",
-        all_tool_calls: [{ name: "case_summary", args: { path: "caso/x", depth: 2 } }],
+        all_tool_calls: [
+          { name: "case_summary", args: { path: "caso/x", depth: 2 } },
+        ],
         latency_ms: 1200,
         tool_latency_ms: 300,
         agent_response: `resposta do ${r.test_id}`,
@@ -30,21 +32,40 @@ function detailed(b: BatchResult): BatchResult {
     passed,
     cobre_mcp_version: "1.2.3",
     git_commit_sha: "abcdef0123456789",
-    metrics: { avg_latency_ms: 1234, p95_latency_ms: 2500 } as BatchResult["metrics"],
+    metrics: {
+      avg_latency_ms: 1234,
+      p95_latency_ms: 2500,
+    } as BatchResult["metrics"],
   };
 }
 
 const REF = detailed(
-  makeBatch("ref", [["q1", "pass", "case_summary"], ["q2", "pass", "case_summary"], ["q3", "fail", "case_summary"]], {
-    timestamp: "2026-01-01T10:00:00",
-    conjunto: "todos",
-  }),
+  makeBatch(
+    "ref",
+    [
+      ["q1", "pass", "case_summary"],
+      ["q2", "pass", "case_summary"],
+      ["q3", "fail", "case_summary"],
+    ],
+    {
+      timestamp: "2026-01-01T10:00:00",
+      conjunto: "todos",
+    },
+  ),
 );
 const CUR = detailed(
-  makeBatch("cur", [["q1", "fail", "case_summary"], ["q2", "pass", "case_summary"], ["q3", "pass", "case_summary"]], {
-    timestamp: "2026-01-02T10:00:00",
-    conjunto: "todos",
-  }),
+  makeBatch(
+    "cur",
+    [
+      ["q1", "fail", "case_summary"],
+      ["q2", "pass", "case_summary"],
+      ["q3", "pass", "case_summary"],
+    ],
+    {
+      timestamp: "2026-01-02T10:00:00",
+      conjunto: "todos",
+    },
+  ),
 );
 const ALONE = detailed(
   makeBatch("alone", [["q1", "pass", "case_summary"]], {
@@ -53,7 +74,9 @@ const ALONE = detailed(
   }),
 );
 
-function setup(over: Partial<React.ComponentProps<typeof BatchDashboard>> = {}) {
+function setup(
+  over: Partial<React.ComponentProps<typeof BatchDashboard>> = {},
+) {
   const onToggleBaseline = vi.fn(async () => {});
   render(
     <BatchDashboard
@@ -74,8 +97,15 @@ describe("BatchHeader", () => {
     expect(screen.getByText("Esteira completa")).toBeInTheDocument();
     expect(screen.getByText(/1\.2\.3/)).toBeInTheDocument();
     expect(screen.getByText("abcdef0")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "★ Definir como baseline" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "★ Definir como baseline" }),
+    );
     expect(toggle).toHaveBeenCalledWith(CUR);
+  });
+
+  it("omite a versão quando é unknown", () => {
+    setup({ batch: { ...CUR, cobre_mcp_version: "unknown" } });
+    expect(screen.queryByText(/vunknown/)).toBeNull();
   });
 
   it("offline o botão de baseline fica desabilitado", () => {
@@ -88,7 +118,9 @@ describe("BatchHeader", () => {
 
   it("oferece Remover baseline quando a bateria já é a baseline", () => {
     setup({ baselines: { todos: "cur" } });
-    expect(screen.getByRole("button", { name: "Remover baseline" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remover baseline" }),
+    ).toBeInTheDocument();
   });
 
   it("mostra a recusa do launcher", async () => {
@@ -97,13 +129,23 @@ describe("BatchHeader", () => {
         throw new Error("launcher recusou");
       }),
     });
-    fireEvent.click(screen.getByRole("button", { name: "★ Definir como baseline" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("launcher recusou");
+    fireEvent.click(
+      screen.getByRole("button", { name: "★ Definir como baseline" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "launcher recusou",
+    );
   });
 
   it("Baixar resumo fica habilitado por padrão e usa o handler quando há", () => {
     const { unmount } = render(
-      <BatchDashboard batch={CUR} all={[CUR]} baselines={{}} launcherOnline onToggleBaseline={vi.fn()} />,
+      <BatchDashboard
+        batch={CUR}
+        all={[CUR]}
+        baselines={{}}
+        launcherOnline
+        onToggleBaseline={vi.fn()}
+      />,
     );
     const off = screen.getByRole("button", { name: "⤓ Baixar resumo" });
     expect(off).toBeEnabled();
@@ -127,24 +169,36 @@ describe("BatchHeader", () => {
 describe("ChangesStrip", () => {
   it("lista as perguntas que passaram a falhar e a passar", () => {
     setup();
-    const strip = screen.getByRole("region", { name: "Mudanças contra a referência" });
+    const strip = screen.getByRole("region", {
+      name: "Mudanças contra a referência",
+    });
     expect(strip).toHaveTextContent("1 pergunta passou a falhar");
     expect(strip).toHaveTextContent("1 passou a passar");
-    expect(within(strip).getByRole("button", { name: "q1" })).toBeInTheDocument();
-    expect(within(strip).getByRole("button", { name: "q3" })).toBeInTheDocument();
+    expect(
+      within(strip).getByRole("button", { name: "q1" }),
+    ).toBeInTheDocument();
+    expect(
+      within(strip).getByRole("button", { name: "q3" }),
+    ).toBeInTheDocument();
   });
 
   it("some sem referência", () => {
     setup({ batch: ALONE });
-    expect(screen.queryByRole("region", { name: "Mudanças contra a referência" })).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Mudanças contra a referência" }),
+    ).toBeNull();
   });
 
   it("clicar num id abre o detalhe da pergunta", () => {
     setup();
     expect(screen.queryByText("resposta do q1")).toBeNull();
-    const strip = screen.getByRole("region", { name: "Mudanças contra a referência" });
+    const strip = screen.getByRole("region", {
+      name: "Mudanças contra a referência",
+    });
     fireEvent.click(within(strip).getByRole("button", { name: "q1" }));
-    expect(screen.getByText("pergunta do q1", { selector: "pre" })).toBeInTheDocument();
+    expect(
+      screen.getByText("pergunta do q1", { selector: "pre" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -152,7 +206,7 @@ describe("BatchCards", () => {
   it("mostra a aprovação, o Δ e as latências", () => {
     setup();
     expect(screen.getByText("66,7%")).toBeInTheDocument();
-    expect(screen.getByText("▲ +0,0 pp")).toBeInTheDocument();
+    expect(screen.getByText("0,0 pp")).toBeInTheDocument();
     expect(screen.getByText("1234 ms")).toBeInTheDocument();
     expect(screen.getByText("2500 ms")).toBeInTheDocument();
   });
@@ -175,7 +229,9 @@ describe("QuestionList", () => {
     setup();
     const list = screen.getByRole("region", { name: "Perguntas" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(3);
-    fireEvent.change(within(list).getByLabelText("Status"), { target: { value: "fail" } });
+    fireEvent.change(within(list).getByLabelText("Status"), {
+      target: { value: "fail" },
+    });
     const items = within(list).getAllByRole("listitem");
     expect(items).toHaveLength(1);
     expect(items[0]).toHaveTextContent("q1");
@@ -193,6 +249,8 @@ describe("QuestionList", () => {
 describe("ConjuntoEvolution", () => {
   it("existe como seção da bateria", () => {
     setup();
-    expect(screen.getByRole("region", { name: "Evolução do conjunto" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Evolução do conjunto" }),
+    ).toBeInTheDocument();
   });
 });

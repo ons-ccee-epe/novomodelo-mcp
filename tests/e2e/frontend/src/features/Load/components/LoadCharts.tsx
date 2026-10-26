@@ -20,7 +20,7 @@ interface Props {
   series: LoadSeriesPoint[];
   /** Altura menor para o gráfico ao vivo dentro do progresso. */
   compact?: boolean;
-  /** Prefixo do nome dos PNGs baixados (o load_id); sem ele os gráficos não têm download. */
+  /** Prefixo do nome dos PNGs baixados (o load_id); sem ele vale "carga". */
   fileStem?: string;
   /** Janela da carga, para descartar o bucket final quase vazio (ver ``trimPartialTail``). */
   durationSeconds?: number;

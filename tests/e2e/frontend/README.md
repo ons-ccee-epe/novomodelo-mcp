@@ -37,7 +37,7 @@ O frontend busca tudo sob `/data`:
 | `/data/results/<id>.json`    | `tests/e2e/results/<id>.json`        | uma bateria completa           |
 | `/data/results/baseline.json`| `tests/e2e/results/baseline.json`    | baseline de cada conjunto      |
 | `/data/metrics/history.jsonl`| `tests/e2e/metrics/history.jsonl`    | histórico das baterias         |
-| `/data/results/load/index.json` | `tests/e2e/results/load/index.json` | lista de cargas (aba Carga)  |
+| `/data/results/load/index.json` | `tests/e2e/results/load/index.json` | lista de cargas (Testes de Carga)|
 | `/data/results/load/<id>.json`  | `tests/e2e/results/load/<id>.json`  | uma carga completa           |
 
 - **Em dev**: o plugin `resultsDataPlugin` (em `vite.config.ts`) serve `/data`
@@ -106,7 +106,7 @@ src/
   services/resultsApi.ts         # fetch dos JSON + parse do JSONL
   services/launcherApi.ts        # controle do launcher (polling cancelável)
   services/api/useHistory.ts     # baterias, baselines e comparação do histórico
-  services/api/useLauncher.ts    # provedores, casos, quadro de comando e disparo de runs
+  services/api/useLauncher.ts    # provedores, casos e disparo de runs
   services/loadApi.ts            # cargas: leitura de results/load e controle pelo launcher
   services/api/useLoadResults.ts # index, carga selecionada e comparação
   services/api/useLoadLauncher.ts# tools/limites, disparo, polling e parada da carga

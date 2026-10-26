@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { CaseMeta, RunResultItem } from "@/services/launcherApi";
 import type { LauncherData } from "@/services/api/useLauncher";
@@ -35,13 +35,13 @@ function toSummary(c: CaseMeta): CaseSummary {
 function LauncherOffline() {
   return (
     <div className="cobre-banner" data-kind="warning">
-      <strong>Launcher de testes offline.</strong> Para disparar testes pela UI, suba o
-      launcher de dev em outro terminal:
+      <strong>Launcher de testes offline.</strong> Para disparar testes pela UI,
+      suba o launcher de dev em outro terminal:
       <pre className="cobre-code">
         pip install -r tests/e2e/launcher/requirements.txt{"\n"}
         python -m tests.e2e.launcher.serve
       </pre>
-      Sem ele, o dashboard ainda mostra as baterias já gravadas (somente leitura).
+      As baterias já gravadas continuam na aba Histórico.
     </div>
   );
 }
@@ -53,9 +53,12 @@ function LauncherOffline() {
 export function TestLauncher({
   launcher,
   onScopeChange,
+  preview,
 }: {
   launcher: LauncherData;
   onScopeChange?: (scope: LauncherScope) => void;
+  /** Renderizado logo abaixo do seletor de grupo. */
+  preview?: ReactNode;
 }) {
   const { cases, run, busy, error } = launcher;
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -63,14 +66,21 @@ export function TestLauncher({
 
   const groups = useMemo(() => groupCases(cases), [cases]);
   const visibleCases = useMemo(
-    () => (selectedGroup ? cases.filter((c) => groupForCase(c) === selectedGroup) : cases),
+    () =>
+      selectedGroup
+        ? cases.filter((c) => groupForCase(c) === selectedGroup)
+        : cases,
     [cases, selectedGroup],
   );
   const resultById = useMemo(
-    () => new Map<string, RunResultItem>((run?.results ?? []).map((r) => [r.test_id, r])),
+    () =>
+      new Map<string, RunResultItem>(
+        (run?.results ?? []).map((r) => [r.test_id, r]),
+      ),
     [run],
   );
-  const selectedCase = visibleCases.find((c) => c.id === selectedCaseId) ?? null;
+  const selectedCase =
+    visibleCases.find((c) => c.id === selectedCaseId) ?? null;
   const selectedCaseKey = selectedCase?.id ?? null;
 
   useEffect(() => {
@@ -91,7 +101,7 @@ export function TestLauncher({
 
   const noProvider = !launcher.providers.some((p) => p.installed);
   const canRun = !busy && !noProvider;
-  const runningCaseId = busy ? run?.current ?? null : null;
+  const runningCaseId = busy ? (run?.current ?? null) : null;
 
   return (
     <section className="cobre-launcher" aria-label="Disparar testes">
@@ -106,7 +116,8 @@ export function TestLauncher({
       />
       {noProvider && (
         <div className="cobre-banner" data-kind="critical">
-          Nenhum provedor de IA instalado (kiro-cli ou claude não estão no PATH).
+          Nenhum provedor de IA instalado (kiro-cli ou claude não estão no
+          PATH).
         </div>
       )}
       <GroupFilter
@@ -119,6 +130,7 @@ export function TestLauncher({
         onSelectGroup={setSelectedGroup}
         onRunGroup={(g) => launcher.runTags([g])}
       />
+      {preview}
       {error && (
         <div className="cobre-banner" data-kind="critical">
           {error}

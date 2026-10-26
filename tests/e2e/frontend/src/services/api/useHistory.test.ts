@@ -65,4 +65,17 @@ describe("useHistory", () => {
     expect(launcher.clearBaseline).toHaveBeenCalledWith("todos");
     expect(result.current.baselines).toEqual({});
   });
+
+  it("uma bateria ilegível não derruba as demais e é contada", async () => {
+    mockData({ baselines: {}, legacyId: null });
+    vi.mocked(results.fetchBatch).mockImplementation(async (id) => {
+      if (id === "b1") throw new Error("404");
+      return b2;
+    });
+    const { result } = renderHook(() => useHistory());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.batches.map((b) => b.batch_id)).toEqual(["b2"]);
+    expect(result.current.unreadable).toBe(1);
+    expect(result.current.error).toBeNull();
+  });
 });

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { statusIcon } from "@/shared/constants/status";
 import { groupForCase } from "@/shared/toolGroups";
 import type { TestResult, TestStatus } from "@/shared/types";
+import { STATUS_LABEL } from "../charts/chartData";
 import { TestDetail } from "./TestDetail";
 
 export type Change = "broke" | "fixed";
@@ -29,7 +30,10 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
   const [status, setStatus] = useState("all");
   const [group, setGroup] = useState("all");
 
-  const groups = useMemo(() => [...new Set(results.map(groupForCase))].sort(), [results]);
+  const groups = useMemo(
+    () => [...new Set(results.map(groupForCase))].sort(),
+    [results],
+  );
   const visible = results.filter(
     (tr) =>
       tr.test_id === openId ||
@@ -54,7 +58,7 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
             <option value="all">Todos</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {STATUS_LABEL[s]}
               </option>
             ))}
           </select>
@@ -86,7 +90,11 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
           const open = tr.test_id === openId;
           const change = changes.get(tr.test_id);
           return (
-            <li key={tr.test_id} className="cobre-question" data-question-id={tr.test_id}>
+            <li
+              key={tr.test_id}
+              className="cobre-question"
+              data-question-id={tr.test_id}
+            >
               <button
                 type="button"
                 className="cobre-question-row"
@@ -95,7 +103,7 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
               >
                 <code>{tr.test_id}</code>
                 <span className="cobre-status" data-status={tr.status}>
-                  {statusIcon(tr.status)} {tr.status}
+                  {statusIcon(tr.status)} {STATUS_LABEL[tr.status]}
                 </span>
                 {change && (
                   <span className="cobre-change-marker" data-kind={change}>

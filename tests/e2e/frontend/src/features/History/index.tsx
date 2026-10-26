@@ -9,10 +9,13 @@ const NOOP = () => {};
 
 export function History() {
   const { batchId } = useParams();
-  const { batches, baselines, loading, error, toggleBaseline } = useHistory();
+  const { batches, baselines, loading, error, unreadable, toggleBaseline } =
+    useHistory();
   const launcher = useLauncher(NOOP);
 
-  const selected = batches.find((b) => b.batch_id === (batchId ?? batches[0]?.batch_id)) ?? null;
+  const selected =
+    batches.find((b) => b.batch_id === (batchId ?? batches[0]?.batch_id)) ??
+    null;
 
   return (
     <div className="cobre-history">
@@ -22,6 +25,14 @@ export function History() {
         </div>
       )}
       <aside className="cobre-history-side">
+        {unreadable > 0 && (
+          <p className="cobre-muted">
+            {unreadable}{" "}
+            {unreadable === 1
+              ? "bateria não pôde ser lida"
+              : "baterias não puderam ser lidas"}
+          </p>
+        )}
         {!loading && !error && batches.length === 0 ? (
           <p>Nenhuma bateria gravada</p>
         ) : (
@@ -44,7 +55,9 @@ export function History() {
           onToggleBaseline={toggleBaseline}
         />
       ) : (
-        <section aria-label="Dashboard da bateria">Selecione uma bateria</section>
+        <section aria-label="Dashboard da bateria">
+          Selecione uma bateria
+        </section>
       )}
     </div>
   );

@@ -20,11 +20,25 @@ export function Functional() {
   return (
     <div className="cobre-shell">
       {run && (launcher.busy || run.status !== "pending") && (
-        <RunProgress run={run} stopping={launcher.stopping} onStop={launcher.stop} />
+        <RunProgress
+          run={run}
+          stopping={launcher.stopping}
+          onStop={launcher.stop}
+        />
       )}
       {run && <RunFinished key={run.run_id} run={run} />}
-      <TestLauncher launcher={launcher} onScopeChange={onScopeChange} />
-      {online && <CommandPreview provider={launcher.selectedProvider} scope={scope} />}
+      <TestLauncher
+        launcher={launcher}
+        onScopeChange={onScopeChange}
+        preview={
+          online && (
+            <CommandPreview
+              provider={launcher.selectedProvider}
+              scope={scope}
+            />
+          )
+        }
+      />
     </div>
   );
 }

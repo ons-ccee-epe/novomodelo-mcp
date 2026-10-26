@@ -27,7 +27,6 @@ export function Load() {
         <LoadProgress run={launcher.run} stopping={launcher.stopping} onStop={launcher.stop} />
       )}
 
-      <h1><repositório anterior> — Teste de carga</h1>
       <p className="cobre-muted">
         Cada sessão simultânea tem o seu próprio servidor MCP. Nas tools diretas, as sessões chamam
         só tools somente leitura, sem LLM, e a subida dos servidores é medida à parte, fora da

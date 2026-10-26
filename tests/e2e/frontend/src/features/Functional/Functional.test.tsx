@@ -51,6 +51,14 @@ describe("Functional", () => {
     expect(previewUrls(mock).at(-1)).toBe("api/command-preview?provider=claude");
   });
 
+  it("o comando equivalente vem antes da lista de testes", async () => {
+    stub(true);
+    renderIt();
+    const box = await screen.findByText("cmd-terminal");
+    const list = screen.getByRole("button", { name: /q_docs/ });
+    expect(box.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("escolher um grupo atualiza o preview com tags", async () => {
     const mock = stub(true);
     renderIt();

@@ -14,7 +14,7 @@ export function formatDelta(delta: number | null): {
 } {
   if (delta === null) return { text: "—", trend: "none" };
   const rounded = Math.round(delta * 10) / 10;
-  if (rounded === 0) return { text: "▲ +0,0 pp", trend: "none" };
+  if (rounded === 0) return { text: "0,0 pp", trend: "none" };
   if (rounded > 0) return { text: `▲ +${decimal(rounded)} pp`, trend: "up" };
   return { text: `▼ −${decimal(-rounded)} pp`, trend: "down" };
 }

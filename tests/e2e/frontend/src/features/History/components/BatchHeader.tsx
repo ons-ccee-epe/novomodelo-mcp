@@ -26,7 +26,9 @@ export function BatchHeader({
         <h2 className="cobre-batch-title">{formatDate(batch.timestamp)}</h2>
         <ConjuntoTag conjunto={conjuntoOf(batch)} />
         <code className="cobre-muted">{batch.batch_id}</code>
-        {batch.cobre_mcp_version && <span className="cobre-muted">v{batch.cobre_mcp_version}</span>}
+        {batch.cobre_mcp_version && batch.cobre_mcp_version !== "unknown" && (
+          <span className="cobre-muted">v{batch.cobre_mcp_version}</span>
+        )}
         {batch.git_commit_sha && (
           <code className="cobre-muted" title={batch.git_commit_sha}>
             {batch.git_commit_sha.slice(0, SHORT_SHA_CHARS)}
@@ -38,7 +40,9 @@ export function BatchHeader({
           type="button"
           className="cobre-btn"
           disabled={!canToggle}
-          title={canToggle ? undefined : "Suba o launcher para alterar a baseline"}
+          title={
+            canToggle ? undefined : "Suba o launcher para alterar a baseline"
+          }
           onClick={onToggleBaseline}
         >
           {isBaseline ? "Remover baseline" : "★ Definir como baseline"}
