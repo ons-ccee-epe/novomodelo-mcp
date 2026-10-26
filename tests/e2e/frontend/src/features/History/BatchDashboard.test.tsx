@@ -101,13 +101,12 @@ describe("BatchHeader", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("launcher recusou");
   });
 
-  it("Baixar resumo fica desabilitado sem o handler e chama o handler quando há", () => {
+  it("Baixar resumo fica habilitado por padrão e usa o handler quando há", () => {
     const { unmount } = render(
       <BatchDashboard batch={CUR} all={[CUR]} baselines={{}} launcherOnline onToggleBaseline={vi.fn()} />,
     );
     const off = screen.getByRole("button", { name: "⤓ Baixar resumo" });
-    expect(off).toBeDisabled();
-    expect(off).toHaveAttribute("title", "Disponível com os gráficos");
+    expect(off).toBeEnabled();
     unmount();
     const onDownloadSummary = vi.fn();
     render(
