@@ -477,6 +477,17 @@ def _glossary_terms(con: sqlite3.Connection, normalized: str) -> list[str]:
     return found
 
 
+#: Uma consulta por tabela, escrita por inteiro: o SQLite não parametriza nome de tabela.
+_SEARCH_SQL = {
+    "secoes": ("SELECT pagina, titulo, ancora, snippet(secoes, 3, '', '', '…', 48), "
+               "bm25(secoes, 0.0, 5.0, 0.0, 1.0) AS r FROM secoes WHERE secoes MATCH ? "
+               "ORDER BY r LIMIT ?"),
+    "changelog": ("SELECT pagina, titulo, ancora, snippet(changelog, 3, '', '', '…', 48), "
+                  "bm25(changelog, 0.0, 5.0, 0.0, 1.0) AS r FROM changelog WHERE changelog MATCH ? "
+                  "ORDER BY r LIMIT ?"),
+}
+
+
 def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
     """Seções mais relevantes para `query` (BM25, título com peso maior).
 
@@ -495,16 +506,14 @@ def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
         return error(22, "consulta vazia: informe termos da documentação (de preferência em inglês)")
     match = " OR ".join(f'"{t}"' for t in terms)
     limit = max(1, min(int(k), _SEARCH_MAX_K))
-    sql = ("SELECT pagina, titulo, ancora, snippet({t}, 3, '', '', '…', 48), "
-           "bm25({t}, 0.0, 5.0, 0.0, 1.0) AS r FROM {t} WHERE {t} MATCH ? ORDER BY r LIMIT ?")
     try:
         rows = []
         if _VERSION_INTENT.search(normalized) and con.execute(
                 "SELECT 1 FROM sqlite_master WHERE name = 'changelog'").fetchone():
             # Os escores das duas tabelas não se comparam: o changelog vem na frente,
             # com até metade das vagas, quando a consulta é sobre versões.
-            rows = con.execute(sql.format(t="changelog"), (match, (limit + 1) // 2)).fetchall()
-        rows += con.execute(sql.format(t="secoes"), (match, limit - len(rows))).fetchall()
+            rows = con.execute(_SEARCH_SQL["changelog"], (match, (limit + 1) // 2)).fetchall()
+        rows += con.execute(_SEARCH_SQL["secoes"], (match, limit - len(rows))).fetchall()
     except sqlite3.Error as exc:
         return error(2, "falha na busca do índice de docs", str(exc))
     return {"status": "ok", "consulta_usada": match, "termos_do_glossario": glossary,

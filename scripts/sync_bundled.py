@@ -123,10 +123,10 @@ def generate(source: Path, dest: Path, changelogs: dict[str, Path] | None = None
     index = dest / INDEX_FILE
     index.unlink(missing_ok=True)
     con = build_docs_index(dest / "docs", index)
-    sections = sum(con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
-                   for t in ("secoes", "changelog"))
-    for table in ("secoes", "changelog"):
-        con.execute(f"INSERT INTO {table}({table}) VALUES('optimize')")
+    sections = con.execute(
+        "SELECT (SELECT count(*) FROM secoes) + (SELECT count(*) FROM changelog)").fetchone()[0]
+    con.execute("INSERT INTO secoes(secoes) VALUES('optimize')")
+    con.execute("INSERT INTO changelog(changelog) VALUES('optimize')")
     con.commit()
     con.execute("VACUUM")
     con.close()
