@@ -8,13 +8,13 @@ interface Props {
 }
 
 export function ConjuntoTag({ conjunto, onClick, pressed }: Props) {
-  const style = { background: conjuntoColor(conjunto) };
+  const color = conjuntoColor(conjunto);
   if (onClick) {
     return (
       <button
         type="button"
         className="cobre-tag"
-        style={style}
+        style={{ "--tag-color": color } as React.CSSProperties}
         aria-pressed={pressed}
         onClick={onClick}
       >
@@ -23,7 +23,7 @@ export function ConjuntoTag({ conjunto, onClick, pressed }: Props) {
     );
   }
   return (
-    <span className="cobre-tag" style={style}>
+    <span className="cobre-tag" style={{ background: color }}>
       {conjuntoLabel(conjunto)}
     </span>
   );

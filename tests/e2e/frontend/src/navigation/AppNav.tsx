@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { fetchIndex } from "@/services/resultsApi";
@@ -31,11 +31,27 @@ function useLatestBatchLabel(): string | null {
   return label;
 }
 
+/** Publica a altura real do cabeçalho em --cobre-header-h (o painel lateral do histórico gruda abaixo dele). */
+function useHeaderHeight(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const publish = () =>
+      document.documentElement.style.setProperty("--cobre-header-h", `${el.offsetHeight}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+}
+
 /** Cabeçalho fixo: título, última bateria e as abas das áreas do painel. */
 export function AppNav() {
   const latest = useLatestBatchLabel();
+  const headerRef = useRef<HTMLElement>(null);
+  useHeaderHeight(headerRef);
   return (
-    <header className="cobre-header">
+    <header className="cobre-header" ref={headerRef}>
       <div className="cobre-header-top">
         <h1 className="cobre-header-title">Testes Automatizados · MCP NovoModelo</h1>
         {latest && <span className="cobre-header-batch">{latest}</span>}
