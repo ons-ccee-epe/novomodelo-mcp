@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..config import Settings
 from ..names import BRIDGE_CLI, SOLVER_CLI
+from .subproc import NO_WINDOW
 
 
 def bridge_origin(settings: Settings) -> tuple[str | None, str | None]:
@@ -63,7 +64,7 @@ def tool_version(binpath: str | None) -> str | None:
         try:
             proc = subprocess.run(
                 [binpath, *args], capture_output=True, encoding="utf-8", errors="replace",
-                timeout=15,
+                timeout=15, **NO_WINDOW,
             )
         except (OSError, subprocess.SubprocessError):
             return None

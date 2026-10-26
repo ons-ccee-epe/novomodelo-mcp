@@ -15,6 +15,7 @@ from ..names import BINDING_DIST, SOLVER_CLI
 from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_novomodelo
 from .obs import log
+from .subproc import NO_WINDOW
 
 _NOT_FOUND = f"{SOLVER_CLI} não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN)."
 
@@ -35,7 +36,7 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
     try:
         proc = subprocess.run(
             cmd, capture_output=True, encoding="utf-8", errors="replace",
-            timeout=timeout if timeout is not None else settings.default_timeout,
+            timeout=timeout if timeout is not None else settings.default_timeout, **NO_WINDOW,
         )
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
@@ -148,7 +149,7 @@ def validate_deck_cli(case_dir: str, *, output_dir: str | None = None,
         cmd += ["--output", output_dir]
     try:
         proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
-                              timeout=settings.default_timeout)
+                              timeout=settings.default_timeout, **NO_WINDOW)
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
     except OSError as exc:
@@ -192,7 +193,7 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
     # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout), nunca propagam ao stdio.
     try:
         proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
-                              timeout=settings.default_timeout)
+                              timeout=settings.default_timeout, **NO_WINDOW)
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
     except OSError as exc:

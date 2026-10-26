@@ -20,6 +20,7 @@ from typing import Any
 from . import versions
 from .discovery import tool_version
 from .envelope import error
+from .subproc import NO_WINDOW
 
 #: Variáveis que fazem o instalador oficial baixar de outro lugar: nunca repassadas.
 SCRUBBED_ENV = ("NOVOMODELO_CLI_DOWNLOAD_URL", "INSTALLER_DOWNLOAD_URL",
@@ -68,7 +69,7 @@ def _expected_sha256(version: str) -> str | dict[str, str]:
 
 def _run_installer(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
-                          **kwargs)
+                          **NO_WINDOW, **kwargs)
 
 
 def _installer_env(pasta: str | None) -> dict[str, str]:

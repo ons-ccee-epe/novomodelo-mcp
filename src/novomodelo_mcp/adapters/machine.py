@@ -25,6 +25,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from .subproc import NO_WINDOW
+
 _GIB = 1024 ** 3
 _CGROUP = Path("/sys/fs/cgroup")
 
@@ -186,7 +188,7 @@ def _sysctl_int(name: str) -> int | None:
     try:
         # argv fixa (ferramenta do SO + nome de chave interno), sem shell: nada vem do agente.
         out = subprocess.run([_sysctl(), "-n", name], capture_output=True, encoding="utf-8", errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                             timeout=5)
+                             timeout=5, **NO_WINDOW)
         return int(out.stdout.strip()) if out.returncode == 0 else None
     except (OSError, subprocess.SubprocessError, ValueError):
         return None
@@ -301,7 +303,7 @@ def _raw_machine_id() -> str | None:
             out = subprocess.run([system_tool("ioreg", "/usr/sbin"),  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                                   "-rd1", "-c", "IOPlatformExpertDevice"],
                                  capture_output=True, encoding="utf-8", errors="replace",
-                                 timeout=5)
+                                 timeout=5, **NO_WINDOW)
         except (OSError, subprocess.SubprocessError):
             return None
         m = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', out.stdout or "")
