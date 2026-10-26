@@ -3,6 +3,7 @@
 Rotas (todas sob /api, exceto o serving de dados):
   GET  /api/providers          -> provedores de IA detectados no PATH
   GET  /api/cases              -> biblioteca de prompts (casos de teste)
+  GET  /api/command-preview    -> comando equivalente ao disparo (terminal e agente)
   POST /api/runs               -> dispara uma bateria (esteira completa / tags / 1 caso)
   GET  /api/runs               -> lista runs desta sessao do launcher
   GET  /api/runs/{run_id}      -> estado de um run (polling)
@@ -47,6 +48,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from tests.e2e.launcher.command_preview import command_preview
 from tests.e2e.launcher.load_service import LoadRunService
 from tests.e2e.launcher.providers import detect_providers, resolve_provider
 from tests.e2e.launcher.run_gate import RunGate
@@ -377,6 +379,26 @@ def create_app() -> FastAPI:
         except RunAlreadyActiveError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return state.to_dict()
+
+    @app.get("/api/command-preview")
+    def get_command_preview(
+        provider: str | None = Query(None, max_length=40),
+        tags: str | None = Query(None, max_length=800),
+        case_id: str | None = Query(None, max_length=200, pattern=_CASE_ID_PATTERN),
+    ) -> dict[str, Any]:
+        """Comando que um disparo com estes filtros executaria; nada é gravado nem iniciado."""
+        try:
+            resolved = resolve_provider(provider)
+        except RuntimeError as exc:
+            raise _unprocessable(str(exc)) from exc
+        names = _split(tags)
+        try:
+            cases = service.load_cases(tags=names, case_id=case_id)
+        except CasesLoaderError as exc:
+            raise _unprocessable(str(exc)) from exc
+        if not cases:
+            raise _unprocessable("Nenhum caso encontrado com os filtros informados.")
+        return command_preview(resolved, names, case_id, cases)
 
     @app.get("/api/runs")
     def list_runs() -> dict[str, Any]:
