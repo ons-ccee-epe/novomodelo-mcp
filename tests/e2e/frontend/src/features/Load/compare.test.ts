@@ -72,7 +72,7 @@ describe("configDifferences", () => {
   it("lista os parâmetros que mudaram", () => {
     expect(
       configDifferences(base, { ...base, concurrency: 8, tools: ["docs_list"], iterations: 5 }),
-    ).toEqual(["concorrência", "iterações", "tools"]);
+    ).toEqual(["sessões simultâneas", "iterações", "tools"]);
   });
 });
 

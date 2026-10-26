@@ -1,7 +1,9 @@
 """`novomodelo-mcp configurar`: grava a entrada do MCP na configuração do cliente.
 
 Altera só a chave `novomodelo` (e a lista de liberação das tools de leitura, onde o
-cliente aceita uma); o resto do arquivo é preservado. Antes de gravar faz backup
+cliente aceita uma); o resto do arquivo é preservado. A pasta de trabalho nunca tem
+padrão: vem de `--workspace`, da pergunta no terminal, ou é recusada de propósito com
+`--irrestrito`. Antes de gravar faz backup
 `<arquivo>.bak-AAAAMMDD-HHMMSS`; grava de forma atômica e relê o JSON.
 """
 from __future__ import annotations
@@ -187,16 +189,29 @@ def create_workspaces(workspace: list[str]) -> list[Path]:
     return created
 
 
+def _private_write(path: Path, data: bytes, mode: int) -> None:
+    """Grava com o modo pedido desde a criação (a config do cliente guarda o `env` dos
+    MCPs e dados de conta; o umask comum a deixaria legível por todos)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), mode)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    os.chmod(path, mode)
+
+
+#: Só a pessoa lê a config do cliente (o cliente roda como ela); no Windows vale a ACL.
+_PRIVATE = 0o600
+
+
 def _backup(path: Path, stamp: str) -> Path:
     backup = path.with_name(f"{path.name}.bak-{stamp}")
-    backup.write_bytes(path.read_bytes())
+    _private_write(backup, path.read_bytes(), _PRIVATE)
     return backup
 
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    tmp.write_bytes(text.encode("utf-8"))
+    _private_write(tmp, text.encode("utf-8"), _PRIVATE)
     os.replace(tmp, path)
     if path.suffix == ".json":
         json.loads(path.read_bytes().decode("utf-8"))
@@ -229,6 +244,25 @@ _NOTES = {
     "kiro": "O mcp.json de um workspace (.kiro/settings/mcp.json) vence o do usuário.",
 }
 REOPEN = "Feche e abra o cliente e peça o server_info."
+SEM_PASTA = ("erro: informe a pasta de estudos com --workspace <pasta> (repita para mais de "
+             "uma). Para liberar todas as pastas, use --irrestrito. Nada foi gravado.")
+
+
+def ask_workspace() -> list[str]:
+    """Pergunta as pastas de estudos no terminal; resposta vazia pergunta de novo, sem padrão."""
+    print("Em que pasta ficam seus estudos (decks e casos)? O MCP só lê e grava dentro dela.")
+    print("Uma pasta por linha; linha vazia termina. Se ainda não tem uma, digite, por "
+          f"exemplo, {_home() / 'novomodelo'} (a pasta é criada).")
+    pastas: list[str] = []
+    while True:
+        try:
+            linha = input("pasta: ").strip().strip('"')
+        except EOFError:
+            return pastas
+        if linha:
+            pastas.append(linha)
+        elif pastas:
+            return pastas
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -236,13 +270,24 @@ def main(argv: list[str] | None = None) -> int:
         prog=f"{MCP_DIST} configurar",
         description="Grava a entrada do MCP no arquivo de configuração do cliente.")
     parser.add_argument("--cliente", choices=CLIENTS, required=True)
-    parser.add_argument("--workspace", action="append", default=[], metavar="PASTA",
-                        help="raiz permitida (repita para mais de uma)")
+    pasta = parser.add_mutually_exclusive_group()
+    pasta.add_argument("--workspace", action="append", default=[], metavar="PASTA",
+                       help="pasta de estudos permitida (repita para mais de uma)")
+    pasta.add_argument("--irrestrito", action="store_true",
+                       help="sem pasta de trabalho: o MCP lê e grava em qualquer pasta")
     parser.add_argument("--mostrar", action="store_true",
                         help="só mostra o que seria gravado, sem tocar em nada")
     parser.add_argument("--instrucoes", action="store_true",
                         help="também grava uma linha nas instruções do cliente")
     args = parser.parse_args(argv)
+    if not args.workspace and not args.irrestrito:
+        if not sys.stdin.isatty():
+            print(SEM_PASTA, file=sys.stderr)
+            return 2
+        args.workspace = ask_workspace()
+        if not args.workspace:
+            print(SEM_PASTA, file=sys.stderr)
+            return 2
     try:
         changes = plan(args.cliente, args.workspace, args.instrucoes)
     except ConfigError as exc:

@@ -258,7 +258,7 @@ def test_dominios_permitidos(url):
 @pytest.mark.parametrize("url", [
     "http://github.com/ons-ccee-epe/novomodelo",
     "https://github.com/outra-org/novomodelo",
-    "https://api.github.com/repos/<repositório anterior>/releases/latest",
+    "https://api.github.com/repos/<organização interna>/novomodelo-mcp/releases/latest",
     "https://pypi.org/pypi/outro-pacote/json",
     "https://release-assets.githubusercontent.com/x",
     "https://evil.example/ons-ccee-epe/",
@@ -476,3 +476,7 @@ def test_docs_de_outra_versao_avisam_e_sem_manifesto_nao(pecas, monkeypatch):
 def test_docs_embutidas_reais_tem_a_versao_do_manifesto():
     piece = V._docs_piece()
     assert piece["versao"] and piece["commit"]
+
+
+def test_comando_de_instalar_o_mcp_compila_o_bytecode():
+    assert "uv tool install --force --compile-bytecode ./" in V.mcp_install_command("0.19.0")

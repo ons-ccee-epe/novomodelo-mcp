@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { isFinished, launcherHealthy } from "@/services/launcherApi";
+import {
+  fetchProviders,
+  isFinished,
+  launcherHealthy,
+  type ProviderId,
+} from "@/services/launcherApi";
 import {
   cancelLoadRun,
+  fetchLoadCapacity,
+  fetchLoadCases,
   fetchLoadRunStates,
   fetchLoadTools,
   pollLoadRun,
   startLoadRun,
+  type AgentCatalog,
+  type CapacityQuery,
+  type LoadCapacity,
   type LoadLimits,
+  type LoadMode,
   type LoadRunState,
   type LoadToolInfo,
   type StartLoadBody,
@@ -19,6 +30,22 @@ export interface LoadLauncherData {
   checking: boolean;
   tools: LoadToolInfo[];
   limits: LoadLimits | null;
+  /** Casos, limites e provedores do modo agente; null se não carregaram (ver agentError). */
+  agent: AgentCatalog | null;
+  /** Falha ao carregar casos/provedores: o modo tools segue disponível. */
+  agentError: string | null;
+  /** Capacidade da máquina para o modo/provedor pedido por último. */
+  capacity: LoadCapacity | null;
+  capacityError: string | null;
+  /**
+   * Pede a capacidade de novo (a memória livre é um instantâneo); só o agente usa o provedor.
+   * ``selection`` é o que vai rodar (tools marcadas ou caso/grupo): muda o custo por sessão.
+   */
+  requestCapacity: (
+    mode: LoadMode,
+    provider: ProviderId | null,
+    selection?: CapacityQuery,
+  ) => void;
   /** Carga em andamento ou a última desta sessão, para o progresso ao vivo. */
   run: LoadRunState | null;
   busy: boolean;
@@ -31,8 +58,8 @@ export interface LoadLauncherData {
 }
 
 /**
- * Interação com o launcher de dev para o teste de carga: descobre as tools e os limites,
- * dispara, acompanha por polling e para. Ao reabrir a tela com uma carga em andamento,
+ * Interação com o launcher de dev para o teste de carga: descobre as tools, os casos, os
+ * provedores e os limites, dispara, acompanha por polling e para. Ao reabrir a tela com uma carga em andamento,
  * retoma o acompanhamento. Ao terminar com sucesso, chama onFinished.
  */
 export function useLoadLauncher(onFinished: () => void): LoadLauncherData {
@@ -40,6 +67,10 @@ export function useLoadLauncher(onFinished: () => void): LoadLauncherData {
   const [checking, setChecking] = useState(true);
   const [tools, setTools] = useState<LoadToolInfo[]>([]);
   const [limits, setLimits] = useState<LoadLimits | null>(null);
+  const [agent, setAgent] = useState<AgentCatalog | null>(null);
+  const [agentError, setAgentError] = useState<string | null>(null);
+  const [capacity, setCapacity] = useState<LoadCapacity | null>(null);
+  const [capacityError, setCapacityError] = useState<string | null>(null);
   const [run, setRun] = useState<LoadRunState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +88,27 @@ export function useLoadLauncher(onFinished: () => void): LoadLauncherData {
     abortRef.current = controller;
     return () => controller.abort();
   }, []);
+
+  // Só a resposta do último pedido vale: trocar de modo/provedor/seleção rápido não mistura capacidades.
+  const capacityRequest = useRef(0);
+  const requestCapacity = useCallback(
+    (mode: LoadMode, provider: ProviderId | null, selection?: CapacityQuery) => {
+      const id = ++capacityRequest.current;
+      const signal = abortRef.current?.signal;
+      setCapacity(null);
+      setCapacityError(null);
+      fetchLoadCapacity(mode, provider, selection)
+        .then((next) => {
+          if (id === capacityRequest.current && !signal?.aborted) setCapacity(next);
+        })
+        .catch((e: unknown) => {
+          if (id === capacityRequest.current && !signal?.aborted) {
+            setCapacityError(e instanceof Error ? e.message : String(e));
+          }
+        });
+    },
+    [],
+  );
 
   const follow = useCallback(
     (initial: LoadRunState) => {
@@ -98,6 +150,22 @@ export function useLoadLauncher(onFinished: () => void): LoadLauncherData {
         } catch (e: unknown) {
           if (alive) setError(e instanceof Error ? e.message : String(e));
         }
+        const [cases, providers] = await Promise.allSettled([fetchLoadCases(), fetchProviders()]);
+        if (!alive) return;
+        if (cases.status === "fulfilled" && providers.status === "fulfilled") {
+          setAgent({
+            cases: cases.value.cases ?? [],
+            limits: cases.value.limits,
+            providers: providers.value.providers ?? [],
+            defaultProvider: providers.value.default ?? null,
+          });
+        } else {
+          const failed = [cases, providers].find(
+            (r): r is PromiseRejectedResult => r.status === "rejected",
+          );
+          const reason: unknown = failed?.reason;
+          setAgentError(reason instanceof Error ? reason.message : String(reason));
+        }
       }
       if (alive) setChecking(false);
     })();
@@ -138,6 +206,11 @@ export function useLoadLauncher(onFinished: () => void): LoadLauncherData {
     checking,
     tools,
     limits,
+    agent,
+    agentError,
+    capacity,
+    capacityError,
+    requestCapacity,
     run,
     busy,
     error,

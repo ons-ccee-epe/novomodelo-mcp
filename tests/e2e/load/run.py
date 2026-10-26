@@ -3,10 +3,20 @@
 Uso:
     python -m tests.e2e.load.run --concurrency 4 --duration 30
     python -m tests.e2e.load.run --concurrency 2 --duration 10 --tools deck_list,docs_search
+    python -m tests.e2e.load.run --mode agent --provider claude --group deck --concurrency 2 --duration 120
 
-Códigos de saída: 0 concluída, 1 falha (servidor não sobe, mix vazio), 2 uso
-inválido, 3 interrompida pelo launcher (nada é gravado), 130 interrompida por
-Ctrl+C (grava o parcial com ``interrupted: true``).
+Modos: ``tools`` (padrão) chama as tools direto, sem agente; ``agent`` roda os casos do
+``cases.yaml`` em N sessões de agente simultâneas (consome tokens do provedor).
+
+Códigos de saída: 0 concluída, 1 falha (servidor não sobe, nenhum caso ou chamada
+disponível, disco insuficiente para a cópia das fixtures), 2 uso inválido, 3 interrompida
+pelo launcher (nada é gravado), 130 interrompida por Ctrl+C (grava o parcial com
+``interrupted: true``).
+
+As pastas das sessões (e as cópias das fixtures, se a seleção grava) ficam numa pasta
+temporária do run, dentro de ``--work-dir``, apagada ao fim, inclusive em erro e Ctrl+C.
+O launcher passa uma ``--work-dir`` própria e a apaga depois que a árvore do motor morre:
+um cancelamento mata o motor sem dar tempo de limpar.
 """
 from __future__ import annotations
 
@@ -17,11 +27,30 @@ import os
 import shlex
 import signal
 import sys
+import tempfile
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
+from tests.e2e.launcher.providers import ProviderInfo, resolve_provider
+from tests.e2e.load.agent_cases import CaseSelection
+from tests.e2e.load.agent_engine import (
+    MAX_AGENT_CONCURRENCY,
+    PROVIDERS,
+    AgentLoadConfig,
+    AgentLoadRunner,
+)
+from tests.e2e.load.agent_session import default_run_root
+from tests.e2e.load.agent_setup import (
+    agent_server_config,
+    denied_tools,
+    make_preflight,
+    server_tool_lister,
+    session_factory,
+)
 from tests.e2e.load.client import default_server_command, stdio_client_factory
 from tests.e2e.load.engine import (
     DEFAULT_TIMEOUT_S,
@@ -31,12 +60,23 @@ from tests.e2e.load.engine import (
     LoadError,
     LoadRunner,
 )
-from tests.e2e.load.mix import ALLOWED_TOOLS
+from tests.e2e.load.mix import ALLOWED_TOOLS, DEFAULT_TOOLS, select_specs
 from tests.e2e.load.resources import ResourceSampler, load_psutil
-from tests.e2e.load.store import LoadStore, build_record
+from tests.e2e.load.sandbox import (
+    SandboxPlan,
+    SessionSandbox,
+    ToolsSessions,
+    check_disk,
+    make_run_root,
+    plan_for_specs,
+    remove_tree,
+    sandbox_summary,
+)
+from tests.e2e.load.store import LoadStore, build_agent_record, build_record
 from tests.e2e.queries.mcp_workspace import WORKSPACE_ENV, workspace_roots
+from tests.e2e.queries.run_queries import _build_test_result
 
-__all__ = ["build_parser", "format_report", "main"]
+__all__ = ["build_parser", "format_agent_report", "format_report", "main", "stderr_tail"]
 
 _E2E_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_FIXTURES = _E2E_DIR / "fixtures"
@@ -48,18 +88,34 @@ EXIT_CANCELLED = 3
 EXIT_INTERRUPTED = 130
 
 _HUMAN_PROGRESS_EVERY_S = 5.0
+_SANDBOX_WORKSPACE = "cópia das fixtures por sessão"
+_STDERR_TAIL_CHARS = 500
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tests.e2e.load.run",
         description=(
-            "Carga no servidor MCP do novomodelo: N clientes, cada um com o seu processo do "
-            "servidor, chamando só tools somente leitura."
+            "Carga no servidor MCP do novomodelo. Modo tools: N sessões, cada uma com o seu "
+            "processo do servidor, chamando as tools do mix (as que gravam numa cópia das "
+            "fixtures por sessão). Modo agent: N sessões de agente rodando em laço os casos do "
+            "cases.yaml que podem rodar em paralelo."
         ),
     )
     parser.add_argument(
-        "--concurrency", type=int, required=True, help=f"Clientes concorrentes (1..{MAX_CONCURRENCY})."
+        "--mode",
+        choices=("tools", "agent"),
+        default="tools",
+        help="tools (padrão): chamadas diretas, sem agente; agent: casos por agente (gasta tokens).",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        required=True,
+        help=(
+            f"Sessões simultâneas (tools: 1..{MAX_CONCURRENCY}; "
+            f"agent: 1..{MAX_AGENT_CONCURRENCY})."
+        ),
     )
     parser.add_argument(
         "--duration", type=float, required=True, help=f"Janela de carga em segundos (1..{MAX_DURATION_S:g})."
@@ -68,18 +124,40 @@ def build_parser() -> argparse.ArgumentParser:
         "--iterations",
         type=int,
         default=None,
-        help="Chamadas por cliente; cada cliente para nisso ou ao fim da duração, o que vier primeiro.",
+        help=(
+            "Por sessão: chamadas (tools) ou casos (agent); cada sessão para nisso ou ao fim "
+            "da duração, o que vier primeiro."
+        ),
     )
     parser.add_argument(
         "--tools",
         default=None,
-        help=f"Tools do mix, separadas por vírgula (permitidas: {', '.join(ALLOWED_TOOLS)}).",
+        help=(
+            "Só tools: tools do mix, separadas por vírgula (default: o mix padrão, "
+            f"{', '.join(DEFAULT_TOOLS)}; permitidas: {', '.join(ALLOWED_TOOLS)})."
+        ),
     )
     parser.add_argument(
         "--timeout",
         type=float,
-        default=DEFAULT_TIMEOUT_S,
-        help="Segundos sem resposta até contar timeout e recriar o cliente (default: %(default)s).",
+        default=None,
+        help=(
+            f"tools: segundos sem resposta até contar timeout e recriar a sessão (default: "
+            f"{DEFAULT_TIMEOUT_S:g}); agent: timeout de cada caso (default: o timeout_s do caso)."
+        ),
+    )
+    parser.add_argument(
+        "--provider",
+        choices=PROVIDERS,
+        default=None,
+        help="Só agent: provedor de IA (default: o primeiro instalado, como a esteira).",
+    )
+    parser.add_argument("--case", default=None, help="Só agent: um caso do cases.yaml, pelo id.")
+    parser.add_argument(
+        "--group", default=None, help="Só agent: um grupo (o da tool esperada: deck, docs, ...)."
+    )
+    parser.add_argument(
+        "--tags", default=None, help="Só agent: tags separadas por vírgula (casos com qualquer uma)."
     )
     parser.add_argument(
         "--no-warmup",
@@ -94,9 +172,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--server-command",
         default=None,
-        help="Comando do servidor (default: o Python atual com -m novomodelo_mcp).",
+        help="Comando do servidor (default: o Python do .venv do projeto com -m novomodelo_mcp).",
     )
     parser.add_argument("--server-log", type=Path, default=None, help="Arquivo para o stderr dos servidores.")
+    parser.add_argument(
+        "--work-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Pasta onde o run cria a sua pasta temporária (sessões e cópias das fixtures), "
+            "apagada ao fim (default: o TEMP)."
+        ),
+    )
     parser.add_argument(
         "--json-progress",
         action="store_true",
@@ -110,6 +197,38 @@ def _parse_tools(raw: str | None) -> tuple[str, ...] | None:
         return None
     names = tuple(part.strip() for part in raw.split(",") if part.strip())
     return names or None
+
+
+_TOOLS_ONLY = {"tools": "--tools", "no_warmup": "--no-warmup", "server_command": "--server-command"}
+_AGENT_ONLY = {"provider": "--provider", "case": "--case", "group": "--group", "tags": "--tags"}
+
+
+def _misplaced(args: argparse.Namespace) -> list[str]:
+    """Opções que não valem no modo escolhido."""
+    wrong = _AGENT_ONLY if args.mode == "tools" else _TOOLS_ONLY
+    return [flag for name, flag in wrong.items() if getattr(args, name)]
+
+
+def _tools_config(args: argparse.Namespace) -> LoadConfig:
+    return LoadConfig(
+        concurrency=args.concurrency,
+        duration_s=args.duration,
+        iterations=args.iterations,
+        tools=_parse_tools(args.tools),
+        timeout_s=args.timeout if args.timeout is not None else DEFAULT_TIMEOUT_S,
+        warmup=not args.no_warmup,
+    )
+
+
+def _agent_config(args: argparse.Namespace) -> AgentLoadConfig:
+    return AgentLoadConfig(
+        concurrency=args.concurrency,
+        duration_s=args.duration,
+        provider=args.provider,
+        selection=CaseSelection(case_id=args.case, group=args.group, tags=_parse_tools(args.tags)),
+        iterations=args.iterations,
+        timeout_s=args.timeout,
+    )
 
 
 def _server_command(raw: str | None) -> tuple[str, list[str]]:
@@ -130,6 +249,69 @@ def _emit(event: str, **fields: Any) -> None:
 
 def _ms(value: float | None) -> str:
     return "-" if value is None else f"{value:.0f}"
+
+
+def _resources_line(resources: dict[str, Any], what: str) -> str:
+    if resources["available"] and resources.get("samples"):
+        return (
+            f"{what}: CPU média {resources['avg_cpu_percent']:.0f}% (pico "
+            f"{resources['peak_cpu_percent']:.0f}%), RSS de pico {resources['peak_rss_mb']:.0f} MB"
+        )
+    return f"{what}: CPU/RSS não medidos (instale psutil para medir)"
+
+
+def _sandbox_lines(sandbox: dict[str, Any] | None) -> list[str]:
+    if not sandbox or not sandbox.get("enabled"):
+        return []
+    copy_ms = sandbox.get("copy_ms_mean")
+    final = sandbox.get("final_mb_max")
+    return [
+        f"Cópia por sessão: {sandbox['copy_mb']:.1f} MB ({', '.join(sandbox['subtrees']) or 'só scratch/'})"
+        + (f", copiada em {copy_ms / 1000:.1f} s em média" if copy_ms is not None else "")
+        + (f"; maior cópia ao fim: {final:.1f} MB" if final is not None else "")
+    ]
+
+
+def format_agent_report(record: dict[str, Any]) -> str:
+    """Resumo legível de uma carga do modo agent (o mesmo conteúdo do JSON gravado)."""
+    totals = record["totals"]
+    sessions = record["sessions"]
+    statuses = totals["statuses"]
+    lines = [
+        f"Carga {record['load_id']} (agent, {record['agent']['provider']}): "
+        f"{sessions['requested']} sessão(ões), {record['cases']['selection']}, "
+        f"{record['duration_seconds']:.1f} s" + (" (interrompida)" if record["interrupted"] else ""),
+        f"Sessões: {sessions['started']}/{sessions['requested']} preparadas em "
+        f"{sessions['setup_ms'] / 1000:.1f} s",
+        f"Total: {totals['calls']} execuções; aprovados {statuses['pass']}, parciais "
+        f"{statuses['partial']}, reprovados {statuses['fail']}, timeouts {statuses['timeout']}, "
+        f"erros {statuses['error']}; aprovação {totals['pass_rate'] * 100:.1f}%; "
+        f"vazão {totals['throughput_cpm']:.2f} casos/min",
+        f"Latência ponta a ponta (ms, execuções completas): p50 {_ms(totals['p50_ms'])}, "
+        f"p95 {_ms(totals['p95_ms'])}, p99 {_ms(totals['p99_ms'])}, máx {_ms(totals['max_ms'])}",
+        "",
+        f"{'caso':<34}{'exec':>6}{'pass':>6}{'fail':>6}{'t.out':>6}{'erro':>6}"
+        f"{'p50':>8}{'p95':>8}{'tools':>7}",
+    ]
+    for case_id, row in record["per_case"].items():
+        st = row["statuses"]
+        mean_calls = row["tool_calls_mean"]
+        lines.append(
+            f"{case_id:<34}{row['calls']:>6}{st['pass']:>6}{st['fail'] + st['partial']:>6}"
+            f"{st['timeout']:>6}{st['error']:>6}{_ms(row['p50_ms']):>8}{_ms(row['p95_ms']):>8}"
+            f"{'-' if mean_calls is None else f'{mean_calls:.1f}':>7}"
+        )
+    excluded = record["cases"]["excluded"]
+    if excluded:
+        lines += ["", f"Fora da carga ({len(excluded)}):"]
+        lines += [f"  {item['id']}: {item['reason']}" for item in excluded]
+    for item in record["errors"]:
+        lines.append(
+            f"{item['status']} x{item['count']} [{item['case_id']}]: {item['message'] or '-'}"
+        )
+    lines.append(_resources_line(record["resources"], "Agentes + servidores"))
+    lines += _sandbox_lines(record.get("sandbox"))
+    return "\n".join(lines)
 
 
 def format_report(record: dict[str, Any]) -> str:
@@ -166,21 +348,15 @@ def format_report(record: dict[str, Any]) -> str:
         lines += [f"  {item['id']}: {item['reason']}" for item in excluded]
     for item in record["errors"]:
         lines.append(f"Erro x{item['count']} [{item['tool']}/{item['outcome']}]: {item['message']}")
-    resources = record["resources"]
-    if resources["available"] and resources.get("samples"):
-        lines.append(
-            f"Servidores: CPU média {resources['avg_cpu_percent']:.0f}% (pico "
-            f"{resources['peak_cpu_percent']:.0f}%), RSS de pico {resources['peak_rss_mb']:.0f} MB"
-        )
-    else:
-        lines.append("Servidores: CPU/RSS não medidos (instale psutil para medir)")
+    lines.append(_resources_line(record["resources"], "Servidores"))
+    lines += _sandbox_lines(record.get("sandbox"))
     return "\n".join(lines)
 
 
 _PARENT_GONE = threading.Event()
 
 
-def _watch_stdin(runner: LoadRunner) -> None:
+def _watch_stdin(runner: LoadRunner | AgentLoadRunner) -> None:
     """EOF no stdin = o launcher saiu ou cancelou: interrompe sem gravar."""
 
     def watch() -> None:
@@ -195,15 +371,7 @@ def _watch_stdin(runner: LoadRunner) -> None:
     threading.Thread(target=watch, name="stdin-watch", daemon=True).start()
 
 
-def _execute(
-    config: LoadConfig, args: argparse.Namespace, command: str, command_args: list[str]
-) -> tuple[LoadRunner, Any]:
-    """Roda a carga e devolve ``(runner, outcome)``; levanta ``LoadError`` se não puder rodar."""
-    json_mode: bool = args.json_progress
-    fixtures: Path = args.fixtures.resolve()
-    roots = workspace_roots(fixtures)
-    env = {WORKSPACE_ENV: os.pathsep.join(str(root) for root in roots)}
-    psutil = load_psutil()
+def _progress_printer(json_mode: bool) -> Any:
     last_human_line = 0.0
 
     def on_progress(snapshot: dict[str, Any]) -> None:
@@ -216,27 +384,136 @@ def _execute(
             return
         last_human_line = now
         p95 = snapshot["p95_ms"]
+        p95_text = "-" if p95 is None else f"{p95:.0f}ms"
+        if snapshot.get("mode") == "agent":
+            line = (
+                f"execuções={snapshot['calls']} em curso={snapshot['sessions']['running']} "
+                f"aprovação={snapshot['pass_rate'] * 100:.0f}% "
+                f"erros={snapshot['errors'] + snapshot['timeouts']} p95={p95_text}"
+            )
+        else:
+            line = (
+                f"chamadas={snapshot['calls']} erros={snapshot['errors'] + snapshot['timeouts']} "
+                f"vazão={snapshot['throughput_cps']:.1f}/s p95={p95_text}"
+            )
         print(
-            f"[{snapshot['phase']:>9}] {snapshot['elapsed_seconds']:6.1f}s  "
-            f"chamadas={snapshot['calls']} erros={snapshot['errors'] + snapshot['timeouts']} "
-            f"vazão={snapshot['throughput_cps']:.1f}/s p95={'-' if p95 is None else f'{p95:.0f}ms'}",
+            f"[{snapshot['phase']:>9}] {snapshot['elapsed_seconds']:6.1f}s  {line}",
             file=sys.stderr,
             flush=True,
         )
 
-    with open(args.server_log or os.devnull, "a", encoding="utf-8") as errlog:
-        runner = LoadRunner(
-            config,
-            fixtures,
-            stdio_client_factory(command, command_args, env, errlog),
-            on_progress=on_progress,
-            resource_sampler=ResourceSampler(psutil) if psutil else None,
-        )
-        _install_stop_handlers(runner, json_mode)
-        return runner, asyncio.run(runner.run())
+    return on_progress
 
 
-def _install_stop_handlers(runner: LoadRunner, json_mode: bool) -> None:
+@contextmanager
+def _server_errlog(path: Path | None) -> Iterator[tuple[Path, TextIO]]:
+    """Arquivo para o stderr dos servidores: o pedido ou um temporário apagado ao fim."""
+    temporary = path is None
+    if path is None:
+        fd, name = tempfile.mkstemp(prefix="load-server-", suffix=".log")
+        os.close(fd)
+        path = Path(name)
+    try:
+        with open(path, "a", encoding="utf-8") as errlog:
+            yield path, errlog
+    finally:
+        if temporary:
+            path.unlink(missing_ok=True)
+
+
+def _with_stderr_tail(exc: LoadError, log_path: Path) -> LoadError:
+    tail = stderr_tail(log_path)
+    return LoadError(f"{exc} | stderr do servidor: {tail}") if tail else exc
+
+
+def _execute(
+    config: LoadConfig, args: argparse.Namespace, command: str, command_args: list[str]
+) -> tuple[LoadRunner, Any, dict[str, Any]]:
+    """Roda a carga e devolve ``(runner, outcome, sandbox)``; levanta ``LoadError`` se não
+    puder rodar."""
+    json_mode: bool = args.json_progress
+    fixtures: Path = args.fixtures.resolve()
+    plan = plan_for_specs(fixtures, select_specs(fixtures, config.tools).specs)
+    work_dir = args.work_dir or Path(tempfile.gettempdir())
+    check_disk(plan, config.concurrency, work_dir)
+    psutil = load_psutil()
+    sessions = ToolsSessions(make_run_root(work_dir, f"novomodelo-load-tools-{os.getpid()}-"), plan)
+    try:
+        with _server_errlog(args.server_log) as (log_path, errlog):
+            runner = LoadRunner(
+                config,
+                fixtures,
+                stdio_client_factory(command, command_args, {}, errlog, env_for=sessions.env),
+                on_progress=_progress_printer(json_mode),
+                resource_sampler=ResourceSampler(psutil) if psutil else None,
+                sessions=sessions,
+            )
+            _install_stop_handlers(runner, json_mode)
+            try:
+                outcome = asyncio.run(runner.run())
+            except LoadError as exc:
+                raise _with_stderr_tail(exc, log_path) from exc
+        return runner, outcome, sessions.summary()
+    finally:
+        sessions.close()
+
+
+def _execute_agent(
+    config: AgentLoadConfig, args: argparse.Namespace, provider: ProviderInfo
+) -> tuple[AgentLoadRunner, Any, dict[str, Any]]:
+    """Roda a carga do modo agent; devolve ``(runner, outcome, {"server", "sandbox"})``.
+
+    Raises:
+        LoadError: Se o servidor do agente não está configurado ou não sobe, ou se
+            nenhum caso pode rodar.
+    """
+    fixtures: Path = args.fixtures.resolve()
+    server = agent_server_config(fixtures)
+    psutil = load_psutil()
+    run_root = default_run_root(args.work_dir)
+    sandboxes: list[SessionSandbox] = []
+    try:
+        with _server_errlog(args.server_log) as (log_path, errlog):
+            runner = AgentLoadRunner(
+                config,
+                make_preflight(
+                    config, fixtures, server_tool_lister(server, errlog), work_dir=run_root.parent
+                ),
+                session_factory(
+                    provider, run_root, server, fixtures, config.timeout_s, sandboxes=sandboxes
+                ),
+                build_result=_build_test_result,
+                on_progress=_progress_printer(args.json_progress),
+                resource_sampler=ResourceSampler(psutil) if psutil else None,
+            )
+            _install_stop_handlers(runner, args.json_progress)
+            try:
+                outcome = runner.run()
+            except LoadError as exc:
+                raise _with_stderr_tail(exc, log_path) from exc
+        plan = outcome.sandbox_plan or SandboxPlan(fixtures=fixtures)
+        sandbox = sandbox_summary(plan, sandboxes)
+    finally:
+        remove_tree(run_root)
+    command = [str(server.get("command")), *[str(a) for a in server.get("args") or []]]
+    workspace = str((server.get("env") or {}).get(WORKSPACE_ENV, "")).split(os.pathsep)
+    if sandbox["enabled"]:
+        workspace = [_SANDBOX_WORKSPACE]
+    server_info = {"command": command, "workspace": [w for w in workspace if w]}
+    return runner, outcome, {"server": server_info, "sandbox": sandbox}
+
+
+def stderr_tail(path: Path, max_lines: int = 3) -> str:
+    """Últimas linhas não vazias do stderr dos servidores, para o erro dizer por que não subiram."""
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    filled = [line.strip() for line in lines if line.strip()]
+    return " / ".join(filled[-max_lines:])[:_STDERR_TAIL_CHARS]
+
+
+def _install_stop_handlers(runner: LoadRunner | AgentLoadRunner, json_mode: bool) -> None:
     interrupts = 0
 
     def on_sigint(_signum: int, _frame: Any) -> None:
@@ -252,6 +529,18 @@ def _install_stop_handlers(runner: LoadRunner, json_mode: bool) -> None:
         _watch_stdin(runner)
 
 
+def _agent_info(provider: ProviderInfo, outcome: Any) -> dict[str, Any]:
+    plan = outcome.sandbox_plan
+    sandboxed = plan is not None and plan.enabled
+    denied = denied_tools(outcome.server_tools, sandboxed) if provider.id == "claude" else []
+    return {
+        "provider": provider.id,
+        "label": provider.label,
+        "binary": provider.path or provider.binary,
+        "denied_tools": denied,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     json_mode: bool = args.json_progress
@@ -263,22 +552,26 @@ def main(argv: list[str] | None = None) -> int:
             print(f"erro: {message}", file=sys.stderr)
         return code
 
+    misplaced = _misplaced(args)
+    if misplaced:
+        return fail(f"{', '.join(misplaced)} não vale(m) no modo {args.mode}", EXIT_USAGE)
+    provider: ProviderInfo | None = None
     try:
-        config = LoadConfig(
-            concurrency=args.concurrency,
-            duration_s=args.duration,
-            iterations=args.iterations,
-            tools=_parse_tools(args.tools),
-            timeout_s=args.timeout,
-            warmup=not args.no_warmup,
-        )
-        command, command_args = _server_command(args.server_command)
-    except ValueError as exc:
+        if args.mode == "agent":
+            config: LoadConfig | AgentLoadConfig = _agent_config(args)
+            provider = resolve_provider(config.provider)
+        else:
+            config = _tools_config(args)
+            command, command_args = _server_command(args.server_command)
+    except (ValueError, RuntimeError) as exc:
         return fail(str(exc), EXIT_USAGE)
 
     previous_handler = signal.getsignal(signal.SIGINT)
     try:
-        _runner, outcome = _execute(config, args, command, command_args)
+        if provider is not None:
+            _runner, outcome, extra = _execute_agent(config, args, provider)
+        else:
+            _runner, outcome, sandbox = _execute(config, args, command, command_args)
     except LoadError as exc:
         return fail(str(exc), EXIT_FAILED)
     finally:
@@ -291,15 +584,27 @@ def main(argv: list[str] | None = None) -> int:
 
     store = LoadStore(args.results_dir)
     load_id = store.new_id()
-    roots = workspace_roots(args.fixtures.resolve())
-    server = {"command": [command, *command_args], "workspace": [str(root) for root in roots]}
-    record = build_record(load_id, outcome, server=server)
+    if provider is not None:
+        record = build_agent_record(
+            load_id,
+            outcome,
+            _agent_info(provider, outcome),
+            server=extra["server"],
+            sandbox=extra["sandbox"],
+        )
+        report = format_agent_report
+    else:
+        roots = [str(root) for root in workspace_roots(args.fixtures.resolve())]
+        workspace = [_SANDBOX_WORKSPACE] if sandbox["enabled"] else roots
+        server = {"command": [command, *command_args], "workspace": workspace}
+        record = build_record(load_id, outcome, server=server, sandbox=sandbox)
+        report = format_report
     path = None if args.no_save else store.save(record)
     if json_mode:
         if path is not None:
             _emit("saved", load_id=load_id, path=str(path))
     else:
-        print(format_report(record))
+        print(report(record))
         if path is not None:
             print(f"\nGravado em: {path}")
     return EXIT_INTERRUPTED if outcome.interrupted else 0

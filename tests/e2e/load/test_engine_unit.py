@@ -63,8 +63,8 @@ class TestConfigValidation:
         with pytest.raises(ValueError, match="iterações"):
             LoadConfig(concurrency=1, duration_s=10, iterations=0)
 
-    def test_tools_outside_the_read_only_mix_are_rejected(self) -> None:
-        with pytest.raises(ValueError, match="fora do mix"):
+    def test_tools_outside_the_catalog_are_rejected(self) -> None:
+        with pytest.raises(ValueError, match="fora do catálogo"):
             LoadConfig(concurrency=1, duration_s=10, tools=("docs_list", "run_start"))
 
 
@@ -253,3 +253,98 @@ class TestProgress:
         assert running[-1]["calls"] >= running[0]["calls"]
         assert running[-1]["clients"] == {"requested": 2, "ready": 2, "failed": 0, "respawns": 0}
         assert running[-1]["series"]
+
+
+def _deck_fixtures(root: Path) -> Path:
+    deck = root / "fixtures" / "newave" / "cobre-caso-reduzido"
+    (deck / "constraints").mkdir(parents=True)
+    (deck / "config.json").write_text("{}", encoding="utf-8")
+    (deck / "constraints" / "thermal_bounds.parquet").write_bytes(b"x")
+    for source in ("newave/newave-caso-reduzido", "decomp/decomp-mar-26-rv2-reduzido"):
+        (root / "fixtures" / source).mkdir(parents=True)
+        (root / "fixtures" / source / "caso.dat").write_text("x", encoding="utf-8")
+    return root / "fixtures"
+
+
+class TestSessionsWithCopy:
+    """Com ``sandbox.ToolsSessions``: cada sessão chama na sua cópia, nunca nas originais."""
+
+    TOOLS = ("deck_edit_json", "case_init", "docs_list")
+
+    def _run_with_copy(self, tmp_path: Path, **config):
+        from tests.e2e.load.mix import select_specs
+        from tests.e2e.load.sandbox import ToolsSessions, plan_for_specs
+
+        fixtures = _deck_fixtures(tmp_path)
+        tools = config.pop("tools", self.TOOLS)
+        plan = plan_for_specs(fixtures, select_specs(fixtures, tools).specs)
+        sessions = ToolsSessions(tmp_path / "run", plan)
+        factory = FakeFactory(tools=("docs_list",), writing_tools=("deck_edit_json", "case_init"))
+        runner = LoadRunner(_config(tools=tools, **config), fixtures, factory, sessions=sessions)
+        outcome = _run(runner)
+        return fixtures, sessions, factory, outcome
+
+    def test_every_call_points_to_the_copy_of_its_own_session(self, tmp_path: Path) -> None:
+        fixtures, sessions, factory, _ = self._run_with_copy(tmp_path, duration_s=30, iterations=4)
+        run_root = (tmp_path / "run").resolve()
+        paths = [(index, value) for index, tool, args in factory.arguments
+                 for value in args.values() if isinstance(value, str) and Path(value).is_absolute()]
+        assert {index for index, _ in paths} == {-1, 0, 1}
+        for index, value in paths:
+            folder = "preflight" if index < 0 else f"s{index}"
+            assert Path(value).is_relative_to(run_root / folder / "fixtures"), value
+            assert not Path(value).is_relative_to(fixtures.resolve())
+        assert (run_root / "s0" / "fixtures" / "newave/cobre-caso-reduzido/config.json").is_file()
+        assert sessions.close()
+        assert not run_root.exists()
+
+    def test_case_init_gets_a_new_folder_on_every_call_of_a_session(self, tmp_path: Path) -> None:
+        _, sessions, factory, _ = self._run_with_copy(tmp_path, duration_s=30, iterations=6)
+        folders = [args["directory"] for index, tool, args in factory.arguments
+                   if tool == "case_init" and index == 0]
+        assert len(folders) >= 2
+        assert len(set(folders)) == len(folders)
+        sessions.close()
+
+    def test_the_copy_is_timed_apart_and_the_preflight_copy_is_released(
+        self, tmp_path: Path
+    ) -> None:
+        _, sessions, _, outcome = self._run_with_copy(tmp_path, duration_s=30, iterations=2)
+        by_kind = {(s["kind"], s["client"]): s for s in outcome.startups}
+        assert by_kind[("preflight", -1)]["copy_ms"] is not None
+        assert by_kind[("initial", 0)]["copy_ms"] is not None
+        assert not (tmp_path / "run" / "preflight").exists()
+        summary = sessions.summary()
+        assert summary["enabled"] and summary["sessions"] == 2
+        assert summary["subtrees"] == ["newave/cobre-caso-reduzido"]
+        sessions.close()
+
+    def test_sessions_get_their_own_folders_workspace_and_no_solver_runs(
+        self, tmp_path: Path
+    ) -> None:
+        _, sessions, _, _ = self._run_with_copy(tmp_path, duration_s=30, iterations=1)
+        first, second = sessions.env(0), sessions.env(1)
+        assert first["NOVOMODELO_MCP_WORKSPACE"] == str(sessions.root(0))
+        assert first["NOVOMODELO_MCP_WORKSPACE"] != second["NOVOMODELO_MCP_WORKSPACE"]
+        assert first["TEMP"] != second["TEMP"]
+        assert first["NOVOMODELO_MCP_STATE_DIR"] != second["NOVOMODELO_MCP_STATE_DIR"]
+        assert first["NOVOMODELO_MCP_MAX_JOBS"] == "0"
+        sessions.close()
+
+    def test_a_stalled_bridge_skips_the_rest_of_the_group_in_preflight(
+        self, tmp_path: Path
+    ) -> None:
+        from tests.e2e.load.engine import BRIDGE_STDIN_HINT
+
+        fixtures = _deck_fixtures(tmp_path)
+        tools = ("bridge_check_newave", "bridge_check_decomp", "docs_list")
+        factory = FakeFactory(
+            tools=tools,
+            behaviors={"bridge_check_newave": Behavior(broken=True)},
+        )
+        outcome = _run(LoadRunner(_config(tools=tools, concurrency=1, duration_s=0.2), fixtures,
+                                  factory))
+        reasons = {e.tool: e.reason for e in outcome.selection.excluded}
+        assert BRIDGE_STDIN_HINT in reasons["bridge_check_newave"]
+        assert "não chamada" in reasons["bridge_check_decomp"]
+        assert ("bridge_check_decomp" not in {tool for _index, tool in factory.calls})

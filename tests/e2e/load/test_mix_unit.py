@@ -1,4 +1,4 @@
-"""Testes do mix de carga: só tools somente leitura, fontes presentes, dicas do servidor."""
+"""Testes do mix de carga: classes das tools, mix padrão, fontes presentes, dicas do servidor."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,35 +8,36 @@ import pytest
 
 from tests.e2e.load.mix import (
     ALLOWED_TOOLS,
+    BARRED_TOOLS,
     CATALOG,
+    DEFAULT_TOOLS,
     ToolHints,
+    barred_reason,
     describe_catalog,
     hints_from_tools,
     is_forbidden_tool,
+    is_heavy_tool,
     select_specs,
     validate_tools,
+    writes_files,
 )
 
 DETERM = "newave-determ/cobre-set-24-reduzido-calibrado-determ-2000"
 
-WRITE_OR_SOLVER_TOOLS = [
-    "run_plan",
-    "run_apply",
-    "run_start",
-    "run_status",
-    "run_logs",
-    "run_cancel",
+BARRED = ["run_start", "run_status", "run_logs", "run_cancel", "instalar_novomodelo", "server_info"]
+WRITES = [
     "bridge_convert_newave",
     "bridge_convert_decomp",
     "bridge_compare_newave",
+    "bridge_compare_decomp",
     "bridge_dashboard",
     "deck_edit_json",
     "deck_edit_parquet",
     "case_init",
     "schema_export",
-    "instalar_novomodelo",
-    "server_info",
+    "run_apply",
 ]
+HEAVY = ["bridge_check_newave", "bridge_check_decomp", "bridge_convert_newave", "run_plan"]
 
 
 def _touch(root: Path, relative: str) -> None:
@@ -56,28 +57,60 @@ def fixtures(tmp_path: Path) -> Path:
     return tmp_path
 
 
-class TestForbiddenTools:
-    @pytest.mark.parametrize("tool", WRITE_OR_SOLVER_TOOLS)
-    def test_write_solver_and_network_tools_are_forbidden(self, tool: str) -> None:
-        assert is_forbidden_tool(tool)
+@pytest.fixture
+def all_sources(tmp_path: Path) -> Path:
+    """Toda fonte que alguma chamada do catálogo exige: um arquivo, ou uma pasta não vazia."""
+    for template in CATALOG:
+        for source in template.requires:
+            _touch(tmp_path, source if Path(source).suffix else f"{source}/x.dat")
+    return tmp_path
 
-    @pytest.mark.parametrize("tool", WRITE_OR_SOLVER_TOOLS)
-    def test_forbidden_tools_cannot_be_requested(self, tool: str) -> None:
-        with pytest.raises(ValueError, match="fora do mix somente leitura"):
+
+class TestToolClasses:
+    @pytest.mark.parametrize("tool", BARRED)
+    def test_solver_runs_and_network_tools_are_barred(self, tool: str) -> None:
+        assert is_forbidden_tool(tool)
+        assert tool in BARRED_TOOLS
+
+    @pytest.mark.parametrize("tool", BARRED)
+    def test_barred_tools_cannot_be_requested_and_the_reason_says_why(self, tool: str) -> None:
+        with pytest.raises(ValueError, match="fora do catálogo da carga") as error:
             validate_tools([tool])
+        assert barred_reason(tool) in str(error.value)
         with pytest.raises(ValueError):
             select_specs(Path("."), tools=[tool])
 
-    def test_catalog_holds_no_forbidden_tool(self) -> None:
+    @pytest.mark.parametrize("tool", WRITES)
+    def test_writing_tools_are_in_the_catalog_and_marked_for_the_copy(self, tool: str) -> None:
+        assert writes_files(tool) and not is_forbidden_tool(tool)
+        assert tool in ALLOWED_TOOLS
+
+    @pytest.mark.parametrize("tool", HEAVY)
+    def test_bridge_and_run_plan_are_heavy_and_requestable(self, tool: str) -> None:
+        assert is_heavy_tool(tool)
+        assert validate_tools([tool]) == [tool]
+
+    def test_catalog_holds_no_barred_tool(self) -> None:
         assert not [tool for tool in ALLOWED_TOOLS if is_forbidden_tool(tool)]
         assert not [t.id for t in CATALOG if is_forbidden_tool(t.tool)]
 
+    def test_default_mix_is_only_light_read_only_tools(self) -> None:
+        assert DEFAULT_TOOLS
+        assert not [t for t in DEFAULT_TOOLS if writes_files(t) or is_heavy_tool(t)]
+        assert set(DEFAULT_TOOLS) < set(ALLOWED_TOOLS)
+
+    def test_run_start_reason_names_the_solver_and_the_jobs_lock(self) -> None:
+        reason = barred_reason("run_start")
+        assert "dispara o solver" in reason and "NOVOMODELO_MCP_MAX_JOBS=0" in reason
+        assert "depende de um run" in barred_reason("run_logs")
+        assert "usa a rede" in barred_reason("server_info")
+
 
 class TestSelection:
-    def test_all_sources_present_selects_deck_docs_schema_and_results(self, fixtures: Path) -> None:
+    def test_without_tools_the_default_mix_is_selected(self, fixtures: Path) -> None:
         selection = select_specs(fixtures)
         tools = {spec.tool for spec in selection.specs}
-        assert tools == set(ALLOWED_TOOLS)
+        assert tools == set(DEFAULT_TOOLS)
 
     def test_spec_arguments_are_absolute_and_expanded(self, fixtures: Path) -> None:
         selection = select_specs(fixtures, tools=["deck_list", "deck_sql"])
@@ -88,6 +121,19 @@ class TestSelection:
         sql = by_id["deck_sql#inflow-amostra"].arguments["query"]
         assert (fixtures / DETERM).resolve().as_posix() in sql
         assert "\\" not in sql
+
+    def test_bind_points_the_call_to_another_root(self, all_sources: Path, tmp_path: Path) -> None:
+        copy = tmp_path / "s0" / "fixtures"
+        spec = next(s for s in select_specs(all_sources, ["deck_edit_json"]).specs)
+        bound = spec.bind(copy)
+        assert Path(bound["path"]) == copy / "newave/cobre-caso-reduzido/config.json"
+        assert spec.arguments["path"].startswith(str(all_sources.resolve()))
+
+    def test_case_init_gets_a_new_folder_per_call(self, tmp_path: Path) -> None:
+        spec = select_specs(tmp_path, ["case_init"]).specs[0]
+        first, second = spec.bind(tmp_path, 1), spec.bind(tmp_path, 2)
+        assert first["directory"] != second["directory"]
+        assert first["directory"].endswith("1") and second["directory"].endswith("2")
 
     def test_empty_directory_and_missing_file_are_skipped_with_reason(self, tmp_path: Path) -> None:
         (tmp_path / "newave" / "cobre-caso-reduzido").mkdir(parents=True)
@@ -119,17 +165,31 @@ class TestSelection:
         assert "somente leitura" in reasons["deck_list"]
         assert "rede" in reasons["docs_list"]
 
+    def test_a_writing_tool_announced_as_writing_stays_in_the_mix(self, all_sources: Path) -> None:
+        hints = {"deck_edit_json": ToolHints(read_only=False, open_world=False)}
+        selection = select_specs(all_sources, ["deck_edit_json"], server_tools=hints)
+        assert [spec.tool for spec in selection.specs] == ["deck_edit_json"]
+
     def test_tool_missing_on_the_server_is_excluded(self, tmp_path: Path) -> None:
         selection = select_specs(tmp_path, tools=["docs_list"], server_tools={})
         assert selection.specs == []
         assert selection.excluded[0].reason == "tool ausente no servidor"
 
-    def test_describe_catalog_reports_availability_and_reason(self, tmp_path: Path) -> None:
+    def test_describe_catalog_reports_availability_classes_and_barred_tools(
+        self, tmp_path: Path
+    ) -> None:
         rows = {row["tool"]: row for row in describe_catalog(tmp_path)}
         assert rows["docs_list"]["available"] is True
+        assert rows["docs_list"]["default"] is True
         assert rows["deck_list"]["available"] is False
         assert "fonte ausente" in rows["deck_list"]["reason"]
         assert rows["deck_list"]["group"] == "deck"
+        assert rows["case_init"]["writes"] is True and rows["case_init"]["default"] is False
+        assert rows["case_init"]["available"] is True
+        assert rows["run_plan"]["heavy"] is True
+        for tool in BARRED_TOOLS:
+            assert rows[tool]["barred"] is True and rows[tool]["available"] is False
+            assert rows[tool]["reason"] == barred_reason(tool)
 
 
 def test_hints_from_tools_reads_the_mcp_annotations() -> None:
@@ -153,16 +213,19 @@ def server_tools():
 class TestAgainstTheRealServer:
     """O servidor é construído em processo (sem subir stdio nem tocar a rede)."""
 
-    def test_every_allowed_tool_is_read_only_and_local(self, server_tools) -> None:
+    def test_every_catalog_tool_is_local_and_read_only_unless_it_writes(self, server_tools) -> None:
         hints = hints_from_tools(server_tools.values())
         missing = [tool for tool in ALLOWED_TOOLS if tool not in hints]
         assert not missing, f"tools do catálogo que o servidor não registra: {missing}"
         offenders = {
             tool: hints[tool]
             for tool in ALLOWED_TOOLS
-            if not hints[tool].read_only or hints[tool].open_world
+            if hints[tool].open_world or (not hints[tool].read_only and not writes_files(tool))
         }
         assert not offenders
+
+    def test_barred_tools_are_registered_by_the_server(self, server_tools) -> None:
+        assert set(BARRED_TOOLS) <= set(server_tools)
 
     def test_catalog_arguments_match_the_tool_signatures(self, server_tools) -> None:
         for template in CATALOG:
@@ -174,9 +237,9 @@ class TestAgainstTheRealServer:
             assert required <= given, f"{template.id}: faltam obrigatórios {required - given}"
 
     def test_selection_keeps_every_catalog_tool_with_the_server_hints(
-        self, server_tools, fixtures: Path
+        self, server_tools, all_sources: Path
     ) -> None:
         hints = hints_from_tools(server_tools.values())
-        selection = select_specs(fixtures, server_tools=hints)
+        selection = select_specs(all_sources, ALLOWED_TOOLS, server_tools=hints)
         assert {spec.tool for spec in selection.specs} == set(ALLOWED_TOOLS)
         assert not [item for item in selection.excluded if "servidor" in item.reason]

@@ -1,9 +1,15 @@
 # Teste de carga do servidor MCP
 
-Mede como o servidor `novomodelo-mcp` se comporta com vários clientes ao mesmo
-tempo. Não usa agente de IA: abre N clientes concorrentes pelo SDK `mcp`, **cada
-um com o seu próprio processo do servidor** (stdio, como em produção, onde há um
-processo por cliente), e chama direto as tools do mix.
+Mede como o servidor `novomodelo-mcp` se comporta com várias sessões simultâneas.
+Há dois modos:
+
+- **`tools`** (padrão): não usa agente de IA. Abre N sessões pelo SDK `mcp`, **cada
+  uma com o seu próprio processo do servidor** (stdio, como em produção, onde há um
+  processo por cliente), e chama direto as tools do mix.
+- **`agent`**: N sessões de agente (`kiro-cli` ou `claude`) ao mesmo tempo, cada uma
+  rodando em laço os casos do `tests/e2e/queries/cases.yaml` que podem rodar em
+  paralelo, validados como na esteira. **Consome tokens do provedor**, em proporção
+  a sessões × casos executados. Ver [Modo agent](#modo-agent).
 
 ## Como rodar
 
@@ -12,53 +18,102 @@ processo por cliente), e chama direto as tools do mix.
 python -m tests.e2e.load.run --concurrency 4 --duration 30
 python -m tests.e2e.load.run --concurrency 2 --duration 10 --tools deck_list,docs_search
 python -m tests.e2e.load.run --concurrency 8 --duration 60 --iterations 200 --timeout 30
+python -m tests.e2e.load.run --concurrency 2 --duration 10 --tools deck_edit_json,run_plan,deck_list
 ```
 
 | Opção | Efeito |
 |---|---|
-| `--concurrency N` | Clientes concorrentes (um servidor por cliente). |
+| `--mode tools\|agent` | `tools` (padrão) ou `agent`. |
+| `--concurrency N` | Sessões simultâneas (no modo tools, um servidor por sessão). |
 | `--duration S` | Janela de carga, em segundos. |
-| `--iterations M` | Opcional. Chamadas **por cliente**: cada cliente para ao fazer M chamadas ou ao fim de `--duration`, o que vier primeiro. |
-| `--tools a,b` | Subconjunto do mix. Só aceita tools do catálogo somente leitura. |
-| `--timeout T` | Segundos sem resposta até contar `timeout` e recriar o cliente. |
-| `--no-warmup` | Não aquece os clientes: as primeiras chamadas (frias) entram nas métricas. |
+| `--iterations M` | Opcional. **Por sessão**: chamadas (tools) ou casos (agent); cada sessão para ao chegar em M ou ao fim de `--duration`, o que vier primeiro. |
+| `--tools a,b` | Só tools. Tools do catálogo (`mix.ALLOWED_TOOLS`); sem a opção, o mix padrão (`mix.DEFAULT_TOOLS`: as leves e somente leitura). As que gravam e as pesadas entram só pelo nome. |
+| `--timeout T` | tools: segundos sem resposta até contar `timeout` e recriar a sessão. agent: timeout de cada caso (sem a opção, o `timeout_s` do próprio caso). |
+| `--no-warmup` | Só tools. Não aquece as sessões: as primeiras chamadas (frias) entram nas métricas. |
+| `--provider kiro-cli\|claude` | Só agent. Sem a opção, o primeiro instalado, como na esteira. |
+| `--case ID`, `--group G`, `--tags a,b` | Só agent, no máximo uma: um caso, um grupo (o da tool esperada, como na tela) ou tags (qualquer uma). Sem nenhuma, todos os casos elegíveis. |
 | `--no-save` | Não grava em `tests/e2e/results/load/`. |
 | `--fixtures`, `--results-dir` | Raiz das fixtures (vira o workspace do servidor) e pasta de resultados. |
-| `--server-command` | Comando do servidor, no lugar do padrão. |
+| `--server-command` | Só tools. Comando do servidor, no lugar do padrão. |
 | `--server-log` | Arquivo para o stderr dos servidores (por padrão é descartado). |
+| `--work-dir` | Pasta onde o run cria a sua pasta temporária (sessões e cópias das fixtures), apagada ao fim. Sem a opção, o TEMP. |
 | `--json-progress` | Modo do launcher: eventos JSON em linhas no stdout. |
 
 `python -m tests.e2e.load.run --help` mostra os limites aceitos (definidos em
 `engine.py`: `MIN_CONCURRENCY` a `MAX_CONCURRENCY`, `MIN_DURATION_S` a
-`MAX_DURATION_S`, `MAX_TIMEOUT_S`, `MAX_ITERATIONS`). Valores fora deles saem com
-código 2, sem subir nenhum processo.
+`MAX_DURATION_S`, `MAX_TIMEOUT_S`, `MAX_ITERATIONS`; no modo agent o teto de sessões
+é `MAX_AGENT_CONCURRENCY`, em `agent_engine.py`). Valores fora deles, opções do outro
+modo ou um provedor que não está no PATH saem com código 2, sem subir nenhum processo.
+Se as cópias das fixtures por sessão não cabem no disco, a carga sai com código 1 antes
+de copiar ([Cópia das fixtures por sessão](#cópia-das-fixtures-por-sessão)).
 
 Pela UI: aba **Carga** do dashboard (`tests/e2e/frontend`), que dispara pelo
 launcher (`tests/e2e/launcher/README.md`).
 
-O servidor testado é o do **checkout**: `sys.executable -m novomodelo_mcp`. O
+No modo tools, o servidor testado é o do **checkout**: o Python do `.venv` do
+projeto com `-m novomodelo_mcp` (`client.default_server_command`). O
 `~/.kiro/settings/mcp.json` não é usado, porque costuma apontar para outra
-instalação (`uv tool`), e a carga mediria a instalação errada.
+instalação (`uv tool`), e a carga mediria a instalação errada. No modo agent é o
+contrário: o agente usa o servidor desse `mcp.json`, como na esteira.
 
 ## O mix de chamadas
 
-O catálogo está em `mix.py` (`CATALOG`) e é uma lista fechada de tools somente
-leitura: `deck_*` de leitura, `docs_*`, `schema_list`/`schema_get` e
-`results_*` de leitura. Ficam de fora `run_*`, `*_convert_*`, `deck_edit_*`,
-`case_init`, `schema_export`, `instalar_*`, `bridge_*` e `server_info` (usa a rede).
+O catálogo está em `mix.py` (`CATALOG`) e é uma lista fechada. Cada tool cai numa classe:
 
-Uma tool só entra no mix se **as duas** condições valem: está no catálogo e o
-servidor a anuncia com `readOnlyHint` e sem `openWorldHint`. A primeira barreira
-quebra o import do módulo se alguém colar uma tool de escrita no catálogo; o
-POST do launcher recusa (422) qualquer tool fora dela.
+| Classe | Tools | Na carga |
+|---|---|---|
+| Leve, somente leitura | `deck_*` de leitura, `docs_*`, `schema_list`/`schema_get`, `results_*` | O mix padrão (`DEFAULT_TOOLS`), quando `--tools` não é dado |
+| Grava (`mix.writes_files`) | `bridge_convert_*`, `bridge_compare_*`, `bridge_dashboard`, `deck_edit_*`, `case_init`, `schema_export`, `run_apply` | Só pelo nome, e cada sessão grava na sua cópia das fixtures |
+| Pesada (`mix.is_heavy_tool`) | `bridge_*` e `run_plan` (sobem o bridge ou a CLI do solver a cada chamada) | Só pelo nome; o limitador cobra mais por sessão |
+
+Ficam **fora da carga**, nos dois modos, as de `mix.is_forbidden_tool`, com o motivo
+em `mix.barred_reason` (mostrado na tela e no 422 do launcher):
+
+- `run_start` dispara o solver (`novomodelo run`) destacado do servidor: o run leva
+  minutos com os núcleos de performance e sobrevive à sessão (o runner do job é
+  lançado para sobreviver ao servidor), e N sessões saturariam a máquina; a carga
+  mediria o solver, não o servidor. Além disso, todo servidor da carga roda com
+  `NOVOMODELO_MCP_MAX_JOBS=0`, e o `run_start` recusa qualquer run (nem um agente o
+  dispara por conta própria);
+- `run_status`, `run_logs` e `run_cancel` dependem de um run iniciado por `run_start`:
+  sem ele, só mediriam o erro de job inexistente;
+- `server_info` e `instalar_novomodelo` usam a rede.
+
+Uma tool só entra no mix se está no catálogo e o servidor a anuncia sem
+`openWorldHint` e, se não for das que gravam, com `readOnlyHint`: uma tool tida como
+de leitura que passe a gravar sai do mix em vez de gravar fora da cópia. O import do
+módulo quebra se alguém colar no catálogo uma tool barrada; o POST do launcher recusa
+(422) qualquer tool fora do catálogo.
 
 Os argumentos usam caminhos de `{FIXTURES}` (os decks de `cases.yaml` e os de
 `tests/e2e/fixtures/README.md`) e exemplos das docstrings das tools. Uma
 chamada cuja fonte falta, ou é uma pasta vazia, é pulada e listada em
-`mix.excluded` com o motivo. `GET /api/load-tools` mostra o que está disponível.
+`mix.excluded` com o motivo. `GET /api/load-tools` mostra o que está disponível, a
+classe de cada tool e as barradas.
+
+As chamadas que gravam continuam válidas quando repetidas em laço na mesma cópia: as
+edições (`deck_edit_*`, `run_apply`) regravam o valor que as fixtures já têm, a
+conversão usa `force` (no bridge ele não é travado), relatórios e dashboard são
+sobrescritos e `case_init` recebe uma pasta nova por chamada (`{CALL}`; o `force` dele
+é travado no servidor por `NOVOMODELO_MCP_ALLOW_FORCE`, que a carga não liga).
 
 Antes da carga, um **pré-voo** num cliente à parte roda cada chamada uma vez;
 uma que erra ou trava sai do mix (`pré-voo: ...`) em vez de virar taxa de erro.
+Quando uma tool pesada fica sem resposta, as demais do mesmo grupo não são chamadas
+(cada uma custaria outro timeout) e saem com o motivo.
+
+### O bridge trava no modo tools (Windows)
+
+No Windows, o servidor sobe o bridge com `subprocess.run` sem `stdin`, o
+bridge (um Python) herda o stdin do servidor, que tem uma leitura síncrona pendente
+no pipe do cliente MCP, e trava ao iniciar até o cliente escrever nesse pipe. O
+cliente da carga não escreve nada enquanto espera a resposta, então toda tool
+`bridge_*` fica sem resposta até o timeout e o pré-voo a tira do mix, com essa causa
+no motivo. Com o stdin trocado por `DEVNULL` o mesmo bridge responde em segundos. A
+correção é do servidor (`stdin=subprocess.DEVNULL` em `run_bridge`, `src/novomodelo_mcp/adapters/bridge.py`),
+não da carga; o motor não manda pings para mascarar o defeito. No modo agent o bridge
+só destrava quando o agente escreve no stdin do servidor, o que é a provável causa das
+latências longas e dos timeouts dos casos `bridge-*` na esteira.
 
 ## O que é medido
 
@@ -73,7 +128,8 @@ uma que erra ou trava sai do mix (`pré-voo: ...`) em vez de virar taxa de erro.
   falhas, p50 e p95. O gráfico descarta o último bucket quando a janela mal o cobre.
 - **Subida dos servidores, à parte:** tempo por cliente, até todos prontos,
   aquecimento e pré-voo. O relógio da carga só começa depois que **todos** os
-  clientes estão prontos.
+  clientes estão prontos. Com cópia das fixtures, o tempo dela fica em `copy_ms` de
+  cada subida, fora do `ms` do servidor.
 - **Aquecimento:** cada cliente chama uma vez cada tool do mix antes da carga; essas
   chamadas ficam fora das métricas (a primeira chamada de uma tool carrega bibliotecas).
 - **CPU e RSS** dos processos do servidor, se o `psutil` estiver instalado
@@ -93,18 +149,173 @@ entram nas métricas.
 `tests/e2e/results/load/<id>.json` e `tests/e2e/results/load/index.json`, com o id
 no formato `{timestamp}_{git_short_sha}` do `ResultStore`. O `index.json` das
 baterias de agente (`results/index.json`) não é tocado. O JSON traz a
-configuração, o mix (com os excluídos), a subida, os totais, o `per_tool`, a
-`series`, os erros agrupados e os recursos. O contrato espelhado no frontend
-está em `tests/e2e/frontend/src/shared/types.ts` (`LoadRun`).
+configuração, o mix (com os excluídos), a subida, a cópia por sessão (`sandbox`), os
+totais, o `per_tool`, a `series`, os erros agrupados e os recursos. O contrato
+espelhado no frontend está em `tests/e2e/frontend/src/shared/types.ts` (`LoadRun`).
+JSONs gravados antes da cópia por sessão não têm `sandbox` e continuam legíveis.
+
+## Cópia das fixtures por sessão
+
+Quando a seleção tem tool ou caso que grava, cada sessão recebe, na pasta temporária do
+run, uma cópia própria das fixtures (`sandbox.py`), feita na subida da sessão:
+
+- só as subárvores que a seleção usa (`categoria/caso`, como
+  `newave/cobre-caso-reduzido` ou `results/sample_run`), com o layout das originais,
+  mais uma `scratch/` vazia; um caminho que não existe nas fixtures também não existe
+  na cópia (os casos de erro continuam dando erro);
+- os argumentos das chamadas (modo tools) e o prompt e as fontes de cada caso (modo
+  agent) passam a apontar para a cópia;
+- o `NOVOMODELO_MCP_WORKSPACE` do servidor da sessão é **só a cópia**: o path guard do
+  servidor, fail-closed, recusa as fixtures originais e a cópia de outra sessão;
+- no modo agent, antes de cada execução depois da primeira, a cópia volta ao estado da
+  subida (o que o caso anterior criou é apagado, o que alterou é recopiado), fora da
+  latência do caso;
+- a pasta do run é apagada ao fim, em erro e em Ctrl+C; pelo launcher, que mata o motor
+  no cancelamento, quem apaga é o launcher, depois que a árvore do motor morre.
+
+Sem nada que grave na seleção, não há cópia: as sessões leem as fixtures originais,
+como antes. Em toda carga do modo tools, cada servidor tem ainda TEMP e
+`NOVOMODELO_MCP_STATE_DIR` próprios (o `run_plan` lê e grava a calibração no state dir) e
+roda com `NOVOMODELO_MCP_MAX_JOBS=0`.
+
+Antes de copiar, a carga confere o disco da pasta do run: sessões × (cópia +
+`SANDBOX_GROWTH` para o que as tools gravam nela) precisa caber no espaço livre menos
+`DISK_HEADROOM`. O resultado traz o plano, o tempo médio e máximo da cópia e o maior
+tamanho de uma cópia ao fim (`sandbox.final_mb_max`), para conferir a folga.
+
+## Modo agent
+
+```bash
+python -m tests.e2e.load.run --mode agent --provider claude --group docs --concurrency 2 --duration 120
+python -m tests.e2e.load.run --mode agent --case docs-list-all --concurrency 1 --duration 60 --iterations 1
+```
+
+### Quais casos entram
+
+A seleção é a da esteira (todos, um grupo ou um caso; pela CLI também tags). Fica de
+fora da carga, com o motivo no resultado (`cases.excluded`) e na tela, o caso:
+
+- cuja tool esperada (`tool`, ou qualquer uma de `tools`) é barrada por
+  `mix.is_forbidden_tool`, a mesma barreira do modo tools (o solver e os jobs dele, e a
+  rede; ver [O mix de chamadas](#o-mix-de-chamadas));
+- que não usa o MCP (não exercita o servidor);
+- cuja fonte (`requires`) falta;
+- cuja tool o servidor do agente anuncia com rede, ou como escrita sem ser das que
+  rodam na cópia (pré-voo).
+
+Os casos que gravam (conversão, comparação, dashboard, edição de deck, `case_init`,
+`schema_export`, `run_apply`) entram, e a seleção que tem algum roda cada sessão na sua
+cópia das fixtures. Os casos pesados (`bridge_*`, `run_plan`) também entram.
+
+`GET /api/load-cases` lista cada caso com `available`, `reason`, `writes` e `heavy`. O
+teste `test_agent_cases_unit.py::TestRealCatalog` confere, contra as anotações do
+servidor do checkout, que toda tool que o servidor anuncia como escrita roda na cópia
+ou está barrada, e que toda tool de rede está barrada.
+
+O agente ainda pode chamar por conta própria uma tool que grava. No claude, a carga
+passa em `--disallowedTools` as tools de escrita que a sessão não pode usar: todas, se
+não há cópia; com a cópia, só as barradas. O kiro-cli não tem flag equivalente
+(`--trust-tools` pediria confirmação, que o modo headless não responde), e para ele a
+garantia é a do path guard: sem cópia, as fixtures; com cópia, só a cópia da sessão.
+
+### Isolamento entre sessões
+
+Cada sessão tem uma pasta própria numa raiz temporária do run, apagada ao fim
+(`agent_session.py`), e nenhuma sessão grava onde outra lê:
+
+| O que | Por sessão |
+|---|---|
+| TEMP/TMP/TMPDIR do agente e do servidor MCP | `tmp/` (o servidor exporta os schemas para o TEMP na primeira chamada) |
+| `NOVOMODELO_MCP_STATE_DIR` | `mcp-state/` (jobs e calibração longe do state dir do usuário) |
+| `NOVOMODELO_MCP_RESPONSE_LOG` | `mcp-responses.jsonl`, mesmo que o ambiente do launcher defina outro |
+| `NOVOMODELO_MCP_WORKSPACE` | `fixtures/`, a cópia das fixtures, se a seleção grava; senão as fixtures originais |
+| `NOVOMODELO_MCP_MAX_JOBS` | `0`: o servidor recusa `run_start` |
+| Config MCP do kiro-cli | `workspace/.kiro/settings/mcp.json`, com esse `workspace` como cwd |
+| Config MCP do claude | `claude-mcp.json` (`--mcp-config`) e `--no-session-persistence` |
+
+O agente espera a subida do servidor MCP o mesmo que o modo tools
+(`client.STARTUP_TIMEOUT_S`): `MCP_TIMEOUT` no claude (se o ambiente não definir outro) e
+`initializationTimeout` no `mcp.json` da sessão do kiro-cli (se a definição não tiver
+um). Com N servidores subindo juntos numa máquina ocupada, o limite padrão do claude
+estoura, o agente roda sem as tools do MCP e a carga mediria isso, não o
+servidor.
+
+O kiro-cli lê a definição do servidor do cwd, por isso cada sessão roda na sua pasta;
+o `mcp.json` das fixtures (o da esteira) não é regravado. O claude roda com o cwd nas
+fixtures, como na esteira, porque procura o CLAUDE.md subindo a partir do cwd. Os
+runners das N sessões são criados em sequência antes de qualquer agente rodar.
+
+O servidor MCP usado pelos agentes é o definido no `~/.kiro/settings/mcp.json` (o
+mesmo da esteira), com o path guard restrito às fixtures (ou à cópia da sessão); o
+comando medido fica em `server.command` no resultado. Ele pode ser outra instalação que
+não a do checkout.
+
+### Fases e métricas
+
+`preflight` (carrega os casos, aplica as exclusões, sobe uma vez o servidor do
+agente para ler as dicas das tools e, se a seleção grava, monta o plano da cópia e
+confere o disco; não gasta tokens), `starting` (pastas, cópias e runners; a cópia de
+cada sessão fica em `sessions.events[].copy_ms`),
+`running` e `finishing`: ao fim da janela nenhuma sessão começa caso novo, e os casos
+em curso terminam, limitados pelo timeout do próprio caso.
+
+Cada execução tem dois resultados separados:
+
+- **Transporte**: `ok` (o agente completou), `timeout` ou `error` (exceção, agente sem
+  resposta nem tool-call, erro da API como limite de taxa ou, no claude, servidor MCP
+  que não conectou). Alimenta a taxa de erro; a latência ponta a ponta (p50/p95/p99)
+  cobre só as execuções completas.
+- **Validação** (o mesmo `QueryValidator` da esteira): `pass`, `partial` ou `fail`.
+  Alimenta a taxa de aprovação. Um `fail` é uma execução completa.
+
+Por caso e no total: execuções, contagem por status, aprovação, taxa de erro, vazão
+(casos/min), latência e a média de tool-calls (todas e só as do MCP). A série usa
+buckets de `AGENT_BUCKET_SECONDS`. CPU e RSS somam a árvore inteira: CLIs de agente,
+servidores MCP e os filhos deles. O JSON gravado traz `mode: "agent"`, o provedor, as
+tools negadas ao claude, as sessões e os casos selecionados e excluídos. A tela só
+compara cargas do mesmo modo.
+
+## Limitador de sessões simultâneas
+
+`GET /api/load-capacity` (`capacity.py`) estima quantas sessões a máquina aguenta para
+o modo, o provedor e a **seleção** (`mode=tools&tools=a,b`, sem `tools` = mix padrão;
+`mode=agent&provider=...` com no máximo um entre `case_id`, `group` e `tags`) e diz o
+fator que limita:
+
+```
+memória = piso(MB disponíveis × (1 − MEMORY_HEADROOM) ÷ MB por sessão)
+CPU     = piso((núcleos lógicos − RESERVED_CORES) ÷ núcleos por sessão)
+disco   = piso(MB livres na pasta do run × (1 − DISK_HEADROOM) ÷ MB de disco por sessão)
+recomendado = max(1, min(teto do modo, memória, CPU, disco))
+```
+
+O custo por sessão depende do **perfil** da seleção: `pesada` se ela tem tool que sobe
+o bridge ou a CLI do solver (`mix.is_heavy_tool`), `leve` no resto. Ele vem das cargas
+gravadas do mesmo modo (e provedor, no agent) e do mesmo perfil (`store.record_is_heavy`,
+pelas chamadas que passaram do pré-voo ou pelas tools dos casos selecionados): pico de
+RSS e CPU média da árvore divididos pelas sessões que subiram, o maior entre as
+`HISTORY_RUNS` mais recentes. Sem histórico do perfil vale a estimativa `DEFAULT_COST`
+do modo e perfil (a pesada é maior e está documentada em `capacity.py`), e a resposta
+avisa. O fator disco só entra quando a seleção grava: MB de disco por sessão = tamanho
+da cópia (medido agora nas fixtures) × (1 + `SANDBOX_GROWTH`). Sem psutil só os núcleos
+(e o disco) entram, com aviso. Memória e disco livres são instantâneos da consulta.
+
+A tela mostra o recomendado, o limite de cada fator, o custo por sessão e o que a
+seleção pede (pesada, grava, tamanho da cópia) perto de "Sessões simultâneas", e pede a
+estimativa de novo quando a seleção muda; recusa valores acima do teto do modo e só
+avisa acima do recomendado. O launcher recusa (422) o teto.
 
 ## Encerramento
 
 Terminar ou cancelar deixa zero processo do servidor: o SDK encerra cada árvore
-ao sair do cliente. Pelo launcher, o motor roda num subprocesso que entra num
+ao sair do cliente. No modo agent, parar mata cada CLI de agente com a árvore dele
+(`QueryRunner.cancel`) e a execução em curso conta em `abandoned_calls`. Pelo launcher, o motor roda num subprocesso que entra num
 Job Object (Windows) ou é líder de sessão (POSIX); cancelar mata o grupo todo, e um
 descendente criado no meio do kill não escapa. Ctrl+C na CLI interrompe com
 elegância e grava o parcial com `interrupted: true` (código 130); um segundo
-Ctrl+C aborta.
+Ctrl+C aborta. A pasta temporária do run (sessões e cópias) é apagada pelo motor ao fim,
+inclusive em erro e Ctrl+C; no cancelamento pelo launcher, que mata o motor, o launcher
+a apaga depois que a árvore morre.
 
 ## Testes
 
@@ -112,7 +323,10 @@ Ctrl+C aborta.
 uv run --no-sync pytest tests/e2e/load
 ```
 
-Os testes unitários usam clientes falsos (`fakes.py`) e não sobem o servidor.
+Os testes unitários usam clientes e runners falsos (`fakes.py`): não sobem o
+servidor nem um agente, e não gastam tokens. `test_sandbox_unit.py` cobre a cópia por
+sessão (o que é copiado, caminhos distintos, prompt reescrito, workspace só da cópia,
+reset entre execuções, disco e limpeza).
 `test_load_integration.py` usa um servidor MCP falso (`fake_mcp_server.py`) por
 stdio real para cobrir timeout com recriação, cancelamento e ausência de processos
 sobrando. Com `LOAD_E2E_REAL=1` roda também uma carga curta contra o servidor real.

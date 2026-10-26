@@ -5,10 +5,18 @@ interface Props {
   run: LoadRun;
 }
 
-/** Cards de KPI da carga: vazão, taxa de erro e percentis de latência. */
+/** Cards de KPI da carga: sessões simultâneas, vazão, taxa de erro e percentis de latência. */
 export function LoadSummaryCards({ run }: Props) {
   const t = run.totals;
+  const requested = run.config.concurrency;
+  const started = run.startup.started;
   const cards: Array<{ accent: string; value: string; label: string }> = [
+    {
+      accent: started < requested ? "fail" : "mcp",
+      value: String(requested),
+      label:
+        started < requested ? `Sessões simultâneas (${started} subiram)` : "Sessões simultâneas",
+    },
     { accent: "rate", value: fmtRate(t.throughput_cps), label: "Vazão" },
     {
       accent: t.error_rate > 0 ? "fail" : "pass",

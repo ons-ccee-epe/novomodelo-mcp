@@ -81,8 +81,10 @@ automaticamente no relatório.
 | GET | `/api/runs` | runs desta sessão |
 | GET | `/api/runs/{run_id}` | estado de um run (polling) |
 | POST | `/api/runs/{run_id}/cancel` | para o run (interrompe o caso atual; não grava bateria) |
-| GET | `/api/load-tools` | tools do mix de carga (somente leitura), se há fonte para cada uma, e os limites aceitos |
-| POST | `/api/load-runs` | dispara um teste de carga (body: `concurrency`, `duration_seconds`, `iterations?`, `tools?`, `timeout_seconds?`); 409 se qualquer run estiver ativo |
+| GET | `/api/load-tools` | tools do catálogo de carga, se há fonte para cada uma, se gravam (cópia por sessão), se são pesadas, se são do mix padrão, as barradas com o motivo, e os limites do modo tools |
+| GET | `/api/load-cases` | casos por agente, com `available`/`reason` (se podem entrar na carga), `writes`, `heavy` e os limites do modo agent |
+| GET | `/api/load-capacity?mode=tools\|agent&provider=...` | sessões simultâneas recomendadas para esta máquina e a seleção (`tools=a,b`; ou `case_id`, `group`, `tags`), o fator limitante (teto, memória, CPU ou disco) e a conta; 422 em seleção inválida |
+| POST | `/api/load-runs` | dispara um teste de carga (body: `mode?` tools/agent, `concurrency`, `duration_seconds`, `iterations?`, `timeout_seconds?`; tools: `tools?`, omitido = mix padrão; agent: `provider?` e no máximo um entre `case_id`, `group`, `tags`); 422 em entrada inválida, tool fora do catálogo, provedor não instalado ou seleção sem caso elegível; 409 se qualquer run estiver ativo |
 | GET | `/api/load-runs` | cargas desta sessão |
 | GET | `/api/load-runs/{run_id}` | estado de uma carga, com o progresso ao vivo (polling) |
 | POST | `/api/load-runs/{run_id}/cancel` | para a carga e encerra todos os servidores MCP; não grava |
@@ -117,22 +119,36 @@ confiável.
 
 ## Teste de carga
 
-A aba **Carga** do dashboard dispara `POST /api/load-runs`: N clientes, cada um
-com o seu próprio processo do servidor MCP, chamam só tools somente leitura
-(`tests/e2e/load/README.md` explica o mix e as métricas). O launcher não reimplementa
-nada: roda `python -m tests.e2e.load.run --json-progress ...` e lê os eventos JSON
-que ele imprime.
+A aba **Carga** do dashboard dispara `POST /api/load-runs` em um de dois modos
+(`tests/e2e/load/README.md` explica o mix, os casos, a cópia das fixtures por sessão,
+o isolamento e as métricas): `tools`, N sessões, cada uma com o seu próprio processo do
+servidor MCP, chamando as tools do mix (por padrão as leves e somente leitura); ou
+`agent`, N sessões de agente no provedor escolhido rodando em laço os casos da esteira
+que podem rodar em paralelo (consome tokens). Com tool ou caso que grava na seleção,
+cada sessão roda numa cópia própria das fixtures, e o servidor dela só enxerga essa
+cópia. O launcher não reimplementa nada: roda
+`python -m tests.e2e.load.run --json-progress ...` e lê os eventos JSON que ele imprime.
 
-- **Subprocesso, não thread.** Cancelar é matar uma árvore só (motor + N servidores),
-  sem depender de um desligamento limpo de cada um, e a medição não disputa o
-  event loop do HTTP. No Windows o motor entra num Job Object com
+- **Subprocesso, não thread.** Cancelar é matar uma árvore só (motor + N servidores, ou
+  N agentes com os seus servidores), sem depender de um desligamento limpo de cada um,
+  e a medição não disputa o event loop do HTTP. No Windows o motor entra num Job Object com
   `KILL_ON_JOB_CLOSE` (`process_tree.ProcessTree`); em POSIX é líder de sessão.
   Fechar o launcher fecha o job; o stdin do motor também fecha, e ele para sozinho.
-- **O body não escolhe o que roda.** `tools` é validada contra o catálogo somente
-  leitura (422 se pedir `run_*`, `deck_edit_*`, `*_convert_*`...), campos desconhecidos são
-  recusados e os limites de concorrência, duração, iterações e timeout vêm do motor
-  (`GET /api/load-tools` devolve os valores em vigor). O comando do servidor não é
-  configurável pela API.
+- **O body não escolhe o que roda.** `tools` é validada contra o catálogo fechado (422
+  se pedir uma tool fora dele, como `run_start` ou `server_info`, com o motivo), campos desconhecidos são
+  recusados e os limites de sessões simultâneas, duração, iterações e timeout vêm do motor
+  (`GET /api/load-tools` e `GET /api/load-cases` devolvem os valores em vigor de cada
+  modo). Campos de um modo no outro dão 422. No modo agent, o provedor é validado
+  contra o PATH, o teto de sessões é o do modo agent e uma seleção sem caso elegível
+  (só casos barrados, grupo inexistente...) dá 422 antes de qualquer processo. O comando
+  do servidor, o do agente e a pasta de trabalho não são configuráveis pela API.
+- **Pasta de trabalho.** Cada carga recebe uma `--work-dir` temporária criada pelo
+  launcher (sessões e cópias das fixtures) e apagada depois que a árvore do motor
+  termina, também no cancelamento, quando o motor é morto sem tempo de limpar.
+- **Limitador.** `GET /api/load-capacity` estima as sessões simultâneas que a máquina
+  aguenta para a seleção (memória, CPU, disco das cópias e o teto do modo, com custo por
+  sessão maior para seleções pesadas); a tela mostra a conta e avisa acima do
+  recomendado, sem bloquear. O teto do modo é validado também no POST.
 - **Cancelar não grava.** Como nas baterias de agente, um run interrompido não entra
   no histórico; o estado mostra o que foi medido até ali.
 - **Progresso.** `GET /api/load-runs/{id}` devolve `phase` (`preflight`, `starting`,

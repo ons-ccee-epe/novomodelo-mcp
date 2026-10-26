@@ -53,8 +53,10 @@ O contrato de tipos (`src/shared/types.ts`) espelha os dataclasses de
 A navegação no topo (`navigation/AppNav.tsx`) liga duas áreas (HashRouter):
 
 - **Dashboard** (`/#/`): baterias de teste por agente de IA.
-- **Carga** (`/#/carga`): teste de carga do servidor MCP. Formulário (tools,
-  concorrência, duração ou iterações, timeout), progresso ao vivo com **Parar**,
+- **Carga** (`/#/carga`): teste de carga do servidor MCP. Formulário (tools ou casos,
+  com selos para os que gravam numa cópia das fixtures por sessão e os pesados;
+  concorrência, com a capacidade da máquina para a seleção, incluindo o disco das
+  cópias; duração ou iterações, timeout), progresso ao vivo com **Parar**,
   e, para a carga selecionada, cards (vazão, taxa de erro, p50/p95/p99), gráfico de
   latência e vazão no tempo, tabela por tool, detalhes (subida dos servidores,
   recursos, erros, chamadas fora do mix) e a comparação com a carga anterior (ou outra

@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 from typing import Any, Protocol, TextIO
 
 from tests.e2e.load.mix import ToolHints, hints_from_tools
@@ -26,8 +28,11 @@ __all__ = [
     "McpStdioClient",
     "classify_result",
     "default_server_command",
+    "project_python",
     "stdio_client_factory",
 ]
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 STARTUP_TIMEOUT_S = 180.0
 # Folga sobre o timeout do SDK: só dispara se o próprio SDK ficar preso.
@@ -56,9 +61,23 @@ class LoadClient(Protocol):
 ClientFactory = Callable[[int], AbstractAsyncContextManager[LoadClient]]
 
 
+def project_python(root: Path | None = None) -> Path | None:
+    """Python do venv do projeto (``UV_PROJECT_ENVIRONMENT`` ou ``.venv``), se existir."""
+    venv = Path(os.environ.get("UV_PROJECT_ENVIRONMENT") or ".venv")
+    if not venv.is_absolute():
+        venv = (root or _PROJECT_ROOT) / venv
+    python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    return python if python.is_file() else None
+
+
 def default_server_command() -> tuple[str, list[str]]:
-    """Servidor do checkout em teste: o ``~/.kiro/settings/mcp.json`` aponta outra instalação."""
-    return sys.executable, ["-m", "novomodelo_mcp"]
+    """Servidor do checkout em teste, pelo Python do venv do projeto.
+
+    Não use ``sys.executable`` antes do venv: o launcher costuma rodar no Python do PATH,
+    sem ``novomodelo_mcp`` instalado, e todo servidor morreria ao subir. O
+    ``~/.kiro/settings/mcp.json`` aponta outra instalação.
+    """
+    return str(project_python() or sys.executable), ["-m", "novomodelo_mcp"]
 
 
 def _first_text(result: Any) -> str:
@@ -136,11 +155,19 @@ async def _open_stdio_client(
 
 
 def stdio_client_factory(
-    command: str, args: list[str], env: dict[str, str], errlog: TextIO
+    command: str,
+    args: list[str],
+    env: dict[str, str],
+    errlog: TextIO,
+    env_for: Callable[[int], dict[str, str]] | None = None,
 ) -> ClientFactory:
-    """Fábrica de clientes reais: cada chamada de ``factory(i)`` sobe um processo novo."""
+    """Fábrica de clientes reais: cada chamada de ``factory(i)`` sobe um processo novo.
 
-    def factory(_index: int) -> AbstractAsyncContextManager[LoadClient]:
-        return _open_stdio_client(command, args, env, errlog)
+    ``env_for(i)`` acrescenta o ambiente da sessão ``i`` (pastas e workspace próprios).
+    """
+
+    def factory(index: int) -> AbstractAsyncContextManager[LoadClient]:
+        session_env = {**env, **(env_for(index) if env_for else {})}
+        return _open_stdio_client(command, args, session_env, errlog)
 
     return factory

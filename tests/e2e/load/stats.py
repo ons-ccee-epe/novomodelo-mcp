@@ -100,17 +100,19 @@ def summarize(samples: Sequence[Sample], duration_s: float) -> dict[str, Any]:
     }
 
 
-def time_series(samples: Sequence[Sample], duration_s: float) -> list[dict[str, Any]]:
-    """Buckets de ``BUCKET_SECONDS`` pelo instante de conclusão, com os vazios incluídos.
+def time_series(
+    samples: Sequence[Sample], duration_s: float, bucket_s: float = BUCKET_SECONDS
+) -> list[dict[str, Any]]:
+    """Buckets de ``bucket_s`` pelo instante de conclusão, com os vazios incluídos.
 
     Cada ponto: ``t`` (início do bucket, em s), ``calls`` (vazão do bucket),
     ``failed`` (erros + timeouts) e ``p50_ms``/``p95_ms`` das chamadas ok.
     """
-    last = max((int(s.ended_s // BUCKET_SECONDS) for s in samples), default=0)
-    count = max(last + 1, math.ceil(duration_s / BUCKET_SECONDS), 1)
+    last = max((int(s.ended_s // bucket_s) for s in samples), default=0)
+    count = max(last + 1, math.ceil(duration_s / bucket_s), 1)
     buckets: dict[int, list[Sample]] = defaultdict(list)
     for sample in samples:
-        buckets[int(sample.ended_s // BUCKET_SECONDS)].append(sample)
+        buckets[int(sample.ended_s // bucket_s)].append(sample)
 
     series: list[dict[str, Any]] = []
     for index in range(count):
@@ -118,7 +120,7 @@ def time_series(samples: Sequence[Sample], duration_s: float) -> list[dict[str, 
         latencies = sorted(s.latency_ms for s in inside if s.outcome == "ok")
         series.append(
             {
-                "t": index * BUCKET_SECONDS,
+                "t": index * bucket_s,
                 "calls": len(inside),
                 "failed": sum(1 for s in inside if s.outcome != "ok"),
                 "p50_ms": percentile(latencies, 50) if latencies else None,
@@ -149,7 +151,8 @@ class LiveStats:
     barato e os percentis saem de uma lista já ordenada.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, bucket_s: float = BUCKET_SECONDS) -> None:
+        self.bucket_s = bucket_s
         self.calls = 0
         self.ok = 0
         self.errors = 0
@@ -161,7 +164,7 @@ class LiveStats:
 
     def add(self, sample: Sample) -> None:
         self.calls += 1
-        bucket = int(sample.ended_s // BUCKET_SECONDS)
+        bucket = int(sample.ended_s // self.bucket_s)
         self._calls_by_bucket[bucket] += 1
         if sample.outcome == "ok":
             self.ok += 1
@@ -199,13 +202,13 @@ class LiveStats:
 
     def recent_series(self, now_s: float, window: int) -> list[dict[str, Any]]:
         """Últimos ``window`` buckets completos ou em curso, no mesmo formato de ``time_series``."""
-        current = int(now_s // BUCKET_SECONDS)
+        current = int(now_s // self.bucket_s)
         series: list[dict[str, Any]] = []
         for index in range(max(0, current - window + 1), current + 1):
             latencies = self._ok_by_bucket.get(index, [])
             series.append(
                 {
-                    "t": index * BUCKET_SECONDS,
+                    "t": index * self.bucket_s,
                     "calls": self._calls_by_bucket.get(index, 0),
                     "failed": self._failed_by_bucket.get(index, 0),
                     "p50_ms": percentile(latencies, 50) if latencies else None,

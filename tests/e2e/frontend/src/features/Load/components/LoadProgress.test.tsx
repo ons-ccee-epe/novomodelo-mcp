@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { LoadProgress as Progress, LoadRunState } from "@/services/loadApi";
+import type { LoadRunState, ToolsLoadProgress as Progress } from "@/services/loadApi";
 import { LoadProgress } from "./LoadProgress";
 
 function progress(overrides: Partial<Progress> = {}): Progress {
@@ -65,9 +65,11 @@ describe("LoadProgress", () => {
     expect(live).toHaveTextContent("30.0/s");
     expect(live).toHaveTextContent("1.7%");
     expect(live).toHaveTextContent("110 ms");
+    expect(live).toHaveTextContent("Sessões abertas 4/4");
+    expect(screen.getByText(/4 sessões simultâneas/)).toBeInTheDocument();
   });
 
-  it("na subida dos servidores mostra quantos já estão prontos", () => {
+  it("na abertura das sessões mostra quantas já estão prontas", () => {
     const starting = run({
       phase: "starting",
       progress: progress({
@@ -77,7 +79,7 @@ describe("LoadProgress", () => {
       }),
     });
     render(<LoadProgress run={starting} stopping={false} onStop={vi.fn()} />);
-    expect(screen.getByText("Subindo os servidores (1/4)…")).toBeInTheDocument();
+    expect(screen.getByText("Abrindo as sessões (1/4)…")).toBeInTheDocument();
     expect(screen.queryByLabelText("Métricas ao vivo")).not.toBeInTheDocument();
   });
 

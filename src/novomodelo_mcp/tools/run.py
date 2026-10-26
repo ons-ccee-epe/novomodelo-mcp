@@ -90,6 +90,17 @@ def make_plan(case_dir: str, settings: Settings, *, time_budget_s: float = 900,
     return plan
 
 
+def _completed_run(output: Path) -> bool:
+    return any((output / phase / "_SUCCESS").exists() for phase in ("training", "simulation"))
+
+
+def _free_output(output: Path) -> Path:
+    n = 2
+    while (candidate := output.with_name(f"{output.name}-{n}")).exists():
+        n += 1
+    return candidate
+
+
 def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
     changes = []
     for knob, value in overrides.items():
@@ -210,19 +221,27 @@ def register_run(mcp, settings: Settings) -> None:
     @mcp.tool(annotations=DESTRUCTIVE)
     def run_start(case_dir: str, threads: int | None = None,
                         output: str | None = None, time_budget_s: float = 900,
-                        override: bool = False) -> dict:
+                        override: bool = False, overwrite: bool = False) -> dict:
         """Dispara `novomodelo run` em BACKGROUND e devolve `job_id` na hora.
 
         Comando: `novomodelo run <case> --output <output> --threads N --comm-backend
         local`. `threads` default = o do plano (núcleos de performance em
         CPU híbrida, ou o nº medido mais rápido); `output` default =
         `<case_dir>/output`. Antes de lançar roda o run_plan: se o veredito
-        for `nao_cabe`, RECUSA (salvo `override=True`). Acompanhe com
-        run_status / run_logs; interrompa com run_cancel.
+        for `nao_cabe`, RECUSA (salvo `override=True`). Um `output` com rodada
+        concluída também é RECUSADO, com `output_sugerido`: rodar de novo nele
+        apaga a rodada anterior. `overwrite=True` só quando a pessoa pediu para
+        substituir (ou para `resume`/`warm_start`/simulação da política salva nele).
+        Acompanhe com run_status / run_logs; interrompa com run_cancel.
         """
         output = output or str(Path(case_dir) / "output")
         if (err := ensure_in_workspace(case_dir, output, settings=settings)):
             return err
+        if not overwrite and _completed_run(Path(output)):
+            return error(17, f"já há uma rodada concluída em {output}",
+                         "rodar de novo nela apaga a rodada anterior: use output_sugerido, ou "
+                         "overwrite=True se a pessoa pediu para substituir",
+                         output_sugerido=str(_free_output(Path(output))))
         binpath = find_novomodelo(settings)
         if binpath is None:
             return error(127, "novomodelo não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN).")

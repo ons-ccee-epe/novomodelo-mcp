@@ -6,7 +6,7 @@ espelhando o tratamento do Polars em adapters/results.py.
 
 Modelo de ameaca (o mesmo de adapters/paths): o agente controla a query. O guard
 e fail-closed e roda ANTES de executar:
-  1. um unico comando, comecando por SELECT ou WITH (CTE);
+  1. um unico comando, comecando por SELECT, WITH (CTE), DESCRIBE ou SUMMARIZE;
   2. nenhuma palavra-chave que escreva/anexe/carregue extensao/mude config
      (COPY, ATTACH, DETACH, INSTALL, LOAD, PRAGMA, SET, CALL, INSERT, UPDATE,
       DELETE, DROP, CREATE, ALTER, EXPORT, IMPORT, VACUUM, CHECKPOINT);
@@ -26,10 +26,12 @@ from typing import Any
 
 from ..config import Settings
 from .envelope import error
-from .paths import allowed_roots
+from . import budget
+from .budget import fit_to_budget
+from .paths import allowed_roots, refuse_outside
 
-#: Comandos que apenas leem.
-_ALLOWED_START = ("SELECT", "WITH")
+#: Comandos que apenas leem (DESCRIBE e SUMMARIZE: schema e estatísticas de uma consulta).
+_ALLOWED_START = ("SELECT", "WITH", "DESCRIBE", "SUMMARIZE")
 
 #: Palavras proibidas em qualquer posicao (fora de literais/comentarios).
 #: REPLACE fica de fora de proposito: `SELECT * REPLACE (...)` e leitura valida
@@ -97,7 +99,9 @@ def _strip_literals_and_comments(sql: str) -> str:
 
 
 def _string_literals(sql: str) -> list[str]:
-    """Conteudo de todos os literais '...' (com '' escapado). Ignora comentarios."""
+    """Conteudo dos literais '...' (com '' escapado). Ignora comentarios e
+    identificadores "..." (nome de coluna e alias; o caminho entre aspas duplas fica
+    com o confinamento da conexao)."""
     lits: list[str] = []
     i, n = 0, len(sql)
     while i < n:
@@ -112,26 +116,21 @@ def _string_literals(sql: str) -> list[str]:
                 i += 1
             i += 2
             continue
-        if c == "'":
+        if c in "'\"":
             i += 1
             buf: list[str] = []
             while i < n:
-                if sql[i] == "'" and i + 1 < n and sql[i + 1] == "'":
-                    buf.append("'")
+                if sql[i] == c and i + 1 < n and sql[i + 1] == c:
+                    buf.append(c)
                     i += 2
                     continue
-                if sql[i] == "'":
+                if sql[i] == c:
                     i += 1
                     break
                 buf.append(sql[i])
                 i += 1
-            lits.append("".join(buf))
-            continue
-        if c == '"':
-            i += 1
-            while i < n and sql[i] != '"':
-                i += 1
-            i += 1
+            if c == "'":
+                lits.append("".join(buf))
             continue
         i += 1
     return lits
@@ -161,7 +160,8 @@ def guard_sql(query: str, roots: list[Path]) -> dict | None:
     m = re.match(r"[A-Za-z_]+", scrubbed.lstrip())
     kw = m.group(0).upper() if m else ""
     if kw not in _ALLOWED_START:
-        return error(13, f"apenas SELECT/WITH (read-only) e permitido; comando: {kw or '?'}")
+        return error(13, "apenas SELECT/WITH/DESCRIBE/SUMMARIZE (read-only) e permitido; "
+                         f"comando: {kw or '?'}")
 
     words = set(re.findall(r"[A-Za-z_]+", scrubbed.upper()))
     hit = sorted(words & _FORBIDDEN)
@@ -179,8 +179,7 @@ def guard_sql(query: str, roots: list[Path]) -> dict | None:
             except OSError as exc:
                 return error(22, f"caminho invalido no SQL: {lit}", str(exc))
             if not any(_within(rp, r) for r in roots):
-                return error(13, f"caminho fora do workspace permitido: {lit}",
-                             f"raizes: {[str(r) for r in roots]}")
+                return refuse_outside(lit, rp, roots)
     return None
 
 
@@ -216,14 +215,25 @@ def run_readonly_sql(query: str, *, settings: Settings,
         return error(127, "duckdb nao instalado no ambiente do servidor",
                      "adicione 'duckdb' as dependencias e rode `uv sync`")
 
-    cap = max(1, min(max_rows or settings.max_query_rows, settings.max_query_rows))
+    limite = budget.row_limit(settings)
+    cap = max(1, min(max_rows or limite, limite))
     con = duckdb.connect(database=":memory:")
+    if roots:
+        # Confinamento no motor: o guard textual nao enxerga caminho montado por
+        # expressao (chr(47) || ...). Fail-closed: sem ele, a query nao roda.
+        try:
+            con.execute("SET allowed_directories=?", [[r.as_posix().rstrip("/") + "/" for r in roots]])
+            con.execute("SET enable_external_access=false")
+        except Exception as exc:  # noqa: BLE001 - qualquer falha aqui recusa a query
+            con.close()
+            return error(13, "nao foi possivel confinar o SQL ao workspace", str(exc))
     for pragma in (
         "SET autoinstall_known_extensions=false",
         "SET autoload_known_extensions=false",
         "SET allow_community_extensions=false",
         "SET disabled_filesystems="
         "'HTTPFileSystem,S3FileSystem,GCSFileSystem,AzureBlobStorageFileSystem'",
+        "SET enable_progress_bar=false",   # a barra sai no stdout, que é o canal do protocolo MCP
         "SET lock_configuration=true",
     ):
         try:
@@ -245,10 +255,10 @@ def run_readonly_sql(query: str, *, settings: Settings,
 
     truncated = len(rows) > cap
     rows = rows[:cap]
-    return {
+    return fit_to_budget({
         "status": "ok",
         "columns": columns,
         "row_count": len(rows),
         "truncated": truncated,
         "rows": [dict(zip(columns, (_jsonable(v) for v in r), strict=True)) for r in rows],
-    }
+    }, settings, "rows")

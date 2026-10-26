@@ -162,19 +162,8 @@ class QueryRunner:
         Returns:
             QueryResult com tool_calls, resposta, envelope MCP e métricas.
         """
-        # Check if there's a fixed log file configured
-        # Priority: env var > mcp.json > fallback to temp file
-        fixed_log_file = os.environ.get("NOVOMODELO_MCP_RESPONSE_LOG")
-        if not fixed_log_file:
-            # Try to read from mcp.json (Kiro's user-level config)
-            fixed_log_file = self._read_log_path_from_mcp_json()
-        
-        if fixed_log_file:
-            log_file = Path(fixed_log_file)
-        else:
-            # Fallback to unique log file per test (won't work if server already running)
-            log_file = self._response_log_dir / f"mcp_responses_{test_case.id}_{int(time.time() * 1000)}.jsonl"
-        
+        log_file = self._response_log_file(test_case)
+
         # Record log file size before test to read only new entries after
         log_size_before = log_file.stat().st_size if log_file.exists() else 0
         
@@ -218,6 +207,16 @@ class QueryRunner:
             envelope=envelope,
             timeout_s=timeout,
         )
+
+    def _response_log_file(self, test_case: QueryTestCase) -> Path:
+        """Arquivo NOVOMODELO_MCP_RESPONSE_LOG do caso: env > mcp.json > um por caso no diretório do runner."""
+        fixed_log_file = os.environ.get("NOVOMODELO_MCP_RESPONSE_LOG")
+        if not fixed_log_file:
+            fixed_log_file = self._read_log_path_from_mcp_json()
+        if fixed_log_file:
+            return Path(fixed_log_file)
+        # Um arquivo por caso não funciona se o servidor já estiver rodando com outro caminho.
+        return self._response_log_dir / f"mcp_responses_{test_case.id}_{int(time.time() * 1000)}.jsonl"
 
     def _agent_env(self) -> dict[str, str]:
         """Variáveis extras para o processo do agente (o kiro-cli não precisa de nenhuma)."""
@@ -306,7 +305,7 @@ class QueryRunner:
         
         entries = []
         try:
-            with open(log_file, "r", encoding="utf-8") as f:
+            with open(log_file, encoding="utf-8") as f:
                 if offset > 0:
                     f.seek(offset)
                 for line in f:
@@ -743,7 +742,7 @@ class QueryRunner:
                 continue
             
             try:
-                with open(mcp_json_path, "r", encoding="utf-8") as f:
+                with open(mcp_json_path, encoding="utf-8") as f:
                     config = json.load(f)
                 
                 # Procurar em mcpServers.novomodelo.env

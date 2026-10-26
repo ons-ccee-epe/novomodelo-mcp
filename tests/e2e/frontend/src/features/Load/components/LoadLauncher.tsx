@@ -37,6 +37,11 @@ export function LoadLauncher({ launcher }: { launcher: LoadLauncherData }) {
           limits={launcher.limits}
           disabled={busy}
           onStart={launcher.start}
+          agent={launcher.agent}
+          agentError={launcher.agentError}
+          capacity={launcher.capacity}
+          capacityError={launcher.capacityError}
+          onRequestCapacity={launcher.requestCapacity}
         />
       ) : (
         <div className="cobre-banner" data-kind="critical">

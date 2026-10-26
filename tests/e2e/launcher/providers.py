@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import tempfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -27,7 +28,14 @@ from tests.e2e.queries.mcp_workspace import (
 
 Provider = Literal["kiro-cli", "claude"]
 
-__all__ = ["Provider", "ProviderInfo", "detect_providers", "resolve_provider", "build_command"]
+__all__ = [
+    "Provider",
+    "ProviderInfo",
+    "build_command",
+    "claude_mcp_config",
+    "detect_providers",
+    "resolve_provider",
+]
 
 
 @dataclass(frozen=True)
@@ -117,6 +125,14 @@ def resolve_provider(requested: str | None) -> ProviderInfo:
     )
 
 
+def claude_mcp_config(server: dict) -> dict:
+    """``{"mcpServers": {"novomodelo": ...}}`` so com os campos que o ``claude --mcp-config`` aceita."""
+    clean = {"command": server.get("command"), "args": server.get("args", [])}
+    if server.get("env"):
+        clean["env"] = server["env"]
+    return {"mcpServers": {SERVER_NAME: clean}}
+
+
 def _novomodelo_mcp_config(workspace: Path | None = None) -> dict | None:
     """Le a definicao do servidor MCP 'novomodelo' do mcp.json do Kiro.
 
@@ -134,11 +150,7 @@ def _novomodelo_mcp_config(workspace: Path | None = None) -> dict | None:
     server = server_config_for_workspace(workspace) if workspace else load_server_config()
     if not server:
         return None
-    # Mantem so os campos que o claude --mcp-config aceita.
-    clean = {"command": server.get("command"), "args": server.get("args", [])}
-    if server.get("env"):
-        clean["env"] = server["env"]
-    return {"mcpServers": {SERVER_NAME: clean}}
+    return claude_mcp_config(server)
 
 
 def _write_claude_mcp_config(workspace: Path | None = None) -> str | None:
@@ -160,6 +172,10 @@ def build_command(
     provider: ProviderInfo,
     query: str,
     workspace: Path | None = None,
+    *,
+    mcp_config_path: Path | None = None,
+    persist_session: bool = True,
+    disallowed_tools: Sequence[str] = (),
 ) -> list[str]:
     """Constroi o comando headless do provedor para rodar um prompt.
 
@@ -190,6 +206,12 @@ def build_command(
         query: Prompt em linguagem natural.
         workspace: Raiz do path guard do MCP para o claude. O kiro-cli a recebe
             pelo cwd (``<workspace>/.kiro/settings/mcp.json``), nao pelo comando.
+        mcp_config_path: So claude: config MCP ja gravada pelo chamador, no lugar
+            do arquivo temporario por chamada (o chamador cuida de apaga-la).
+        persist_session: So claude: False acrescenta ``--no-session-persistence``.
+        disallowed_tools: So claude (``--disallowedTools``). O kiro-cli nao tem
+            flag equivalente: ``--trust-tools`` muda a semantica (pede confirmacao,
+            que o modo headless nao responde); para ele a lista e ignorada.
 
     Returns:
         Lista de argumentos para subprocess.
@@ -213,7 +235,12 @@ def build_command(
             "stream-json",
             "--dangerously-skip-permissions",
         ]
-        mcp_cfg = _write_claude_mcp_config(workspace)
+        if not persist_session:
+            cmd.append("--no-session-persistence")
+        if disallowed_tools:
+            # Um argumento so, com virgulas: a opcao e variadica e engoliria o prompt.
+            cmd += ["--disallowedTools", ",".join(disallowed_tools)]
+        mcp_cfg = str(mcp_config_path) if mcp_config_path else _write_claude_mcp_config(workspace)
         if mcp_cfg:
             cmd += ["--mcp-config", mcp_cfg, "--strict-mcp-config"]
         cmd.append(query)

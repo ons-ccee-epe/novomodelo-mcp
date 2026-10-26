@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Settings
+from . import budget
+from .budget import fit_to_budget
 from .envelope import error
 from .paths import ensure_in_workspace
 
@@ -43,11 +45,71 @@ def _read_object(path: Path) -> dict[str, Any] | str:
     return obj if isinstance(obj, dict) else "não é um objeto JSON"
 
 
+#: Até onde a busca de rodadas desce abaixo da pasta recebida, e quantas pastas
+#: visita: a pasta pode ser a de um estudo inteiro, e a busca não pode travar a tool.
+_RUN_SEARCH_DEPTH = 4
+_RUN_SEARCH_MAX_DIRS = 5000
+_RUNS_LISTED = 20
+
+
+def _is_run(path: Path) -> bool:
+    return (path / "training" / "metadata.json").is_file()
+
+
+def find_runs(folder: Path) -> list[Path]:
+    """Rodadas abaixo de `folder`, reconhecidas pelo `training/metadata.json`, com
+    qualquer nome de pasta.
+
+    Não desce dentro de uma rodada nem segue link simbólico: um link levaria a busca
+    para fora da pasta que o guard aprovou.
+    """
+    runs: list[Path] = []
+    level, visited = [folder], 0
+    for _ in range(_RUN_SEARCH_DEPTH):
+        below: list[Path] = []
+        for d in level:
+            try:
+                children = sorted(c for c in d.iterdir()
+                                  if c.is_dir() and not c.is_symlink() and not c.name.startswith("."))
+            except OSError:
+                continue
+            for c in children:
+                visited += 1
+                if visited > _RUN_SEARCH_MAX_DIRS:
+                    return runs
+                (runs if _is_run(c) else below).append(c)
+        level = below
+    return runs
+
+
+def folder_above_runs(output_dir: str) -> dict[str, Any] | None:
+    """Recusa uma pasta que contém rodadas (a do caso, a do estudo) no lugar da rodada.
+
+    Com uma rodada, sugere ela em `output_sugerido`; com várias, só lista, porque a
+    escolha é do usuário. Sem rodada abaixo, devolve None e cada tool segue com o
+    próprio erro.
+    """
+    root = Path(output_dir)
+    if _is_run(root) or not root.is_dir():
+        return None
+    runs = [str(r) for r in find_runs(root)]
+    if not runs:
+        return None
+    if len(runs) == 1:
+        return error(2, f"{output_dir} não é a pasta de uma rodada; a rodada encontrada nela "
+                        f"está em output_sugerido", output_sugerido=runs[0], rodadas=runs)
+    return error(2, f"{output_dir} não é a pasta de uma rodada e tem {len(runs)} rodadas",
+                 "pergunte ao usuário qual rodada usar e passe a pasta dela em output_dir",
+                 rodadas=runs[:_RUNS_LISTED], rodadas_total=len(runs))
+
+
 def read_metadata(output_dir: str) -> dict[str, Any]:
     """Lê training/metadata.json (obrigatório) e simulation/metadata.json (opcional).
 
     Treino ilegível é erro; simulação ilegível vira `simulation: None` + aviso.
     """
+    if (err := folder_above_runs(output_dir)):
+        return err
     root = Path(output_dir)
     tmeta = root / "training" / "metadata.json"
     if not tmeta.exists():
@@ -219,7 +281,7 @@ def policy_summary(output_dir: str, *, settings: Settings, stage: int | None = N
              "n_cortes": len(s.get("cuts") or []),
              "n_ativos": sum(1 for c in s.get("cuts") or [] if c.get("is_active"))}
             for s in stages]
-    cap = settings.max_query_rows
+    cap = budget.row_limit(settings)
     out: dict[str, Any] = {"status": "ok", "metadata": meta, "estagios": rows[:cap],
                            "estagios_truncado": len(rows) > cap}
     if stage is not None:
@@ -227,7 +289,7 @@ def policy_summary(output_dir: str, *, settings: Settings, stage: int | None = N
         if chosen is None:
             return error(22, f"estágio inexistente na política: {stage}")
         cuts = chosen.get("cuts") or []
-        n = settings.max_inline_rows
+        n = budget.row_limit(settings)
         out["cortes"] = {"estagio": stage, "linhas": [_cut_row(c) for c in cuts[:n]],
                          "total": len(cuts), "truncado": len(cuts) > n}
     return out
@@ -315,6 +377,17 @@ def simulation_query(output_dir: str, entity: str, *, settings: Settings,
     except (OSError, pl.exceptions.PolarsError) as exc:
         return error(2, f"não foi possível ler simulation/{entity}", _first_line(exc))
 
-    return {"status": "ok", "entity": entity, "columns": df.columns,
-            "row_count": df.height, "truncated": df.height >= cap,
-            "rows": df.to_dicts()}
+    out: dict[str, Any] = {"status": "ok", "entity": entity, "columns": df.columns,
+                           "row_count": df.height, "truncated": df.height >= cap,
+                           "rows": df.to_dicts()}
+    if limit > max_rows:
+        out["limite_aplicado"] = max_rows
+    glob = f"{base.as_posix()}/**/*.parquet".replace("'", "''")
+    next_step = (
+        "o recorte não coube na resposta. Escolha menos colunas ou, para varrer todos os "
+        f"cenários, use o deck_sql sobre read_parquet('{glob}'): agregue (GROUP BY) ou filtre "
+        "(WHERE) para achar os casos que interessam e depois detalhe só esses.")
+    out = fit_to_budget(out, settings, "rows", reserve=len(next_step.encode("utf-8")) + 64)
+    if out["truncated"]:
+        out["proximo_passo"] = next_step
+    return out

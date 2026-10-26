@@ -147,6 +147,8 @@ export interface LoadStartupEvent {
   warmup_ms: number | null;
   ok: boolean;
   error: string | null;
+  /** Cópia das fixtures da sessão; ausente nos registros antigos ou sem sandbox. */
+  copy_ms?: number | null;
 }
 
 export interface LoadStartup {
@@ -164,6 +166,8 @@ export interface LoadStartup {
 }
 
 export interface LoadConfigRecord {
+  /** Ausente nos registros antigos (= tools). */
+  mode?: "tools";
   concurrency: number;
   duration_seconds: number;
   iterations: number | null;
@@ -198,6 +202,8 @@ export interface LoadErrorGroup {
 }
 
 export interface LoadRun {
+  /** Ausente nos registros antigos (= tools). */
+  mode?: "tools";
   load_id: string;
   timestamp: string;
   ended_at: string;
@@ -220,16 +226,149 @@ export interface LoadRun {
   series: LoadSeriesPoint[];
   errors: LoadErrorGroup[];
   resources: LoadResources;
+  sandbox?: LoadSandbox;
+}
+
+/**
+ * Cópia das fixtures por sessão ("sandbox") das tools/casos que gravam arquivos.
+ * Ausente nos registros anteriores ao recurso; ``enabled: false`` = nada foi copiado.
+ */
+export interface LoadSandbox {
+  enabled: boolean;
+  subtrees?: string[];
+  copy_mb?: number;
+  sessions?: number;
+  copy_ms_mean?: number | null;
+  copy_ms_max?: number | null;
+  final_mb_max?: number | null;
+}
+
+/** Resultado de um caso no modo agente. */
+export type AgentCaseStatus = "pass" | "partial" | "fail" | "timeout" | "error";
+
+/** Estatísticas do modo agente: ``calls`` são execuções de caso; latência só das completas. */
+export interface AgentStats extends LoadStats {
+  /** Casos concluídos por minuto. */
+  throughput_cpm: number;
+  statuses: Record<AgentCaseStatus, number>;
+  /** Fração de execuções aprovadas, de 0 a 1. */
+  pass_rate: number;
+  tool_calls_mean: number | null;
+  mcp_calls_mean: number | null;
+}
+
+export interface AgentSeriesPoint extends LoadSeriesPoint {
+  passed: number;
+}
+
+export interface AgentSelection {
+  case_id: string | null;
+  group: string | null;
+  tags: string[] | null;
+}
+
+export interface AgentConfigRecord {
+  mode: "agent";
+  provider: string;
+  concurrency: number;
+  duration_seconds: number;
+  iterations: number | null;
+  /** null = cada caso usa o próprio timeout. */
+  timeout_seconds: number | null;
+  selection: AgentSelection;
+}
+
+export interface AgentErrorGroup {
+  case_id: string;
+  status: string;
+  outcome: string;
+  message: string;
+  count: number;
+}
+
+export interface AgentLoadRun {
+  mode: "agent";
+  load_id: string;
+  timestamp: string;
+  ended_at: string;
+  version: string;
+  git_commit_sha: string;
+  environment: string;
+  interrupted: boolean;
+  config: AgentConfigRecord;
+  agent: {
+    provider: string;
+    label: string;
+    binary: string;
+    /** Tools de escrita negadas ao claude (vazio no kiro). */
+    denied_tools: string[];
+  };
+  server: { command?: string[]; workspace?: string[] };
+  cases: {
+    /** Ex.: "grupo docs". */
+    selection: string;
+    selected: Array<{ id: string; group: string; tool: string | null }>;
+    excluded: Array<{ id: string; tool: string | null; reason: string }>;
+  };
+  sessions: {
+    requested: number;
+    started: number;
+    failed: number;
+    setup_ms: number;
+    events: Array<{
+      session: number;
+      ok: boolean;
+      ms: number;
+      error: string | null;
+      executions: number;
+      /** Cópia das fixtures da sessão; ausente nos registros antigos ou sem sandbox. */
+      copy_ms?: number | null;
+    }>;
+  };
+  duration_seconds: number;
+  abandoned_calls: number;
+  series_bucket_seconds: number;
+  totals: AgentStats;
+  per_case: Record<string, AgentStats & { group: string }>;
+  series: AgentSeriesPoint[];
+  errors: AgentErrorGroup[];
+  resources: LoadResources;
+  sandbox?: LoadSandbox;
+}
+
+/** Carga gravada de qualquer modo; os registros antigos (sem ``mode``) são do modo tools. */
+export type SavedLoadRun = LoadRun | AgentLoadRun;
+
+export function isAgentRun(run: SavedLoadRun): run is AgentLoadRun {
+  return run.mode === "agent";
+}
+
+export type LoadRunMode = "tools" | "agent";
+
+/** Configuração resumida no index.json: campos de tools ou do agente, conforme ``mode``. */
+export interface LoadIndexConfig {
+  mode?: LoadRunMode;
+  concurrency: number;
+  duration_seconds: number;
+  iterations: number | null;
+  timeout_seconds: number | null;
+  /** Só tools. */
+  tools?: string[] | null;
+  /** Só agent. */
+  provider?: string;
+  selection?: AgentSelection;
 }
 
 /** Resumo de uma carga no results/load/index.json. */
 export interface LoadIndexEntry {
+  /** Ausente nas entradas antigas (= tools). */
+  mode?: LoadRunMode;
   load_id: string;
   timestamp: string;
   version: string;
   git_commit_sha: string;
   interrupted: boolean;
-  config: Omit<LoadConfigRecord, "warmup">;
+  config: LoadIndexConfig;
   summary: Pick<
     LoadStats,
     | "calls"
@@ -241,7 +380,15 @@ export interface LoadIndexEntry {
     | "p50_ms"
     | "p95_ms"
     | "p99_ms"
-  >;
+  > & {
+    /** Só agent. */
+    throughput_cpm?: number;
+    pass_rate?: number;
+  };
+}
+
+export function indexEntryMode(entry: LoadIndexEntry): LoadRunMode {
+  return entry.mode ?? entry.config.mode ?? "tools";
 }
 
 export interface LoadIndex {

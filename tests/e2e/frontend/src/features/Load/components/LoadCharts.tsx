@@ -20,7 +20,15 @@ interface Props {
   compact?: boolean;
   /** Janela da carga, para descartar o bucket final quase vazio (ver ``trimPartialTail``). */
   durationSeconds?: number;
+  /** Título e rótulos do gráfico de vazão; o padrão é o das chamadas por segundo (tools). */
+  throughput?: { title: string; ok: string; failed: string };
 }
+
+const DEFAULT_THROUGHPUT = {
+  title: "Vazão no tempo (chamadas/s)",
+  ok: "ok",
+  failed: "erros e timeouts",
+};
 
 const HEIGHT_PX = 240;
 const COMPACT_HEIGHT_PX = 160;
@@ -39,7 +47,12 @@ export function trimPartialTail(series: LoadSeriesPoint[], durationSeconds: numb
 }
 
 /** Latência (p50/p95 de cada segundo) e vazão ao longo da carga. */
-export function LoadCharts({ series, compact = false, durationSeconds }: Props) {
+export function LoadCharts({
+  series,
+  compact = false,
+  durationSeconds,
+  throughput = DEFAULT_THROUGHPUT,
+}: Props) {
   const height = compact ? COMPACT_HEIGHT_PX : HEIGHT_PX;
   const data = useMemo(
     () =>
@@ -92,7 +105,7 @@ export function LoadCharts({ series, compact = false, durationSeconds }: Props) 
         </ResponsiveContainer>
       </div>
       <div className="cobre-chart">
-        <div className="cobre-chart-title">Vazão no tempo (chamadas/s)</div>
+        <div className="cobre-chart-title">{throughput.title}</div>
         <ResponsiveContainer width="100%" height={height}>
           <BarChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--cobre-border)" />
@@ -102,14 +115,14 @@ export function LoadCharts({ series, compact = false, durationSeconds }: Props) 
             <Legend />
             <Bar
               dataKey="ok_calls"
-              name="ok"
+              name={throughput.ok}
               stackId="calls"
               fill="var(--cobre-chart-throughput)"
               isAnimationActive={false}
             />
             <Bar
               dataKey="failed"
-              name="erros e timeouts"
+              name={throughput.failed}
               stackId="calls"
               fill="var(--cobre-chart-failed)"
               isAnimationActive={false}

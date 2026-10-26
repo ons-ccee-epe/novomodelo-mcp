@@ -7,6 +7,8 @@ import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from pathlib import Path
+
 import pytest
 
 from tests.e2e.launcher import service as service_mod
@@ -41,6 +43,20 @@ child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
 print(json.dumps({"event": "progress", "phase": "running", "child_pid": child.pid}), flush=True)
 time.sleep(120)
 """
+
+# Motor falso que grava na --work-dir (como a cópia das fixtures) e fica esperando.
+_WRITES_IN_WORK_DIR_AND_WAITS = """
+import json, pathlib, sys, time
+work = pathlib.Path(sys.argv[sys.argv.index("--work-dir") + 1])
+(work / "s0" / "fixtures").mkdir(parents=True)
+(work / "s0" / "fixtures" / "config.json").write_text("{}")
+print(json.dumps({"event": "progress", "phase": "running", "work_dir": str(work)}), flush=True)
+time.sleep(120)
+"""
+
+_WRITES_IN_WORK_DIR_AND_SAVES = _WRITES_IN_WORK_DIR_AND_WAITS.replace(
+    "time.sleep(120)", 'print(json.dumps({"event": "saved", "load_id": "20261024_100000_abc1234"}))'
+)
 
 
 def _service(script: str, gate: RunGate | None = None) -> LoadRunService:
@@ -147,6 +163,24 @@ class TestCancel:
         assert state.load_id is None
         assert gate.owner is None
         assert "não gravada" in state.to_dict()["log"][-1]
+
+    def test_cancel_removes_the_work_dir_the_engine_could_not_clean(self) -> None:
+        svc = _service(_WRITES_IN_WORK_DIR_AND_WAITS)
+        state = svc.start_run(CONFIG)
+        assert _wait_until(lambda: (state.progress or {}).get("work_dir"))
+        work_dir = Path(state.progress["work_dir"])
+        assert (work_dir / "s0" / "fixtures" / "config.json").is_file()
+
+        svc.cancel(state.run_id)
+        assert _wait_until(lambda: state.status == "cancelled")
+        assert _wait_until(lambda: not work_dir.exists(), timeout=15), "a pasta do run sobrou"
+
+    def test_a_finished_run_also_leaves_no_work_dir(self) -> None:
+        svc = _service(_WRITES_IN_WORK_DIR_AND_SAVES)
+        state = svc.start_run(CONFIG)
+        assert _wait_until(lambda: state.status == "done")
+        work_dir = Path(state.progress["work_dir"])
+        assert _wait_until(lambda: not work_dir.exists(), timeout=15), "a pasta do run sobrou"
 
     def test_cancel_on_a_finished_run_is_a_noop(self) -> None:
         svc = _service(_COMPLETES)

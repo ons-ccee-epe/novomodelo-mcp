@@ -99,13 +99,12 @@ A glyph takes a second meaning only on pages that never carry its first; each su
 - $\theta_t$ is the future-cost epigraph variable, approximating $V_{t+1}(x_t)$; in [Hydro Production Function Models](/math/hydro-production-models) $\theta$ is the angle between the normals of two FPHA planes.
 - $\kappa_{r,k}$ is the curtailment of non-controllable source $r$ in [System Element Modeling Overview](/math/system-elements) and [Equipment-Specific Formulations](/math/equipment-formulations); in [Hydro Production Function Models](/math/hydro-production-models) $\kappa$ is the intercept-only correction factor of precomputed FPHA planes, and in [Penalty System](/math/penalty-system) $\kappa = 10^6/3600$ is the number of (m³/s)·h in one hm³.
 - $\mu$ with a season, bus or source index is a mean ($\mu_m$, $\mu^A_m$, $\mu^{\text{load}}_{b,t}$, $\mu^{nc}_r$); in [Risk Measures](/math/risk-measures) $\mu$ is a risk-adjusted probability vector.
-- $\epsilon_{b,k}$ is the excess generation at bus $b$, block $k$, in [LP Formulation](/math/lp-formulation), [System Element Modeling Overview](/math/system-elements) and [Penalty System](/math/penalty-system); in [Cut Management](/math/cut-management) $\epsilon$ is the cut-activity tolerance of periodic pruning.
+- $\epsilon_{b,k}$ is the excess generation at bus $b$, block $k$, in [LP Formulation](/math/lp-formulation), [System Element Modeling Overview](/math/system-elements) and [Penalty System](/math/penalty-system); in [Cut Management](/math/cut-management) $\varepsilon_{\text{viol}}$ is the relative violation tolerance of the dynamic method.
 - $\mathcal{C}$ is the contract set, with $\mathcal{C}^{imp}$, $\mathcal{C}^{exp}$ and their per-bus subsets, in the System Modelling chapters; in [Horizon Modes](/math/horizon-modes) $\mathcal{C}_\tau$ is the set of stages that occupy season $\tau$ of a cyclic policy graph.
 - $\mathcal{P}$ is the pumping-station set, with per-bus subsets $\mathcal{P}_b$, in the System Modelling chapters; in [Risk Measures](/math/risk-measures) it is the probability simplex of the scenario probabilities.
 - $\mathcal{M}_h$ is the FPHA hyperplane set of hydro $h$; in [Risk Measures](/math/risk-measures) $\mathcal{M}(p)$, $\mathcal{M}_\alpha(p)$ and $\mathcal{M}^{EAVaR}(p)$ are risk sets of the dual representation of a convex risk measure.
 - $\mathcal{X}_t(x_{t-1}, \omega_t)$ is the feasible set of the stage-$t$ state and control; in [Cut Management](/math/cut-management) $\mathcal{X}_t$ is the feasible state set on which a cut is valid.
 - $I_t$ is the number of vertices stored at stage $t$ in [Upper Bound Evaluation](/math/upper-bound-evaluation); in [LP Formulation](/math/lp-formulation) $I_{h,k}$ is the inflow of hydro $h$ in block $k$ that a hydro-inflow term reads.
-- $\xi_r$ is the availability ratio of non-controllable source $r$ in [System Element Modeling Overview](/math/system-elements), [Equipment-Specific Formulations](/math/equipment-formulations) and [Scenario Generation](/math/scenario-generation); in [Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity) $\xi_h$ is the noise-adjustment slack of the reference design.
 
 ### Stage Indexing
 
@@ -210,7 +209,7 @@ Cost coefficients use $c$ with a superscript naming the cost type.
 | $c^{gv-}_h$ | \$/MWh | Generation-minimum violation penalty, charged on every cell of hydro $h$ |
 | $c^{ev+}_h$, $c^{ev-}_h$ | \$/(m³/s·h) | Evaporation above-target and below-target violation penalties |
 | $c^{wv+}_h$, $c^{wv-}_h$ | \$/(m³/s·h) | Water-withdrawal over-delivery and under-delivery penalties |
-| $c^{inf}_h$ | \$/(m³/s·h) | Inflow non-negativity penalty (penalty-based inflow methods) |
+| $c^{inf}_h$ | \$/(m³/s·h) | Inflow non-negativity penalty (`penalty` and `truncation_with_penalty` inflow methods) |
 | $c^{exch}_n$ | \$/MWh | Exchange (transmission) cost |
 | $c^{curt}_r$ | \$/MWh | Curtailment regularization cost of non-controllable source $r$ |
 | $c^{ctr}_c$     | \$/MWh      | Contract price (signed: + import cost, − export revenue) |
@@ -310,6 +309,7 @@ We use **"season $m$"** as a generic term for the position within the cycle, avo
 | $\tilde{\Lambda}^{1/2}$ | - | Square roots of the eigenvalues clipped at zero, $\mathrm{diag}(\sqrt{\max(\lambda_1, 0)}, \ldots, \sqrt{\max(\lambda_n, 0)})$ |
 | $C^{1/2}$ | - | Spectral correlation factor $U \Lambda^{1/2} U^\top$, negative eigenvalues clipped to zero; the correlated noise is $C^{1/2} z$ |
 | $a_h$ | m³/s | Incremental inflow of hydro $h$ at the current stage |
+| $a^-_h$ | m³/s | Truncation amount, the negative part of the realization: $a^-_h = \max(0, -a_h)$ ([Inflow Non-Negativity Solution Methods](/math/inflow-nonnegativity)) |
 | $\hat{a}_{h,\ell}$ | m³/s  | Incoming AR lag $\ell$ (state)                                                                                                                                                                                                                   |
 
 ## 4. Decision Variables
@@ -375,12 +375,14 @@ Slack variables for soft constraints:
 | $\sigma^{v-}_h$                          | $\geq 0$ | hm³   | Storage below the dead volume of a filling hydro, from its entry stage on (every other operating hydro's dead volume is a hard bound)             |
 | $\sigma^{fill}_h$                        | $\geq 0$ | hm³   | Per-stage filling-floor shortfall                                                                                                                 |
 | $\sigma^{q-}_{h,b,k}$                    | $\geq 0$ | m³/s  | Turbined flow below minimum — one per (hydro, bus) cell $b \in \mathcal{B}_h$ of a split plant                                                    |
+| $\sigma^{Q-}_{h,k}$                      | $\geq 0$ | m³/s  | Plant turbined flow below the plant minimum, beyond what the cell slacks cover (a plant with several cells whose minimum binds) |
 | $\sigma^{o-}_{h,k}$                      | $\geq 0$ | m³/s  | Outflow below minimum (per plant — no per-cell outflow column to attribute a floor to)                                                            |
 | $\sigma^{o+}_{h,k}$                      | $\geq 0$ | m³/s  | Outflow above maximum (per plant)                                                                                                                 |
 | $\sigma^{g-}_{h,b,k}$                    | $\geq 0$ | MW    | Generation below minimum — one per (hydro, bus) cell $b \in \mathcal{B}_h$ of a split plant                                                       |
+| $\sigma^{G-}_{h,k}$                      | $\geq 0$ | MW    | Plant generation below the plant minimum, beyond what the cell slacks cover (a plant with several cells whose minimum binds) |
 | $\sigma^{e+}_{h,k}$, $\sigma^{e-}_{h,k}$ | $\geq 0$ | m³/s | Evaporation above-target and below-target violation (per plant): one stage-level pair $\sigma^{e\pm}_h$ on a parallel stage, priced over the stage hours $H_t$; one pair per block on a chronological stage, priced over $\tau_k$ |
 | $\sigma^{w-}_h$, $\sigma^{w+}_h$         | $\geq 0$ | m³/s  | Water withdrawal under-/over-delivery relative to the target $r_h$ (stage-level, not per-block); priced by $c^{wv-}_h$ / $c^{wv+}_h$ respectively |
-| $\sigma^{inf}_h$                         | $\geq 0$ | m³/s  | Inflow non-negativity (if enabled)                                                                                                                |
+| $\sigma^{inf}_h$                         | $\geq 0$ | m³/s  | Inflow non-negativity, every inflow method except `none`; its bounds follow the method                                                            |
 
 ## 5. Duals and Cut Slopes
 

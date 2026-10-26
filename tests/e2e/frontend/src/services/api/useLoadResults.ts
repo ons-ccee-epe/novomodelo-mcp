@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchLoadIndex, fetchLoadRun } from "@/services/loadApi";
-import type { LoadIndexEntry, LoadRun } from "@/shared/types";
+import { indexEntryMode, type LoadIndexEntry, type SavedLoadRun } from "@/shared/types";
 
 export interface LoadResultsData {
   loading: boolean;
@@ -11,8 +11,8 @@ export interface LoadResultsData {
   selectedId: string | null;
   /** Carga de comparação efetiva (por padrão, a imediatamente anterior à selecionada). */
   compareId: string | null;
-  run: LoadRun | null;
-  compareRun: LoadRun | null;
+  run: SavedLoadRun | null;
+  compareRun: SavedLoadRun | null;
   selectRun: (id: string) => void;
   /** ``null`` = sem comparação; ``undefined`` = voltar ao padrão (a anterior). */
   selectCompare: (id: string | null | undefined) => void;
@@ -21,10 +21,19 @@ export interface LoadResultsData {
   showNewest: () => void;
 }
 
+/** A carga imediatamente anterior do MESMO modo: tools e agente não se comparam. */
 function previousOf(runs: LoadIndexEntry[], id: string | null): string | null {
   if (!id) return null;
   const index = runs.findIndex((r) => r.load_id === id);
-  return index >= 0 ? (runs[index + 1]?.load_id ?? null) : null;
+  if (index < 0) return null;
+  const mode = indexEntryMode(runs[index]);
+  return runs.slice(index + 1).find((r) => indexEntryMode(r) === mode)?.load_id ?? null;
+}
+
+function sameMode(runs: LoadIndexEntry[], a: string | null, b: string): boolean {
+  const first = runs.find((r) => r.load_id === a);
+  const second = runs.find((r) => r.load_id === b);
+  return Boolean(first && second && indexEntryMode(first) === indexEntryMode(second));
 }
 
 /**
@@ -37,8 +46,8 @@ export function useLoadResults(): LoadResultsData {
   const [runs, setRuns] = useState<LoadIndexEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [compareChoice, setCompareChoice] = useState<string | null | undefined>(undefined);
-  const [run, setRun] = useState<LoadRun | null>(null);
-  const [compareRun, setCompareRun] = useState<LoadRun | null>(null);
+  const [run, setRun] = useState<SavedLoadRun | null>(null);
+  const [compareRun, setCompareRun] = useState<SavedLoadRun | null>(null);
   const [tick, setTick] = useState(0);
   const followNewest = useRef(false);
 
@@ -76,7 +85,10 @@ export function useLoadResults(): LoadResultsData {
 
   const compareId =
     compareChoice === undefined ? previousOf(runs, selectedId) : compareChoice;
-  const effectiveCompareId = compareId && compareId !== selectedId ? compareId : null;
+  const effectiveCompareId =
+    compareId && compareId !== selectedId && sameMode(runs, selectedId, compareId)
+      ? compareId
+      : null;
 
   useEffect(() => {
     if (!selectedId) {

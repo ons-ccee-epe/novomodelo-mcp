@@ -457,6 +457,21 @@ def test_run_start_refuses_nao_cabe():
         assert outside["exit_code"] == 13, outside
 
 
+def test_run_start_nao_sobrescreve_rodada_concluida():
+    with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE) as d:
+        case = _make_case(d, meta_host=None)
+        t = _tools()
+        assert _wait(t, t["run_start"](str(case), override=True)["job_id"])["state"] == "succeeded"
+        de_novo = t["run_start"](str(case), override=True)
+        assert de_novo["status"] == "error" and de_novo["exit_code"] == 17, de_novo
+        assert any("overwrite=True" in x for x in de_novo["diagnostics"]), de_novo
+        assert de_novo["output_sugerido"] != str((case / "output").resolve()), de_novo
+        outro = t["run_start"](str(case), output=de_novo["output_sugerido"], override=True)
+        assert outro["status"] == "ok", outro
+        _wait(t, outro["job_id"])
+        assert t["run_start"](str(case), override=True, overwrite=True)["status"] == "ok"
+
+
 def test_calibration_registry_by_machine_id():
     """Run via run_start alimenta o registro; o plano o usa mesmo se o hostname mudar."""
     with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_META=json.dumps(REF_META)) as d:

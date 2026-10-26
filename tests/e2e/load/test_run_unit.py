@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from tests.e2e.load import run as run_mod
 from tests.e2e.load import store as store_mod
 from tests.e2e.load.engine import LoadError
-from tests.e2e.load.fakes import make_outcome
+from tests.e2e.load.fakes import make_agent_outcome, make_outcome
 from tests.e2e.load.mix import Excluded
 from tests.e2e.load.store import build_record
 
@@ -22,9 +24,12 @@ def isolated(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(run_mod._PARENT_GONE, "is_set", lambda: False)
 
 
-def _fake_execute(outcome=None):
+NO_SANDBOX = {"enabled": False}
+
+
+def _fake_execute(outcome=None, sandbox=None):
     def execute(_config, _args, _command, _command_args):
-        return None, outcome or make_outcome()
+        return None, outcome or make_outcome(), sandbox or NO_SANDBOX
 
     return execute
 
@@ -40,7 +45,7 @@ class TestValidation:
             ["--concurrency", "2", "--duration", "5", "--iterations", "0"],
             ["--concurrency", "2", "--duration", "5", "--timeout", "0"],
             ["--concurrency", "2", "--duration", "5", "--tools", "run_start"],
-            ["--concurrency", "2", "--duration", "5", "--tools", "docs_list,deck_edit_json"],
+            ["--concurrency", "2", "--duration", "5", "--tools", "docs_list,run_status"],
         ],
     )
     def test_invalid_values_exit_2_without_running(
@@ -187,3 +192,204 @@ class TestCtrlC:
                 signal.raise_signal(signal.SIGINT)
         finally:
             signal.signal(signal.SIGINT, previous)
+
+
+class TestServerStderrInError:
+    def test_stderr_tail_keeps_the_last_non_empty_lines(self, tmp_path: Path) -> None:
+        log = tmp_path / "srv.log"
+        log.write_text("a\n\nTraceback\nNo module named novomodelo_mcp\n", encoding="utf-8")
+        assert run_mod.stderr_tail(log, max_lines=2) == "Traceback / No module named novomodelo_mcp"
+
+    def test_stderr_tail_of_a_missing_file_is_empty(self, tmp_path: Path) -> None:
+        assert run_mod.stderr_tail(tmp_path / "nao-existe.log") == ""
+
+    def test_startup_failure_reports_why_the_server_died(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        server = tmp_path / "server.py"
+        server.write_text(
+            "import sys\nsys.exit('No module named novomodelo_mcp')\n", encoding="utf-8"
+        )
+        code = run_mod.main(
+            [
+                *VALID,
+                "--no-save",
+                "--fixtures",
+                str(tmp_path),
+                "--server-command",
+                f'"{sys.executable}" "{server}"',
+            ]
+        )
+        assert code == run_mod.EXIT_FAILED
+        err = capsys.readouterr().err
+        assert "não iniciou" in err
+        assert "stderr do servidor: No module named novomodelo_mcp" in err
+
+
+AGENT = ["--mode", "agent", "--concurrency", "2", "--duration", "60", "--provider", "claude"]
+_CLAUDE = SimpleNamespace(id="claude", label="Claude Code", binary="claude", path="C:/claude.exe")
+
+
+def _fake_execute_agent(outcome=None, sandbox=None):
+    def execute(_config, _args, _provider):
+        server = {"command": ["mcp.exe"], "workspace": []}
+        return None, outcome or make_agent_outcome(), {"server": server, "sandbox": sandbox or NO_SANDBOX}
+
+    return execute
+
+
+class TestAgentMode:
+    @pytest.fixture(autouse=True)
+    def installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(run_mod, "resolve_provider", lambda _requested: _CLAUDE)
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            ["--concurrency", "9"],
+            ["--tools", "docs_list"],
+            ["--no-warmup"],
+            ["--server-command", "python -m x"],
+            ["--group", "docs", "--case", "docs-list-all"],
+            ["--timeout", "0"],
+        ],
+    )
+    def test_invalid_agent_options_exit_2_without_running(
+        self, extra: list[str], monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        monkeypatch.setattr(run_mod, "_execute_agent", lambda *a: pytest.fail("não deveria rodar"))
+        assert run_mod.main([*AGENT, *extra]) == 2
+        assert "erro:" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("flag", [["--provider", "claude"], ["--case", "x"], ["--group", "docs"]])
+    def test_agent_options_are_refused_in_tools_mode(self, flag: list[str], capsys) -> None:
+        assert run_mod.main([*VALID, *flag]) == 2
+        assert "não vale(m) no modo tools" in capsys.readouterr().err
+
+    def test_provider_not_installed_exits_2(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+        def missing(_requested):
+            raise RuntimeError("Provedor 'claude' nao esta instalado nesta maquina")
+
+        monkeypatch.setattr(run_mod, "resolve_provider", missing)
+        assert run_mod.main(AGENT) == 2
+        assert "nao esta instalado" in capsys.readouterr().err
+
+    def test_selection_and_timeout_reach_the_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen = {}
+
+        def execute(config, _args, provider):
+            seen.update(config=config, provider=provider)
+            return None, make_agent_outcome(), {"server": {}, "sandbox": NO_SANDBOX}
+
+        monkeypatch.setattr(run_mod, "_execute_agent", execute)
+        argv = [*AGENT, "--tags", "docs, list", "--timeout", "90", "--iterations", "1", "--no-save"]
+        assert run_mod.main(argv) == 0
+        config = seen["config"]
+        assert config.selection.tags == ("docs", "list")
+        assert (config.timeout_s, config.iterations, config.provider) == (90.0, 1, "claude")
+        assert seen["provider"] is _CLAUDE
+
+    def test_agent_run_saves_an_agent_record_and_prints_its_report(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        monkeypatch.setattr(run_mod, "_execute_agent", _fake_execute_agent())
+        assert run_mod.main([*AGENT, "--results-dir", str(tmp_path)]) == 0
+        out = capsys.readouterr().out
+        assert "(agent, claude)" in out
+        assert "aprovação 50.0%" in out
+        assert "Fora da carga (1)" in out
+        [saved] = (tmp_path / "load").glob("2*.json")
+        record = json.loads(saved.read_text(encoding="utf-8"))
+        assert record["mode"] == "agent"
+        assert record["agent"]["provider"] == "claude"
+        assert record["server"]["command"] == ["mcp.exe"]
+
+    def test_agent_load_error_exits_1(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+        def execute(*_args):
+            raise LoadError("nenhum caso da seleção (grupo run) pode rodar na carga: x")
+
+        monkeypatch.setattr(run_mod, "_execute_agent", execute)
+        assert run_mod.main([*AGENT, "--group", "run"]) == 1
+        assert "nenhum caso" in capsys.readouterr().err
+
+    def test_stopped_by_the_launcher_saves_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        monkeypatch.setattr(run_mod, "_execute_agent", _fake_execute_agent())
+        monkeypatch.setattr(run_mod._PARENT_GONE, "is_set", lambda: True)
+        code = run_mod.main([*AGENT, "--json-progress", "--results-dir", str(tmp_path)])
+        assert code == 3
+        assert not (tmp_path / "load").exists()
+
+    def test_denied_tools_are_recorded_only_for_claude(self) -> None:
+        from tests.e2e.load.mix import ToolHints
+
+        outcome = make_agent_outcome()
+        outcome.server_tools = {
+            "deck_edit_json": ToolHints(read_only=False, open_world=False),
+            "docs_list": ToolHints(read_only=True, open_world=False),
+        }
+        assert run_mod._agent_info(_CLAUDE, outcome)["denied_tools"] == ["deck_edit_json"]
+        kiro = SimpleNamespace(id="kiro-cli", label="Kiro", binary="kiro-cli", path=None)
+        assert run_mod._agent_info(kiro, outcome)["denied_tools"] == []
+
+    def test_with_the_copy_only_barred_writing_tools_are_denied(self, tmp_path: Path) -> None:
+        from tests.e2e.load.mix import ToolHints
+        from tests.e2e.load.sandbox import SandboxPlan
+
+        outcome = make_agent_outcome()
+        outcome.server_tools = {
+            "deck_edit_json": ToolHints(read_only=False, open_world=False),
+            "run_start": ToolHints(read_only=False, open_world=False),
+            "docs_list": ToolHints(read_only=True, open_world=False),
+        }
+        outcome.sandbox_plan = SandboxPlan(fixtures=tmp_path, enabled=True)
+        assert run_mod._agent_info(_CLAUDE, outcome)["denied_tools"] == ["run_start"]
+
+
+SANDBOX = {
+    "enabled": True,
+    "subtrees": ["newave/cobre-caso-reduzido"],
+    "copy_mb": 19.2,
+    "per_session_mb": 38.4,
+    "growth": 1.0,
+    "sessions": 2,
+    "copy_ms_mean": 450.0,
+    "copy_ms_max": 600.0,
+    "final_mb_max": 19.5,
+}
+
+
+class TestSandboxRecord:
+    def test_tools_record_keeps_the_copy_and_the_workspace_says_so(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        monkeypatch.setattr(run_mod, "_execute", _fake_execute(sandbox=SANDBOX))
+        assert run_mod.main([*VALID, "--results-dir", str(tmp_path)]) == 0
+        assert "Cópia por sessão: 19.2 MB (newave/cobre-caso-reduzido)" in capsys.readouterr().out
+        [saved] = (tmp_path / "load").glob("2*.json")
+        record = json.loads(saved.read_text(encoding="utf-8"))
+        assert record["sandbox"] == SANDBOX
+        assert record["server"]["workspace"] == ["cópia das fixtures por sessão"]
+
+    def test_tools_record_without_copy_keeps_the_fixtures_workspace(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(run_mod, "_execute", _fake_execute())
+        fixtures = tmp_path / "fixtures"
+        fixtures.mkdir()
+        argv = [*VALID, "--results-dir", str(tmp_path), "--fixtures", str(fixtures)]
+        assert run_mod.main(argv) == 0
+        [saved] = (tmp_path / "load").glob("2*.json")
+        record = json.loads(saved.read_text(encoding="utf-8"))
+        assert record["sandbox"] == {"enabled": False}
+        assert record["server"]["workspace"] == [str(fixtures.resolve())]
+
+    def test_agent_record_keeps_the_copy(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(run_mod, "resolve_provider", lambda _requested: _CLAUDE)
+        monkeypatch.setattr(run_mod, "_execute_agent", _fake_execute_agent(sandbox=SANDBOX))
+        assert run_mod.main([*AGENT, "--results-dir", str(tmp_path)]) == 0
+        [saved] = (tmp_path / "load").glob("2*.json")
+        assert json.loads(saved.read_text(encoding="utf-8"))["sandbox"]["copy_mb"] == 19.2

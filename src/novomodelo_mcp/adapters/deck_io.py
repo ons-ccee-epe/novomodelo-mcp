@@ -211,6 +211,13 @@ def read_parquet_summary(path: str, columns: list[str] | None = None,
             "nrows": int(nrows), "head_rows": len(head), "head": head}
 
 
+def parquet_bytes(path: Path) -> int:
+    """Bytes em disco do parquet, ou de todos os parquets de uma pasta (sem ler o conteúdo)."""
+    if path.is_dir():
+        return sum(f.stat().st_size for f in path.rglob("*.parquet") if f.is_file())
+    return path.stat().st_size
+
+
 def describe_parquet(path: str) -> dict[str, Any]:
     pl = _pl()
     df = pl.read_parquet(path)

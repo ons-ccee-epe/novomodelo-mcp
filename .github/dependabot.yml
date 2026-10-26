@@ -6,8 +6,11 @@
 # Atenção: o GitHub só lê este arquivo na branch padrão do repositório.
 version: 2
 updates:
-  # novomodelo-python anda junto com o release do novomodelo (pin exato no
-  # pyproject). Só ela: as demais dependências seguem o uv.lock até um bump
+  # Só o novomodelo-bridge, que anda junto com o release do novomodelo (pin
+  # exato no pyproject). Ele fixa a mesma versão da novomodelo-python, que sobe
+  # junto no uv.lock: por isso a python fica sem pin e fora desta lista (o
+  # Dependabot atualiza uma dependência por vez, e um bump isolado de uma das
+  # duas não resolve). As demais dependências seguem o uv.lock até um bump
   # deliberado. Ao aceitar, subir também o `ref` do job rename-guard no CI.
   - package-ecosystem: "uv"
     directory: "/"
@@ -15,7 +18,7 @@ updates:
     schedule:
       interval: "daily"
     allow:
-      - dependency-name: "novomodelo-python"
+      - dependency-name: "novomodelo-bridge"
     commit-message:
       prefix: "build"
 

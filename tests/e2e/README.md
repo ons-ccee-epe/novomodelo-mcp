@@ -96,9 +96,11 @@ python -m tests.e2e.eval.run --no-browser
 
 ## Teste de carga
 
-Mede latência, vazão e erros do servidor MCP com vários clientes concorrentes,
-chamando só tools somente leitura, sem agente de IA. Detalhes, métricas e o
-formato do resultado em [`load/README.md`](load/README.md).
+Mede latência, vazão e erros do servidor MCP com vários clientes concorrentes, sem
+agente de IA (modo tools) ou com N agentes rodando os casos da esteira (modo agent). O
+mix padrão só tem tools leves e somente leitura; as que gravam rodam numa cópia das
+fixtures por sessão. Detalhes, métricas e o formato do resultado em
+[`load/README.md`](load/README.md).
 
 ```bash
 python -m tests.e2e.load.run --concurrency 4 --duration 30

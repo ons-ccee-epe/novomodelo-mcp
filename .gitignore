@@ -31,6 +31,8 @@ tests/e2e/fixtures/
 tests/e2e/metrics/
 tests/e2e/reports/*.html
 tests/e2e/reports/*.json
+# Resultados de execuções de carga (saída local; os de query ficam versionados)
+tests/e2e/results/load/
 
 # Planos de trabalho (specs, intake, épicos): locais, fora do git
 plans/

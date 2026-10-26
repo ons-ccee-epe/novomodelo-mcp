@@ -4,13 +4,24 @@ Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 """
 from __future__ import annotations
 
+from ..adapters import budget
 from ..adapters.bridge import run_bridge
 from ..adapters.novomodelo import case_summary_binding, validate_deck_binding, validate_deck_cli
 from ..adapters.discovery import find_novomodelo
+from ..adapters.envelope import error
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .shaping import attach_artifact, cap_envelope, group_diagnostics
 from .annotations import READ_ONLY, WRITES
+
+
+def _force_gate(force: bool, dry_run: bool, settings: Settings) -> dict | None:
+    """O `--force` do bridge limpa o deck de destino antes de converter."""
+    if force and not dry_run and not settings.allow_force:
+        return error(13, "force=True desabilitado",
+                     "o convert com force apaga o deck de destino; defina "
+                     "NOVOMODELO_MCP_ALLOW_FORCE=1 para permitir")
+    return None
 
 
 def register_pre_run(mcp, settings: Settings) -> None:
@@ -39,11 +50,13 @@ def register_pre_run(mcp, settings: Settings) -> None:
         """Converte um caso NEWAVE para deck Novomodelo, escrevendo em `dst`.
 
         `validate=True` (recomendado) também valida o deck resultante numa
-        tacada — é o portão de prontidão pré-rodada. `force` sobrescreve `dst`
-        existente; `dry_run` não escreve nada. Devolve o envelope + o caminho
+        tacada — é o portão de prontidão pré-rodada. `force` apaga e regrava `dst`
+        existente (exige NOVOMODELO_MCP_ALLOW_FORCE=1); `dry_run` não escreve nada. Devolve o envelope + o caminho
         do deck em `artifacts.deck`.
         """
         if (err := ensure_in_workspace(src, dst, settings=settings)):
+            return err
+        if (err := _force_gate(force, dry_run, settings)):
             return err
         argv = ["convert", "newave", src, dst]
         if validate:
@@ -103,8 +116,8 @@ def register_pre_run(mcp, settings: Settings) -> None:
         """
         if (err := ensure_in_workspace(case_dir, settings=settings)):
             return err
-        return cap_envelope(case_summary_binding(case_dir, max_items=settings.max_inline_rows,
-                                                 settings=settings), settings)
+        return cap_envelope(budget.shrink_to_budget(case_summary_binding(
+            case_dir, max_items=budget.row_limit(settings), settings=settings), settings), settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def bridge_check_decomp(src: str) -> dict:
@@ -130,12 +143,14 @@ def register_pre_run(mcp, settings: Settings) -> None:
         """Converte uma revisão DECOMP para deck Novomodelo, escrevendo em `dst`.
 
         Espelha `bridge_convert_newave`: `validate=True` valida o deck resultante,
-        `force` sobrescreve `dst`, `dry_run` não escreve. Caminho do deck em
+        `force` apaga e regrava `dst` (exige NOVOMODELO_MCP_ALLOW_FORCE=1), `dry_run` não escreve. Caminho do deck em
         `artifacts.deck`. `importar_fcf=False` converte sem importar os cortes da
         FCF declarados no deck (`--no-fcf`); só no DECOMP, o conversor NEWAVE não
         tem essa opção.
         """
         if (err := ensure_in_workspace(src, dst, settings=settings)):
+            return err
+        if (err := _force_gate(force, dry_run, settings)):
             return err
         argv = ["convert", "decomp", src, dst]
         if validate:

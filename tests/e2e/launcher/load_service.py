@@ -1,10 +1,15 @@
 """Serviço das cargas disparadas pela UI (estado consultável por polling).
 
 O motor (``tests.e2e.load.run``) roda num subprocesso próprio, não numa thread do
-launcher: o cancelamento é matar uma única árvore (motor + os N servidores MCP,
-sem depender de um desligamento limpo de cada um) e a medição não disputa o
-event loop do HTTP. O motor imprime eventos JSON em linhas; o launcher só os lê.
-Fechar o stdin do motor (launcher encerrado) o faz parar sozinho.
+launcher: o cancelamento é matar uma única árvore (motor + os N servidores MCP, ou
+no modo agent os N CLIs de agente com os seus servidores, sem depender de um
+desligamento limpo de cada um) e a medição não disputa o event loop do HTTP. O motor
+imprime eventos JSON em linhas; o launcher só os lê. Fechar o stdin do motor
+(launcher encerrado) o faz parar sozinho.
+
+Cada carga recebe uma ``--work-dir`` criada aqui (pastas das sessões e cópias das
+fixtures), apagada depois que a árvore do motor termina: matar o motor no cancelamento não
+lhe dá tempo de limpar.
 """
 from __future__ import annotations
 
@@ -14,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import uuid
 from collections.abc import Callable
@@ -24,7 +30,9 @@ from typing import Any, Literal
 
 from tests.e2e.launcher.process_tree import ProcessTree
 from tests.e2e.launcher.run_gate import RunGate
+from tests.e2e.load.agent_engine import AgentLoadConfig
 from tests.e2e.load.engine import LoadConfig
+from tests.e2e.load.sandbox import remove_tree
 
 __all__ = ["LoadRunService", "LoadRunState", "build_command"]
 
@@ -35,9 +43,26 @@ _FINISHED: frozenset[str] = frozenset({"done", "error", "cancelled"})
 _LOG_KEPT = 200
 _LOG_SHOWN = 50
 _READER_JOIN_S = 3.0
+_WORK_DIR_PREFIX = "novomodelo-load-launcher-"
 
 
-def build_command(config: LoadConfig) -> list[str]:
+def _agent_arguments(config: AgentLoadConfig) -> list[str]:
+    arguments = ["--mode", "agent"]
+    if config.provider is not None:
+        arguments += ["--provider", config.provider]
+    if config.timeout_s is not None:
+        arguments += ["--timeout", repr(float(config.timeout_s))]
+    selection = config.selection
+    if selection.case_id:
+        arguments += ["--case", selection.case_id]
+    elif selection.group:
+        arguments += ["--group", selection.group]
+    elif selection.tags:
+        arguments += ["--tags", ",".join(selection.tags)]
+    return arguments
+
+
+def build_command(config: LoadConfig | AgentLoadConfig) -> list[str]:
     """Linha de comando do motor para ``config``; só valores já validados entram nela."""
     command = [
         sys.executable,
@@ -48,11 +73,12 @@ def build_command(config: LoadConfig) -> list[str]:
         str(config.concurrency),
         "--duration",
         repr(float(config.duration_s)),
-        "--timeout",
-        repr(float(config.timeout_s)),
     ]
     if config.iterations is not None:
         command += ["--iterations", str(config.iterations)]
+    if isinstance(config, AgentLoadConfig):
+        return command + _agent_arguments(config)
+    command += ["--timeout", repr(float(config.timeout_s))]
     if config.tools is not None:
         command += ["--tools", ",".join(config.tools)]
     return command
@@ -100,7 +126,7 @@ class LoadRunService:
     def __init__(
         self,
         gate: RunGate,
-        command_builder: Callable[[LoadConfig], list[str]] = build_command,
+        command_builder: Callable[[LoadConfig | AgentLoadConfig], list[str]] = build_command,
         cwd: Path = _REPO_ROOT,
     ) -> None:
         self._gate = gate
@@ -118,7 +144,7 @@ class LoadRunService:
         with self._lock:
             return [state.to_dict() for state in self._runs.values()]
 
-    def start_run(self, config: LoadConfig) -> LoadRunState:
+    def start_run(self, config: LoadConfig | AgentLoadConfig) -> LoadRunState:
         """Cria e dispara uma carga em background.
 
         Raises:
@@ -129,16 +155,22 @@ class LoadRunService:
         self._gate.acquire(run_id)
         with self._lock:
             self._runs[run_id] = state
+        try:
+            work_dir = Path(tempfile.mkdtemp(prefix=_WORK_DIR_PREFIX)).resolve()
+            command = [*self._command_builder(config), "--work-dir", str(work_dir)]
+        except Exception as exc:
+            self._fail(state, f"Falha ao preparar a carga: {exc}")
+            raise
         threading.Thread(
             target=self._supervise,
-            args=(state, self._command_builder(config)),
+            args=(state, command, work_dir),
             name=f"load-{run_id}",
             daemon=True,
         ).start()
         return state
 
     def cancel(self, run_id: str) -> LoadRunState | None:
-        """Mata a árvore do motor (e com ela todos os servidores); nada é gravado.
+        """Mata a árvore do motor (e com ela os agentes e servidores); nada é gravado.
 
         Idempotente: num run já encerrado devolve o estado sem mudar nada.
         """
@@ -153,7 +185,7 @@ class LoadRunService:
             tree.kill()
         return state
 
-    def _supervise(self, state: LoadRunState, command: list[str]) -> None:
+    def _supervise(self, state: LoadRunState, command: list[str], work_dir: Path) -> None:
         try:
             process = self._spawn(state, command)
             if process is None:
@@ -171,6 +203,9 @@ class LoadRunService:
                 tree = self._trees.pop(state.run_id, None)
             if tree is not None:
                 tree.close()
+            if not remove_tree(work_dir):
+                with self._lock:
+                    state.log.append(f"Pasta temporária não apagada: {work_dir}")
             self._gate.release(state.run_id)
 
     @staticmethod

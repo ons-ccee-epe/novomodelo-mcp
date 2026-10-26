@@ -1,4 +1,5 @@
 import type { ProviderId, ProviderInfo } from "@/services/launcherApi";
+import { ProviderSelect } from "@/shared/components/ProviderSelect";
 
 interface Props {
   providers: ProviderInfo[];
@@ -22,24 +23,12 @@ export function LauncherControls({
 }: Props) {
   return (
     <div className="cobre-launcher-row">
-      <div className="cobre-launcher-provider">
-        <label htmlFor="provider-select" className="cobre-muted">
-          Provedor de IA
-        </label>
-        <select
-          id="provider-select"
-          value={selectedProvider ?? ""}
-          onChange={(e) => onSelectProvider((e.target.value || null) as ProviderId | null)}
-          disabled={disabled || noProvider}
-        >
-          {providers.map((p) => (
-            <option key={p.id} value={p.id} disabled={!p.installed}>
-              {p.label}
-              {p.installed ? "" : " (não instalado)"}
-            </option>
-          ))}
-        </select>
-      </div>
+      <ProviderSelect
+        providers={providers}
+        value={selectedProvider}
+        onChange={onSelectProvider}
+        disabled={disabled || noProvider}
+      />
 
       <button
         type="button"

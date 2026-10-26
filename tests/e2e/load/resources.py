@@ -1,7 +1,8 @@
-"""CPU e memória dos processos do servidor durante a carga (opcional, via psutil).
+"""CPU e memória dos processos da carga (opcional, via psutil).
 
-O motor é o único pai dos servidores, então os descendentes dele são exatamente
-a árvore de servidores medida. Sem psutil o relatório diz ``available: false`` e
+O motor é o único pai dos processos medidos, então os descendentes dele são
+exatamente a árvore da carga: os servidores no modo tools; os CLIs de agente, os
+servidores deles e os demais filhos no modo agent. Sem psutil o relatório diz ``available: false`` e
 a carga segue normalmente.
 """
 from __future__ import annotations

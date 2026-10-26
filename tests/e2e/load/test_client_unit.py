@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -117,3 +120,36 @@ class TestMcpStdioClient:
         hints = asyncio.run(McpStdioClient(_Session(None)).list_tools())
         assert hints["docs_list"].read_only is True
         assert hints["docs_list"].open_world is False
+
+
+class TestDefaultServerCommand:
+    def _venv_python(self, root: Path) -> Path:
+        python = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        python.parent.mkdir(parents=True)
+        python.write_text("")
+        return python
+
+    def test_prefers_the_project_venv_over_the_running_python(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("UV_PROJECT_ENVIRONMENT", raising=False)
+        python = self._venv_python(tmp_path)
+        monkeypatch.setattr(client_mod, "_PROJECT_ROOT", tmp_path)
+        assert client_mod.default_server_command() == (str(python), ["-m", "novomodelo_mcp"])
+
+    def test_honours_uv_project_environment(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        venv = tmp_path / "outro-venv"
+        python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        python.parent.mkdir(parents=True)
+        python.write_text("")
+        monkeypatch.setenv("UV_PROJECT_ENVIRONMENT", str(venv))
+        assert client_mod.project_python(tmp_path) == python
+
+    def test_falls_back_to_the_running_python_without_a_venv(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("UV_PROJECT_ENVIRONMENT", raising=False)
+        monkeypatch.setattr(client_mod, "_PROJECT_ROOT", tmp_path)
+        assert client_mod.default_server_command() == (sys.executable, ["-m", "novomodelo_mcp"])

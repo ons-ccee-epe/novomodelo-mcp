@@ -1,4 +1,4 @@
-"""Motor da carga: N clientes concorrentes chamando o mix somente leitura.
+"""Motor da carga: N clientes concorrentes chamando as tools do mix.
 
 Fases: ``preflight`` (um cliente valida o mix), ``starting`` (os N servidores
 sobem em paralelo e cada cliente se aquece), ``running`` (o relógio da carga só
@@ -7,6 +7,10 @@ aquecimento ficam fora da latência das chamadas.
 
 Cada chamada sem resposta no timeout é contada como ``timeout`` e o cliente é
 recriado: uma sessão stdio que perdeu uma resposta não é mais confiável.
+
+Com ``sessions`` (``sandbox.ToolsSessions``), cada sessão tem pastas próprias e, se a
+seleção grava, a sua cópia das fixtures: a cópia é feita antes de subir o servidor dela,
+medida em ``copy_ms`` (fora do tempo de subida), e as chamadas são expandidas contra ela.
 """
 from __future__ import annotations
 
@@ -18,10 +22,17 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from tests.e2e.load.client import CallOutcome, ClientFactory, LoadClient
-from tests.e2e.load.mix import CallSpec, Excluded, Selection, select_specs, validate_tools
+from tests.e2e.load.mix import (
+    CallSpec,
+    Excluded,
+    Selection,
+    select_specs,
+    tool_group,
+    validate_tools,
+)
 from tests.e2e.load.resources import ResourceSampler
 from tests.e2e.load.stats import LiveStats, Sample
 
@@ -54,9 +65,27 @@ DRAIN_GRACE_S = 5.0
 PROGRESS_INTERVAL_S = 1.0
 LIVE_SERIES_WINDOW = 120
 
+# Medido no Windows: o bridge (Python) herda o stdin do servidor, que tem uma leitura
+# síncrona pendente, e trava ao iniciar até o cliente escrever nesse pipe; a carga não
+# escreve durante a chamada. A correção é do servidor, não do motor.
+BRIDGE_STDIN_HINT = (
+    "provável causa no Windows: o bridge herda o stdin do servidor MCP e trava ao iniciar "
+    "até o cliente escrever nele (correção no servidor: stdin=subprocess.DEVNULL em run_bridge)"
+)
+
 
 class LoadError(RuntimeError):
     """A carga não pôde rodar (servidor não sobe, mix vazio...)."""
+
+
+class SessionSpace(Protocol):
+    """Pastas por sessão (``-1`` é o pré-voo); ``sandbox.ToolsSessions`` é a real."""
+
+    def prepare(self, index: int) -> float: ...
+
+    def root(self, index: int) -> Path: ...
+
+    def release(self, index: int) -> None: ...
 
 
 def _is_number(value: Any) -> bool:
@@ -102,8 +131,11 @@ class LoadConfig:
         if self.tools is not None:
             object.__setattr__(self, "tools", tuple(validate_tools(self.tools)))
 
+    mode = "tools"
+
     def to_dict(self) -> dict[str, Any]:
         return {
+            "mode": self.mode,
             "concurrency": self.concurrency,
             "duration_seconds": self.duration_s,
             "iterations": self.iterations,
@@ -159,10 +191,13 @@ class LoadRunner:
         on_progress: Callable[[dict[str, Any]], None] | None = None,
         resource_sampler: ResourceSampler | None = None,
         clock: Callable[[], float] = time.perf_counter,
+        sessions: SessionSpace | None = None,
     ) -> None:
         self._cfg = config
         self._fixtures = Path(fixtures_dir)
         self._factory = client_factory
+        self._sessions = sessions
+        self._call_numbers: dict[int, int] = {}
         self._on_progress = on_progress
         self._sampler = resource_sampler
         self._clock = clock
@@ -293,6 +328,10 @@ class LoadRunner:
         pending: list[CallSpec] = []
         valid: list[CallSpec] = []
         excluded: list[Excluded] = []
+        # Grupo pesado que já travou no pré-voo -> a chamada que travou: as demais do mesmo
+        # grupo sobem a mesma CLI e custariam um timeout cada.
+        stalled: dict[str, str] = {}
+        copy_s = await self._prepare_session(-1)
 
         while selection is None or pending:
             if self._stop.is_set():
@@ -303,7 +342,8 @@ class LoadRunner:
                     client = await stack.enter_async_context(self._factory(-1))
                 except Exception as exc:  # noqa: BLE001 - reportado como LoadError
                     raise LoadError(f"o servidor MCP não iniciou: {_describe(exc)}") from exc
-                self._record_startup(-1, "preflight", self._clock() - started, True)
+                self._record_startup(-1, "preflight", self._clock() - started, True, copy_s=copy_s)
+                copy_s = None
 
                 if selection is None:
                     selection = await self._select(client)
@@ -312,24 +352,55 @@ class LoadRunner:
 
                 while pending and not self._stop.is_set():
                     spec = pending.pop(0)
+                    group = tool_group(spec.tool)
+                    if spec.heavy and group in stalled:
+                        reason = f"pré-voo: não chamada, {stalled[group]} ficou sem resposta"
+                        excluded.append(Excluded(spec.id, spec.tool, reason))
+                        continue
                     result = await self._race(
-                        client.call(spec.tool, spec.arguments, cfg.timeout_s)
+                        client.call(spec.tool, self._arguments(-1, spec), cfg.timeout_s)
                     )
                     if result is None:
                         break
                     if result.outcome == "ok":
                         valid.append(spec)
                     else:
-                        excluded.append(Excluded(spec.id, spec.tool, f"pré-voo: {result.error}"))
+                        excluded.append(
+                            Excluded(spec.id, spec.tool, self._preflight_reason(spec, result))
+                        )
+                        if result.outcome == "timeout" and spec.heavy:
+                            stalled.setdefault(group, spec.id)
                     if result.broken:
                         break
 
-        selection = selection or Selection()
+        if self._sessions is not None:
+            await asyncio.to_thread(self._sessions.release, -1)
         final = Selection(specs=valid, excluded=excluded)
         if not final.specs and not self._interrupted:
             reasons = "; ".join(f"{e.id}: {e.reason}" for e in final.excluded[:5])
             raise LoadError(f"nenhuma chamada disponível no mix ({reasons})")
         return final
+
+    @staticmethod
+    def _preflight_reason(spec: CallSpec, result: CallOutcome) -> str:
+        reason = f"pré-voo: {result.error}"
+        if result.outcome == "timeout" and spec.tool.startswith("bridge_"):
+            reason += f" ({BRIDGE_STDIN_HINT})"
+        return reason
+
+    async def _prepare_session(self, index: int) -> float | None:
+        """Pastas e cópia da sessão, numa thread (a cópia é síncrona); None sem ``sessions``."""
+        if self._sessions is None:
+            return None
+        return await asyncio.to_thread(self._sessions.prepare, index)
+
+    def _arguments(self, index: int, spec: CallSpec) -> dict[str, Any]:
+        """Argumentos da chamada na raiz da sessão, com ``{CALL}`` numerado por sessão."""
+        if self._sessions is None:
+            return spec.arguments
+        number = self._call_numbers.get(index, 0) + 1
+        self._call_numbers[index] = number
+        return spec.bind(self._sessions.root(index), number)
 
     async def _select(self, client: LoadClient) -> Selection:
         try:
@@ -357,25 +428,36 @@ class LoadRunner:
 
     async def _session(self, index: int, kind: StartupKind) -> str:
         """Abre o cliente, aquece e roda o laço de chamadas; devolve ``done|respawn|failed``."""
+        copy_s = None
+        if kind == "initial":
+            try:
+                copy_s = await self._prepare_session(index)
+            except Exception as exc:  # noqa: BLE001 - registrado como falha de subida
+                self._startup_failed(index, kind, 0.0, f"cópia das fixtures: {_describe(exc)}")
+                return "failed"
         async with AsyncExitStack() as stack:
             started = self._clock()
             try:
                 client = await stack.enter_async_context(self._factory(index))
             except Exception as exc:  # noqa: BLE001 - registrado como falha de subida
-                self._startup_failed(index, kind, self._clock() - started, _describe(exc))
+                self._startup_failed(
+                    index, kind, self._clock() - started, _describe(exc), copy_s=copy_s
+                )
                 return "failed"
             startup_s = self._clock() - started
 
             warmup_s = None
             if self._cfg.warmup and not self._stop.is_set():
                 warmup_started = self._clock()
-                problem = await self._warm_up(client)
+                problem = await self._warm_up(index, client)
                 if problem:
-                    self._startup_failed(index, kind, startup_s, f"aquecimento: {problem}")
+                    self._startup_failed(
+                        index, kind, startup_s, f"aquecimento: {problem}", copy_s=copy_s
+                    )
                     return "failed"
                 warmup_s = self._clock() - warmup_started
 
-            self._record_startup(index, kind, startup_s, True, warmup_s=warmup_s)
+            self._record_startup(index, kind, startup_s, True, warmup_s=warmup_s, copy_s=copy_s)
             if kind == "initial":
                 self._counters.ready += 1
                 self._arrive()
@@ -385,8 +467,15 @@ class LoadRunner:
             finally:
                 self._loops_ended_at = max(self._loops_ended_at, self._clock())
 
-    def _startup_failed(self, index: int, kind: StartupKind, seconds: float, error: str) -> None:
-        self._record_startup(index, kind, seconds, False, error=error)
+    def _startup_failed(
+        self,
+        index: int,
+        kind: StartupKind,
+        seconds: float,
+        error: str,
+        copy_s: float | None = None,
+    ) -> None:
+        self._record_startup(index, kind, seconds, False, error=error, copy_s=copy_s)
         self._counters.failed += 1
         if kind == "initial":
             self._arrive()
@@ -395,10 +484,11 @@ class LoadRunner:
         if self._counters.ready + self._counters.failed >= self._cfg.concurrency:
             self._all_arrived.set()
 
-    async def _warm_up(self, client: LoadClient) -> str | None:
+    async def _warm_up(self, index: int, client: LoadClient) -> str | None:
         """Uma chamada de cada tool do mix, fora das métricas; devolve o problema, se houver."""
         for spec in self._warm_specs:
-            result = await self._race(client.call(spec.tool, spec.arguments, self._cfg.timeout_s))
+            arguments = self._arguments(index, spec)
+            result = await self._race(client.call(spec.tool, arguments, self._cfg.timeout_s))
             if result is not None and result.broken:
                 return f"{spec.tool}: {result.error}"
         return None
@@ -413,8 +503,9 @@ class LoadRunner:
             counters.cursors[index] = cursor + 1
             spec = self._specs[cursor % len(self._specs)]
 
+            arguments = self._arguments(index, spec)
             started_s = self._clock() - self._t0
-            result = await self._race(client.call(spec.tool, spec.arguments, cfg.timeout_s))
+            result = await self._race(client.call(spec.tool, arguments, cfg.timeout_s))
             if result is None:
                 counters.abandoned += 1
                 return "done"
@@ -449,6 +540,7 @@ class LoadRunner:
         ok: bool,
         error: str | None = None,
         warmup_s: float | None = None,
+        copy_s: float | None = None,
     ) -> None:
         self._startups.append(
             {
@@ -456,6 +548,7 @@ class LoadRunner:
                 "kind": kind,
                 "ms": seconds * 1000.0,
                 "warmup_ms": warmup_s * 1000.0 if warmup_s is not None else None,
+                "copy_ms": copy_s * 1000.0 if copy_s is not None else None,
                 "ok": ok,
                 "error": error,
             }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import type { LoadIndexEntry } from "@/shared/types";
-import { fmtLoadId, fmtMs, fmtPercent, fmtRate } from "../format";
+import { indexEntryMode, type LoadIndexEntry } from "@/shared/types";
+import { fmtCpm, fmtLoadId, fmtMs, fmtPercent, fmtRate } from "../format";
 
 const RELOAD_FEEDBACK_MS = 700;
 
@@ -18,7 +18,14 @@ interface Props {
 function label(r: LoadIndexEntry): string {
   const s = r.summary;
   const partial = r.interrupted ? " (parcial)" : "";
-  return `${fmtLoadId(r.load_id)} | ${r.config.concurrency} cli × ${r.config.duration_seconds}s | ${fmtRate(
+  const sessions = `${r.config.concurrency} sessões ×${r.config.duration_seconds}s`;
+  if (indexEntryMode(r) === "agent") {
+    const provider = r.config.provider ? ` · ${r.config.provider}` : "";
+    return `${fmtLoadId(r.load_id)} | agent${provider} · ${sessions} | ${fmtCpm(
+      s.throughput_cpm,
+    )} · aprov ${fmtPercent(s.pass_rate)} · p95 ${fmtMs(s.p95_ms)}${partial}`;
+  }
+  return `${fmtLoadId(r.load_id)} | tools · ${sessions} | ${fmtRate(
     s.throughput_cps,
   )} · err ${fmtPercent(s.error_rate)} · p95 ${fmtMs(s.p95_ms)}${partial}`;
 }
@@ -33,6 +40,8 @@ export function LoadRunSelector({
   onReload,
 }: Props) {
   const [spinning, setSpinning] = useState(false);
+  const selected = runs.find((r) => r.load_id === selectedId);
+  const selectedMode = selected ? indexEntryMode(selected) : null;
 
   function handleReload() {
     setSpinning(true);
@@ -73,7 +82,7 @@ export function LoadRunSelector({
         >
           <option value="">-- Nenhuma --</option>
           {runs
-            .filter((r) => r.load_id !== selectedId)
+            .filter((r) => r.load_id !== selectedId && indexEntryMode(r) === selectedMode)
             .map((r) => (
               <option key={r.load_id} value={r.load_id}>
                 {label(r)}

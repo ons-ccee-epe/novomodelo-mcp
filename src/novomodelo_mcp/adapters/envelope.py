@@ -11,12 +11,12 @@ from typing import Any
 MAX_DETAIL_CHARS = 2000
 
 
-def error(code: int, message: str, detail: str = "") -> dict[str, Any]:
-    """Envelope de erro padrão: {status, exit_code, diagnostics}."""
+def error(code: int, message: str, detail: str = "", **extra: Any) -> dict[str, Any]:
+    """Envelope de erro padrão: {status, exit_code, diagnostics}, mais os campos de `extra`."""
     diagnostics = [message]
     if detail:
         diagnostics.append(detail[:MAX_DETAIL_CHARS])
-    return {"status": "error", "exit_code": code, "diagnostics": diagnostics}
+    return {"status": "error", "exit_code": code, "diagnostics": diagnostics, **extra}
 
 
 def as_error(exc: BaseException, *, code: int = 1) -> dict[str, Any]:

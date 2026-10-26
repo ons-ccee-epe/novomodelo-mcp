@@ -1,6 +1,10 @@
 import { useLoadLauncher } from "@/services/api/useLoadLauncher";
 import { useLoadResults } from "@/services/api/useLoadResults";
+import { isAgentRun } from "@/shared/types";
 import { fmtLoadId } from "./format";
+import { AgentCaseTable } from "./components/AgentCaseTable";
+import { AgentDetails } from "./components/AgentDetails";
+import { AgentSummaryCards } from "./components/AgentSummaryCards";
 import { LoadCharts } from "./components/LoadCharts";
 import { LoadComparison } from "./components/LoadComparison";
 import { LoadDetails } from "./components/LoadDetails";
@@ -13,13 +17,16 @@ import { LoadToolTable } from "./components/LoadToolTable";
 export function Load() {
   const d = useLoadResults();
   const launcher = useLoadLauncher(d.showNewest);
+  const run = d.run;
 
   return (
     <div className="cobre-shell">
       <h1><repositório anterior> — Teste de carga</h1>
       <p className="cobre-muted">
-        N clientes, cada um com o seu próprio servidor MCP, chamam só tools somente leitura. A
-        subida dos servidores é medida à parte e não entra na latência.
+        Cada sessão simultânea tem o seu próprio servidor MCP. Nas tools diretas, as sessões chamam
+        só tools somente leitura, sem LLM, e a subida dos servidores é medida à parte, fora da
+        latência. Nos casos por agente, as sessões rodam em laço os casos do cases.yaml num
+        provedor de IA (consome tokens), e a latência é a do caso inteiro, com a subida do agente.
       </p>
 
       <LoadLauncher launcher={launcher} />
@@ -55,23 +62,40 @@ export function Load() {
             onReload={d.reload}
           />
 
-          {d.run ? (
+          {run ? (
             <>
               <p className="cobre-muted">
-                Carga <strong>{d.run.load_id}</strong> ({fmtLoadId(d.run.load_id)}) · ambiente{" "}
-                {d.run.environment} · versão {d.run.version}
+                Carga <strong>{run.load_id}</strong> ({fmtLoadId(run.load_id)}) · ambiente{" "}
+                {run.environment} · versão {run.version}
+                {isAgentRun(run) ? ` · agente ${run.agent.label}` : ""}
               </p>
-              <LoadSummaryCards run={d.run} />
-              {d.compareRun && <LoadComparison current={d.run} previous={d.compareRun} />}
+              {isAgentRun(run) ? <AgentSummaryCards run={run} /> : <LoadSummaryCards run={run} />}
+              {d.compareRun && <LoadComparison current={run} previous={d.compareRun} />}
               <section className="cobre-section">
                 <h2 className="cobre-section-title">Ao longo do tempo</h2>
-                <LoadCharts series={d.run.series} durationSeconds={d.run.duration_seconds} />
+                {isAgentRun(run) ? (
+                  <LoadCharts
+                    series={run.series}
+                    durationSeconds={run.duration_seconds}
+                    throughput={{
+                      title: `Casos concluídos por bucket de ${run.series_bucket_seconds} s`,
+                      ok: "concluídos",
+                      failed: "erros e timeouts",
+                    }}
+                  />
+                ) : (
+                  <LoadCharts series={run.series} durationSeconds={run.duration_seconds} />
+                )}
               </section>
               <section className="cobre-section">
-                <h2 className="cobre-section-title">Por tool</h2>
-                <LoadToolTable perTool={d.run.per_tool} />
+                <h2 className="cobre-section-title">{isAgentRun(run) ? "Por caso" : "Por tool"}</h2>
+                {isAgentRun(run) ? (
+                  <AgentCaseTable perCase={run.per_case} />
+                ) : (
+                  <LoadToolTable perTool={run.per_tool} />
+                )}
               </section>
-              <LoadDetails run={d.run} />
+              {isAgentRun(run) ? <AgentDetails run={run} /> : <LoadDetails run={run} />}
             </>
           ) : (
             <div className="cobre-muted">Carregando a carga selecionada…</div>

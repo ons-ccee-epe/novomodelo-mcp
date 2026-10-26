@@ -131,12 +131,22 @@ describe("fetchLoadTools", () => {
   it("devolve as tools e os limites do launcher", async () => {
     stubFetch(() =>
       response({
-        tools: [{ tool: "docs_list", group: "docs", calls: 1, available: true, reason: null }],
+        tools: [
+          {
+            tool: "docs_list", group: "docs", calls: 1, available: true, reason: null,
+            writes: false, heavy: false, default: true, barred: false,
+          },
+          {
+            tool: "run_start", group: "run", calls: 0, available: false, reason: "dispara o solver",
+            writes: true, heavy: true, default: false, barred: true,
+          },
+        ],
         limits: { max_concurrency: 32 },
       }),
     );
     const data = await fetchLoadTools();
     expect(data.tools[0].tool).toBe("docs_list");
+    expect(data.tools[1]).toMatchObject({ barred: true, available: false, heavy: true, writes: true });
     expect(data.limits.max_concurrency).toBe(32);
   });
 });

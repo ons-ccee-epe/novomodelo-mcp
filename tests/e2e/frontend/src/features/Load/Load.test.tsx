@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppNav } from "@/navigation/AppNav";
 import type { LoadRunState } from "@/services/loadApi";
 import { Load } from "./index";
-import { makeLoadRun, stats } from "./fixtures";
+import { makeLoadRun, stats, toolInfo } from "./fixtures";
 
 const OLDER = makeLoadRun({
   load_id: "20261024_090000_abc1234",
@@ -37,8 +37,9 @@ function entry(run: typeof OLDER) {
 
 const TOOLS = {
   tools: [
-    { tool: "deck_list", group: "deck", calls: 1, available: true, reason: null },
-    { tool: "docs_search", group: "docs", calls: 2, available: true, reason: null },
+    toolInfo({ tool: "deck_list", group: "deck", calls: 1 }),
+    toolInfo({ tool: "docs_search", group: "docs", calls: 2 }),
+    toolInfo({ tool: "deck_edit_json", group: "deck", calls: 1, writes: true, default: false }),
   ],
   limits: {
     min_concurrency: 1, max_concurrency: 32, min_duration_seconds: 1, max_duration_seconds: 1800,
@@ -121,7 +122,7 @@ describe("Load com o launcher offline", () => {
 
     const comparison = await screen.findByLabelText("Comparação entre cargas");
     expect(within(comparison).getByText(/Comparação: 24\/10\/2026 10:00:00 vs 24\/10\/2026 09:00:00/)).toBeInTheDocument();
-    expect(within(comparison).getByText(/parâmetros diferentes \(concorrência\)/)).toBeInTheDocument();
+    expect(within(comparison).getByText(/parâmetros diferentes \(sessões simultâneas\)/)).toBeInTheDocument();
     expect(within(comparison).getByText(/\+4\.0\/s/)).toBeInTheDocument();
     expect(within(comparison).getByRole("table", { name: "p95 por tool" })).toBeInTheDocument();
   });
@@ -159,7 +160,7 @@ describe("Load com o launcher no ar", () => {
     const mock = stubFetch(online);
     renderLoad();
 
-    fireEvent.change(await screen.findByLabelText(/Concorrência/), { target: { value: "2" } });
+    fireEvent.change(await screen.findByLabelText(/Sessões simultâneas/), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText(/Duração/), { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: /Iniciar carga/ }));
 
@@ -173,6 +174,32 @@ describe("Load com o launcher no ar", () => {
     expect(JSON.parse(post?.[1]?.body as string)).toMatchObject({
       concurrency: 2, duration_seconds: 30, tools: null, timeout_seconds: 60,
     });
+  });
+
+  it("o mix padrão manda tools nulo; marcar uma que grava manda a lista e refaz a capacidade", async () => {
+    const mock = stubFetch(online);
+    renderLoad();
+
+    await screen.findByLabelText(/Sessões simultâneas/);
+    const capacityUrls = () =>
+      mock.mock.calls.map(([url]) => url as string).filter((u) => u.startsWith("api/load-capacity"));
+    await waitFor(() => expect(capacityUrls()).toEqual(["api/load-capacity?mode=tools"]));
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "deck_edit_json" }));
+    await waitFor(() =>
+      expect(capacityUrls().at(-1)).toBe(
+        "api/load-capacity?mode=tools&tools=deck_list,docs_search,deck_edit_json",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Iniciar carga/ }));
+    await screen.findByText("Carga em andamento…");
+    const post = mock.mock.calls.find(([url, init]) => url === "api/load-runs" && init?.method === "POST");
+    expect(JSON.parse(post?.[1]?.body as string).tools).toEqual([
+      "deck_list",
+      "docs_search",
+      "deck_edit_json",
+    ]);
   });
 
   it("mostra o motivo quando há outro run em andamento (409)", async () => {

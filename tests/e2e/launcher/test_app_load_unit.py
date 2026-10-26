@@ -80,7 +80,8 @@ class TestValidation:
             {"concurrency": 2, "duration_seconds": 10, "timeout_seconds": 1801},
             {"concurrency": 2, "duration_seconds": 10, "tools": []},
             {"concurrency": 2, "duration_seconds": 10, "tools": ["run_start"]},
-            {"concurrency": 2, "duration_seconds": 10, "tools": ["docs_list", "deck_edit_json"]},
+            {"concurrency": 2, "duration_seconds": 10, "tools": ["docs_list", "run_status"]},
+            {"concurrency": 2, "duration_seconds": 10, "tools": ["server_info"]},
             {"concurrency": 2, "duration_seconds": 10, "tools": ["nao_existe"]},
             {"duration_seconds": 10},
             {"concurrency": 2},
@@ -194,18 +195,34 @@ class TestSharedLock:
 
 
 class TestLoadTools:
-    def test_lists_only_the_read_only_catalog_with_availability_and_limits(
+    def test_lists_the_catalog_with_classes_and_the_barred_tools_with_the_reason(
         self, client: TestClient
     ) -> None:
         data = client.get("/api/load-tools").json()
-        names = {row["tool"] for row in data["tools"]}
-        assert {"deck_list", "docs_search", "results_query"} <= names
-        assert not {n for n in names if n.startswith(("run_", "deck_edit_", "bridge_"))}
-        assert {"case_init", "schema_export", "instalar_novomodelo"}.isdisjoint(names)
-        assert all({"tool", "group", "calls", "available", "reason"} <= set(r) for r in data["tools"])
+        rows = {row["tool"]: row for row in data["tools"]}
+        assert {"deck_list", "docs_search", "results_query"} <= set(rows)
+        keys = {"tool", "group", "calls", "available", "reason", "writes", "heavy", "default", "barred"}
+        assert all(keys <= set(r) for r in data["tools"])
+        assert rows["deck_list"]["default"] is True and rows["deck_list"]["writes"] is False
+        assert rows["deck_edit_json"]["writes"] is True and rows["deck_edit_json"]["default"] is False
+        assert rows["bridge_check_newave"]["heavy"] is True
+        assert rows["run_plan"]["heavy"] is True and rows["run_plan"]["barred"] is False
+        for barred in ("run_start", "run_status", "run_logs", "run_cancel", "server_info",
+                       "instalar_novomodelo"):
+            assert rows[barred]["barred"] is True and rows[barred]["available"] is False
+            assert rows[barred]["reason"]
         assert data["limits"]["max_concurrency"] == 32
         assert data["limits"]["max_duration_seconds"] == 1800
         assert data["limits"]["min_concurrency"] == 1
+
+    def test_writing_and_heavy_tools_can_be_requested_by_name(self, client: TestClient) -> None:
+        body = {"concurrency": 2, "duration_seconds": 10,
+                "tools": ["deck_edit_json", "bridge_check_newave", "run_plan"]}
+        with patch.object(LoadRunService, "start_run", return_value=SimpleNamespace(
+            to_dict=lambda: {"run_id": "r1", "status": "pending"})) as start:
+            resp = client.post("/api/load-runs", json=body, headers=HEADER)
+        assert resp.status_code == 200
+        assert start.call_args.args[0].tools == ("deck_edit_json", "bridge_check_newave", "run_plan")
 
 
 class TestServingResultsLoad:
