@@ -33,6 +33,64 @@ def test_read_metadata_missing():
         assert env["status"] == "error", env
 
 
+def _rodada(pasta):
+    (pasta / "training").mkdir(parents=True)
+    (pasta / "training" / "metadata.json").write_text(
+        json.dumps({"status": "complete"}), encoding="utf-8")
+    return pasta
+
+
+def _caso_com_rodada(d):
+    caso = Path(d) / "caso"
+    _rodada(caso / "output")
+    return caso
+
+
+def test_pasta_do_caso_e_recusada_apontando_a_rodada():
+    with tempfile.TemporaryDirectory() as d:
+        caso = _caso_com_rodada(d)
+        env = R.read_metadata(str(caso))
+        assert env["status"] == "error" and env["exit_code"] == 2, env
+        assert env["output_sugerido"] == str(caso / "output"), env
+
+
+def test_rodada_com_qualquer_nome_e_mais_funda_e_achada():
+    with tempfile.TemporaryDirectory() as d:
+        rodada = _rodada(Path(d) / "estudo" / "caso-a" / "rodadas" / "teste 1")
+        env = R.folder_above_runs(str(Path(d) / "estudo"))
+        assert env["output_sugerido"] == str(rodada), env
+
+
+def test_varias_rodadas_sao_listadas_sem_sugerir_nenhuma():
+    with tempfile.TemporaryDirectory() as d:
+        caso = _caso_com_rodada(d)
+        _rodada(caso / "output-teste")
+        env = R.folder_above_runs(str(caso))
+        assert "output_sugerido" not in env, env
+        assert env["rodadas"] == [str(caso / "output"), str(caso / "output-teste")], env
+        assert any("pergunte ao usuário" in m for m in env["diagnostics"]), env
+
+
+def test_busca_nao_entra_dentro_de_uma_rodada():
+    with tempfile.TemporaryDirectory() as d:
+        caso = _caso_com_rodada(d)
+        _rodada(caso / "output" / "simulation" / "copia")
+        assert R.folder_above_runs(str(caso))["rodadas"] == [str(caso / "output")]
+
+
+def test_pasta_da_rodada_nao_e_recusada():
+    with tempfile.TemporaryDirectory() as d:
+        caso = _caso_com_rodada(d)
+        assert R.folder_above_runs(str(caso / "output")) is None
+        assert R.read_metadata(str(caso / "output"))["status"] == "ok"
+
+
+def test_pasta_sem_rodada_nenhuma_segue_o_erro_de_cada_tool():
+    with tempfile.TemporaryDirectory() as d:
+        assert R.folder_above_runs(d) is None
+        assert R.folder_above_runs(str(Path(d) / "nao-existe")) is None
+
+
 def test_list_entities_empty():
     with tempfile.TemporaryDirectory() as d:
         assert R.list_entities(d) == []

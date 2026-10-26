@@ -46,6 +46,10 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 - Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
 - Se as docs não cobrem o assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.
+- Pedido sobre resultados de um caso (status, convergência, CMO, geração, política):
+  vá direto às tools `results_*`. Se não souber a pasta da rodada, passe a do caso: a
+  recusa traz a rodada encontrada em `output_sugerido`, ou, se houver várias, a lista
+  em `rodadas` para o usuário escolher.
 - Resultados de muitos cenários: agregue ou filtre com o `deck_sql` sobre as partições
   de `simulation/` e só depois detalhe; não leia os parquets por outras ferramentas.
 - As tools que gravam ou alteram arquivos pedem aprovação.
