@@ -14,6 +14,9 @@ Rotas (todas sob /api, exceto o serving de dados):
   GET  /api/load-runs          -> lista cargas desta sessao do launcher
   GET  /api/load-runs/{id}     -> estado de uma carga (progresso ao vivo, polling)
   POST /api/load-runs/{id}/cancel -> para a carga e mata os servidores MCP
+  GET  /api/baselines          -> baseline vigente de cada conjunto
+  PUT  /api/baselines/{conjunto} -> define a bateria baseline do conjunto
+  DELETE /api/baselines/{conjunto} -> remove a baseline do conjunto
   GET  /api/health            -> saude do launcher
 
   GET  /data/results/...       -> JSON das baterias (mesma convencao do plugin Vite);
@@ -64,6 +67,7 @@ from tests.e2e.load.engine import (
 from tests.e2e.load.mix import ALLOWED_TOOLS, describe_catalog, validate_tools
 from tests.e2e.load.store import LoadStore
 from tests.e2e.queries.loader import CasesLoaderError
+from tests.e2e.queries.store import ResultStore
 
 __all__ = ["app", "create_app"]
 
@@ -111,6 +115,12 @@ class RunRequest(BaseModel):
     timeout_seconds: float | None = Field(
         default=None, gt=0, le=MAX_TIMEOUT_SECONDS, allow_inf_nan=False
     )
+
+
+class BaselineRequest(BaseModel):
+    """Corpo de PUT /api/baselines/{conjunto}."""
+
+    batch_id: str = Field(min_length=1, max_length=200)
 
 
 class LoadRunRequest(BaseModel):
@@ -264,7 +274,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_ALLOWED_ORIGINS,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Content-Type", LAUNCHER_HEADER],
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_ALLOWED_HOSTS)
@@ -293,6 +303,28 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     def health() -> dict[str, Any]:
         return {"ok": True}
+
+    @app.get("/api/baselines")
+    def baselines() -> dict[str, Any]:
+        return {"baselines": ResultStore(_RESULTS_DIR, _METRICS_DIR).get_baselines()}
+
+    @app.put("/api/baselines/{conjunto:path}", dependencies=[Depends(_require_launcher_header)])
+    def put_baseline(conjunto: str, body: BaselineRequest) -> dict[str, Any]:
+        store = ResultStore(_RESULTS_DIR, _METRICS_DIR)
+        try:
+            store.set_baseline(body.batch_id, conjunto)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="bateria nao encontrada") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"conjunto": conjunto, "batch_id": body.batch_id}
+
+    @app.delete(
+        "/api/baselines/{conjunto:path}", dependencies=[Depends(_require_launcher_header)]
+    )
+    def delete_baseline(conjunto: str) -> dict[str, Any]:
+        removed = ResultStore(_RESULTS_DIR, _METRICS_DIR).clear_baseline(conjunto)
+        return {"conjunto": conjunto, "removed": removed}
 
     @app.get("/api/providers")
     def providers() -> dict[str, Any]:

@@ -27,7 +27,7 @@ from tests.e2e.queries.loader import CasesLoader, CasesLoaderError
 from tests.e2e.queries.models import QueryTestCase, TestResult
 from tests.e2e.queries.preconditions import missing_sources, skipped_result
 from tests.e2e.queries.run_queries import _build_test_result
-from tests.e2e.queries.store import ResultStore
+from tests.e2e.queries.store import ResultStore, conjunto_from_filters
 from tests.e2e.queries.validator import QueryValidator
 
 __all__ = ["RunAlreadyActiveError", "RunService", "RunState"]
@@ -265,7 +265,9 @@ class RunService:
         with self._lock:
             self._runners[state.run_id] = runner
         try:
-            self._run_cases(state, runner, validator, store, cases)
+            self._run_cases(
+                state, runner, validator, store, cases, conjunto_from_filters(tags, case_id)
+            )
         finally:
             with self._lock:
                 self._runners.pop(state.run_id, None)
@@ -278,6 +280,7 @@ class RunService:
         validator: QueryValidator,
         store: ResultStore,
         cases: list[QueryTestCase],
+        conjunto: str,
     ) -> None:
         test_results: list[TestResult] = []
         for case in cases:
@@ -300,7 +303,7 @@ class RunService:
             return
 
         try:
-            batch = store.create_batch(test_results)
+            batch = store.create_batch(test_results, conjunto=conjunto)
             store.save_batch(batch)
             store.append_metrics(batch)
         except Exception as exc:  # noqa: BLE001
