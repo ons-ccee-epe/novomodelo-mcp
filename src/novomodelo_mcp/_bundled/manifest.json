@@ -1,7 +1,25 @@
 {
  "docs_versao": "0.19.0",
  "docs_commit": "8c59a54063b93e279fbe2de532eb6591fd424ef9",
- "gerado_em": "2026-10-24T17:27:09Z",
- "paginas": 65,
- "secoes": 1227
+ "gerado_em": "2026-10-25T16:26:52Z",
+ "paginas": 67,
+ "secoes": 1247,
+ "changelogs": {
+  "novomodelo": {
+   "commit": "60aaff7fdcd1500df5a99192a03ec8c953c699da",
+   "versoes": [
+    "0.19.0",
+    "0.18.1",
+    "0.18.0"
+   ]
+  },
+  "novomodelo-bridge": {
+   "commit": "0180ceead85f0f5a9494b93f20d5661b03b40ca6",
+   "versoes": [
+    "0.19.0",
+    "0.18.1",
+    "0.18.0"
+   ]
+  }
+ }
 }

@@ -186,7 +186,7 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
 
     A CLI real não aceita `--json` em `version` (clap rejeita com exit 2); a saída
     é texto humano, uma `label: valor` por linha, exceto a primeira que separa por
-    espaço (ex.: `novomodelo   v0.17.0`). Transporte puro, sem regra de domínio.
+    espaço (ex.: `novomodelo   v0.19.0`). Transporte puro, sem regra de domínio.
     """
     settings = settings or load_settings()
     binpath = find_novomodelo(settings)

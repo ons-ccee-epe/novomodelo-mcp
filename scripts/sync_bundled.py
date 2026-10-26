@@ -6,9 +6,14 @@ A fonte é um clone local do `novomodelo-docs`. As páginas saem resolvidas (tre
 A preparação das páginas é a de `novomodelo_mcp.adapters.reference`, a mesma que o
 servidor usa no modo de desenvolvimento.
 
+Os changelogs do novomodelo e do bridge (`--changelog <produto>=<clone>`) viram uma
+página cada, `changelog/<produto>`, com uma seção `## <versão>` por versão a partir de
+`CHANGELOG_DESDE`, para o agente ler só a versão que interessa.
+
 Uso (a partir do repositório):
-    uv run python scripts/sync_bundled.py --source <clone do novomodelo-docs>
-    uv run python scripts/sync_bundled.py --source <clone> --check   # CI: sai 1 se divergir
+    uv run python scripts/sync_bundled.py --source <clone do novomodelo-docs> \
+        --changelog novomodelo=<clone> --changelog novomodelo-bridge=<clone>
+    uv run python scripts/sync_bundled.py --source <clone> ... --check   # CI: sai 1 se divergir
 
 Nada é baixado da rede: a fonte é sempre um diretório local.
 """
@@ -16,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -33,6 +39,45 @@ from novomodelo_mcp.adapters.reference import (  # noqa: E402
 _PKG_BUNDLED = _ROOT / "src" / "novomodelo_mcp" / "_bundled"
 _DOCS_SUBPATH = Path("src") / "content" / "docs"
 _SCHEMAS_SUBPATH = Path("public") / "schemas"
+CHANGELOG_PRODUTOS = ("novomodelo", "novomodelo-bridge")
+CHANGELOG_DESDE = "0.18.0"
+_VERSAO = re.compile(r"^## \[(?P<versao>\d+\.\d+\.\d+[^\]\s]*)\](?:\s*-\s*(?P<data>\S+))?\s*$")
+
+
+def _chave(versao: str) -> tuple[int, ...]:
+    return tuple(int(n) for n in re.findall(r"\d+", versao)[:3])
+
+
+def _secoes_de_versao(texto: str, desde: str) -> list[tuple[str, str | None, list[str]]]:
+    secoes: list[tuple[str, str | None, list[str]]] = []
+    atual: list[str] | None = None
+    for linha in texto.splitlines():
+        if linha.startswith("# ") and secoes:
+            break
+        if linha.startswith("## "):
+            m = _VERSAO.match(linha)
+            atual = None
+            if m and _chave(m["versao"]) >= _chave(desde):
+                atual = []
+                secoes.append((m["versao"], m["data"], atual))
+            continue
+        if atual is not None:
+            atual.append(linha)
+    return secoes
+
+
+def changelog_page(produto: str, texto: str, desde: str = CHANGELOG_DESDE) -> str:
+    """A página `changelog/<produto>`: uma seção `## <versão>` por versão >= `desde`."""
+    partes = [f"---\ntitle: {produto} changelog\ndescription: What changed in each {produto} "
+              f"release, from {desde} on.\n---\n"]
+    for versao, data, corpo in _secoes_de_versao(texto, desde):
+        cabeca = f"## {versao}\n\nReleased {data}." if data else f"## {versao}"
+        partes.append(f"{cabeca}\n\n" + "\n".join(corpo).strip() + "\n")
+    return "\n".join(partes)
+
+
+def changelog_versions(texto: str, desde: str = CHANGELOG_DESDE) -> list[str]:
+    return [versao for versao, _, _ in _secoes_de_versao(texto, desde)]
 
 
 def _docs_version(source: Path) -> str | None:
@@ -43,7 +88,7 @@ def _docs_version(source: Path) -> str | None:
         return None
 
 
-def _docs_commit(source: Path) -> str | None:
+def _git_commit(source: Path) -> str | None:
     try:
         proc = subprocess.run(["git", "-C", str(source), "rev-parse", "HEAD"],
                               capture_output=True, encoding="utf-8", errors="replace",
@@ -53,8 +98,9 @@ def _docs_commit(source: Path) -> str | None:
     return proc.stdout.strip() or None if proc.returncode == 0 else None
 
 
-def generate(source: Path, dest: Path) -> dict:
-    """Grava docs resolvidas, schemas, índice e manifesto em `dest`; devolve o manifesto."""
+def generate(source: Path, dest: Path, changelogs: dict[str, Path] | None = None) -> dict:
+    """Grava docs resolvidas, changelogs, schemas, índice e manifesto em `dest`; devolve o
+    manifesto."""
     docs_src, schemas_src = source / _DOCS_SUBPATH, source / _SCHEMAS_SUBPATH
     for sub in ("docs", "schemas"):
         if (dest / sub).exists():
@@ -64,20 +110,31 @@ def generate(source: Path, dest: Path) -> dict:
         target = dest / "docs" / path.relative_to(docs_src)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(resolve_mdx(path), encoding="utf-8")
+    origens = {}
+    for produto, clone in sorted((changelogs or {}).items()):
+        texto = (clone / "CHANGELOG.md").read_text(encoding="utf-8")
+        target = dest / "docs" / "changelog" / f"{produto}.mdx"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(changelog_page(produto, texto), encoding="utf-8")
+        origens[produto] = {"commit": _git_commit(clone), "versoes": changelog_versions(texto)}
     (dest / "schemas").mkdir(parents=True, exist_ok=True)
     for f in sorted(schemas_src.glob("*.schema.json")):
         shutil.copy2(f, dest / "schemas" / f.name)
     index = dest / INDEX_FILE
     index.unlink(missing_ok=True)
     con = build_docs_index(dest / "docs", index)
-    sections = con.execute("SELECT count(*) FROM secoes").fetchone()[0]
-    con.execute("INSERT INTO secoes(secoes) VALUES('optimize')")
+    sections = sum(con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
+                   for t in ("secoes", "changelog"))
+    for table in ("secoes", "changelog"):
+        con.execute(f"INSERT INTO {table}({table}) VALUES('optimize')")
     con.commit()
     con.execute("VACUUM")
     con.close()
-    manifest = {"docs_versao": _docs_version(source), "docs_commit": _docs_commit(source),
+    manifest = {"docs_versao": _docs_version(source), "docs_commit": _git_commit(source),
                 "gerado_em": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "paginas": len(pages), "secoes": sections}
+                "paginas": len(pages) + len(origens), "secoes": sections}
+    if origens:
+        manifest["changelogs"] = origens
     (dest / MANIFEST_FILE).write_text(json.dumps(manifest, indent=1, ensure_ascii=False) + "\n",
                                       encoding="utf-8")
     return manifest
@@ -96,6 +153,7 @@ def _index_rows(path: Path) -> list:
     try:
         return [con.execute(q).fetchall() for q in (
             "SELECT pagina, titulo, ancora, texto FROM secoes ORDER BY pagina, rowid",
+            "SELECT pagina, titulo, ancora, texto FROM changelog ORDER BY pagina, rowid",
             "SELECT * FROM paginas ORDER BY pagina", "SELECT * FROM glossario ORDER BY pt, en")]
     finally:
         con.close()
@@ -128,9 +186,20 @@ def main(argv: list[str] | None = None) -> int:
                     help="Raiz do clone do novomodelo-docs.")
     ap.add_argument("--dest", type=Path, default=_PKG_BUNDLED,
                     help="Pasta de destino (padrão: src/novomodelo_mcp/_bundled).")
+    ap.add_argument("--changelog", action="append", default=[], metavar="PRODUTO=CLONE",
+                    help=f"Clone com o CHANGELOG.md de um produto ({', '.join(CHANGELOG_PRODUTOS)}).")
     ap.add_argument("--check", action="store_true",
                     help="Não grava: sai 1 se o destino divergir do que seria gerado.")
     args = ap.parse_args(argv)
+    changelogs: dict[str, Path] = {}
+    for item in args.changelog:
+        produto, _, clone = item.partition("=")
+        path = Path(clone).expanduser().resolve()
+        if produto not in CHANGELOG_PRODUTOS or not (path / "CHANGELOG.md").is_file():
+            print(f"erro: --changelog {item}: produto em {CHANGELOG_PRODUTOS} e clone com "
+                  "CHANGELOG.md", file=sys.stderr)
+            return 2
+        changelogs[produto] = path
 
     source: Path = args.source.expanduser().resolve()
     for sub in (_DOCS_SUBPATH, _SCHEMAS_SUBPATH):
@@ -139,13 +208,13 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     if args.check:
         with tempfile.TemporaryDirectory() as tmp:
-            generate(source, Path(tmp))
+            generate(source, Path(tmp), changelogs)
             diffs = differences(Path(tmp), args.dest.resolve())
         for d in diffs:
             print(d)
         print("embutido igual à fonte" if not diffs else f"{len(diffs)} diferença(s)")
         return 1 if diffs else 0
-    manifest = generate(source, args.dest.resolve())
+    manifest = generate(source, args.dest.resolve(), changelogs)
     print(f"snapshot atualizado: {manifest['paginas']} páginas, {manifest['secoes']} seções, "
           f"docs {manifest['docs_versao']} @ {manifest['docs_commit']} -> {args.dest}")
     return 0 if manifest["paginas"] else 1

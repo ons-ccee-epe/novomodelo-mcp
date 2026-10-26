@@ -36,6 +36,8 @@ Servidor MCP do novomodelo: valida, converte (NEWAVE/DECOMP), roda, compara e l�
 resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 
 - Comece por `server_info`: versões das peças, workspace e se há versão nova.
+- Se uma resposta trouxer `avisos_de_versao`, avise a pessoa e ofereça rodar os comandos
+  dele, com o ok dela; o MCP continua funcionando.
 - Se faltar o executável do novomodelo, ofereça a tool `instalar_novomodelo` (a pessoa
   pode pedir “instale o executável do novomodelo”); o comando manual é a alternativa.
 - As docs embutidas são as oficiais da versão instalada. Para a metodologia e o uso do
@@ -43,8 +45,11 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
   definição do novomodelo pode diferir da literatura e do NEWAVE.
 - Busque em inglês (as docs estão em inglês); termos em português do glossário das
   docs são traduzidos. Depois leia a seção com `docs_read(page, secao)`.
+- O que mudou entre versões do novomodelo e do bridge está em `changelog/novomodelo` e
+  `changelog/novomodelo-bridge`: leia a seção de cada versão com
+  `docs_read(pagina, "<versão>")`.
 - Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
-- Se as docs não cobrem o assunto, diga isso: não complete de memória.
+- Se as docs não tratam do assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.
 - Pedido sobre resultados de um caso (status, convergência, CMO, geração, política):
   vá direto às tools `results_*`. Se não souber a pasta da rodada, passe a do caso: a

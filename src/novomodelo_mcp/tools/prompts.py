@@ -16,7 +16,7 @@ novomodelo, que são as da versão instalada.
    também traduz os termos que estão nele.
 2. Leia as seções relevantes com `docs_read(page, secao)`.
 3. Responda em português, citando página e seção de cada afirmação (`pagina#secao`).
-4. Se as docs não cobrem o assunto, diga isso claramente: não complete de memória.
+4. Se as docs não tratam do assunto, diga isso claramente: não complete de memória.
 5. Avise que as docs descrevem a intenção do modelo e que o código pode divergir delas
    (há divergências conhecidas, como no tratamento da afluência negativa).
 """

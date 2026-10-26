@@ -125,7 +125,7 @@ def register_deck(mcp, settings: Settings) -> None:
     def deck_sql(query: str, max_rows: int | None = None) -> dict:
         """Consulta SQL read-only (DuckDB) sobre Parquet/CSV/JSON do deck ou dos resultados.
 
-        Para AGREGAR / FILTRAR / juntar o que as outras tools nao cobrem: contagem
+        Para AGREGAR / FILTRAR / juntar o que as outras tools nao tratam: contagem
         condicional, min/max e P10/P90 por usina ou estagio, joins entre parquets.
         Aponte os arquivos por CAMINHO ABSOLUTO em read_parquet('/caminho/arq.parquet')
         (tambem read_csv/read_json).

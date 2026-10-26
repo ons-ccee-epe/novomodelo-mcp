@@ -117,9 +117,7 @@ def point_from_run(train_meta: dict[str, Any], sim_meta: dict[str, Any] | None =
         "threads": dist.get("threads_per_rank") or stats.get("parallelism") or 1,
         "ranks": dist.get("world_size") or 1,
         "completed_at": train_meta.get("completed_at"),
-        # runs ≤ 0.17 gravaram `cobre_version`: é dado já escrito em disco
-        "software_version": train_meta.get("software_version")
-        or train_meta.get("cobre_version"),
+        "software_version": train_meta.get("software_version"),
         "dims": dims_of(train_meta.get("problem_dimensions")),
         "config_sig": config_sig or config_signature(config),
         "train": train,
