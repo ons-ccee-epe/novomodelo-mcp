@@ -61,7 +61,9 @@ def run_bridge(argv: list[str], *, timeout: float | None = None,
     log(settings, "bridge", argv=argv)
     cmd = [binpath, *argv, "--json", "--no-color"]
     try:
-        proc = subprocess.run(
+        # argv em lista e sem shell: os caminhos do agente, já validados pelo guard, chegam
+        # como argumentos literais, nunca interpretados.
+        proc = subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
             cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout if timeout is not None else settings.default_timeout,
             env={**os.environ, "PYTHONIOENCODING": "utf-8"}, **NO_WINDOW,

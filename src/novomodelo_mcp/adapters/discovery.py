@@ -62,7 +62,8 @@ def tool_version(binpath: str | None) -> str | None:
         return None
     for args in (["--version"], ["version"]):
         try:
-            proc = subprocess.run(
+            # argv em lista e sem shell; o binário vem da configuração ou do PATH, nunca do agente.
+            proc = subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                 [binpath, *args], stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
                 timeout=15, **NO_WINDOW,
             )

@@ -68,7 +68,9 @@ def _expected_sha256(version: str) -> str | dict[str, str]:
 
 
 def _run_installer(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
+    # argv em lista e sem shell: roda o instalador oficial baixado, só depois de conferir o
+    # SHA-256 publicado no release e com confirmar=True.
+    return subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
                           **NO_WINDOW, **kwargs)
 
 
