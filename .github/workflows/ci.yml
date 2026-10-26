@@ -31,6 +31,52 @@ jobs:
       - name: Testes (pytest)
         run: uv run pytest -q
 
+  executaveis-reais:
+    # Todas as tools contra o executável novomodelo, o novomodelo-bridge e o
+    # novomodelo-python reais da versão esperada (o pin do bridge), nos três sistemas.
+    # O executável vem pela própria tool instalar_novomodelo (instalador oficial, hash
+    # conferido); os decks são os mínimos do bridge na tag da versão.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    name: Executáveis reais (${{ matrix.os }})
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Sincronizar dependências
+        run: uv sync --dev
+
+      - name: Versão esperada
+        id: versao
+        run: echo "v=$(uv run python -c 'from novomodelo_mcp.adapters.versions import expected_version; print(expected_version())')" >> "$GITHUB_OUTPUT"
+
+      - name: Decks mínimos do novomodelo-bridge na tag
+        uses: actions/checkout@v5
+        with:
+          repository: ons-ccee-epe/novomodelo-bridge
+          ref: v${{ steps.versao.outputs.v }}
+          path: _bridge
+          sparse-checkout: tests/decks
+          persist-credentials: false
+
+      - name: e2e_live
+        run: >
+          uv run python scripts/e2e_live.py --workspace "$RUNNER_TEMP/estudos"
+          --bridge-repo _bridge --instalar-executavel
+
   rename-guard:
     # TEMPORÁRIO: existe só enquanto o MCP vive fora do repo do novomodelo.
     # Na migração para o monorepo, apagar este job: o CI do novomodelo já roda o
