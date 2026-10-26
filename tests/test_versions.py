@@ -130,9 +130,9 @@ def test_caso_da_decisora_executavel_0_19_com_mcp_0_18(pecas, monkeypatch):
     _bridge_do_pacote(monkeypatch)
     [aviso] = V.version_warnings(object())
     assert aviso.startswith("O executável novomodelo está na 0.19.0 e o MCP na 0.18.0;")
-    assert V.MCP_UPGRADE_COMMAND in aviso
+    assert V.mcp_install_command("0.19.0") in aviso
     assert "v0.18.0/novomodelo-cli-installer" in aviso and "instalar_novomodelo" in aviso
-    assert aviso.index(V.MCP_UPGRADE_COMMAND) < aviso.index("novomodelo-cli-installer")
+    assert aviso.index(V.mcp_install_command("0.19.0")) < aviso.index("novomodelo-cli-installer")
 
 
 def test_so_a_biblioteca_diverge(pecas):
@@ -185,6 +185,7 @@ def test_aviso_nao_usa_a_rede(pecas, monkeypatch):
     assert len(V.version_warnings(object())) == 1
 
 
+#: O link do release do MCP é o canal de instalação; fora dele, nada interno.
 _INTERNO = re.compile(r"página de instalação|\bcard\b|validação da v1|validadores|<organização interna>", re.I)
 
 
@@ -195,7 +196,7 @@ def test_produto_sem_referencia_interna(pecas, monkeypatch, executavel):
     _respostas(monkeypatch)
     nova = V.update_check(object())
     texto = " ".join(V.version_warnings(object())) + " ".join(p.get("nota", "") for p in nova.values())
-    assert not _INTERNO.search(texto), texto
+    assert not _INTERNO.search(texto.replace(V.MCP_RELEASE_TAG_URL, "")), texto
 
 
 def test_executavel_mais_velho_manda_instalar_a_versao_do_mcp(pecas):
@@ -210,7 +211,7 @@ def test_bridge_instalado_a_parte_e_mais_novo_da_os_dois_caminhos(pecas):
     estado["bridge"] = "0.18.1"
     [aviso] = V.version_warnings(object())
     assert aviso.startswith("O novomodelo-bridge está na 0.18.1 e o MCP na 0.18.0;")
-    assert V.MCP_UPGRADE_COMMAND in aviso and "novomodelo-bridge==0.18.0" in aviso
+    assert V.mcp_install_command("0.18.1") in aviso and "novomodelo-bridge==0.18.0" in aviso
 
 
 _REBAIXAR = re.compile(r"volte|voltar|rebaix|downgrade|mantenha", re.I)
@@ -453,7 +454,7 @@ def test_release_mais_novo_nao_da_o_mcp_novo_como_existente(pecas, monkeypatch):
     _respostas(monkeypatch)
     mcp = V.update_check(object())["mcp"]
     assert mcp["status"] == "a_conferir" and "link" not in mcp and "comando" not in mcp
-    assert "MCP 0.19.0" in mcp["nota"] and V.MCP_UPGRADE_COMMAND in mcp["nota"]
+    assert "MCP 0.19.0" in mcp["nota"] and V.mcp_install_command("0.19.0") in mcp["nota"]
 
 
 def test_release_mais_novo_nao_manda_instalar_so_o_executavel(pecas, monkeypatch):
@@ -523,4 +524,7 @@ def test_docs_embutidas_reais_tem_a_versao_do_manifesto():
 
 def test_comando_de_instalar_o_mcp_compila_o_bytecode():
     assert V.mcp_install_command("0.19.0") == (
-        "uv tool install --force --compile-bytecode novomodelo-mcp==0.19.0")
+        "baixe o novomodelo_mcp-0.19.0-py3-none-any.whl de "
+        "https://github.com/<organização interna>/novomodelo-mcp/releases/tag/v0.19.0 e rode "
+        "`uv tool install --force --compile-bytecode ./novomodelo_mcp-0.19.0-py3-none-any.whl` "
+        "(o bridge, a biblioteca e as docs vêm junto)")

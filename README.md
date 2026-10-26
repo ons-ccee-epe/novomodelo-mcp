@@ -152,7 +152,7 @@ versão, ou faltar, **toda** resposta traz `avisos_de_versao` com os comandos pa
 alinhar; a chamada continua, e a instrução do servidor pede ao agente que ofereça rodar
 os comandos, com o ok da pessoa. A peça mais velha que o MCP sobe até a versão dele. Para
 a mais nova há dois caminhos, porque sem rede o MCP não sabe se já saiu o MCP dessa
-versão: `uv tool upgrade novomodelo-mcp`, ou voltar a peça para a versão do MCP.
+versão: instalar a wheel do MCP dessa versão, do release, ou voltar a peça para a versão do MCP.
 
 A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo e do
 bridge (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo

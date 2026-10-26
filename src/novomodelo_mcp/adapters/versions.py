@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..names import BINDING_DIST, BRIDGE_CLI, BRIDGE_DIST, MCP_DIST
+from ..names import BINDING_DIST, BRIDGE_CLI, BRIDGE_DIST, MCP_DIST, MCP_RELEASE_TAG_URL
 from .discovery import bridge_origin, bridge_version
 
 CLI_RELEASES = "https://github.com/ons-ccee-epe/novomodelo/releases"
@@ -117,13 +117,14 @@ def cli_install_command(version: str) -> str:
     return f"curl --proto '=https' --tlsv1.2 -LsSf {base}/novomodelo-cli-installer.sh | sh"
 
 
-MCP_UPGRADE_COMMAND = f"uv tool upgrade {MCP_DIST}"
 ASK_AGENT_TO_INSTALL = ("Peça ao agente: “instale o executável do novomodelo” "
                         "(tool instalar_novomodelo)")
 
 
 def mcp_install_command(version: str) -> str:
-    return f"uv tool install --force --compile-bytecode {MCP_DIST}=={version}"
+    wheel = f"novomodelo_mcp-{version}-py3-none-any.whl"
+    return (f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
+            f"`uv tool install --force --compile-bytecode ./{wheel}` (o bridge, a biblioteca e as docs vêm junto)")
 
 
 def _bridge_command(version: str, origin: str | None = None) -> str:
@@ -136,8 +137,8 @@ def _newer_piece_warning(label: str, version: str, expected: str, align: str) ->
     name = label[0].upper() + label[1:]
     verb = "estão" if label.startswith("as ") else "está"
     return (f"{name} {verb} na {version} e o MCP na {expected}; o MCP foi testado com as peças "
-            f"na versão dele. Para alinhar, atualize o MCP ({MCP_UPGRADE_COMMAND}), se já houver "
-            f"o MCP {version}, ou volte {label} para a {expected}: {align}.")
+            f"na versão dele. Para alinhar, atualize o MCP, se já houver o MCP "
+            f"{version} ({mcp_install_command(version)}), ou volte {label} para a {expected}: {align}.")
 
 
 def _piece_warnings(settings, expected: str) -> list[str]:
@@ -358,7 +359,7 @@ def _notes_text(piece: str, version: str, releases: str) -> str:
 
 def _release_note(piece: str, newest: str, current: str | None) -> str:
     return (f"o {piece} {newest} saiu; o MCP está na {current}. Quando sair o MCP {newest}, "
-            f"atualize as peças juntas: {MCP_UPGRADE_COMMAND}.")
+            f"atualize as peças juntas: {mcp_install_command(newest)}.")
 
 
 def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, Any]:
