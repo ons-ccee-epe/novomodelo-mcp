@@ -51,8 +51,40 @@ jobs:
           path: _docs
           persist-credentials: false
 
+      - name: Commits dos changelogs gravados no manifesto
+        id: changelogs
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          c = json.load(open("src/novomodelo_mcp/_bundled/manifest.json"))["changelogs"]
+          print(f"novomodelo={c['novomodelo']['commit']}")
+          print(f"bridge={c['novomodelo-bridge']['commit']}")
+          PY
+
+      - name: novomodelo nesse commit (CHANGELOG.md)
+        uses: actions/checkout@v5
+        with:
+          repository: ons-ccee-epe/novomodelo
+          ref: ${{ steps.changelogs.outputs.novomodelo }}
+          path: _novomodelo
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: novomodelo-bridge nesse commit (CHANGELOG.md)
+        uses: actions/checkout@v5
+        with:
+          repository: ons-ccee-epe/novomodelo-bridge
+          ref: ${{ steps.changelogs.outputs.bridge }}
+          path: _bridge
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Docs embutidas iguais à fonte
-        run: python3 scripts/sync_bundled.py --source _docs --check
+        run: >
+          python3 scripts/sync_bundled.py --source _docs
+          --changelog novomodelo=_novomodelo --changelog novomodelo-bridge=_bridge --check
 
       - name: Testes
         run: |
