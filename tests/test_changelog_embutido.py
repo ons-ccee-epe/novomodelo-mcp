@@ -161,3 +161,17 @@ def test_busca_sem_intencao_de_versao_nao_traz_changelog(consulta):
                                       "breaking changes release"])
 def test_busca_sobre_versao_traz_changelog(consulta):
     assert any(p.startswith("changelog/") for p in _busca(consulta, 5))
+
+
+@pytest.mark.parametrize("workflow", sorted((ROOT / ".github" / "workflows").glob("*.yml")),
+                         ids=lambda p: p.name)
+def test_conferencia_das_docs_nos_workflows_passa_os_changelogs(workflow):
+    """Um `sync_bundled --check` sem os changelogs do manifesto acusa as páginas como sobra."""
+    produtos = json.loads((BUNDLED / "manifest.json").read_text(encoding="utf-8"))["changelogs"]
+    texto = workflow.read_text(encoding="utf-8")
+    for chamada in texto.split("sync_bundled.py")[1:]:
+        trecho = chamada.split("\n\n", 1)[0]
+        if "--check" not in trecho:
+            continue
+        for produto in produtos:
+            assert f"--changelog {produto}=" in trecho, f"{workflow.name}: falta --changelog {produto}"
