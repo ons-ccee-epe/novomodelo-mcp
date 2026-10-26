@@ -4,6 +4,7 @@ import { deltaPp, passRate, type Reference } from "@/shared/comparison";
 import { historyBatchPath } from "@/shared/constants/Routes";
 import { conjuntoOf } from "@/shared/conjunto";
 import type { BatchResult } from "@/shared/types";
+import { decimal, formatDate, formatDelta } from "../format";
 import { ConjuntoTag } from "./ConjuntoTag";
 
 interface Props {
@@ -13,24 +14,6 @@ interface Props {
   isBaseline: boolean;
   canToggle: boolean;
   onToggleBaseline: () => void;
-}
-
-const pad = (n: number) => String(n).padStart(2, "0");
-
-function formatDate(timestamp: string): string {
-  const d = new Date(timestamp);
-  if (Number.isNaN(d.getTime())) return timestamp;
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-const decimal = (n: number) => n.toFixed(1).replace(".", ",");
-
-function formatDelta(delta: number | null): { text: string; trend: "up" | "down" | "none" } {
-  if (delta === null) return { text: "—", trend: "none" };
-  const rounded = Math.round(delta * 10) / 10;
-  if (rounded === 0) return { text: "▲ +0,0 pp", trend: "none" };
-  if (rounded > 0) return { text: `▲ +${decimal(rounded)} pp`, trend: "up" };
-  return { text: `▼ −${decimal(-rounded)} pp`, trend: "down" };
 }
 
 export function BatchCard({

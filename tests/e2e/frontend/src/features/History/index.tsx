@@ -2,18 +2,10 @@ import { useParams } from "react-router-dom";
 
 import { useHistory } from "@/services/api/useHistory";
 import { useLauncher } from "@/services/api/useLauncher";
-import type { BatchResult } from "@/shared/types";
+import { BatchDashboard } from "./components/BatchDashboard";
 import { BatchList } from "./components/BatchList";
 
 const NOOP = () => {};
-
-function BatchDashboard({ batch }: { batch: BatchResult | null }) {
-  return (
-    <section aria-label="Dashboard da bateria">
-      {batch ? batch.batch_id : "Selecione uma bateria"}
-    </section>
-  );
-}
 
 export function History() {
   const { batchId } = useParams();
@@ -42,7 +34,18 @@ export function History() {
           />
         )}
       </aside>
-      <BatchDashboard batch={selected} />
+      {selected ? (
+        <BatchDashboard
+          key={selected.batch_id}
+          batch={selected}
+          all={batches}
+          baselines={baselines}
+          launcherOnline={launcher.available}
+          onToggleBaseline={toggleBaseline}
+        />
+      ) : (
+        <section aria-label="Dashboard da bateria">Selecione uma bateria</section>
+      )}
     </div>
   );
 }

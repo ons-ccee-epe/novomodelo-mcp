@@ -39,6 +39,8 @@ const GRP = withCounts(
 );
 const BATCHES = [GRP, MID, OLD];
 
+const sideItems = () => within(screen.getByRole("complementary")).getAllByRole("listitem");
+
 function setup(over: Record<string, unknown> = {}) {
   const toggleBaseline = vi.fn(async () => {});
   history.value = {
@@ -72,7 +74,7 @@ describe("History", () => {
   it("lista os cards do mais recente ao mais antigo, com tag, contagem e delta", () => {
     setup();
     renderAt();
-    const cards = screen.getAllByRole("listitem");
+    const cards = sideItems();
     expect(cards.map((c) => c.getAttribute("data-batch-id"))).toEqual(["b3", "b2", "b1"]);
     const mid = cards[1];
     expect(within(mid).getByText("Esteira completa")).toBeInTheDocument();
@@ -88,7 +90,7 @@ describe("History", () => {
   it("formata delta negativo com sinal unicode e vírgula", () => {
     setup({ batches: [OLD, MID], baselines: { todos: "b2" } });
     renderAt();
-    const card = screen.getAllByRole("listitem").find((c) => c.getAttribute("data-batch-id") === "b1")!;
+    const card = sideItems().find((c) => c.getAttribute("data-batch-id") === "b1")!;
     const delta = within(card).getByText(/pp/);
     expect(delta.textContent).toBe("▼ −60,0 pp");
     expect(delta).toHaveAttribute("data-trend", "down");
@@ -99,9 +101,9 @@ describe("History", () => {
     setup();
     renderAt();
     fireEvent.click(screen.getByRole("button", { name: "Grupo deck" }));
-    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(sideItems()).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Todos" }));
-    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    expect(sideItems()).toHaveLength(3);
   });
 
   it("a estrela chama toggleBaseline", () => {
@@ -139,7 +141,7 @@ describe("History", () => {
   it("abrir /historico/<id> seleciona aquela bateria", () => {
     setup();
     renderAt("/historico/b1");
-    const selected = screen.getAllByRole("listitem").filter((c) => c.getAttribute("aria-current") === "true");
+    const selected = sideItems().filter((c) => c.getAttribute("aria-current") === "true");
     expect(selected.map((c) => c.getAttribute("data-batch-id"))).toEqual(["b1"]);
     expect(screen.getByRole("region", { name: "Dashboard da bateria" })).toHaveTextContent("b1");
   });
@@ -148,7 +150,7 @@ describe("History", () => {
     setup();
     renderAt();
     expect(screen.getByRole("region", { name: "Dashboard da bateria" })).toHaveTextContent("b3");
-    fireEvent.click(within(screen.getAllByRole("listitem")[2]).getByRole("link"));
+    fireEvent.click(within(sideItems()[2]).getByRole("link"));
     await waitFor(() =>
       expect(screen.getByRole("region", { name: "Dashboard da bateria" })).toHaveTextContent("b1"),
     );

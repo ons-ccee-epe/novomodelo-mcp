@@ -20,17 +20,21 @@ function ToolCalls({ calls }: { calls: TestResult["all_tool_calls"] }) {
       {calls.map((tc, i) => (
         <li key={tc.tool_id ?? i}>
           <code>{tc.name}</code>
+          <pre className="cobre-pre-wrap">{JSON.stringify(tc.args ?? {}, null, 2)}</pre>
         </li>
       ))}
     </ol>
   );
 }
 
-/** Detalhe expandido de um teste na tabela. */
+const ms = (v: number | null | undefined) => (typeof v === "number" ? `${Math.round(v)} ms` : "—");
+
+/** Detalhe expandido de uma pergunta. */
 export function TestDetail({ tr, expected }: { tr: TestResult; expected: string }) {
+  const checks = tr.validation_checks ?? [];
   return (
     <div className="cobre-test-detail">
-      <Field label="Query completa">
+      <Field label="Pergunta">
         <pre className="cobre-pre-wrap">{tr.query}</pre>
       </Field>
       <Field label="Tool esperada → chamada">
@@ -38,6 +42,14 @@ export function TestDetail({ tr, expected }: { tr: TestResult; expected: string 
       </Field>
       <Field label={`Tool calls (${tr.all_tool_calls.length})`}>
         <ToolCalls calls={tr.all_tool_calls} />
+      </Field>
+      {checks.length > 0 && (
+        <Field label={`Checagens (${checks.length})`}>
+          <pre className="cobre-pre-wrap">{JSON.stringify(checks, null, 2)}</pre>
+        </Field>
+      )}
+      <Field label="Latências">
+        agente {ms(tr.latency_ms)} · tool {ms(tr.tool_latency_ms)}
       </Field>
       {tr.error_message && (
         <Field label="Erro">

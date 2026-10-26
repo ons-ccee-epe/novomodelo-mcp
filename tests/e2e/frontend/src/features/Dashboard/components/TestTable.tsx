@@ -3,7 +3,7 @@ import { Fragment, useMemo, useState } from "react";
 import { statusIcon } from "@/shared/constants/status";
 import { groupForCase } from "@/shared/toolGroups";
 import type { BatchResult, TestResult } from "@/shared/types";
-import { TestDetail } from "./table/TestDetail";
+import { TestDetail } from "@/features/History/components/TestDetail";
 import { TestFilters, type FilterState } from "./table/TestFilters";
 
 const QUERY_PREVIEW_CHARS = 60;
