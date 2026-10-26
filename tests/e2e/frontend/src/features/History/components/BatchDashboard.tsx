@@ -91,10 +91,13 @@ export function BatchDashboard({
         onToggleBaseline={toggle}
         onDownloadSummary={onDownloadSummary ?? downloadSummary}
       />
-      {(toggleError ?? summaryError) && (
-        <p role="alert" className="cobre-run-finished-error">
-          {toggleError ?? summaryError}
-        </p>
+      {[toggleError, summaryError].map(
+        (msg) =>
+          msg && (
+            <p key={msg} role="alert" className="cobre-run-finished-error">
+              {msg}
+            </p>
+          ),
       )}
       <ChangesStrip broke={broke} fixed={fixed} onSelect={setOpenId} />
       <BatchCards batch={batch} reference={reference} />

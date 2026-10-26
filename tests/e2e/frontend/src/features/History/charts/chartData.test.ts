@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { makeBatch } from "@/shared/fixtures.testutil";
 import type { BatchResult, TestResult } from "@/shared/types";
-import { funnel, latencyRows, passByGroup, statusColor, statusCounts, toolsPerQuestion, toolUsage } from "./chartData";
+import { funnel, latencyLegend, latencyRows, passByGroup, statusColor, statusCounts, toolsPerQuestion, toolUsage } from "./chartData";
 
 function fixture(): BatchResult {
   const b = makeBatch("b1", [
@@ -98,5 +98,13 @@ describe("chartData", () => {
     expect(statusColor("partial")).toBe("var(--cobre-partial)");
     expect(statusColor("timeout")).toBe("var(--cobre-timeout)");
     expect(statusColor("skip")).toBe("var(--cobre-skip)");
+  });
+
+  it("latencyLegend lista só os status presentes mais o tempo na tool", () => {
+    expect(latencyLegend(fixture())).toEqual([
+      { label: "Aprovada", color: "var(--cobre-pass)" },
+      { label: "Falhou", color: "var(--cobre-fail)" },
+      { label: "Tempo na tool", color: "var(--cobre-text-muted)" },
+    ]);
   });
 });

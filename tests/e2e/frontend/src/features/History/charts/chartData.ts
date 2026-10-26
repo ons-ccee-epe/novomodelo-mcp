@@ -64,3 +64,24 @@ export function funnel(
 }
 
 export const statusColor = (status: TestStatus) => `var(--cobre-${status})`;
+
+export const STATUS_LABEL: Record<TestStatus, string> = {
+  pass: "Aprovada",
+  partial: "Parcial",
+  fail: "Falhou",
+  timeout: "Timeout",
+  skip: "Pulada",
+};
+
+export const TOOL_TIME_COLOR = "var(--cobre-text-muted)";
+
+export function latencyLegend(b: BatchResult): Array<{ label: string; color: string }> {
+  const present = new Set(b.test_results.map((r) => r.status));
+  return [
+    ...STATUS_ORDER.filter((s) => present.has(s)).map((s) => ({
+      label: STATUS_LABEL[s],
+      color: statusColor(s),
+    })),
+    { label: "Tempo na tool", color: TOOL_TIME_COLOR },
+  ];
+}
