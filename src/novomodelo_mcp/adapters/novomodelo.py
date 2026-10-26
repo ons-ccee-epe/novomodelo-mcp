@@ -15,6 +15,7 @@ from ..names import BINDING_DIST, SOLVER_CLI
 from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_novomodelo
 from .obs import log
+from .subproc import NO_WINDOW
 
 _NOT_FOUND = f"{SOLVER_CLI} não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN)."
 
@@ -33,9 +34,11 @@ def run_novomodelo(subargv: list[str], *, timeout: float | None = None,
     log(settings, "novomodelo", subargv=subargv)
     cmd = [binpath, "--color", "never", *subargv]
     try:
-        proc = subprocess.run(
-            cmd, capture_output=True, encoding="utf-8", errors="replace",
-            timeout=timeout if timeout is not None else settings.default_timeout,
+        # argv em lista e sem shell: os caminhos do agente, já validados pelo guard, chegam
+        # como argumentos literais, nunca interpretados.
+        proc = subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+            cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
+            timeout=timeout if timeout is not None else settings.default_timeout, **NO_WINDOW,
         )
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
@@ -147,8 +150,9 @@ def validate_deck_cli(case_dir: str, *, output_dir: str | None = None,
     if output_dir:
         cmd += ["--output", output_dir]
     try:
-        proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
-                              timeout=settings.default_timeout)
+        # argv em lista e sem shell; case_dir e output_dir já passaram pelo guard.
+        proc = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+                              timeout=settings.default_timeout, **NO_WINDOW)
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
     except OSError as exc:
@@ -191,8 +195,9 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
     cmd = [binpath, "--color", "never", "version"]
     # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout), nunca propagam ao stdio.
     try:
-        proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
-                              timeout=settings.default_timeout)
+        # argv fixa, sem shell: nada vem do agente.
+        proc = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+                              timeout=settings.default_timeout, **NO_WINDOW)
     except subprocess.TimeoutExpired:
         return _error(-1, f"timeout ao executar: {' '.join(cmd)}")
     except OSError as exc:

@@ -20,6 +20,7 @@ from pathlib import Path
 from ..config import Settings
 from .discovery import find_novomodelo
 from .envelope import error
+from .subproc import NO_WINDOW
 
 _SCHEMA_EXPORT_CACHE: dict[str, str] = {}
 _SUFFIX = ".schema.json"
@@ -62,9 +63,10 @@ def _export_schemas(settings: Settings) -> str | None:
     out = Path(tempfile.gettempdir()) / "novomodelo_mcp_schemas"
     out.mkdir(parents=True, exist_ok=True)
     try:
-        proc = subprocess.run(
+        # argv fixa, sem shell: nada vem do agente.
+        proc = subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
             [novomodelo, "--color", "never", "schema", "export", "--output-dir", str(out)],
-            capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+            stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace", timeout=60, **NO_WINDOW)
     except (OSError, subprocess.SubprocessError):
         return None
     if proc.returncode != 0:

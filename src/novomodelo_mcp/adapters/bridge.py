@@ -21,6 +21,7 @@ from ..names import BRIDGE_CLI
 from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_bridge
 from .obs import log
+from .subproc import NO_WINDOW
 
 
 
@@ -60,10 +61,12 @@ def run_bridge(argv: list[str], *, timeout: float | None = None,
     log(settings, "bridge", argv=argv)
     cmd = [binpath, *argv, "--json", "--no-color"]
     try:
-        proc = subprocess.run(
-            cmd, capture_output=True, encoding="utf-8", errors="replace",
+        # argv em lista e sem shell: os caminhos do agente, já validados pelo guard, chegam
+        # como argumentos literais, nunca interpretados.
+        proc = subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+            cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout if timeout is not None else settings.default_timeout,
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"}, **NO_WINDOW,
         )
     except FileNotFoundError:
         return _error(127, f"binário não encontrado/executável: {binpath}")

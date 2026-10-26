@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..config import Settings
 from ..names import BRIDGE_CLI, SOLVER_CLI
+from .subproc import NO_WINDOW
 
 
 def bridge_origin(settings: Settings) -> tuple[str | None, str | None]:
@@ -61,9 +62,10 @@ def tool_version(binpath: str | None) -> str | None:
         return None
     for args in (["--version"], ["version"]):
         try:
-            proc = subprocess.run(
-                [binpath, *args], capture_output=True, encoding="utf-8", errors="replace",
-                timeout=15,
+            # argv em lista e sem shell; o binário vem da configuração ou do PATH, nunca do agente.
+            proc = subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+                [binpath, *args], stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
+                timeout=15, **NO_WINDOW,
             )
         except (OSError, subprocess.SubprocessError):
             return None

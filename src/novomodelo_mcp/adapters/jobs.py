@@ -33,6 +33,7 @@ from typing import Any
 from ..config import Settings
 from . import _job_runner
 from .state import atomic_write_text, file_lock, state_dir
+from .subproc import NO_WINDOW
 
 #: Jobs terminados há mais que isto são removidos ao iniciar um novo job.
 KEEP_DAYS = 7
@@ -229,7 +230,7 @@ def _force_kill_runner(pid: int, child_pid: int | None = None) -> None:
     """Último recurso, se o runner não responde: derruba o runner E a árvore dele."""
     if _WIN:
         subprocess.run([_job_runner._taskkill(), "/T", "/F", "/PID", str(int(pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                       capture_output=True, check=False)
+                       stdin=subprocess.DEVNULL, capture_output=True, check=False, **NO_WINDOW)
         return
     # O runner e o comando lideram cada um a própria sessão.
     for leader in (pid, child_pid):

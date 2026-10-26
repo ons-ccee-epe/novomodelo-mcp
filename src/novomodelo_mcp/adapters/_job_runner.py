@@ -48,7 +48,8 @@ def _kill_tree(proc: subprocess.Popen, *, force: bool) -> None:
     if _WIN:
         # TerminateProcess não alcança netos; taskkill /T derruba a árvore toda.
         subprocess.run([_taskkill(), "/T", "/F", "/PID", str(int(proc.pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                       capture_output=True, check=False)
+                       stdin=subprocess.DEVNULL, capture_output=True, check=False,
+                       creationflags=subprocess.CREATE_NO_WINDOW)  # type: ignore[attr-defined]  # só existe no Windows
         return
     # O comando lidera o próprio grupo (start_new_session): o sinal alcança os netos.
     try:
