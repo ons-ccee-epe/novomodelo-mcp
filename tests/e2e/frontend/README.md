@@ -6,8 +6,8 @@ atualiza a cada refresh.
 
 ## Stack
 
-React 19 + TypeScript + Vite 6, HashRouter, Radix UI Themes, Recharts para os
-gráficos de tendência, Vitest para testes. Sem backend — hospedagem estática.
+React 19 + TypeScript + Vite 6, HashRouter, Radix UI Themes, Recharts e SVG
+próprio para os gráficos, Vitest para testes. Sem backend — hospedagem estática.
 
 ## Como rodar
 
@@ -18,7 +18,7 @@ npm run dev          # http://127.0.0.1:5174
 ```
 
 Rode os testes E2E normalmente (gera/atualiza os JSON em `../results` e
-`../metrics`) e dê **refresh** no dashboard — ou clique em **↻ Atualizar**.
+`../metrics`) e dê **refresh** no dashboard.
 
 Build estático (para publicar):
 
@@ -35,8 +35,8 @@ O frontend busca tudo sob `/data`:
 | ---------------------------- | ------------------------------------ | ------------------------------ |
 | `/data/results/index.json`   | `tests/e2e/results/index.json`       | lista de baterias              |
 | `/data/results/<id>.json`    | `tests/e2e/results/<id>.json`        | uma bateria completa           |
-| `/data/results/baseline.json`| `tests/e2e/results/baseline.json`    | ponteiro da baseline           |
-| `/data/metrics/history.jsonl`| `tests/e2e/metrics/history.jsonl`    | histórico (tendências)         |
+| `/data/results/baseline.json`| `tests/e2e/results/baseline.json`    | baseline de cada conjunto      |
+| `/data/metrics/history.jsonl`| `tests/e2e/metrics/history.jsonl`    | histórico das baterias         |
 | `/data/results/load/index.json` | `tests/e2e/results/load/index.json` | lista de cargas (aba Carga)  |
 | `/data/results/load/<id>.json`  | `tests/e2e/results/load/<id>.json`  | uma carga completa           |
 
@@ -50,10 +50,15 @@ O contrato de tipos (`src/shared/types.ts`) espelha os dataclasses de
 
 ## Áreas
 
-A navegação no topo (`navigation/AppNav.tsx`) liga duas áreas (HashRouter):
+A navegação no topo (`navigation/AppNav.tsx`) liga três áreas (HashRouter). A raiz e
+qualquer rota desconhecida levam a `/#/funcionais`.
 
-- **Dashboard** (`/#/`): baterias de teste por agente de IA.
-- **Carga** (`/#/carga`): teste de carga do servidor MCP. Formulário (tools ou casos,
+- **Testes Funcionais** (`/#/funcionais`): dispara baterias de perguntas por agente de
+  IA. Escolhe o provedor e o conjunto (esteira completa, um grupo de tools ou uma
+  pergunta), mostra o quadro de comando equivalente (o do terminal e o do agente,
+  vindos de `GET /api/command-preview`), o progresso ao vivo com **Parar** e, ao
+  terminar, o resultado da bateria. Precisa do launcher.
+- **Testes de Carga** (`/#/carga`): teste de carga do servidor MCP. Formulário (tools ou casos,
   com selos para os que gravam numa cópia das fixtures por sessão e os pesados;
   concorrência, com a capacidade da máquina para a seleção, incluindo o disco das
   cópias; duração ou iterações, timeout), progresso ao vivo com **Parar**,
@@ -62,6 +67,12 @@ A navegação no topo (`navigation/AppNav.tsx`) liga duas áreas (HashRouter):
   recursos, erros, chamadas fora do mix) e a comparação com a carga anterior (ou outra
   à escolha). Com o launcher offline mostra só as cargas gravadas, em leitura.
   Detalhes do teste em [`../load/README.md`](../load/README.md).
+- **Histórico** (`/#/historico` e `/#/historico/:batchId`): lista as baterias gravadas
+  em `tests/e2e/results/`, com a variação em relação à baseline do conjunto, as tags
+  do conjunto e a marca de baseline. O detalhe de uma bateria traz cards, gráficos
+  (cada um com download em PNG), a lista de perguntas, o detalhe de cada pergunta e o
+  download do resumo. Lê só os JSON, então funciona com o launcher desligado; definir
+  ou remover a baseline usa `PUT`/`DELETE /api/baselines/{conjunto}` e precisa dele.
 
 ## O que mudou nos runners
 
@@ -82,25 +93,32 @@ Segue o layout do padrão de frontend:
 src/
   main.tsx                       # entrypoint (HashRouter + Radix Theme)
   navigation/index.tsx           # rotas
+  navigation/AppNav.tsx          # barra de navegação e layout das rotas
   shared/constants/Routes.ts     # path de cada tela
   shared/constants/status.ts     # ícones de status
   shared/types.ts                # contrato de dados (espelha o store.py)
   shared/toolGroups.ts           # mapa tool->grupo (espelha store.TOOL_GROUPS)
+  shared/conjunto.ts             # valores e rótulos de conjunto (todos, grupo:x, pergunta:y)
+  shared/comparison.ts           # variação entre duas baterias
+  shared/charts/                 # ChartCard e SvgLegend, base dos gráficos com download
+  shared/exportPng.ts            # SVG -> canvas -> PNG
   theme/styles.css               # tokens de tema (sem cor literal nos componentes)
   services/resultsApi.ts         # fetch dos JSON + parse do JSONL
   services/launcherApi.ts        # controle do launcher (polling cancelável)
-  services/api/useResults.ts     # carga de index/bateria/comparação/histórico
-  services/api/useLauncher.ts    # provedores, casos e disparo de runs
+  services/api/useHistory.ts     # baterias, baselines e comparação do histórico
+  services/api/useLauncher.ts    # provedores, casos, quadro de comando e disparo de runs
   services/loadApi.ts            # cargas: leitura de results/load e controle pelo launcher
   services/api/useLoadResults.ts # index, carga selecionada e comparação
   services/api/useLoadLauncher.ts# tools/limites, disparo, polling e parada da carga
-  navigation/AppNav.tsx          # barra de navegação e layout das rotas
-  features/Dashboard/
-    index.tsx                    # tela do dashboard
-    alertRules.ts                # regras do banner de saúde (limiares nomeados)
-    components/                  # SummaryCards, TrendCharts, TestTable, ...
+  features/Functional/
+    index.tsx                    # tela dos testes funcionais
+    components/                  # TestLauncher, CommandPreview, RunFinished
       launcher/                  # partes do TestLauncher
-      table/                     # partes do TestTable
+  features/History/
+    index.tsx                    # lista e detalhe das baterias
+    format.ts                    # formatação de datas, durações e variações
+    charts/                      # os gráficos do dashboard de uma bateria
+    components/                  # BatchList, BatchDashboard, QuestionList, TestDetail, ...
   features/Load/
     index.tsx                    # tela da carga
     compare.ts                   # deltas entre duas cargas (melhor/pior por métrica)

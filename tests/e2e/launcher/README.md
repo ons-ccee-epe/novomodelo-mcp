@@ -61,14 +61,14 @@ cd tests/e2e/frontend
 npm run dev:launcher
 ```
 
-Abra `http://127.0.0.1:5174`. No topo do dashboard:
+Abra `http://127.0.0.1:5174`. Na aba **Testes Funcionais**:
 
 - **Esteira completa** — roda todos os casos.
-- **Rodar grupo** — roda um grupo de tools (bridge, deck, docs, …).
-- **Biblioteca de prompts** — roda um caso isolado.
+- **Grupo** — roda um grupo de tools (bridge, deck, docs, …).
+- **Pergunta** — roda um caso isolado.
 
-O progresso aparece ao vivo; ao terminar, a nova bateria é carregada
-automaticamente no relatório.
+O quadro de comando mostra o que será executado. O progresso aparece ao vivo; ao
+terminar, a bateria fica disponível na aba **Histórico**.
 
 ## Rotas (`/api`)
 
@@ -77,6 +77,10 @@ automaticamente no relatório.
 | GET | `/api/health` | saúde do launcher |
 | GET | `/api/providers` | provedores detectados + default |
 | GET | `/api/cases` | biblioteca de prompts (casos) |
+| GET | `/api/command-preview?provider=&tags=&case_id=` | comando equivalente ao disparo: o do terminal (só kiro-cli) e o do agente, com o conjunto e o total de casos; nada é iniciado nem gravado |
+| GET | `/api/baselines` | baseline vigente de cada conjunto (`{"baselines": {conjunto: batch_id}}`) |
+| PUT | `/api/baselines/{conjunto}` | define a bateria (body: `batch_id`) como baseline do conjunto; 404 se a bateria não existe, 409 se é de outro conjunto |
+| DELETE | `/api/baselines/{conjunto}` | remove a baseline do conjunto |
 | POST | `/api/runs` | dispara (body: `provider?`, `tags?`, `case_id?`, `timeout_seconds?`); 409 se já houver um run ativo |
 | GET | `/api/runs` | runs desta sessão |
 | GET | `/api/runs/{run_id}` | estado de um run (polling) |
@@ -90,7 +94,7 @@ automaticamente no relatório.
 | POST | `/api/load-runs/{run_id}/cancel` | para a carga e encerra todos os servidores MCP; não grava |
 | GET | `/data/{results\|metrics}/...` | baterias/histórico (mesma convenção do Vite); as cargas gravadas ficam em `/data/results/load/` |
 
-Os `POST` exigem o header `X-Launcher: 1` (o frontend já envia).
+Os `POST`, `PUT` e `DELETE` exigem o header `X-Launcher: 1` (o frontend já envia).
 
 ## Segurança (dev)
 
@@ -119,7 +123,7 @@ confiável.
 
 ## Teste de carga
 
-A aba **Carga** do dashboard dispara `POST /api/load-runs` em um de dois modos
+A aba **Testes de Carga** do dashboard dispara `POST /api/load-runs` em um de dois modos
 (`tests/e2e/load/README.md` explica o mix, os casos, a cópia das fixtures por sessão,
 o isolamento e as métricas): `tools`, N sessões, cada uma com o seu próprio processo do
 servidor MCP, chamando as tools do mix (por padrão as leves e somente leitura); ou
@@ -158,6 +162,6 @@ cópia. O launcher não reimplementa nada: roda
 
 ## Sem o launcher
 
-Se o launcher estiver offline, o dashboard ainda mostra as baterias já gravadas
-(somente leitura) e exibe um aviso com o comando para subi-lo. A aba **Carga** faz o
-mesmo com as cargas gravadas.
+Se o launcher estiver offline, o **Histórico** ainda mostra as baterias já gravadas
+(somente leitura) e a aba **Testes de Carga** faz o mesmo com as cargas gravadas; o
+disparo e a edição de baselines ficam indisponíveis até subir o launcher.

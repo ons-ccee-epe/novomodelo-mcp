@@ -1,4 +1,5 @@
 """Testes do conjunto gravado pelo launcher e das rotas de baseline por conjunto."""
+
 from __future__ import annotations
 
 import time
@@ -91,9 +92,7 @@ def test_put_baseline_wrong_conjunto_is_409(client: TestClient, store: ResultSto
     assert client.get("/api/baselines").json() == {"baselines": {}}
 
 
-def test_delete_baseline_removes_only_that_conjunto(
-    client: TestClient, store: ResultStore
-) -> None:
+def test_delete_baseline_removes_only_that_conjunto(client: TestClient, store: ResultStore) -> None:
     first = _save(store, CONJUNTO)
     second = _save(store, "grupo:docs", suffix="_b")
     for conjunto, batch_id in ((CONJUNTO, first), ("grupo:docs", second)):

@@ -1,4 +1,5 @@
 """Testes do comando equivalente ao disparo (GET /api/command-preview)."""
+
 from __future__ import annotations
 
 import shlex

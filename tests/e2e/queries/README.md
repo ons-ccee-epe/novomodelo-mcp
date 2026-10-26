@@ -36,7 +36,7 @@ tests/e2e/
 │
 ├── results/                    # Resultados de baterias (JSON)
 │   ├── index.json             # Índice de todas as baterias
-│   ├── baseline.json          # Bateria marcada como baseline
+│   ├── baseline.json          # Baseline de cada conjunto ({"baselines": {conjunto: batch_id}})
 │   └── {batch_id}.json        # Resultado de cada bateria
 │
 ├── metrics/                    # Histórico de métricas
@@ -86,7 +86,8 @@ python -m tests.e2e.queries.run_queries --tags bridge --parallel 2
 # Mostrar como abrir o dashboard (frontend) para a bateria executada
 python -m tests.e2e.queries.run_queries --report
 
-# Marcar bateria atual como baseline para comparações
+# Marcar a bateria como baseline do seu conjunto (todos, grupo:<nome> ou pergunta:<id>);
+# baselines de outros conjuntos são preservadas
 python -m tests.e2e.queries.run_queries --set-baseline
 
 # Comparar com uma bateria específica

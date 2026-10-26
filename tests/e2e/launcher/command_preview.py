@@ -1,4 +1,5 @@
 """Comando equivalente a um disparo, para a UI mostrar antes de rodar."""
+
 from __future__ import annotations
 
 import dataclasses
