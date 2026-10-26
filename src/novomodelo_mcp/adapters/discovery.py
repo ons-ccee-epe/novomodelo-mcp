@@ -63,7 +63,7 @@ def tool_version(binpath: str | None) -> str | None:
     for args in (["--version"], ["version"]):
         try:
             proc = subprocess.run(
-                [binpath, *args], capture_output=True, encoding="utf-8", errors="replace",
+                [binpath, *args], stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
                 timeout=15, **NO_WINDOW,
             )
         except (OSError, subprocess.SubprocessError):

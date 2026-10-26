@@ -62,7 +62,7 @@ def run_bridge(argv: list[str], *, timeout: float | None = None,
     cmd = [binpath, *argv, "--json", "--no-color"]
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, encoding="utf-8", errors="replace",
+            cmd, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout if timeout is not None else settings.default_timeout,
             env={**os.environ, "PYTHONIOENCODING": "utf-8"}, **NO_WINDOW,
         )

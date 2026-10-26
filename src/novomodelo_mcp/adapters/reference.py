@@ -65,7 +65,7 @@ def _export_schemas(settings: Settings) -> str | None:
     try:
         proc = subprocess.run(
             [novomodelo, "--color", "never", "schema", "export", "--output-dir", str(out)],
-            capture_output=True, encoding="utf-8", errors="replace", timeout=60, **NO_WINDOW)
+            stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace", timeout=60, **NO_WINDOW)
     except (OSError, subprocess.SubprocessError):
         return None
     if proc.returncode != 0:
