@@ -78,6 +78,7 @@ export interface BatchResult {
   metrics: BatchMetrics;
   metrics_by_tag: Record<string, TagMetrics>;
   metrics_by_group: Record<string, GroupMetrics>;
+  conjunto?: string | null;
 }
 
 /** Resumo de uma bateria no index.json (ResultStore._update_index). */
@@ -92,9 +93,10 @@ export interface BatchIndexEntry {
     skipped: number;
     timeout: number;
   };
+  conjunto?: string;
 }
 
-export interface BatchIndex {
+export interface BatchIndex{
   batches: BatchIndexEntry[];
 }
 
