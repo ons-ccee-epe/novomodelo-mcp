@@ -246,6 +246,9 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `bridge_dashboard(case_dir)`: dashboard HTML a partir da pasta do **caso** (grava `<case_dir>/dashboard.html` e devolve o caminho)
 
 **Resultados** (`tools/results.py`)
+
+`output_dir` é a pasta de uma rodada: a que tem `training/metadata.json`, com qualquer nome. Uma pasta acima dela (a do caso, a do estudo) é recusada, e a recusa traz as rodadas encontradas abaixo: com uma só, em `output_sugerido`; com várias, só a lista em `rodadas`, para o usuário escolher. A busca desce alguns níveis, não entra numa rodada e não segue links simbólicos.
+
 - `results_status(output_dir)`: status, bounds, gap, iterações, custo e `software_version` (lê os `metadata.json`; em runs ≤ 0.17 usa o campo antigo `cobre_version`)
 - `results_convergence(output_dir, tail)`: trajetória de convergência (`convergence.parquet`)
 - `results_list_entities(output_dir)`: entidades de simulação disponíveis
