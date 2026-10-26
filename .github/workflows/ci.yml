@@ -25,6 +25,9 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
+      - name: Formatação (ruff format)
+        run: uv run ruff format --check .
+
       - name: Sintaxe (compileall)
         run: uv run python -m compileall src
 
