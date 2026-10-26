@@ -1,5 +1,5 @@
 import type { BatchResult } from "@/shared/types";
-import { ChartCard } from "./ChartCard";
+import { ChartCard } from "@/shared/charts/ChartCard";
 import { DiagnosticFunnel } from "./DiagnosticFunnel";
 import { LatencyByQuestion } from "./LatencyByQuestion";
 import { PassByGroup } from "./PassByGroup";

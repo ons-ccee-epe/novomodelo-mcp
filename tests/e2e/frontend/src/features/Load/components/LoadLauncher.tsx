@@ -1,6 +1,5 @@
 import type { LoadLauncherData } from "@/services/api/useLoadLauncher";
 import { LoadForm } from "./LoadForm";
-import { LoadProgress } from "./LoadProgress";
 
 function LauncherOffline() {
   return (
@@ -16,9 +15,9 @@ function LauncherOffline() {
   );
 }
 
-/** Formulário de disparo da carga, com o progresso ao vivo e o botão de parar. */
+/** Formulário de disparo da carga. */
 export function LoadLauncher({ launcher }: { launcher: LoadLauncherData }) {
-  const { run, busy, error } = launcher;
+  const { busy, error } = launcher;
 
   if (launcher.checking) {
     return (
@@ -47,9 +46,6 @@ export function LoadLauncher({ launcher }: { launcher: LoadLauncherData }) {
         <div className="cobre-banner" data-kind="critical">
           O launcher não informou as tools e os limites do teste de carga.
         </div>
-      )}
-      {run && (busy || run.status !== "pending") && (
-        <LoadProgress run={run} stopping={launcher.stopping} onStop={launcher.stop} />
       )}
       {error && (
         <div className="cobre-banner" data-kind="critical">

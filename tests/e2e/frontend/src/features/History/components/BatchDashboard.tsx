@@ -5,7 +5,7 @@ import { conjuntoOf } from "@/shared/conjunto";
 import { downloadBlob, summaryPngBlob } from "@/shared/exportPng";
 import type { BatchResult } from "@/shared/types";
 import { BatchCharts } from "../charts/BatchCharts";
-import { chartSvg } from "../charts/ChartCard";
+import { chartSvg } from "@/shared/charts/ChartCard";
 import { formatDate } from "../format";
 import { BatchCards } from "./BatchCards";
 import { BatchHeader } from "./BatchHeader";

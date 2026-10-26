@@ -9,6 +9,8 @@ import { LoadCharts } from "./components/LoadCharts";
 import { LoadComparison } from "./components/LoadComparison";
 import { LoadDetails } from "./components/LoadDetails";
 import { LoadLauncher } from "./components/LoadLauncher";
+import { LoadPerToolChart } from "./components/LoadPerToolChart";
+import { LoadProgress } from "./components/LoadProgress";
 import { LoadRunSelector } from "./components/LoadRunSelector";
 import { LoadSummaryCards } from "./components/LoadSummaryCards";
 import { LoadToolTable } from "./components/LoadToolTable";
@@ -21,6 +23,10 @@ export function Load() {
 
   return (
     <div className="cobre-shell">
+      {launcher.run && (launcher.busy || launcher.run.status !== "pending") && (
+        <LoadProgress run={launcher.run} stopping={launcher.stopping} onStop={launcher.stop} />
+      )}
+
       <h1><repositório anterior> — Teste de carga</h1>
       <p className="cobre-muted">
         Cada sessão simultânea tem o seu próprio servidor MCP. Nas tools diretas, as sessões chamam
@@ -77,6 +83,7 @@ export function Load() {
                   <LoadCharts
                     series={run.series}
                     durationSeconds={run.duration_seconds}
+                    fileStem={run.load_id}
                     throughput={{
                       title: `Casos concluídos por bucket de ${run.series_bucket_seconds} s`,
                       ok: "concluídos",
@@ -84,11 +91,16 @@ export function Load() {
                     }}
                   />
                 ) : (
-                  <LoadCharts series={run.series} durationSeconds={run.duration_seconds} />
+                  <LoadCharts
+                    series={run.series}
+                    durationSeconds={run.duration_seconds}
+                    fileStem={run.load_id}
+                  />
                 )}
               </section>
               <section className="cobre-section">
                 <h2 className="cobre-section-title">{isAgentRun(run) ? "Por caso" : "Por tool"}</h2>
+                <LoadPerToolChart run={run} />
                 {isAgentRun(run) ? (
                   <AgentCaseTable perCase={run.per_case} />
                 ) : (

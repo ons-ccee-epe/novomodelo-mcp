@@ -3,7 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
+  Customized,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -12,12 +12,16 @@ import {
   YAxis,
 } from "recharts";
 
+import { ChartCard } from "@/shared/charts/ChartCard";
+import { SvgLegend } from "@/shared/charts/SvgLegend";
 import type { LoadSeriesPoint } from "@/shared/types";
 
 interface Props {
   series: LoadSeriesPoint[];
   /** Altura menor para o gráfico ao vivo dentro do progresso. */
   compact?: boolean;
+  /** Prefixo do nome dos PNGs baixados (o load_id); sem ele os gráficos não têm download. */
+  fileStem?: string;
   /** Janela da carga, para descartar o bucket final quase vazio (ver ``trimPartialTail``). */
   durationSeconds?: number;
   /** Título e rótulos do gráfico de vazão; o padrão é o das chamadas por segundo (tools). */
@@ -29,6 +33,11 @@ const DEFAULT_THROUGHPUT = {
   ok: "ok",
   failed: "erros e timeouts",
 };
+
+const LATENCY_LEGEND = [
+  { label: "p50", color: "var(--cobre-chart-p50)" },
+  { label: "p95", color: "var(--cobre-chart-p95)" },
+];
 
 const HEIGHT_PX = 240;
 const COMPACT_HEIGHT_PX = 160;
@@ -50,6 +59,7 @@ export function trimPartialTail(series: LoadSeriesPoint[], durationSeconds: numb
 export function LoadCharts({
   series,
   compact = false,
+  fileStem = "carga",
   durationSeconds,
   throughput = DEFAULT_THROUGHPUT,
 }: Props) {
@@ -72,15 +82,14 @@ export function LoadCharts({
 
   return (
     <div className="cobre-charts" data-compact={compact}>
-      <div className="cobre-chart">
-        <div className="cobre-chart-title">Latência no tempo (ms)</div>
+      <ChartCard title="Latência no tempo (ms)" fileName={`${fileStem}-latencia.png`}>
         <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+          <LineChart data={data} margin={{ top: 28, right: 16, bottom: 8, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--cobre-border)" />
             <XAxis dataKey="t" tick={{ fontSize: 10 }} unit=" s" />
             <YAxis tick={{ fontSize: 10 }} width={48} />
             <Tooltip />
-            <Legend />
+            <Customized component={<SvgLegend items={LATENCY_LEGEND} />} />
             <Line
               type="monotone"
               dataKey="p50_ms"
@@ -103,16 +112,24 @@ export function LoadCharts({
             />
           </LineChart>
         </ResponsiveContainer>
-      </div>
-      <div className="cobre-chart">
-        <div className="cobre-chart-title">{throughput.title}</div>
+      </ChartCard>
+      <ChartCard title={throughput.title} fileName={`${fileStem}-vazao.png`}>
         <ResponsiveContainer width="100%" height={height}>
-          <BarChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+          <BarChart data={data} margin={{ top: 28, right: 16, bottom: 8, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--cobre-border)" />
             <XAxis dataKey="t" tick={{ fontSize: 10 }} unit=" s" />
             <YAxis tick={{ fontSize: 10 }} width={48} allowDecimals={false} />
             <Tooltip />
-            <Legend />
+            <Customized
+              component={
+                <SvgLegend
+                  items={[
+                    { label: throughput.ok, color: "var(--cobre-chart-throughput)" },
+                    { label: throughput.failed, color: "var(--cobre-chart-failed)" },
+                  ]}
+                />
+              }
+            />
             <Bar
               dataKey="ok_calls"
               name={throughput.ok}
@@ -129,7 +146,7 @@ export function LoadCharts({
             />
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </ChartCard>
     </div>
   );
 }

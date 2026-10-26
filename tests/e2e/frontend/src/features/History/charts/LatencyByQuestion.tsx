@@ -2,7 +2,7 @@ import { Bar, BarChart, Cell, Customized, ResponsiveContainer, Tooltip, XAxis, Y
 
 import type { BatchResult } from "@/shared/types";
 import { latencyLegend, latencyRows, statusColor, TOOL_TIME_COLOR } from "./chartData";
-import { SvgLegend } from "./SvgLegend";
+import { SvgLegend } from "@/shared/charts/SvgLegend";
 
 const ROW_HEIGHT_PX = 22;
 const MIN_HEIGHT_PX = 220;
