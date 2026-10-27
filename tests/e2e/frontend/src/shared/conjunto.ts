@@ -19,8 +19,30 @@ export function conjuntoLabel(c: string): string {
   return c;
 }
 
+/** Rótulo curto da tag: cabe no card e a cor diz o grupo. */
+export function conjuntoTag(c: string): string {
+  if (c === "todos") return "Esteira";
+  if (c.startsWith("grupo:")) return c.slice("grupo:".length);
+  if (c.startsWith("pergunta:")) return "Avulsa";
+  return c;
+}
+
+/** Texto da pergunta de uma bateria avulsa; null para esteira e grupo. */
+export function conjuntoQuestion(batch: BatchResult): string | null {
+  const c = conjuntoOf(batch);
+  if (!c.startsWith("pergunta:")) return null;
+  const id = c.slice("pergunta:".length);
+  return batch.test_results.find((r) => r.test_id === id)?.query ?? null;
+}
+
+/** Nome para leitura: a pergunta das avulsas; o rótulo do conjunto nos demais. */
+export function conjuntoTitle(batch: BatchResult): string {
+  return conjuntoQuestion(batch) ?? conjuntoLabel(conjuntoOf(batch));
+}
+
 export function conjuntoColor(c: string): string {
   if (c === "todos") return "var(--cobre-set-todos)";
+  if (c.startsWith("pergunta:")) return "var(--cobre-set-avulsa)";
   let hash = 0;
   for (const ch of c) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   return `var(--cobre-set-${(hash % PALETTE_SIZE) + 1})`;

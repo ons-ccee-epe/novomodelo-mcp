@@ -12,8 +12,8 @@ import type {
 } from "@/services/loadApi";
 import { ProviderSelect } from "@/shared/components/ProviderSelect";
 import { AgentCasePicker, type CaseScope } from "./AgentCasePicker";
-import { LoadBadges } from "./LoadBadges";
 import { LoadCapacityHint } from "./LoadCapacityHint";
+import { ToolMixPicker } from "./ToolMixPicker";
 
 export interface LoadFormValues {
   /** Ausente = tools. */
@@ -242,6 +242,13 @@ function tokenWarning(label: string, sessions: number | null, iterations: number
   return `${base} Sem iterações definidas, o gasto é limitado pela duração.`;
 }
 
+const MODE_HINT: Record<LoadMode, string> = {
+  tools:
+    "Cada sessão sobe o seu próprio servidor MCP e chama as tools do mix, sem LLM. A subida dos servidores é medida à parte, fora da latência.",
+  agent:
+    "Cada sessão roda em laço os casos do cases.yaml num provedor de IA (consome tokens). A latência é a do caso inteiro, com a subida do agente.",
+};
+
 /**
  * Parâmetros da carga: modo (tools diretas ou casos por agente), sessões simultâneas,
  * duração (ou iterações), timeout e o que rodar (tools do mix ou casos do agente).
@@ -278,7 +285,10 @@ export function LoadForm({
 
   // O custo por sessão depende do que roda (pesada x leve, grava ou não): a seleção entra no
   // pedido. Chave em texto para o efeito só refazer o pedido quando a seleção muda de fato.
-  const toolsKey = useMemo(() => (toolsSelection(selected, tools) ?? []).join(","), [selected, tools]);
+  const toolsKey = useMemo(
+    () => (toolsSelection(selected, tools) ?? []).join(","),
+    [selected, tools],
+  );
   const capacityQuery = useMemo<CapacityQuery>(() => {
     if (!isAgent) return { tools: toolsKey ? toolsKey.split(",") : null };
     if (scope === "case") return { caseId };
@@ -339,105 +349,106 @@ export function LoadForm({
         if (parsed.body) onStart(parsed.body);
       }}
     >
-      <div className="cobre-form-row">
-        <div className="cobre-field">
-          <label htmlFor="load-mode" className="cobre-field-label">
-            Modo
-          </label>
-          <select
-            id="load-mode"
-            className="cobre-select"
-            value={mode}
-            onChange={(e) => setMode(e.target.value as LoadMode)}
-            disabled={disabled}
-          >
-            <option value="tools">Tools diretas (sem LLM)</option>
-            <option value="agent" disabled={!agent}>
-              Casos por agente
-            </option>
-          </select>
+      <section className="cobre-panel">
+        <h2 className="cobre-panel-title">Configurar carga</h2>
+        <div className="cobre-form-grid">
+          <div className="cobre-field">
+            <label htmlFor="load-mode" className="cobre-field-label">
+              Modo
+            </label>
+            <select
+              id="load-mode"
+              className="cobre-select"
+              value={mode}
+              onChange={(e) => setMode(e.target.value as LoadMode)}
+              disabled={disabled}
+            >
+              <option value="tools">Servidor MCP (tools, sem IA)</option>
+              <option value="agent" disabled={!agent}>
+                Uso real (agente de IA, gasta tokens)
+              </option>
+            </select>
+          </div>
+          {isAgent && agent && (
+            <ProviderSelect
+              id="load-provider"
+              providers={agent.providers}
+              value={provider}
+              onChange={setChosenProvider}
+              disabled={disabled}
+            />
+          )}
+          <div className="cobre-field">
+            <label htmlFor="load-concurrency" className="cobre-field-label">
+              Sessões simultâneas
+            </label>
+            <input
+              id="load-concurrency"
+              className="cobre-input"
+              type="number"
+              inputMode="numeric"
+              min={activeLimits.min_concurrency}
+              max={activeLimits.max_concurrency}
+              value={concurrency}
+              onChange={(e) => setConcurrency(e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+          <div className="cobre-field">
+            <label htmlFor="load-duration" className="cobre-field-label">
+              Duração (s)
+            </label>
+            <input
+              id="load-duration"
+              className="cobre-input"
+              type="number"
+              min={activeLimits.min_duration_seconds}
+              max={activeLimits.max_duration_seconds}
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+          <div className="cobre-field">
+            <label htmlFor="load-iterations" className="cobre-field-label">
+              Iterações por sessão (opcional)
+            </label>
+            <input
+              id="load-iterations"
+              className="cobre-input"
+              type="number"
+              min={1}
+              max={activeLimits.max_iterations}
+              placeholder="sem limite"
+              value={iterations}
+              onChange={(e) => setIterations(e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+          <div className="cobre-field">
+            <label htmlFor="load-timeout" className="cobre-field-label">
+              {isAgent ? "Timeout por caso (s, opcional)" : "Timeout por chamada (s)"}
+            </label>
+            <input
+              id="load-timeout"
+              className="cobre-input"
+              type="number"
+              min={0}
+              max={activeLimits.max_timeout_seconds}
+              placeholder={isAgent ? "o de cada caso" : undefined}
+              value={isAgent ? caseTimeout : callTimeout}
+              onChange={(e) => (isAgent ? setCaseTimeout : setCallTimeout)(e.target.value)}
+              disabled={disabled}
+            />
+          </div>
         </div>
-        {isAgent && agent && (
-          <ProviderSelect
-            id="load-provider"
-            providers={agent.providers}
-            value={provider}
-            onChange={setChosenProvider}
-            disabled={disabled}
-          />
+        <p className="cobre-muted cobre-mode-hint">{MODE_HINT[mode]}</p>
+        {!agent && agentError && (
+          <div className="cobre-muted cobre-load-note">Modo agente indisponível: {agentError}</div>
         )}
-      </div>
-      {!agent && agentError && (
-        <div className="cobre-muted cobre-load-note">Modo agente indisponível: {agentError}</div>
-      )}
 
-      <div className="cobre-form-row">
-        <div className="cobre-field">
-          <label htmlFor="load-concurrency" className="cobre-field-label">
-            Sessões simultâneas
-          </label>
-          <input
-            id="load-concurrency"
-            className="cobre-input"
-            type="number"
-            inputMode="numeric"
-            min={activeLimits.min_concurrency}
-            max={activeLimits.max_concurrency}
-            value={concurrency}
-            onChange={(e) => setConcurrency(e.target.value)}
-            disabled={disabled}
-          />
-        </div>
-        <div className="cobre-field">
-          <label htmlFor="load-duration" className="cobre-field-label">
-            Duração (s)
-          </label>
-          <input
-            id="load-duration"
-            className="cobre-input"
-            type="number"
-            min={activeLimits.min_duration_seconds}
-            max={activeLimits.max_duration_seconds}
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            disabled={disabled}
-          />
-        </div>
-        <div className="cobre-field">
-          <label htmlFor="load-iterations" className="cobre-field-label">
-            Iterações por sessão (opcional)
-          </label>
-          <input
-            id="load-iterations"
-            className="cobre-input"
-            type="number"
-            min={1}
-            max={activeLimits.max_iterations}
-            placeholder="sem limite"
-            value={iterations}
-            onChange={(e) => setIterations(e.target.value)}
-            disabled={disabled}
-          />
-        </div>
-        <div className="cobre-field">
-          <label htmlFor="load-timeout" className="cobre-field-label">
-            {isAgent ? "Timeout por caso (s, opcional)" : "Timeout por chamada (s)"}
-          </label>
-          <input
-            id="load-timeout"
-            className="cobre-input"
-            type="number"
-            min={0}
-            max={activeLimits.max_timeout_seconds}
-            placeholder={isAgent ? "o de cada caso" : undefined}
-            value={isAgent ? caseTimeout : callTimeout}
-            onChange={(e) => (isAgent ? setCaseTimeout : setCallTimeout)(e.target.value)}
-            disabled={disabled}
-          />
-        </div>
-      </div>
-
-      {onRequestCapacity && <LoadCapacityHint capacity={shownCapacity} error={capacityError} />}
+        {onRequestCapacity && <LoadCapacityHint capacity={shownCapacity} error={capacityError} />}
+      </section>
       {parsed.warnings.map((message) => (
         <div key={message} className="cobre-banner" data-kind="warning">
           {message}
@@ -463,56 +474,16 @@ export function LoadForm({
       )}
 
       {!isAgent && (
-        <fieldset className="cobre-tool-picker" disabled={disabled}>
-          <legend className="cobre-field-label">
-            Tools do mix{" "}
-            <button type="button" className="cobre-btn cobre-btn-ghost" onClick={() => setAll(true)}>
-              todas
-            </button>{" "}
-            <button type="button" className="cobre-btn cobre-btn-ghost" onClick={() => setAll(false)}>
-              nenhuma
-            </button>
-          </legend>
-          <div className="cobre-muted cobre-load-note">
-            O mix padrão só tem tools que leem e são leves. Marque por sua conta as que gravam
-            (rodam numa cópia das fixtures por sessão) ou as pesadas (sobem o bridge ou o solver).
-          </div>
-          {groups.map(([toolGroup, items]) => (
-            <div key={toolGroup} className="cobre-tool-group">
-              <span className="cobre-muted cobre-tool-group-name">{toolGroup}</span>
-              {items.map((t) => (
-                <span key={t.tool} className="cobre-load-tool">
-                  <label
-                    className="cobre-tag-option"
-                    data-active={selected.has(t.tool) && t.available}
-                    title={t.available ? `${t.calls} chamada(s) no mix` : (t.reason ?? "indisponível")}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(t.tool) && t.available}
-                      disabled={!t.available}
-                      onChange={() => toggle(t.tool)}
-                    />
-                    {t.tool}
-                  </label>
-                  <LoadBadges writes={t.writes} heavy={t.heavy} />
-                </span>
-              ))}
-            </div>
-          ))}
-          {barred.length > 0 && (
-            <details className="cobre-load-excluded">
-              <summary className="cobre-summary-toggle">Fora da carga ({barred.length})</summary>
-              <ul className="cobre-tool-call-list">
-                {barred.map((t) => (
-                  <li key={t.tool}>
-                    <code>{t.tool}</code> — {t.reason ?? "fora da carga"}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </fieldset>
+        <ToolMixPicker
+          groups={groups}
+          barred={barred}
+          selected={selected}
+          isDefault={toolsSelection(selected, tools) === null}
+          disabled={disabled}
+          onToggle={toggle}
+          onAll={setAll}
+          onDefault={() => setSelected(defaultTools(tools))}
+        />
       )}
 
       {parsed.errors.length > 0 && (
@@ -523,18 +494,20 @@ export function LoadForm({
         </ul>
       )}
 
-      <button
-        type="submit"
-        className="cobre-btn cobre-btn-primary"
-        disabled={disabled || parsed.body === null}
-        title={
-          isAgent
-            ? "Sobe um agente por sessão e roda os casos em laço pelo tempo informado (consome tokens)"
-            : "Sobe um servidor MCP por sessão e chama as tools do mix pelo tempo informado"
-        }
-      >
-        ▶ Iniciar carga
-      </button>
+      <div className="cobre-form-actions">
+        <button
+          type="submit"
+          className="cobre-btn cobre-btn-primary"
+          disabled={disabled || parsed.body === null}
+          title={
+            isAgent
+              ? "Sobe um agente por sessão e roda os casos em laço pelo tempo informado (consome tokens)"
+              : "Sobe um servidor MCP por sessão e chama as tools do mix pelo tempo informado"
+          }
+        >
+          ▶ Iniciar carga
+        </button>
+      </div>
     </form>
   );
 }

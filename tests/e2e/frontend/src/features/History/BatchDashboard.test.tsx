@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { makeBatch } from "@/shared/fixtures.testutil";
 import type { BatchResult, TestResult } from "@/shared/types";
-import { BatchCards } from "./components/BatchCards";
+import { BatchOverview } from "./components/BatchCards";
+import { TestDetail } from "@/shared/components/TestDetail";
+import { BatchCharts } from "./charts/BatchCharts";
 import { BatchDashboard } from "./components/BatchDashboard";
 
 function detailed(b: BatchResult): BatchResult {
@@ -94,7 +96,8 @@ function setup(
 describe("BatchHeader", () => {
   it("mostra conjunto, versão, commit curto e o botão de baseline", () => {
     const toggle = setup();
-    expect(screen.getByText("Esteira completa")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Esteira completa — / })).toBeInTheDocument();
+    expect(screen.getByText("Esteira")).toHaveAttribute("title", "Esteira completa");
     expect(screen.getByText(/1\.2\.3/)).toBeInTheDocument();
     expect(screen.getByText("abcdef0")).toBeInTheDocument();
     fireEvent.click(
@@ -196,13 +199,11 @@ describe("ChangesStrip", () => {
       name: "Mudanças contra a referência",
     });
     fireEvent.click(within(strip).getByRole("button", { name: "q1" }));
-    expect(
-      screen.getByText("pergunta do q1", { selector: "pre" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("resposta do q1")).toBeInTheDocument();
   });
 });
 
-describe("BatchCards", () => {
+describe("BatchOverview e BatchStats", () => {
   it("mostra a aprovação, o Δ e as latências", () => {
     setup();
     expect(screen.getByText("66,7%")).toBeInTheDocument();
@@ -212,7 +213,7 @@ describe("BatchCards", () => {
   });
 
   it("mostra — no Δ sem referência", () => {
-    render(<BatchCards batch={ALONE} reference={null} />);
+    render(<BatchOverview batch={ALONE} reference={null} />);
     expect(screen.getByLabelText("Δ vs referência")).toHaveTextContent("—");
   });
 });
@@ -244,13 +245,68 @@ describe("QuestionList", () => {
     expect(screen.getByText(/"path": "caso\/x"/)).toBeInTheDocument();
     expect(screen.getByText("resposta do q2")).toBeInTheDocument();
   });
+
+  it("o propósito da chamada vira texto e as checagens viram lista", () => {
+    const tr = {
+      ...CUR.test_results[1],
+      all_tool_calls: [
+        { name: "docs_list", args: { __tool_use_purpose: "Listar as páginas" }, tool_id: "t1" },
+      ],
+      validation_checks: [
+        { name: "uses_mcp", passed: true, message: "MCP usado: docs_list" },
+        { name: "correct_result", passed: false, message: "Resultado sem as páginas" },
+      ],
+    };
+    render(<TestDetail tr={tr} expected="docs_list" />);
+    expect(screen.getByText("Listar as páginas")).toBeInTheDocument();
+    expect(screen.queryByText(/__tool_use_purpose/)).toBeNull();
+    expect(screen.getByText("MCP usado: docs_list")).toBeInTheDocument();
+    expect(screen.getByText("✗ falhou")).toHaveAttribute("data-status", "fail");
+  });
 });
 
 describe("ConjuntoEvolution", () => {
-  it("existe como seção da bateria", () => {
+  it("aparece com mais de uma bateria do conjunto", () => {
     setup();
     expect(
       screen.getByRole("region", { name: "Evolução do conjunto" }),
     ).toBeInTheDocument();
+  });
+
+  it("some quando o conjunto tem uma bateria só", () => {
+    setup({ batch: ALONE });
+    expect(
+      screen.queryByRole("region", { name: "Evolução do conjunto" }),
+    ).toBeNull();
+  });
+
+  it("vem logo depois do resumo da bateria", () => {
+    setup();
+    const overview = screen.getByRole("region", { name: "Resumo da bateria" });
+    expect(overview.nextElementSibling).toBe(
+      screen.getByRole("region", { name: "Evolução do conjunto" }),
+    );
+  });
+});
+
+describe("BatchCharts", () => {
+  it("os gráficos de uma barra por item ocupam a linha toda; os menores vêm em pares", () => {
+    const batch = makeBatch("charts", [
+      ["q1", "pass", "case_summary"],
+      ["q2", "fail", "docs_list"],
+    ]);
+    render(<BatchCharts batch={batch} />);
+    const cards = screen.getAllByRole("figure");
+    expect(cards.map((c) => within(c).getByRole("heading").textContent)).toEqual([
+      "Status",
+      "Tools por pergunta",
+      "Tempo por pergunta",
+      "Tools mais usadas",
+      "Aprovação por grupo",
+      "Funil de diagnóstico",
+    ]);
+    expect(cards.filter((c) => c.dataset.wide === "true").length).toBe(2);
+    expect(cards[2]).toHaveAttribute("data-wide", "true");
+    expect(cards[3]).toHaveAttribute("data-wide", "true");
   });
 });

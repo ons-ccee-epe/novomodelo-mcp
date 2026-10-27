@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { conjuntoColor, conjuntoLabel, conjuntoOf } from "./conjunto";
+import {
+  conjuntoColor,
+  conjuntoLabel,
+  conjuntoOf,
+  conjuntoQuestion,
+  conjuntoTag,
+  conjuntoTitle,
+} from "./conjunto";
 import { makeBatch } from "./fixtures.testutil";
 
 describe("conjuntoOf", () => {
@@ -37,6 +44,29 @@ describe("conjuntoOf", () => {
     expect(conjuntoOf(b)).toBe("todos");
     b.test_results[0].expected_tools = null;
     expect(conjuntoOf(b)).toBe("grupo:other");
+  });
+});
+
+describe("conjuntoTag e conjuntoTitle", () => {
+  it("encurta a tag e usa Avulsa para uma pergunta só", () => {
+    expect(conjuntoTag("todos")).toBe("Esteira");
+    expect(conjuntoTag("grupo:meta")).toBe("meta");
+    expect(conjuntoTag("pergunta:q1")).toBe("Avulsa");
+  });
+
+  it("as avulsas têm uma cor só, separada da paleta dos grupos", () => {
+    expect(conjuntoColor("pergunta:q1")).toBe("var(--cobre-set-avulsa)");
+    expect(conjuntoColor("pergunta:q2")).toBe("var(--cobre-set-avulsa)");
+  });
+
+  it("o título de uma avulsa é o texto da pergunta", () => {
+    const b = makeBatch("a", [["q1", "pass", "docs_list"]], { conjunto: "pergunta:q1" });
+    b.test_results[0].query = "Liste a documentação";
+    expect(conjuntoQuestion(b)).toBe("Liste a documentação");
+    expect(conjuntoTitle(b)).toBe("Liste a documentação");
+    const g = makeBatch("g", [["q1", "pass", "docs_list"]], { conjunto: "grupo:docs" });
+    expect(conjuntoQuestion(g)).toBeNull();
+    expect(conjuntoTitle(g)).toBe("Grupo docs");
   });
 });
 

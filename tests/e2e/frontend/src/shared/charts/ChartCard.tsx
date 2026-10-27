@@ -5,6 +5,8 @@ import { downloadBlob, svgToPngBlob } from "@/shared/exportPng";
 interface Props {
   title: string;
   fileName: string;
+  /** Ocupa a linha inteira da grade (gráficos com uma barra por item). */
+  wide?: boolean;
   children: ReactNode;
 }
 
@@ -12,7 +14,7 @@ export function chartSvg(root: ParentNode): SVGSVGElement | null {
   return root.querySelector<SVGSVGElement>(".recharts-wrapper > svg") ?? root.querySelector("svg");
 }
 
-export function ChartCard({ title, fileName, children }: Props) {
+export function ChartCard({ title, fileName, wide = false, children }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +33,7 @@ export function ChartCard({ title, fileName, children }: Props) {
   };
 
   return (
-    <figure className="cobre-chart-card" data-chart-card>
+    <figure className="cobre-chart-card" data-chart-card data-wide={wide || undefined}>
       <figcaption className="cobre-chart-card-head">
         <h4 className="cobre-section-title">{title}</h4>
         <button type="button" className="cobre-btn" onClick={download}>

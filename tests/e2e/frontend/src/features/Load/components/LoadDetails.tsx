@@ -30,7 +30,8 @@ export function SandboxRow({ sandbox }: { sandbox?: LoadSandbox }) {
   else if (size) parts.push(size);
   else if (trees) parts.push(trees);
   if (typeof sandbox.copy_ms_mean === "number") {
-    const max = typeof sandbox.copy_ms_max === "number" ? ` (máx ${fmtMs(sandbox.copy_ms_max)})` : "";
+    const max =
+      typeof sandbox.copy_ms_max === "number" ? ` (máx ${fmtMs(sandbox.copy_ms_max)})` : "";
     parts.push(`cópia em ~${fmtMs(sandbox.copy_ms_mean)}${max}`);
   }
   return <Row label="Cópia por sessão" value={parts.length > 0 ? parts.join(", ") : "ativada"} />;
@@ -43,7 +44,10 @@ function ConfigCard({ run }: Props) {
       <h4>Configuração</h4>
       <Row label="Sessões simultâneas" value={String(c.concurrency)} />
       <Row label="Duração pedida" value={`${c.duration_seconds} s`} />
-      <Row label="Iterações por sessão" value={c.iterations === null ? "sem limite" : String(c.iterations)} />
+      <Row
+        label="Iterações por sessão"
+        value={c.iterations === null ? "sem limite" : String(c.iterations)}
+      />
       <Row label="Timeout por chamada" value={`${c.timeout_seconds} s`} />
       <Row label="Tools" value={c.tools ? `${c.tools.length} escolhida(s)` : "mix padrão"} />
       <SandboxRow sandbox={run.sandbox} />
@@ -58,10 +62,15 @@ function StartupCard({ run }: Props) {
   return (
     <div className="cobre-metrics-card">
       <h4>Subida dos servidores</h4>
-      <div className="cobre-muted cobre-load-note">Medida à parte: não entra na latência das chamadas.</div>
+      <div className="cobre-muted cobre-load-note">
+        Medida à parte: não entra na latência das chamadas.
+      </div>
       <Row label="Sessões abertas" value={`${s.started}/${s.clients}`} />
       <Row label="Tempo até todas prontas" value={fmtSeconds(s.wall_ms / 1000)} />
-      <Row label="Por sessão (mín / méd / máx)" value={`${fmtMs(s.min_ms)} / ${fmtMs(s.mean_ms)} / ${fmtMs(s.max_ms)}`} />
+      <Row
+        label="Por sessão (mín / méd / máx)"
+        value={`${fmtMs(s.min_ms)} / ${fmtMs(s.mean_ms)} / ${fmtMs(s.max_ms)}`}
+      />
       <Row label="Aquecimento médio" value={fmtMs(s.warmup_mean_ms)} />
       <Row label="Pré-voo" value={fmtMs(s.preflight_ms)} />
       <Row label="Sessões recriadas" value={String(s.respawns)} />
@@ -101,8 +110,7 @@ export function ResourcesCard({
 export function LoadDetails({ run }: Props) {
   const excluded = run.mix.excluded;
   return (
-    <section className="cobre-section" aria-label="Detalhes da carga">
-      <h2 className="cobre-section-title">Detalhes</h2>
+    <>
       {run.interrupted && (
         <div className="cobre-banner" data-kind="warning">
           Carga interrompida antes do fim: o resultado é parcial.
@@ -114,54 +122,59 @@ export function LoadDetails({ run }: Props) {
           entram nas métricas.
         </div>
       )}
-      <div className="cobre-metrics-grid">
-        <ConfigCard run={run} />
-        <StartupCard run={run} />
-        <ResourcesCard resources={run.resources} />
-      </div>
+      <details className="cobre-section cobre-load-details" aria-label="Detalhes da carga">
+        <summary>Detalhes</summary>
+        <div className="cobre-load-details-body">
+          <div className="cobre-metrics-grid">
+            <ConfigCard run={run} />
+            <StartupCard run={run} />
+            <ResourcesCard resources={run.resources} />
+          </div>
 
-      {run.errors.length > 0 && (
-        <>
-          <h3 className="cobre-load-subtitle">Erros e timeouts</h3>
-          <table className="cobre-table" aria-label="Erros agrupados">
-            <thead>
-              <tr>
-                <th>Tool</th>
-                <th>Tipo</th>
-                <th>Mensagem</th>
-                <th>Ocorrências</th>
-              </tr>
-            </thead>
-            <tbody>
-              {run.errors.map((e) => (
-                <tr key={`${e.tool}-${e.outcome}-${e.message}`}>
-                  <td>
-                    <code>{e.tool}</code>
-                  </td>
-                  <td>{e.outcome}</td>
-                  <td>{e.message}</td>
-                  <td>{e.count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
+          {run.errors.length > 0 && (
+            <>
+              <h3 className="cobre-load-subtitle">Erros e timeouts</h3>
+              <table className="cobre-table" aria-label="Erros agrupados">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>Tipo</th>
+                    <th>Mensagem</th>
+                    <th>Ocorrências</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {run.errors.map((e) => (
+                    <tr key={`${e.tool}-${e.outcome}-${e.message}`}>
+                      <td>
+                        <code>{e.tool}</code>
+                      </td>
+                      <td>{e.outcome}</td>
+                      <td>{e.message}</td>
+                      <td>{e.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
 
-      {excluded.length > 0 && (
-        <details className="cobre-load-excluded">
-          <summary className="cobre-summary-toggle">
-            Chamadas fora do mix ({excluded.length})
-          </summary>
-          <ul className="cobre-tool-call-list">
-            {excluded.map((item) => (
-              <li key={item.id}>
-                <code>{item.id}</code> — {item.reason}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </section>
+          {excluded.length > 0 && (
+            <details className="cobre-load-excluded">
+              <summary className="cobre-summary-toggle">
+                Chamadas fora do mix ({excluded.length})
+              </summary>
+              <ul className="cobre-tool-call-list">
+                {excluded.map((item) => (
+                  <li key={item.id}>
+                    <code>{item.id}</code> — {item.reason}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      </details>
+    </>
   );
 }

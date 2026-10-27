@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -61,10 +61,9 @@ class RunState:
             caso em andamento é interrompido.
         started_at / finished_at: ISO timestamps.
         log: Linhas de progresso curtas para a UI mostrar ao vivo.
-        results: Resultado resumido de cada caso JA terminado (transparencia
-            incremental: a UI ve cada teste assim que ele acaba, sem esperar a
-            esteira inteira). Cada item: id, status, tool esperada/chamada,
-            latencia, uso de MCP, trecho da resposta, erro.
+        results: O TestResult de cada caso JA terminado, como dict (o mesmo
+            registro da bateria gravada), para a UI mostrar o detalhe completo
+            de cada teste assim que ele acaba, sem esperar a esteira inteira.
     """
 
     run_id: str
@@ -322,21 +321,7 @@ class RunService:
         """Publica no estado do run o resultado de um caso (pass, fail, skip...)."""
         with self._lock:
             state.completed += 1
-            state.results.append(
-                {
-                    "test_id": tr.test_id,
-                    "status": tr.status,
-                    "expected_tool": tr.expected_tool
-                    or (tr.expected_tools[0] if tr.expected_tools else None),
-                    "actual_tool": tr.actual_tool,
-                    "mcp_used": tr.mcp_used,
-                    "correct_tool": tr.correct_tool,
-                    "correct_result": tr.correct_result,
-                    "latency_ms": tr.latency_ms,
-                    "error_message": tr.error_message,
-                    "response_preview": (tr.agent_response or "")[:280],
-                }
-            )
+            state.results.append(asdict(tr))
             state.log.append(
                 f"[{state.completed}/{state.total}] {case.id}: {tr.status} "
                 f"({tr.latency_ms:.0f}ms)"

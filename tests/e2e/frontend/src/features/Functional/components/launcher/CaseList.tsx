@@ -1,5 +1,5 @@
 import type { CaseMeta, RunResultItem } from "@/services/launcherApi";
-import { statusIcon } from "@/shared/constants/status";
+import { STATUS_LABEL, statusIcon } from "@/shared/constants/status";
 
 interface Props {
   cases: CaseMeta[];
@@ -13,15 +13,18 @@ interface Props {
 function CaseBadge({ running, result }: { running: boolean; result?: RunResultItem }) {
   if (running) {
     return (
-      <span className="cobre-spin" aria-label="rodando">
-        ↻
+      <span className="cobre-status" data-status="running" aria-label="rodando">
+        <span className="cobre-spin" aria-hidden>
+          ↻
+        </span>{" "}
+        rodando
       </span>
     );
   }
-  if (!result) return <span className="cobre-muted">—</span>;
+  if (!result) return <span className="cobre-status">pronto</span>;
   return (
     <span className="cobre-status" data-status={result.status}>
-      {statusIcon(result.status)}
+      {statusIcon(result.status)} {STATUS_LABEL[result.status] ?? result.status}
     </span>
   );
 }
@@ -54,9 +57,9 @@ export function CaseList({
                 data-status={result?.status ?? (running ? "running" : "")}
                 onClick={() => onSelectCase(c.id)}
               >
-                <span className="cobre-case-item-id">{c.id}</span>
                 <span className="cobre-case-item-query">{c.query}</span>
-                <span className="cobre-case-item-badge">
+                <span className="cobre-case-item-id">{c.id}</span>
+                <span className="cobre-case-item-side">
                   <CaseBadge running={running} result={result} />
                 </span>
               </button>

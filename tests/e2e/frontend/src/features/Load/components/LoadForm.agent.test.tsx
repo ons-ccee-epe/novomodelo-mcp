@@ -271,7 +271,7 @@ describe("LoadForm com o modo agente", () => {
 
   it("sem o catálogo do agente, o modo fica indisponível e explica o motivo", () => {
     renderForm({ agent: null, agentError: "HTTP 404" });
-    expect(screen.getByRole("option", { name: "Casos por agente" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Uso real (agente de IA, gasta tokens)" })).toBeDisabled();
     expect(screen.getByText(/Modo agente indisponível: HTTP 404/)).toBeInTheDocument();
   });
 });
@@ -311,7 +311,7 @@ describe("LoadForm e a capacidade da máquina", () => {
     switchToAgent();
 
     const hint = screen.getByLabelText("Capacidade da máquina");
-    expect(hint).toHaveTextContent("Recomendado: ≈ 2 (memória)");
+    expect(hint).toHaveTextContent("até ≈ 2 sessões simultâneas (limite: memória)");
     expect(hint).toHaveTextContent("2303 MB livres × 75% ÷ 600 MB/sessão");
     expect(hint).toHaveTextContent("Pouca memória livre");
     expect(screen.getByLabelText(/Sessões simultâneas/)).toHaveAttribute("max", "8");
@@ -461,7 +461,7 @@ describe("LoadForm com casos que gravam e pesados", () => {
     renderForm({ agent: WEIGHTED, capacity, onRequestCapacity: vi.fn() });
     switchToAgent();
     const hint = screen.getByLabelText("Capacidade da máquina");
-    expect(hint).toHaveTextContent("Recomendado: ≈ 3 (disco)");
+    expect(hint).toHaveTextContent("até ≈ 3 sessões simultâneas (limite: disco)");
     expect(hint).toHaveTextContent("disco 3");
     expect(hint).toHaveTextContent("Seleção pesada");
     expect(hint).toHaveTextContent("Seleção que grava");

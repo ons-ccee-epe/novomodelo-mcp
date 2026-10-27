@@ -4,7 +4,7 @@ import { statusIcon } from "@/shared/constants/status";
 import { groupForCase } from "@/shared/toolGroups";
 import type { TestResult, TestStatus } from "@/shared/types";
 import { STATUS_LABEL } from "../charts/chartData";
-import { TestDetail } from "./TestDetail";
+import { TestDetail } from "@/shared/components/TestDetail";
 
 export type Change = "broke" | "fixed";
 
@@ -42,7 +42,7 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
   );
 
   return (
-    <section className="cobre-section" aria-label="Perguntas">
+    <section className="cobre-panel" aria-label="Perguntas">
       <h3 className="cobre-section-title">Perguntas</h3>
       <div className="cobre-filters">
         <div className="cobre-field">
@@ -101,17 +101,22 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
                 aria-expanded={open}
                 onClick={() => onOpen(open ? null : tr.test_id)}
               >
-                <code>{tr.test_id}</code>
-                <span className="cobre-status" data-status={tr.status}>
-                  {statusIcon(tr.status)} {STATUS_LABEL[tr.status]}
+                <span className="cobre-question-text">{tr.query}</span>
+                <span className="cobre-question-sub">
+                  <code>{tr.test_id}</code>
+                  {change && (
+                    <span className="cobre-change-marker" data-kind={change}>
+                      {MARKER[change]}
+                    </span>
+                  )}
                 </span>
-                {change && (
-                  <span className="cobre-change-marker" data-kind={change}>
-                    {MARKER[change]}
+                <span className="cobre-question-side">
+                  <span className="cobre-status" data-status={tr.status}>
+                    {statusIcon(tr.status)} {STATUS_LABEL[tr.status]}
                   </span>
-                )}
-                <span className="cobre-muted cobre-question-latency">
-                  {Math.round(tr.latency_ms)} ms
+                  <span className="cobre-muted cobre-question-latency">
+                    {Math.round(tr.latency_ms)} ms
+                  </span>
                 </span>
               </button>
               {open && <TestDetail tr={tr} expected={expectedDisplay(tr)} />}

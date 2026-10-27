@@ -8,8 +8,14 @@ describe("LoadCapacityHint", () => {
   it("seleção leve e só leitura: sem disco, sem selos, com o custo por RAM e núcleos", () => {
     render(<LoadCapacityHint capacity={makeCapacity()} error={null} />);
     const hint = screen.getByLabelText("Capacidade da máquina");
-    expect(hint).toHaveTextContent("Recomendado: ≈ 6 (CPU)");
-    expect(hint).toHaveTextContent("Custo por sessão (leve): 200 MB de RAM · 1 núcleo(s) · estimativa");
+    expect(hint).toHaveTextContent(
+      "Capacidade da máquina: até ≈ 6 sessões simultâneas (limite: CPU)",
+    );
+    expect(hint.tagName).toBe("DETAILS");
+    expect(hint).not.toHaveAttribute("open");
+    expect(hint).toHaveTextContent(
+      "Custo por sessão (leve): 200 MB de RAM · 1 núcleo(s) · estimativa",
+    );
     expect(hint).not.toHaveTextContent("disco");
     expect(screen.queryByLabelText("Custo da seleção")).not.toBeInTheDocument();
   });
@@ -41,8 +47,10 @@ describe("LoadCapacityHint", () => {
     render(<LoadCapacityHint capacity={capacity} error={null} />);
     const hint = screen.getByLabelText("Capacidade da máquina");
 
-    expect(hint).toHaveTextContent("Recomendado: ≈ 3 (disco)");
-    expect(hint).toHaveTextContent("Limite por fator: teto do modo 32 · CPU 7 · memória 40 · disco 3");
+    expect(hint).toHaveTextContent("até ≈ 3 sessões simultâneas (limite: disco)");
+    expect(hint).toHaveTextContent(
+      "Limite por fator: teto do modo 32 · CPU 7 · memória 40 · disco 3",
+    );
     expect(hint).toHaveTextContent("limitado por disco (50000 MB livres)");
     expect(hint).toHaveTextContent(
       "Custo por sessão (pesada): 500 MB de RAM · 1.5 núcleo(s) · 46.8 MB de disco (cópia 23.4 MB + folga 23.4 MB) · histórico",
@@ -50,7 +58,9 @@ describe("LoadCapacityHint", () => {
     const selection = screen.getByLabelText("Custo da seleção");
     expect(selection).toHaveTextContent("pesada");
     expect(selection).toHaveTextContent("grava · cópia por sessão");
-    expect(selection).toHaveTextContent("Seleção pesada: sobe o bridge ou o solver (bridge_check_newave).");
+    expect(selection).toHaveTextContent(
+      "Seleção pesada: sobe o bridge ou o solver (bridge_check_newave).",
+    );
     expect(selection).toHaveTextContent(
       "Seleção que grava: cada sessão copia 23.4 MB de fixtures (newave/cobre-caso-reduzido).",
     );
@@ -58,7 +68,13 @@ describe("LoadCapacityHint", () => {
 
   it("seleção só pesada (não grava): mostra a pesada e nada de cópia", () => {
     const capacity = makeCapacity({
-      per_session: { rss_mb: 500, cpu_cores: 1.5, source: "estimativa", runs: 0, profile: "pesada" },
+      per_session: {
+        rss_mb: 500,
+        cpu_cores: 1.5,
+        source: "estimativa",
+        runs: 0,
+        profile: "pesada",
+      },
       selection: {
         heavy: true,
         writes: false,

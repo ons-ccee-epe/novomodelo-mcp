@@ -22,7 +22,7 @@ export function GroupFilter({
 }: Props) {
   return (
     <div className="cobre-launcher-groups">
-      <span className="cobre-muted">Grupo:</span>
+      <span className="cobre-field-label">Grupo</span>
       <button
         type="button"
         className="cobre-btn cobre-btn-ghost"

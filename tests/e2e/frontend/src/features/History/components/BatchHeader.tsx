@@ -1,9 +1,6 @@
-import { conjuntoOf } from "@/shared/conjunto";
+import { conjuntoLabel, conjuntoOf } from "@/shared/conjunto";
 import type { BatchResult } from "@/shared/types";
 import { formatDate } from "../format";
-import { ConjuntoTag } from "./ConjuntoTag";
-
-const SHORT_SHA_CHARS = 7;
 
 interface Props {
   batch: BatchResult;
@@ -11,6 +8,14 @@ interface Props {
   canToggle: boolean;
   onToggleBaseline: () => void;
   onDownloadSummary?: () => void;
+}
+
+const SINGLE_PREFIX = "pergunta:";
+
+/** Avulsa: o id da pergunta (o texto já está na lista abaixo); demais: o rótulo do conjunto. */
+export function headerName(batch: BatchResult): string {
+  const c = conjuntoOf(batch);
+  return c.startsWith(SINGLE_PREFIX) ? c.slice(SINGLE_PREFIX.length) : conjuntoLabel(c);
 }
 
 export function BatchHeader({
@@ -23,22 +28,16 @@ export function BatchHeader({
   return (
     <header className="cobre-batch-header">
       <div className="cobre-batch-header-id">
-        <h2 className="cobre-batch-title">{formatDate(batch.timestamp)}</h2>
-        <ConjuntoTag conjunto={conjuntoOf(batch)} />
+        <h2 className="cobre-batch-title">
+          {headerName(batch)} — {formatDate(batch.timestamp)}
+        </h2>
         <code className="cobre-muted">{batch.batch_id}</code>
-        {batch.cobre_mcp_version && batch.cobre_mcp_version !== "unknown" && (
-          <span className="cobre-muted">v{batch.cobre_mcp_version}</span>
-        )}
-        {batch.git_commit_sha && (
-          <code className="cobre-muted" title={batch.git_commit_sha}>
-            {batch.git_commit_sha.slice(0, SHORT_SHA_CHARS)}
-          </code>
-        )}
       </div>
       <div className="cobre-batch-header-actions">
         <button
           type="button"
           className="cobre-btn"
+          aria-pressed={isBaseline}
           disabled={!canToggle}
           title={
             canToggle ? undefined : "Suba o launcher para alterar a baseline"

@@ -14,6 +14,10 @@ interface Props {
   run: LoadRunState;
   stopping: boolean;
   onStop: () => void;
+  /** Ação ao lado do cabeçalho quando a carga termina (ex.: abrir o resultado). */
+  action?: ReactNode;
+  /** Resumo que substitui as métricas ao vivo quando a carga termina gravada. */
+  summary?: ReactNode;
 }
 
 const PHASE_LABEL: Record<string, string> = {
@@ -94,7 +98,9 @@ function AgentLive({ progress }: { progress: AgentLoadProgress }) {
           {s.failed > 0 ? ` · ${s.failed} falharam` : ""}
         </Metric>
         <Metric label="Execuções">{progress.calls}</Metric>
-        <Metric label="Aprovação">{progress.calls > 0 ? fmtPercent(progress.pass_rate) : "—"}</Metric>
+        <Metric label="Aprovação">
+          {progress.calls > 0 ? fmtPercent(progress.pass_rate) : "—"}
+        </Metric>
         <Metric label="Vazão">{fmtCpm(progress.throughput_cpm)}</Metric>
         <Metric label="Erros e timeouts">{progress.errors + progress.timeouts}</Metric>
         <Metric label="p50">{fmtMs(progress.p50_ms)}</Metric>
@@ -104,7 +110,8 @@ function AgentLive({ progress }: { progress: AgentLoadProgress }) {
         <ul className="cobre-tool-call-list" aria-label="Casos em curso">
           {progress.in_flight.map((item) => (
             <li key={`${item.session}-${item.case_id}`}>
-              sessão {item.session} · <code>{item.case_id}</code> · {fmtSeconds(item.elapsed_seconds)}
+              sessão {item.session} · <code>{item.case_id}</code> ·{" "}
+              {fmtSeconds(item.elapsed_seconds)}
             </li>
           ))}
         </ul>
@@ -114,7 +121,7 @@ function AgentLive({ progress }: { progress: AgentLoadProgress }) {
 }
 
 /** Progresso ao vivo da carga: fase, contadores, gráfico recente e o botão de parar. */
-export function LoadProgress({ run, stopping, onStop }: Props) {
+export function LoadProgress({ run, stopping, onStop, action, summary }: Props) {
   const progress = run.progress;
   const active = !isFinished(run.status);
   const agent = run.config.mode === "agent";
@@ -125,7 +132,9 @@ export function LoadProgress({ run, stopping, onStop }: Props) {
   const agentProgress = progress && isAgentProgress(progress) ? progress : null;
   const toolsProgress = progress && !isAgentProgress(progress) ? progress : null;
   const bucket = agentProgress?.series_bucket_seconds ?? 5;
+  const done = run.status === "done" && summary;
   const showLive =
+    !done &&
     progress &&
     (agentProgress ? ["running", "finishing"].includes(progress.phase) : progress.calls > 0);
 
@@ -156,6 +165,7 @@ export function LoadProgress({ run, stopping, onStop }: Props) {
               ■ Parar
             </button>
           )}
+          {!active && action}
         </span>
       </div>
       <div className="cobre-progress-bar" aria-hidden>
@@ -164,6 +174,7 @@ export function LoadProgress({ run, stopping, onStop }: Props) {
 
       {showLive && agentProgress && <AgentLive progress={agentProgress} />}
       {showLive && toolsProgress && <ToolsLive progress={toolsProgress} />}
+      {done && summary}
 
       {progress && progress.series.length > 0 && active && (
         <LoadCharts

@@ -10,7 +10,7 @@ function LauncherOffline() {
         pip install -r tests/e2e/launcher/requirements.txt{"\n"}
         python -m tests.e2e.launcher.serve
       </pre>
-      Sem ele, esta tela mostra as cargas já gravadas (somente leitura).
+      As cargas já gravadas continuam no Histórico.
     </div>
   );
 }
@@ -29,7 +29,7 @@ export function LoadLauncher({ launcher }: { launcher: LoadLauncherData }) {
   if (!launcher.available) return <LauncherOffline />;
 
   return (
-    <section className="cobre-launcher" aria-label="Disparar carga">
+    <section aria-label="Disparar carga">
       {launcher.limits ? (
         <LoadForm
           tools={launcher.tools}

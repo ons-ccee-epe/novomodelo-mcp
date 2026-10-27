@@ -7,8 +7,8 @@ import type { BatchResult } from "@/shared/types";
 import { BatchCharts } from "../charts/BatchCharts";
 import { chartSvg } from "@/shared/charts/ChartCard";
 import { formatDate } from "../format";
-import { BatchCards } from "./BatchCards";
-import { BatchHeader } from "./BatchHeader";
+import { BatchOverview, BatchStats } from "./BatchCards";
+import { BatchHeader, headerName } from "./BatchHeader";
 import { ChangesStrip } from "./ChangesStrip";
 import { ConjuntoEvolution } from "./ConjuntoEvolution";
 import { QuestionList, type Change } from "./QuestionList";
@@ -68,15 +68,18 @@ export function BatchDashboard({
     if (!root) return;
     setSummaryError(null);
     try {
-      const cards = [...root.querySelectorAll(".cobre-summary .cobre-card")].map((c) => ({
-        label: c.querySelector(".cobre-card-label")?.textContent ?? "",
-        value: c.querySelector(".cobre-card-value")?.textContent ?? "",
+      const cards = [...root.querySelectorAll("[data-stat]")].map((c) => ({
+        label: c.querySelector("dt, .cobre-card-label")?.textContent ?? "",
+        value: c.querySelector("dd, .cobre-rate")?.textContent ?? "",
       }));
-      const svgs = [...root.querySelectorAll("[data-chart-card]")]
-        .map((c) => chartSvg(c))
-        .filter((s): s is SVGSVGElement => s !== null);
-      const title = `${formatDate(batch.timestamp)} · ${batch.batch_id}`;
-      downloadBlob(await summaryPngBlob(title, cards, svgs), `${batch.batch_id}-resumo.png`);
+      const charts = [...root.querySelectorAll<HTMLElement>("[data-chart-card]")].flatMap((c) => {
+        const svg = chartSvg(c);
+        if (!svg) return [];
+        const title = c.querySelector("h4")?.textContent ?? "";
+        return [{ title, svg, wide: c.dataset.wide === "true" }];
+      });
+      const title = `${headerName(batch)} — ${formatDate(batch.timestamp)} · ${batch.batch_id}`;
+      downloadBlob(await summaryPngBlob(title, cards, charts), `${batch.batch_id}-resumo.png`);
     } catch (e) {
       setSummaryError(e instanceof Error ? e.message : String(e));
     }
@@ -100,9 +103,10 @@ export function BatchDashboard({
           ),
       )}
       <ChangesStrip broke={broke} fixed={fixed} onSelect={setOpenId} />
-      <BatchCards batch={batch} reference={reference} />
-      {charts ?? <BatchCharts batch={batch} />}
+      <BatchOverview batch={batch} reference={reference} />
       <ConjuntoEvolution batch={batch} all={all} baselines={baselines} />
+      <BatchStats batch={batch} />
+      {charts ?? <BatchCharts batch={batch} />}
       <QuestionList
         results={batch.test_results}
         changes={changeById}

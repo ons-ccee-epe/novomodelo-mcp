@@ -65,13 +65,9 @@ export function funnel(
 
 export const statusColor = (status: TestStatus) => `var(--cobre-${status})`;
 
-export const STATUS_LABEL: Record<TestStatus, string> = {
-  pass: "Aprovada",
-  partial: "Parcial",
-  fail: "Falhou",
-  timeout: "Timeout",
-  skip: "Pulada",
-};
+import { STATUS_LABEL } from "@/shared/constants/status";
+
+export { STATUS_LABEL };
 
 export const TOOL_TIME_COLOR = "var(--cobre-text-muted)";
 

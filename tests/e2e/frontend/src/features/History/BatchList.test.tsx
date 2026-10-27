@@ -77,8 +77,9 @@ describe("History", () => {
     const cards = sideItems();
     expect(cards.map((c) => c.getAttribute("data-batch-id"))).toEqual(["b3", "b2", "b1"]);
     const mid = cards[1];
-    expect(within(mid).getByText("Esteira completa")).toBeInTheDocument();
-    expect(within(mid).getByText(/4\/5 aprovadas · 80,0%/)).toBeInTheDocument();
+    expect(within(mid).getByText("Esteira")).toBeInTheDocument();
+    expect(within(mid).getByText(/^4\/5 · /)).toBeInTheDocument();
+    expect(within(mid).getByText("80%")).toHaveAttribute("data-band", "good");
     const delta = within(mid).getByText(/\+60,0 pp/);
     expect(delta.textContent).toContain("▲");
     expect(delta).toHaveAttribute("data-trend", "up");
@@ -97,45 +98,61 @@ describe("History", () => {
     expect(delta).toHaveAttribute("title", "vs baseline b2");
   });
 
-  it("filtra por conjunto", () => {
+  it("filtra por conjunto no dropdown, com a contagem de cada um", () => {
     setup();
     renderAt();
-    fireEvent.click(screen.getByRole("button", { name: "Grupo deck" }));
+    const select = screen.getByLabelText("Filtrar por conjunto");
+    expect(within(select).getByRole("option", { name: "Todas (3)" })).toBeInTheDocument();
+    expect(within(select).getByRole("option", { name: "Esteira completa (2)" })).toBeInTheDocument();
+    fireEvent.change(select, { target: { value: "grupo:deck" } });
     expect(sideItems()).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "Todos" }));
+    expect(screen.getByText("1/3")).toBeInTheDocument();
+    fireEvent.change(select, { target: { value: "" } });
     expect(sideItems()).toHaveLength(3);
   });
 
-  it("a estrela chama toggleBaseline", () => {
-    const toggle = setup({ baselines: { todos: "b1" } });
-    renderAt();
-    const star = screen.getByRole("button", { name: /baseline.*b2/i });
-    fireEvent.click(star);
-    expect(toggle).toHaveBeenCalledWith(MID);
-    const filled = screen.getByRole("button", { name: /remover baseline.*b1/i });
-    expect(filled).toHaveAttribute("aria-pressed", "true");
-  });
-
-  it("estrela desabilitada com o launcher offline", () => {
-    const toggle = setup();
-    launcher.available = false;
-    renderAt();
-    const star = screen.getByRole("button", { name: /baseline.*b2/i });
-    expect(star).toBeDisabled();
-    expect(star).toHaveAttribute("title", "Suba o launcher para alterar a baseline");
-    fireEvent.click(star);
-    expect(toggle).not.toHaveBeenCalled();
-  });
-
-  it("mostra a recusa do launcher ao alternar a baseline", async () => {
-    setup({
-      toggleBaseline: vi.fn(async () => {
-        throw new Error("launcher recusou");
+  it("bateria de uma pergunta só vira Avulsa, com o texto da pergunta no dropdown", () => {
+    const single = withCounts(
+      makeBatch("b4", [["q9", "pass", null]], {
+        timestamp: "2026-01-04T09:00:00",
+        conjunto: "pergunta:q9",
       }),
-    });
+    );
+    single.test_results[0].query = "Qual a versão do servidor?";
+    setup({ batches: [single, ...BATCHES] });
     renderAt();
-    fireEvent.click(screen.getByRole("button", { name: /baseline.*b2/i }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("launcher recusou");
+    const tag = within(sideItems()[0]).getByText("Avulsa");
+    expect(tag).toHaveAttribute("title", "Qual a versão do servidor?");
+    const select = screen.getByLabelText("Filtrar por conjunto");
+    const group = within(select).getByRole("group", { name: "Perguntas avulsas" });
+    expect(within(group).getByRole("option", { name: "Qual a versão do servidor? (1)" })).toBeInTheDocument();
+    expect(
+      within(within(select).getByRole("group", { name: "Grupos" })).getByRole("option", { name: "deck (1)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("marca a baseline do conjunto no card", () => {
+    setup({ baselines: { todos: "b1" } });
+    renderAt();
+    const [, mid, old] = sideItems();
+    expect(within(old).getByText("Baseline")).toBeInTheDocument();
+    expect(within(mid).queryByText("Baseline")).toBeNull();
+  });
+
+  it("o botão do dashboard chama toggleBaseline", () => {
+    const toggle = setup();
+    renderAt("/historico/b2");
+    fireEvent.click(screen.getByRole("button", { name: "★ Definir como baseline" }));
+    expect(toggle).toHaveBeenCalledWith(MID);
+  });
+
+  it("recolhe e mostra de novo a lista", () => {
+    setup();
+    renderAt();
+    fireEvent.click(screen.getByRole("button", { name: "Recolher a lista de baterias" }));
+    expect(within(screen.getByRole("complementary")).queryAllByRole("listitem")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar a lista de baterias" }));
+    expect(sideItems()).toHaveLength(3);
   });
 
   it("abrir /historico/<id> seleciona aquela bateria", () => {

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from tests.e2e.launcher import service as service_mod
 from tests.e2e.launcher.service import RunService
-from tests.e2e.queries.models import ExpectedResult, QueryTestCase
+from tests.e2e.queries.models import ExpectedResult, QueryTestCase, TestResult
 from tests.e2e.queries.runner import QueryRunner
 
 # O filho herda os pipes do pai: se só o pai morrer, o communicate fica preso
@@ -108,18 +108,23 @@ class _BlockingRunner:
 
 
 def _fake_test_result(case, _result, _validation):
-    return SimpleNamespace(
+    return TestResult(
         test_id=case.id,
-        status="pass",
+        query=case.query,
         expected_tool=case.expected.tool,
         expected_tools=None,
         actual_tool=case.expected.tool,
+        all_tool_calls=[],
+        status="pass",
+        latency_ms=1.0,
+        tool_latency_ms=None,
         mcp_used=True,
         correct_tool=True,
         correct_result=True,
-        latency_ms=1.0,
-        error_message=None,
         agent_response="",
+        error_message=None,
+        tags=[],
+        validation_checks=[],
     )
 
 

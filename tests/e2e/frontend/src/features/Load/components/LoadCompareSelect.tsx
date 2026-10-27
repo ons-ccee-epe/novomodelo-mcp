@@ -1,18 +1,12 @@
-import { useState } from "react";
-
 import { indexEntryMode, type LoadIndexEntry } from "@/shared/types";
 import { fmtCpm, fmtLoadId, fmtMs, fmtPercent, fmtRate } from "../format";
-
-const RELOAD_FEEDBACK_MS = 700;
 
 interface Props {
   runs: LoadIndexEntry[];
   selectedId: string | null;
   compareId: string | null;
-  onSelect: (id: string) => void;
   /** ``null`` = sem comparação; ``undefined`` = voltar ao padrão (a carga anterior). */
   onCompare: (id: string | null | undefined) => void;
-  onReload: () => void;
 }
 
 function label(r: LoadIndexEntry): string {
@@ -30,46 +24,13 @@ function label(r: LoadIndexEntry): string {
   )} · err ${fmtPercent(s.error_rate)} · p95 ${fmtMs(s.p95_ms)}${partial}`;
 }
 
-/** Seleção da carga exibida e da carga de comparação, e recarga do índice. */
-export function LoadRunSelector({
-  runs,
-  selectedId,
-  compareId,
-  onSelect,
-  onCompare,
-  onReload,
-}: Props) {
-  const [spinning, setSpinning] = useState(false);
+/** Escolha da carga de comparação: só as do mesmo modo da carga exibida. */
+export function LoadCompareSelect({ runs, selectedId, compareId, onCompare }: Props) {
   const selected = runs.find((r) => r.load_id === selectedId);
   const selectedMode = selected ? indexEntryMode(selected) : null;
 
-  function handleReload() {
-    setSpinning(true);
-    onReload();
-    window.setTimeout(() => setSpinning(false), RELOAD_FEEDBACK_MS);
-  }
-
   return (
-    <div className="cobre-topbar">
-      <div className="cobre-field">
-        <label htmlFor="load-select" className="cobre-field-label">
-          Carga exibida
-        </label>
-        <select
-          id="load-select"
-          className="cobre-select"
-          value={selectedId ?? ""}
-          onChange={(e) => onSelect(e.target.value)}
-        >
-          {runs.map((r, i) => (
-            <option key={r.load_id} value={r.load_id}>
-              {label(r)}
-              {i === 0 ? " (mais recente)" : ""}
-            </option>
-          ))}
-        </select>
-      </div>
-
+    <div className="cobre-topbar cobre-load-compare">
       <div className="cobre-field">
         <label htmlFor="load-compare-select" className="cobre-field-label">
           Comparar com
@@ -93,13 +54,6 @@ export function LoadRunSelector({
 
       <button type="button" onClick={() => onCompare(undefined)} className="cobre-reload">
         Comparar com a anterior
-      </button>
-
-      <button type="button" onClick={handleReload} className="cobre-reload" disabled={spinning}>
-        <span className={spinning ? "cobre-spin" : undefined} aria-hidden>
-          ↻
-        </span>
-        Atualizar
       </button>
     </div>
   );

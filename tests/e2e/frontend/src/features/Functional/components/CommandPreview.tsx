@@ -12,7 +12,7 @@ function CopyableCommand({ title, text }: { title: string; text: string }) {
         <strong>{title}</strong>
         <button
           type="button"
-          className="cobre-btn cobre-btn-ghost"
+          className="cobre-btn cobre-btn-sm"
           onClick={() => void navigator.clipboard?.writeText(text)}
         >
           Copiar
@@ -54,14 +54,16 @@ export function CommandPreview({
 
   if (!preview) return null;
   return (
-    <section className="cobre-command-preview" aria-label="Comando equivalente">
-      <h2>Comando equivalente</h2>
-      {preview.terminal ? (
-        <CopyableCommand title="Bateria pelo terminal" text={preview.terminal} />
-      ) : (
-        <p className="cobre-muted">{preview.terminal_note}</p>
-      )}
-      <CopyableCommand title="Comando do agente por pergunta" text={preview.agent} />
-    </section>
+    <details className="cobre-command-preview" aria-label="Comando equivalente">
+      <summary>Comando equivalente</summary>
+      <div className="cobre-command-preview-body">
+        {preview.terminal ? (
+          <CopyableCommand title="Bateria pelo terminal" text={preview.terminal} />
+        ) : (
+          <p className="cobre-muted">{preview.terminal_note}</p>
+        )}
+        <CopyableCommand title="Comando do agente por pergunta" text={preview.agent} />
+      </div>
+    </details>
   );
 }

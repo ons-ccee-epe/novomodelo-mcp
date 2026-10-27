@@ -11,26 +11,31 @@ export function BatchCharts({ batch }: { batch: BatchResult }) {
   const file = (slug: string) => `${batch.batch_id}-${slug}.png`;
   return (
     <section
-      className="cobre-section cobre-charts"
+      className="cobre-section cobre-charts cobre-charts-pairs"
       aria-label="Gráficos do resumo"
     >
       <ChartCard title="Status" fileName={file("status")}>
         <StatusDonut batch={batch} />
       </ChartCard>
       <ChartCard
-        title="Tempo por pergunta"
-        fileName={file("tempo-por-pergunta")}
-      >
-        <LatencyByQuestion batch={batch} />
-      </ChartCard>
-      <ChartCard title="Tools mais usadas" fileName={file("tools-mais-usadas")}>
-        <ToolUsage batch={batch} />
-      </ChartCard>
-      <ChartCard
         title="Tools por pergunta"
         fileName={file("tools-por-pergunta")}
       >
         <ToolsPerQuestion batch={batch} />
+      </ChartCard>
+      <ChartCard
+        title="Tempo por pergunta"
+        fileName={file("tempo-por-pergunta")}
+        wide
+      >
+        <LatencyByQuestion batch={batch} />
+      </ChartCard>
+      <ChartCard
+        title="Tools mais usadas"
+        fileName={file("tools-mais-usadas")}
+        wide
+      >
+        <ToolUsage batch={batch} />
       </ChartCard>
       <ChartCard
         title="Aprovação por grupo"

@@ -6,13 +6,16 @@ import "@radix-ui/themes/styles.css";
 
 import { AppRoutes } from "@/navigation";
 import { ErrorBoundary } from "@/shared/ErrorBoundary";
+import { applyInitialColorScheme } from "@/theme/colorScheme";
 import "@/theme/styles.css";
+
+applyInitialColorScheme();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {/* HashRouter: hospedagem estática, sem rewrite de SPA (URLs /#/...) */}
     <HashRouter>
-      <Theme accentColor="blue" grayColor="slate" radius="medium">
+      <Theme accentColor="orange" grayColor="slate" radius="medium">
         <ErrorBoundary>
           <AppRoutes />
         </ErrorBoundary>

@@ -1,7 +1,6 @@
-import type { ReactNode } from "react";
-
 import type { RunResultItem } from "@/services/launcherApi";
-import { statusIcon } from "@/shared/constants/status";
+import { TestDetail } from "@/shared/components/TestDetail";
+import { STATUS_LABEL, statusIcon } from "@/shared/constants/status";
 
 export interface CaseSummary {
   id: string;
@@ -23,68 +22,58 @@ function formatDuration(seconds: number): string {
   return seconds >= 60 && seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`;
 }
 
-function MetaItem({ term, children }: { term: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt>{term}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
-}
-
-function CaseMetaList({ caseMeta, result }: Pick<Props, "caseMeta" | "result">) {
+/** O que se sabe do caso antes de ele rodar: tool esperada, timeout e tags. */
+function PendingMeta({ caseMeta }: { caseMeta: CaseSummary }) {
   return (
     <dl className="cobre-detail-meta">
-      <MetaItem term="Tool esperada">
-        <code>{caseMeta.expected}</code>
-      </MetaItem>
+      <div>
+        <dt>Tool esperada</dt>
+        <dd>
+          <code>{caseMeta.expected}</code>
+        </dd>
+      </div>
       {caseMeta.timeoutS !== null && (
-        <MetaItem term="Timeout">{formatDuration(caseMeta.timeoutS)}</MetaItem>
-      )}
-      {result && (
-        <>
-          <MetaItem term="Tool chamada">
-            <code>{result.actual_tool ?? "—"}</code>
-          </MetaItem>
-          <MetaItem term="MCP usado">{result.mcp_used ? "sim" : "não"}</MetaItem>
-          <MetaItem term="Tempo">{result.latency_ms.toFixed(0)}ms</MetaItem>
-        </>
+        <div>
+          <dt>Timeout</dt>
+          <dd>{formatDuration(caseMeta.timeoutS)}</dd>
+        </div>
       )}
       {caseMeta.tags.length > 0 && (
-        <MetaItem term="Tags">
-          {caseMeta.tags.map((t) => (
-            <span key={t} className="cobre-tag-chip">
-              {t}
-            </span>
-          ))}
-        </MetaItem>
+        <div>
+          <dt>Tags</dt>
+          <dd>
+            {caseMeta.tags.map((t) => (
+              <span key={t} className="cobre-tag-chip">
+                {t}
+              </span>
+            ))}
+          </dd>
+        </div>
       )}
     </dl>
   );
 }
 
-function DetailSection({ label, text, kind }: { label: string; text: string; kind?: string }) {
-  return (
-    <div className="cobre-detail-section">
-      <div className="cobre-muted cobre-detail-label">{label}</div>
-      <pre className={`cobre-code${kind ? ` cobre-detail-${kind}` : ""}`}>{text}</pre>
-    </div>
-  );
-}
-
-/** Painel de detalhe de um caso: cabeçalho, prompt e resultado ao vivo. */
+/** Painel de detalhe de um caso: cabeçalho, e o resultado completo quando ele já rodou. */
 export function CaseDetail({ caseMeta, result, running, canRun, onRun }: Props) {
   return (
     <>
       <div className="cobre-detail-head">
         <div>
-          <code className="cobre-detail-id">{caseMeta.id}</code>
-          {result && (
-            <span className="cobre-status cobre-detail-status" data-status={result.status}>
-              {statusIcon(result.status)} {result.status}
-            </span>
-          )}
-          {running && <span className="cobre-detail-status cobre-muted">rodando…</span>}
+          <h2 className="cobre-detail-question">{caseMeta.query}</h2>
+          <div className="cobre-detail-sub">
+            <code className="cobre-detail-id">{caseMeta.id}</code>
+            {result && (
+              <span className="cobre-status" data-status={result.status}>
+                {statusIcon(result.status)} {STATUS_LABEL[result.status] ?? result.status}
+              </span>
+            )}
+            {running && (
+              <span className="cobre-status" data-status="running">
+                rodando…
+              </span>
+            )}
+          </div>
         </div>
         <button
           type="button"
@@ -97,23 +86,22 @@ export function CaseDetail({ caseMeta, result, running, canRun, onRun }: Props) 
         </button>
       </div>
 
-      <CaseMetaList caseMeta={caseMeta} result={result} />
-      <DetailSection label="Prompt" text={caseMeta.query} />
-      {result?.error_message && (
-        <DetailSection label="Erro" text={result.error_message} kind="error" />
-      )}
-      {result?.response_preview && (
-        <DetailSection
-          label="Resposta do agente (trecho)"
-          text={result.response_preview}
-          kind="response"
+      {result ? (
+        <TestDetail
+          tr={result}
+          expected={caseMeta.expected}
+          timeout={caseMeta.timeoutS !== null ? formatDuration(caseMeta.timeoutS) : undefined}
         />
-      )}
-      {!result && !running && (
-        <div className="cobre-muted cobre-detail-hint">
-          Este teste ainda não rodou nesta sessão. Clique em “rodar este teste” ou dispare a
-          esteira/grupo.
-        </div>
+      ) : (
+        <>
+          <PendingMeta caseMeta={caseMeta} />
+          {!running && (
+            <div className="cobre-muted cobre-detail-hint">
+              Este teste ainda não rodou nesta sessão. Clique em “rodar este teste” ou dispare a
+              esteira/grupo.
+            </div>
+          )}
+        </>
       )}
     </>
   );

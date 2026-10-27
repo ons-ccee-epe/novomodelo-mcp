@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LoadRunState } from "@/services/loadApi";
+import { History } from "@/features/History";
 import { Load } from "./index";
 import { makeLoadRun, stats, toolInfo } from "./fixtures";
 
@@ -88,10 +89,14 @@ const recorded: Handler = (url) => {
   return undefined;
 };
 
-function renderLoad() {
+function renderLoad(path = "/historico/carga") {
   return render(
-    <MemoryRouter>
-      <Load />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/carga" element={<Load />} />
+        <Route path="/historico/carga" element={<History />} />
+        <Route path="/historico/carga/:loadId" element={<History />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -101,14 +106,35 @@ afterEach(() => {
 });
 
 describe("Load com o launcher offline", () => {
-  it("mostra as cargas gravadas em modo leitura, sem formulário", async () => {
+  it("a aba de carga avisa que o launcher está offline e aponta o Histórico", async () => {
+    stubFetch(recorded);
+    renderLoad("/carga");
+
+    expect(await screen.findByText(/Launcher de testes offline/)).toBeInTheDocument();
+    expect(screen.getByText(/As cargas já gravadas continuam no Histórico/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Iniciar carga/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Resumo da carga")).not.toBeInTheDocument();
+  });
+
+  it("o Histórico de carga lista as cargas e abre a mais recente, mesmo sem o launcher", async () => {
     stubFetch(recorded);
     renderLoad();
 
-    expect(await screen.findByText(/Launcher de testes offline/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Iniciar carga/ })).not.toBeInTheDocument();
+    const list = await screen.findByRole("list", { name: "Cargas gravadas" });
+    const items = within(list).getAllByRole("listitem");
+    expect(items.map((li) => li.getAttribute("data-load-id"))).toEqual([
+      NEWER.load_id,
+      OLDER.load_id,
+    ]);
+    expect(items[0]).toHaveAttribute("aria-current", "true");
+    expect(within(items[0]).getByText("Tools")).toBeInTheDocument();
+    expect(within(items[0]).getByText(/4 sessões · 10 s · 14\.0\/s · p95 70 ms/)).toBeInTheDocument();
+    expect(within(items[0]).getByText("erro")).toBeInTheDocument();
 
-    const cards = await screen.findByLabelText("Resumo da carga");
+    const cards = await screen.findByLabelText("Resumo da carga", {}, { timeout: 3000 });
+    expect(
+      screen.getByRole("heading", { name: /Carga de tools — 24\/10\/2026 10:00:00/ }),
+    ).toBeInTheDocument();
     expect(within(cards).getByText("14.0/s")).toBeInTheDocument();
     expect(within(cards).getByText("2.0%")).toBeInTheDocument();
     expect(within(cards).getByText("70 ms")).toBeInTheDocument();
@@ -126,6 +152,36 @@ describe("Load com o launcher offline", () => {
     expect(within(comparison).getByRole("table", { name: "p95 por tool" })).toBeInTheDocument();
   });
 
+  it("a URL escolhe a carga exibida e marca o card dela", async () => {
+    stubFetch(recorded);
+    renderLoad(`/historico/carga/${OLDER.load_id}`);
+
+    expect(
+      await screen.findByRole("heading", { name: /Carga de tools — 24\/10\/2026 09:00:00/ }),
+    ).toBeInTheDocument();
+    const selected = screen
+      .getAllByRole("listitem")
+      .find((li) => li.getAttribute("aria-current") === "true");
+    expect(selected).toHaveAttribute("data-load-id", OLDER.load_id);
+    expect(screen.queryByLabelText("Comparação entre cargas")).not.toBeInTheDocument();
+  });
+
+  it("os detalhes vêm recolhidos", async () => {
+    stubFetch(recorded);
+    renderLoad();
+    const details = await screen.findByLabelText("Detalhes da carga");
+    expect(details.tagName).toBe("DETAILS");
+    expect(details).not.toHaveAttribute("open");
+  });
+
+  it("recolher a lista deixa só o botão de mostrar", async () => {
+    stubFetch(recorded);
+    renderLoad();
+    fireEvent.click(await screen.findByRole("button", { name: "Recolher a lista de cargas" }));
+    expect(screen.queryByRole("list", { name: "Cargas gravadas" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mostrar a lista de cargas" })).toBeInTheDocument();
+  });
+
   it("escolher Nenhuma remove a comparação", async () => {
     stubFetch(recorded);
     renderLoad();
@@ -141,7 +197,7 @@ describe("Load com o launcher offline", () => {
   it("sem nenhuma carga gravada explica como gerar a primeira", async () => {
     stubFetch(() => undefined);
     renderLoad();
-    expect(await screen.findByText(/Nenhuma carga gravada ainda/)).toBeInTheDocument();
+    expect(await screen.findByText(/Dispare uma carga em Testes de Carga/)).toBeInTheDocument();
   });
 });
 
@@ -157,7 +213,7 @@ describe("Load com o launcher no ar", () => {
 
   it("dispara a carga com o header do launcher e mostra o progresso ao vivo", async () => {
     const mock = stubFetch(online);
-    renderLoad();
+    renderLoad("/carga");
 
     fireEvent.change(await screen.findByLabelText(/Sessões simultâneas/), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText(/Duração/), { target: { value: "30" } });
@@ -177,7 +233,7 @@ describe("Load com o launcher no ar", () => {
 
   it("o mix padrão manda tools nulo; marcar uma que grava manda a lista e refaz a capacidade", async () => {
     const mock = stubFetch(online);
-    renderLoad();
+    renderLoad("/carga");
 
     await screen.findByLabelText(/Sessões simultâneas/);
     const capacityUrls = () =>
@@ -207,7 +263,7 @@ describe("Load com o launcher no ar", () => {
         ? { status: 409, body: { detail: "run abc123 ainda em andamento" } }
         : online(url, init),
     );
-    renderLoad();
+    renderLoad("/carga");
 
     fireEvent.click(await screen.findByRole("button", { name: /Iniciar carga/ }));
 
@@ -220,7 +276,7 @@ describe("Load com o launcher no ar", () => {
         ? { body: runState({ cancel_requested: true }) }
         : online(url, init),
     );
-    renderLoad();
+    renderLoad("/carga");
     fireEvent.click(await screen.findByRole("button", { name: /Iniciar carga/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Parar/ }));
 
@@ -233,7 +289,43 @@ describe("Load com o launcher no ar", () => {
     stubFetch((url, init) =>
       url === "api/load-runs" && !init?.method ? { body: { runs: [runState()] } } : online(url, init),
     );
-    renderLoad();
+    renderLoad("/carga");
     expect(await screen.findByText("Carga em andamento…")).toBeInTheDocument();
+  });
+
+  it("ao concluir mostra o resumo gravado e Ver no Histórico abre a carga", async () => {
+    stubFetch((url, init) =>
+      url === "api/load-runs/r1"
+        ? { body: runState({ status: "done", phase: null, load_id: OLDER.load_id }) }
+        : online(url, init),
+    );
+    renderLoad("/carga");
+    fireEvent.click(await screen.findByRole("button", { name: /Iniciar carga/ }));
+
+    const summary = await screen.findByLabelText("Resumo da carga concluída");
+    expect(summary).toHaveTextContent("Vazão 10.0/s");
+    expect(summary).toHaveTextContent("p95 90 ms");
+    expect(screen.queryByLabelText("Métricas ao vivo")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ver no Histórico" }));
+
+    expect(
+      await screen.findByRole("heading", { name: /Carga de tools — 24\/10\/2026 09:00:00/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Carga" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("o mix vem resumido no padrão e a lista completa fica em Personalizar", async () => {
+    stubFetch(online);
+    renderLoad("/carga");
+
+    const summary = await screen.findByText(/2 de 3 tools · padrão: só leitura, sem as pesadas/);
+    expect(summary.closest("details")).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "deck_edit_json" }));
+    expect(screen.getByText(/3 de 3 tools · personalizado · 1 gravam/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "padrão" }));
+    expect(screen.getByText(/2 de 3 tools · padrão/)).toBeInTheDocument();
   });
 });

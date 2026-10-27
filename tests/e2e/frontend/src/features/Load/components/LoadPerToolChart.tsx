@@ -1,8 +1,18 @@
-import { Bar, BarChart, CartesianGrid, Customized, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Customized,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { ChartCard } from "@/shared/charts/ChartCard";
 import { SvgLegend } from "@/shared/charts/SvgLegend";
 import { isAgentRun, type AgentLoadRun, type LoadRun } from "@/shared/types";
+import { AXIS_TICK, AXIS_LINE, GRID_STROKE, TOOLTIP } from "@/shared/charts/axis";
 
 const HEIGHT_PX = 280;
 const LEGEND = [
@@ -42,17 +52,18 @@ export function LoadPerToolChart({ run }: { run: LoadRun | AgentLoadRun }) {
       {hasCalls ? (
         <ResponsiveContainer width="100%" height={HEIGHT_PX}>
           <BarChart data={rows} margin={{ top: 28, right: 16, bottom: 8, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--cobre-border)" />
-            <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} />
-            <YAxis yAxisId="ms" tick={{ fontSize: 10 }} width={48} unit=" ms" />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <XAxis stroke={AXIS_LINE} dataKey="name" tick={AXIS_TICK} interval={0} />
+            <YAxis stroke={AXIS_LINE} yAxisId="ms" tick={AXIS_TICK} width={48} unit=" ms" />
             <YAxis
+              stroke={AXIS_LINE}
               yAxisId="err"
               orientation="right"
-              tick={{ fontSize: 10 }}
+              tick={AXIS_TICK}
               width={36}
               allowDecimals={false}
             />
-            <Tooltip />
+            <Tooltip {...TOOLTIP} />
             <Customized component={<SvgLegend items={LEGEND} />} />
             <Bar
               yAxisId="ms"

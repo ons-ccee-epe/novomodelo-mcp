@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { isFinished, type RunState, type RunStatus } from "@/services/launcherApi";
 
 const STATUS_LABEL: Record<RunStatus, string> = {
@@ -12,6 +14,8 @@ interface Props {
   run: RunState;
   stopping: boolean;
   onStop: () => void;
+  /** Ação ao lado do contador quando a rodada termina (ver resultados). */
+  action?: ReactNode;
 }
 
 function statusLabel(run: RunState, stopping: boolean): string {
@@ -23,7 +27,7 @@ function statusLabel(run: RunState, stopping: boolean): string {
 }
 
 /** Progresso agregado do run em andamento, com o botão de parar. */
-export function RunProgress({ run, stopping, onStop }: Props) {
+export function RunProgress({ run, stopping, onStop, action }: Props) {
   const pct = run.total ? (run.completed / run.total) * 100 : 0;
   const active = !isFinished(run.status);
   return (
@@ -47,6 +51,7 @@ export function RunProgress({ run, stopping, onStop }: Props) {
               ■ Parar
             </button>
           )}
+          {action}
         </span>
       </div>
       <div className="cobre-progress-bar" aria-hidden>

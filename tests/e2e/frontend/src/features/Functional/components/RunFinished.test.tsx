@@ -1,9 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { RunState, RunStatus } from "@/services/launcherApi";
-import { makeBatch } from "@/shared/fixtures.testutil";
 import { RunFinished } from "./RunFinished";
 
 function runOf(status: RunStatus, batch_id: string | null = "b1"): RunState {
@@ -25,15 +24,11 @@ function renderIt(run: RunState) {
   );
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("RunFinished", () => {
-  it("com done e batch_id mostra os dois botões", () => {
+  it("com done e batch_id mostra só o botão de ver resultados", () => {
     renderIt(runOf("done"));
-    expect(screen.getByRole("button", { name: "Resumo de resultados" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Definir como baseline" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ver resultados no Histórico" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /baseline/i })).toBeNull();
   });
 
   it.each<[RunStatus, string | null]>([
@@ -41,47 +36,14 @@ describe("RunFinished", () => {
     ["error", "b1"],
     ["done", null],
     ["running", "b1"],
-  ])("com %s e batch_id %s não mostra nenhum", (status, id) => {
+  ])("com %s e batch_id %s não mostra nada", (status, id) => {
     const { container } = renderIt(runOf(status, id));
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("Resumo de resultados navega para o detalhe da bateria", () => {
+  it("Ver resultados no Histórico navega para o detalhe da bateria", () => {
     renderIt(runOf("done"));
-    fireEvent.click(screen.getByRole("button", { name: "Resumo de resultados" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ver resultados no Histórico" }));
     expect(screen.getByText("detalhe")).toBeInTheDocument();
-  });
-
-  it("Definir como baseline grava pelo conjunto da bateria", async () => {
-    const batch = makeBatch("b1", [["q1", "pass", "deck_list"]], { conjunto: "pergunta:q1" });
-    const mock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (init?.method === "PUT") return { ok: true, status: 200, json: async () => ({}) } as Response;
-      if (url === "data/results/b1.json") {
-        return { ok: true, status: 200, json: async () => batch, text: async () => JSON.stringify(batch) } as Response;
-      }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-    vi.stubGlobal("fetch", mock);
-    renderIt(runOf("done"));
-
-    fireEvent.click(screen.getByRole("button", { name: "Definir como baseline" }));
-
-    expect(await screen.findByText("Baseline definida")).toBeInTheDocument();
-    const put = mock.mock.calls.find(([, init]) => init?.method === "PUT")!;
-    expect(put[0]).toBe("api/baselines/pergunta%3Aq1");
-    expect(JSON.parse(put[1]!.body as string)).toEqual({ batch_id: "b1" });
-  });
-
-  it("mostra o erro da baseline ao lado do botão", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }) as Response),
-    );
-    renderIt(runOf("done"));
-    fireEvent.click(screen.getByRole("button", { name: "Definir como baseline" }));
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Definir como baseline" })).toBeEnabled(),
-    );
   });
 });

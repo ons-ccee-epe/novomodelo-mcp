@@ -31,48 +31,61 @@ function costLine(capacity: LoadCapacity): string {
   const parts = [`${fmtMb(p.rss_mb)} de RAM`, `${Number(p.cpu_cores.toFixed(2))} núcleo(s)`];
   if (disk) {
     const slack = Math.max(0, disk.per_session_mb - disk.copy_mb);
-    parts.push(`${fmtMbFine(disk.per_session_mb)} de disco (cópia ${fmtMbFine(disk.copy_mb)} + folga ${fmtMbFine(slack)})`);
+    parts.push(
+      `${fmtMbFine(disk.per_session_mb)} de disco (cópia ${fmtMbFine(disk.copy_mb)} + folga ${fmtMbFine(slack)})`,
+    );
   }
   return `Custo por sessão${profile}: ${parts.join(" · ")} · ${p.source}`;
 }
 
-/** Quantas sessões simultâneas a máquina aguenta, com a conta, o custo por sessão e os avisos do launcher. */
+/** Quantas sessões simultâneas a máquina aguenta numa linha; a conta, o custo e os avisos ficam recolhidos. */
 export function LoadCapacityHint({ capacity, error }: Props) {
   if (!capacity) {
     return (
       <div className="cobre-muted cobre-load-note">
-        {error ? `Capacidade da máquina indisponível: ${error}` : "Estimando a capacidade da máquina…"}
+        {error
+          ? `Capacidade da máquina indisponível: ${error}`
+          : "Estimando a capacidade da máquina…"}
       </div>
     );
   }
   const selection = capacity.selection;
   return (
-    <div className="cobre-load-capacity" aria-label="Capacidade da máquina">
-      <strong>{`Recomendado: ≈ ${capacity.recommended} (${capacity.limiting_factor}) · teto do modo: ${capacity.hard_cap}`}</strong>
-      <div className="cobre-muted cobre-load-note">{capacity.explanation}</div>
-      <div className="cobre-muted cobre-load-note">{`Limite por fator: ${factorsLine(capacity.limits)}`}</div>
-      <div className="cobre-muted cobre-load-note">{costLine(capacity)}</div>
-      {selection && (selection.heavy || selection.writes) && (
-        <div className="cobre-load-note cobre-load-selection" aria-label="Custo da seleção">
-          <LoadBadges writes={selection.writes} heavy={selection.heavy} />
-          {selection.heavy && (
-            <span title={selection.heavy_tools.join(", ")}>
-              {`Seleção pesada: sobe o bridge ou o solver (${nameList(selection.heavy_tools)}).`}
-            </span>
-          )}
-          {selection.writes && (
-            <span title={selection.write_tools.join(", ")}>
-              {`Seleção que grava: cada sessão copia ${fmtMbFine(selection.copy_mb)} de fixtures`}
-              {selection.subtrees.length > 0 ? ` (${selection.subtrees.join(", ")})` : ""}.
-            </span>
-          )}
-        </div>
-      )}
-      {capacity.warnings.map((message) => (
-        <div key={message} className="cobre-banner" data-kind="warning">
-          {message}
-        </div>
-      ))}
-    </div>
+    <details className="cobre-load-capacity" aria-label="Capacidade da máquina">
+      <summary className="cobre-load-capacity-summary">
+        <span>
+          Capacidade da máquina:{" "}
+          <strong>{`até ≈ ${capacity.recommended} sessões simultâneas`}</strong>
+          <span className="cobre-muted">{` (limite: ${capacity.limiting_factor})`}</span>
+        </span>
+        <span className="cobre-mix-edit">Ver cálculo</span>
+      </summary>
+      <div className="cobre-load-capacity-body">
+        <div className="cobre-muted cobre-load-note">{capacity.explanation}</div>
+        <div className="cobre-muted cobre-load-note">{`Limite por fator: ${factorsLine(capacity.limits)}`}</div>
+        <div className="cobre-muted cobre-load-note">{costLine(capacity)}</div>
+        {selection && (selection.heavy || selection.writes) && (
+          <div className="cobre-load-note cobre-load-selection" aria-label="Custo da seleção">
+            <LoadBadges writes={selection.writes} heavy={selection.heavy} />
+            {selection.heavy && (
+              <span title={selection.heavy_tools.join(", ")}>
+                {`Seleção pesada: sobe o bridge ou o solver (${nameList(selection.heavy_tools)}).`}
+              </span>
+            )}
+            {selection.writes && (
+              <span title={selection.write_tools.join(", ")}>
+                {`Seleção que grava: cada sessão copia ${fmtMbFine(selection.copy_mb)} de fixtures`}
+                {selection.subtrees.length > 0 ? ` (${selection.subtrees.join(", ")})` : ""}.
+              </span>
+            )}
+          </div>
+        )}
+        {capacity.warnings.map((message) => (
+          <div key={message} className="cobre-muted cobre-load-note">
+            ⚠ {message}
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }

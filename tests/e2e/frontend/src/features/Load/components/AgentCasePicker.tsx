@@ -41,7 +41,13 @@ const NO_RESULTS = new Map<string, RunResultItem>();
 export function countGroups(cases: LoadCaseInfo[]): GroupCount[] {
   const map = new Map<string, GroupCount>();
   for (const c of cases) {
-    const entry = map.get(c.group) ?? { group: c.group, eligible: 0, total: 0, writes: 0, heavy: 0 };
+    const entry = map.get(c.group) ?? {
+      group: c.group,
+      eligible: 0,
+      total: 0,
+      writes: 0,
+      heavy: 0,
+    };
     entry.total += 1;
     if (c.available) {
       entry.eligible += 1;
@@ -126,12 +132,20 @@ export function AgentCasePicker({
   const eligibleHeavy = eligible.filter((c) => c.heavy).length;
 
   return (
-    <fieldset className="cobre-tool-picker" disabled={disabled}>
-      <legend className="cobre-field-label">Casos da carga</legend>
+    <fieldset className="cobre-tool-picker cobre-panel" disabled={disabled}>
+      <legend className="cobre-tool-picker-head">
+        <span className="cobre-panel-title">Casos da carga</span>
+      </legend>
       <div className="cobre-form-row">
         <label className="cobre-tag-option" data-active={scope === "all"}>
-          <input type="radio" name="load-scope" checked={scope === "all"} onChange={() => onScope("all")} />
-          Todos os casos ({eligible.length} elegíveis{describeWeight(eligibleWrites, eligibleHeavy)})
+          <input
+            type="radio"
+            name="load-scope"
+            checked={scope === "all"}
+            onChange={() => onScope("all")}
+          />
+          Todos os casos ({eligible.length} elegíveis
+          {describeWeight(eligibleWrites, eligibleHeavy)})
         </label>
         <label className="cobre-tag-option" data-active={scope === "group"}>
           <input
@@ -167,7 +181,8 @@ export function AgentCasePicker({
             <option value="">-- Escolha um grupo --</option>
             {groups.map((g) => (
               <option key={g.group} value={g.group} disabled={g.eligible === 0}>
-                {g.group} ({g.eligible}/{g.total} elegíveis{describeWeight(g.writes, g.heavy)})
+                {g.group} ({g.eligible}/{g.total} elegíveis
+                {describeWeight(g.writes, g.heavy)})
               </option>
             ))}
           </select>
@@ -189,7 +204,8 @@ export function AgentCasePicker({
               <option value="">todos ({eligible.length})</option>
               {groups.map((g) => (
                 <option key={g.group} value={g.group} disabled={g.eligible === 0}>
-                  {g.group} ({g.eligible}{describeWeight(g.writes, g.heavy)})
+                  {g.group} ({g.eligible}
+                  {describeWeight(g.writes, g.heavy)})
                 </option>
               ))}
             </select>

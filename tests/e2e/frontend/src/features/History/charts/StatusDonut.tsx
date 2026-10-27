@@ -1,5 +1,6 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
+import { TOOLTIP } from "@/shared/charts/axis";
 import type { BatchResult } from "@/shared/types";
 import { STATUS_LABEL, statusColor, statusCounts } from "./chartData";
 
@@ -19,6 +20,8 @@ export function StatusDonut({ batch }: { batch: BatchResult }) {
           nameKey="label"
           innerRadius={45}
           outerRadius={75}
+          stroke="var(--cobre-surface)"
+          strokeWidth={2}
           label={(p: { name?: string; value?: number }) =>
             `${p.name}: ${p.value}`
           }
@@ -27,7 +30,7 @@ export function StatusDonut({ batch }: { batch: BatchResult }) {
             <Cell key={d.status} fill={statusColor(d.status)} />
           ))}
         </Pie>
-        <Tooltip />
+        <Tooltip {...TOOLTIP} />
       </PieChart>
     </ResponsiveContainer>
   );

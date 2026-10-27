@@ -1,9 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LoadIndexEntry, SavedLoadRun } from "@/shared/types";
 import { isAgentRun } from "@/shared/types";
+import { History } from "@/features/History";
 import { Load } from "./index";
 import { agentStats, makeAgentLoadRun, makeLoadRun, makeSandbox, stats } from "./fixtures";
 
@@ -52,10 +53,14 @@ function stubRecorded(runs: SavedLoadRun[]) {
   );
 }
 
-function renderLoad() {
+function renderLoad(path = "/historico/carga") {
   return render(
-    <MemoryRouter>
-      <Load />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/carga" element={<Load />} />
+        <Route path="/historico/carga" element={<History />} />
+        <Route path="/historico/carga/:loadId" element={<History />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -103,14 +108,21 @@ describe("Load com uma carga do modo agente", () => {
     expect(screen.getByText("Casos concluídos por bucket de 5 s")).toBeInTheDocument();
   });
 
-  it("o seletor rotula o modo e a comparação só oferece cargas do mesmo modo", async () => {
+  it("os cards rotulam o modo, o filtro separa os modos e a comparação só oferece o mesmo modo", async () => {
     stubRecorded([TOOLS_RUN, AGENT_NEW]);
     renderLoad();
     await screen.findByLabelText("Resumo da carga");
 
-    const shown = screen.getByLabelText("Carga exibida");
-    expect(within(shown).getByText(/agent · claude · 2 sessões ×120s \| 1\.3 casos\/min · aprov 80\.0%/)).toBeInTheDocument();
-    expect(within(shown).getByText(/tools · 2 sessões ×10s/)).toBeInTheDocument();
+    const [agentCard, toolsCard] = within(screen.getByRole("list", { name: "Cargas gravadas" })).getAllByRole("listitem");
+    expect(within(agentCard).getByText("Agente · claude")).toBeInTheDocument();
+    expect(within(agentCard).getByText(/2 sessões · 120 s · 1\.3 casos\/min/)).toBeInTheDocument();
+    expect(within(agentCard).getByText("80%")).toBeInTheDocument();
+    expect(within(agentCard).getByText("aprovação")).toBeInTheDocument();
+    expect(within(toolsCard).getByText("Tools")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Filtrar por modo"), { target: { value: "tools" } });
+    expect(within(screen.getByRole("list", { name: "Cargas gravadas" })).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(screen.getByRole("list", { name: "Cargas gravadas" })).getByRole("listitem")).toHaveAttribute("data-load-id", TOOLS_RUN.load_id);
 
     const compare = screen.getByLabelText("Comparar com");
     expect(within(compare).getAllByRole("option")).toHaveLength(1);

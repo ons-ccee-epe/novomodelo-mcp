@@ -8,11 +8,15 @@ export interface LegendItem {
   color: string;
 }
 
-export function SvgLegend({ items }: { items: LegendItem[] }) {
+/** ``perRow`` quebra a legenda em linhas; nos gráficos largos, todos os itens cabem numa só. */
+export function SvgLegend({ items, perRow = PER_ROW }: { items: LegendItem[]; perRow?: number }) {
   return (
     <g>
       {items.map((item, i) => (
-        <g key={item.label} transform={`translate(${8 + (i % PER_ROW) * ITEM_GAP_PX}, ${4 + Math.floor(i / PER_ROW) * ROW_GAP_PX})`}>
+        <g
+          key={item.label}
+          transform={`translate(${8 + (i % perRow) * ITEM_GAP_PX}, ${4 + Math.floor(i / perRow) * ROW_GAP_PX})`}
+        >
           <rect width={SWATCH_PX} height={SWATCH_PX} fill={item.color} />
           <text x={SWATCH_PX + 4} y={SWATCH_PX} fontSize={10} fill="var(--cobre-text)">
             {item.label}

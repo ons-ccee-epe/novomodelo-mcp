@@ -56,8 +56,7 @@ export function AgentDetails({ run }: Props) {
   const failedSessions = run.sessions.events.filter((e) => !e.ok);
   const denied = run.agent.denied_tools;
   return (
-    <section className="cobre-section" aria-label="Detalhes da carga">
-      <h2 className="cobre-section-title">Detalhes</h2>
+    <>
       {run.interrupted && (
         <div className="cobre-banner" data-kind="warning">
           Carga interrompida antes do fim: o resultado é parcial.
@@ -69,84 +68,91 @@ export function AgentDetails({ run }: Props) {
           nas métricas.
         </div>
       )}
-      <div className="cobre-metrics-grid">
-        <ConfigCard run={run} />
-        <SessionsCard run={run} />
-        <ResourcesCard resources={run.resources} title="Recursos (agentes + servidores)" />
-      </div>
+      <details className="cobre-section cobre-load-details" aria-label="Detalhes da carga">
+        <summary>Detalhes</summary>
+        <div className="cobre-load-details-body">
+          <div className="cobre-metrics-grid">
+            <ConfigCard run={run} />
+            <SessionsCard run={run} />
+            <ResourcesCard resources={run.resources} title="Recursos (agentes + servidores)" />
+          </div>
 
-      {failedSessions.length > 0 && (
-        <details className="cobre-load-excluded">
-          <summary className="cobre-summary-toggle">
-            Sessões que falharam ({failedSessions.length})
-          </summary>
-          <ul className="cobre-tool-call-list">
-            {failedSessions.map((e) => (
-              <li key={e.session}>
-                sessão {e.session} — {e.error ?? "falha sem mensagem"}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+          {failedSessions.length > 0 && (
+            <details className="cobre-load-excluded">
+              <summary className="cobre-summary-toggle">
+                Sessões que falharam ({failedSessions.length})
+              </summary>
+              <ul className="cobre-tool-call-list">
+                {failedSessions.map((e) => (
+                  <li key={e.session}>
+                    sessão {e.session} — {e.error ?? "falha sem mensagem"}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
 
-      {denied.length > 0 && (
-        <details className="cobre-load-excluded">
-          <summary className="cobre-summary-toggle">
-            Tools de escrita negadas ao claude ({denied.length})
-          </summary>
-          <ul className="cobre-tool-call-list">
-            {denied.map((tool) => (
-              <li key={tool}>
-                <code>{tool}</code>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+          {denied.length > 0 && (
+            <details className="cobre-load-excluded">
+              <summary className="cobre-summary-toggle">
+                Tools de escrita negadas ao claude ({denied.length})
+              </summary>
+              <ul className="cobre-tool-call-list">
+                {denied.map((tool) => (
+                  <li key={tool}>
+                    <code>{tool}</code>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
 
-      {run.errors.length > 0 && (
-        <>
-          <h3 className="cobre-load-subtitle">Erros e timeouts por caso</h3>
-          <table className="cobre-table" aria-label="Erros agrupados">
-            <thead>
-              <tr>
-                <th>Caso</th>
-                <th>Status</th>
-                <th>Tipo</th>
-                <th>Mensagem</th>
-                <th>Ocorrências</th>
-              </tr>
-            </thead>
-            <tbody>
-              {run.errors.map((e) => (
-                <tr key={`${e.case_id}-${e.status}-${e.outcome}-${e.message}`}>
-                  <td>
-                    <code>{e.case_id}</code>
-                  </td>
-                  <td>{e.status}</td>
-                  <td>{e.outcome}</td>
-                  <td>{e.message}</td>
-                  <td>{e.count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
+          {run.errors.length > 0 && (
+            <>
+              <h3 className="cobre-load-subtitle">Erros e timeouts por caso</h3>
+              <table className="cobre-table" aria-label="Erros agrupados">
+                <thead>
+                  <tr>
+                    <th>Caso</th>
+                    <th>Status</th>
+                    <th>Tipo</th>
+                    <th>Mensagem</th>
+                    <th>Ocorrências</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {run.errors.map((e) => (
+                    <tr key={`${e.case_id}-${e.status}-${e.outcome}-${e.message}`}>
+                      <td>
+                        <code>{e.case_id}</code>
+                      </td>
+                      <td>{e.status}</td>
+                      <td>{e.outcome}</td>
+                      <td>{e.message}</td>
+                      <td>{e.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
 
-      {excluded.length > 0 && (
-        <details className="cobre-load-excluded">
-          <summary className="cobre-summary-toggle">Casos fora da carga ({excluded.length})</summary>
-          <ul className="cobre-tool-call-list">
-            {excluded.map((item) => (
-              <li key={item.id}>
-                <code>{item.id}</code> — {item.reason}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </section>
+          {excluded.length > 0 && (
+            <details className="cobre-load-excluded">
+              <summary className="cobre-summary-toggle">
+                Casos fora da carga ({excluded.length})
+              </summary>
+              <ul className="cobre-tool-call-list">
+                {excluded.map((item) => (
+                  <li key={item.id}>
+                    <code>{item.id}</code> — {item.reason}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      </details>
+    </>
   );
 }

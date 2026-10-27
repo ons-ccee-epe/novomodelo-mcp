@@ -1,6 +1,12 @@
+import type { ReactNode } from "react";
+
 import { deltaPp, passRate, type Reference } from "@/shared/comparison";
 import type { BatchResult } from "@/shared/types";
-import { decimal, formatDelta } from "../format";
+import { decimal, formatDelta, formatDuration, rateBand } from "../format";
+import { batchDurationMs } from "./BatchCard";
+import { ConjuntoTag } from "./ConjuntoTag";
+
+const SHORT_SHA_CHARS = 7;
 
 interface Props {
   batch: BatchResult;
@@ -9,38 +15,98 @@ interface Props {
 
 const ms = (v: number | undefined) => (typeof v === "number" ? `${Math.round(v)} ms` : "—");
 
-export function BatchCards({ batch, reference }: Props) {
+/** Um par rótulo/valor; data-stat marca o que entra no PNG do resumo. */
+function Stat({
+  label,
+  value,
+  title,
+  wide = false,
+}: {
+  label: string;
+  value: ReactNode;
+  title?: string;
+  wide?: boolean;
+}) {
+  return (
+    <div data-stat aria-label={label} title={title} data-wide={wide || undefined}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+/** Resumo da bateria: a aprovação em destaque e os dados da rodada. */
+export function BatchOverview({ batch, reference }: Props) {
   const rate = passRate(batch);
   const delta = formatDelta(reference ? deltaPp(batch, reference.batch) : null);
-  const m = batch.metrics;
+  const version =
+    batch.cobre_mcp_version && batch.cobre_mcp_version !== "unknown"
+      ? `v${batch.cobre_mcp_version}`
+      : "—";
+
   return (
-    <div className="cobre-summary">
-      <div className="cobre-card" aria-label="Total">
-        <div className="cobre-card-value">{batch.total_tests}</div>
-        <div className="cobre-card-label">Total</div>
+    <section className="cobre-panel cobre-batch-overview" aria-label="Resumo da bateria">
+      <div className="cobre-batch-overview-rate" data-stat aria-label="Aprovação">
+        <span className="cobre-rate" data-band={rateBand(rate)}>
+          {rate === null ? "—" : `${decimal(rate)}%`}
+        </span>
+        <span className="cobre-card-label">Aprovação</span>
       </div>
-      <div className="cobre-card" data-accent="pass" aria-label="Aprovação">
-        <div className="cobre-card-value">{rate === null ? "—" : `${decimal(rate)}%`}</div>
-        <div className="cobre-card-label">Aprovação</div>
-      </div>
-      <div className="cobre-card" data-accent="rate" aria-label="Δ vs referência">
-        <div
-          className="cobre-card-value cobre-delta"
-          data-trend={delta.trend}
+      <dl className="cobre-stats">
+        <Stat label="Perguntas" value={`${batch.passed}/${batch.total_tests} aprovadas`} />
+        <Stat
+          label="Δ vs referência"
           title={reference ? `vs ${reference.kind} ${reference.batch.batch_id}` : undefined}
-        >
-          {delta.text}
-        </div>
-        <div className="cobre-card-label">Δ vs referência</div>
-      </div>
-      <div className="cobre-card" data-accent="time" aria-label="Latência média">
-        <div className="cobre-card-value">{ms(m?.avg_latency_ms)}</div>
-        <div className="cobre-card-label">Latência média</div>
-      </div>
-      <div className="cobre-card" data-accent="time" aria-label="Latência p95">
-        <div className="cobre-card-value">{ms(m?.p95_latency_ms)}</div>
-        <div className="cobre-card-label">Latência p95</div>
-      </div>
+          value={
+            <span className="cobre-delta" data-trend={delta.trend}>
+              {delta.text}
+            </span>
+          }
+        />
+        <Stat label="Tempo total" value={formatDuration(batchDurationMs(batch))} />
+        <Stat label="Conjunto" wide value={<ConjuntoTag batch={batch} />} />
+        <Stat label="Versão" value={version} />
+        <Stat
+          label="Commit"
+          title={batch.git_commit_sha || undefined}
+          value={
+            batch.git_commit_sha ? (
+              <code>{batch.git_commit_sha.slice(0, SHORT_SHA_CHARS)}</code>
+            ) : (
+              "—"
+            )
+          }
+        />
+      </dl>
+    </section>
+  );
+}
+
+/** Placar por status e tempos da bateria. */
+export function BatchStats({ batch }: { batch: BatchResult }) {
+  const m = batch.metrics;
+  const latencies = batch.test_results.map((r) => r.latency_ms);
+  return (
+    <div className="cobre-batch-panels">
+      <section className="cobre-panel" aria-label="Resultado">
+        <h3 className="cobre-panel-title">Resultado</h3>
+        <dl className="cobre-stats">
+          <Stat label="Aprovadas" value={batch.passed} />
+          <Stat label="Parciais" value={batch.partial} />
+          <Stat label="Falhas" value={batch.failed} />
+          <Stat label="Timeout" value={batch.timeout} />
+          <Stat label="Puladas" value={batch.skipped} />
+        </dl>
+      </section>
+      <section className="cobre-panel" aria-label="Tempos">
+        <h3 className="cobre-panel-title">Tempos</h3>
+        <dl className="cobre-stats">
+          <Stat label="Latência média" value={ms(m?.avg_latency_ms)} />
+          <Stat label="Latência p95" value={ms(m?.p95_latency_ms)} />
+          <Stat label="Mínima" value={ms(latencies.length ? Math.min(...latencies) : undefined)} />
+          <Stat label="Máxima" value={ms(latencies.length ? Math.max(...latencies) : undefined)} />
+        </dl>
+      </section>
     </div>
   );
 }

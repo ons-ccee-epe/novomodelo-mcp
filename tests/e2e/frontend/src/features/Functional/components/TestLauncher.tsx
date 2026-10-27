@@ -53,12 +53,15 @@ function LauncherOffline() {
 export function TestLauncher({
   launcher,
   onScopeChange,
+  progress,
   preview,
 }: {
   launcher: LauncherData;
   onScopeChange?: (scope: LauncherScope) => void;
   /** Renderizado logo abaixo do seletor de grupo. */
   preview?: ReactNode;
+  /** Progresso da rodada, abaixo do comando equivalente. */
+  progress?: ReactNode;
 }) {
   const { cases, run, busy, error } = launcher;
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -105,37 +108,40 @@ export function TestLauncher({
 
   return (
     <section className="cobre-launcher" aria-label="Disparar testes">
-      <LauncherControls
-        providers={launcher.providers}
-        selectedProvider={launcher.selectedProvider}
-        onSelectProvider={launcher.setSelectedProvider}
-        totalCases={cases.length}
-        disabled={busy}
-        noProvider={noProvider}
-        onRunAll={launcher.runAll}
-      />
-      {noProvider && (
-        <div className="cobre-banner" data-kind="critical">
-          Nenhum provedor de IA instalado (kiro-cli ou claude não estão no
-          PATH).
-        </div>
-      )}
-      <GroupFilter
-        groups={groups}
-        totalCases={cases.length}
-        selectedGroup={selectedGroup}
-        visibleCount={visibleCases.length}
-        busy={busy}
-        canRun={canRun}
-        onSelectGroup={setSelectedGroup}
-        onRunGroup={(g) => launcher.runTags([g])}
-      />
-      {preview}
-      {error && (
-        <div className="cobre-banner" data-kind="critical">
-          {error}
-        </div>
-      )}
+      <div className="cobre-launcher-toolbar">
+        <LauncherControls
+          providers={launcher.providers}
+          selectedProvider={launcher.selectedProvider}
+          onSelectProvider={launcher.setSelectedProvider}
+          totalCases={cases.length}
+          disabled={busy}
+          noProvider={noProvider}
+          onRunAll={launcher.runAll}
+        />
+        {noProvider && (
+          <div className="cobre-banner" data-kind="critical">
+            Nenhum provedor de IA instalado (kiro-cli ou claude não estão no
+            PATH).
+          </div>
+        )}
+        <GroupFilter
+          groups={groups}
+          totalCases={cases.length}
+          selectedGroup={selectedGroup}
+          visibleCount={visibleCases.length}
+          busy={busy}
+          canRun={canRun}
+          onSelectGroup={setSelectedGroup}
+          onRunGroup={(g) => launcher.runTags([g])}
+        />
+        {preview}
+        {progress}
+        {error && (
+          <div className="cobre-banner" data-kind="critical">
+            {error}
+          </div>
+        )}
+      </div>
 
       <div className="cobre-launcher-split">
         <CaseList

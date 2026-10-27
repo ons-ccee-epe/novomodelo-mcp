@@ -1,30 +1,15 @@
-import { conjuntoColor, conjuntoLabel } from "@/shared/conjunto";
+import { conjuntoColor, conjuntoOf, conjuntoTag, conjuntoTitle } from "@/shared/conjunto";
+import type { BatchResult } from "@/shared/types";
 
-interface Props {
-  conjunto: string;
-  /** Torna o chip um botão (filtro). */
-  onClick?: () => void;
-  pressed?: boolean;
-}
-
-export function ConjuntoTag({ conjunto, onClick, pressed }: Props) {
-  const color = conjuntoColor(conjunto);
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        className="cobre-tag"
-        style={{ "--tag-color": color } as React.CSSProperties}
-        aria-pressed={pressed}
-        onClick={onClick}
-      >
-        {conjuntoLabel(conjunto)}
-      </button>
-    );
-  }
+export function ConjuntoTag({ batch }: { batch: BatchResult }) {
+  const conjunto = conjuntoOf(batch);
   return (
-    <span className="cobre-tag" style={{ background: color }}>
-      {conjuntoLabel(conjunto)}
+    <span
+      className="cobre-tag"
+      title={conjuntoTitle(batch)}
+      style={{ "--tag-color": conjuntoColor(conjunto) } as React.CSSProperties}
+    >
+      {conjuntoTag(conjunto)}
     </span>
   );
 }

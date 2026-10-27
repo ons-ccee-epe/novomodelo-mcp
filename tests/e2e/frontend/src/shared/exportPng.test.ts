@@ -6,18 +6,21 @@ const drawn: string[] = [];
 
 function mockEnv() {
   drawn.length = 0;
-  vi.stubGlobal(
-    "getComputedStyle",
-    () => ({ getPropertyValue: (n: string) => (n === "--cobre-pass" ? "#22c55e" : "#ffffff") }),
-  );
+  vi.stubGlobal("getComputedStyle", () => ({
+    fontFamily: "Segoe UI, sans-serif",
+    getPropertyValue: (n: string) => (n === "--cobre-pass" ? "#22c55e" : "#ffffff"),
+  }));
   const ctx = {
     scale: vi.fn(),
     fillRect: vi.fn(),
+    strokeRect: vi.fn(),
     drawImage: vi.fn(),
     fillText: vi.fn((t: string) => drawn.push(t)),
     set fillStyle(_v: string) {},
     set font(_v: string) {},
     set textBaseline(_v: string) {},
+    set strokeStyle(_v: string) {},
+    set lineWidth(_v: number) {},
   };
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
     ctx as unknown as CanvasRenderingContext2D,
@@ -40,9 +43,9 @@ function mockEnv() {
   return { ctx, sources };
 }
 
-function makeSvg(): SVGSVGElement {
+function makeSvg(width = 100): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", "100");
+  svg.setAttribute("width", String(width));
   svg.setAttribute("height", "50");
   const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   rect.setAttribute("fill", "var(--cobre-pass)");
@@ -52,7 +55,11 @@ function makeSvg(): SVGSVGElement {
 
 describe("exportPng", () => {
   beforeEach(() => {
-    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() });
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:x"),
+      revokeObjectURL: vi.fn(),
+    });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -67,13 +74,53 @@ describe("exportPng", () => {
     expect(sources[0]).not.toContain("var(--cobre-pass)");
   });
 
-  it("summaryPngBlob escreve título e cards no canvas", async () => {
+  it("svgToPngBlob leva a fonte da página para o SVG", async () => {
+    const { sources } = mockEnv();
+    await svgToPngBlob(makeSvg());
+    expect(sources[0]).toContain('font-family="Segoe UI, sans-serif"');
+  });
+
+  it("summaryPngBlob escreve título, cards e o título de cada gráfico", async () => {
     mockEnv();
-    const blob = await summaryPngBlob("bateria x", [{ label: "Total", value: "4" }], [makeSvg()]);
+    const blob = await summaryPngBlob(
+      "bateria x",
+      [{ label: "Total", value: "4" }],
+      [{ title: "Status", svg: makeSvg() }],
+    );
     expect(blob.type).toBe("image/png");
     expect(drawn).toContain("bateria x");
     expect(drawn).toContain("Total");
     expect(drawn).toContain("4");
+    expect(drawn).toContain("STATUS");
+  });
+
+  it("summaryPngBlob põe os largos na linha inteira e os demais em pares", async () => {
+    const { ctx } = mockEnv();
+    await summaryPngBlob(
+      "b",
+      [],
+      [
+        { title: "A", svg: makeSvg(2000) },
+        { title: "B", svg: makeSvg(2000) },
+        { title: "Largo", svg: makeSvg(2000), wide: true },
+        { title: "C", svg: makeSvg(2000) },
+      ],
+      1,
+    );
+    const calls = ctx.drawImage.mock.calls.map(([, x, y, w]) => ({ x, y, w }));
+    expect(calls[0].y).toBe(calls[1].y);
+    expect(calls[1].x).toBeGreaterThan(calls[0].x);
+    expect(calls[2].w).toBeGreaterThan(calls[0].w * 2);
+    expect(calls[3].y).toBeGreaterThan(calls[2].y);
+    expect(calls[3].x).toBe(calls[0].x);
+  });
+
+  it("summaryPngBlob não amplia um gráfico além do tamanho desenhado", async () => {
+    const { ctx } = mockEnv();
+    await summaryPngBlob("b", [], [{ title: "Pequeno", svg: makeSvg(100) }], 1);
+    const [, , , w, h] = ctx.drawImage.mock.calls[0];
+    expect(w).toBe(100);
+    expect(h).toBe(50);
   });
 
   it("downloadBlob clica num link com o nome do arquivo", () => {

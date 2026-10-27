@@ -10,6 +10,8 @@
  * vite.config.ts). Assim o frontend sempre chama caminhos relativos /api/*.
  */
 
+import type { TestResult } from "@/shared/types";
+
 export const API = "api";
 
 /** O launcher recusa POSTs sem este header (anti CSRF/DNS rebinding). */
@@ -50,18 +52,8 @@ export function isFinished(status: RunStatus): boolean {
 }
 
 /** Resultado resumido de um caso ja terminado (transparencia incremental). */
-export interface RunResultItem {
-  test_id: string;
-  status: string;
-  expected_tool: string | null;
-  actual_tool: string | null;
-  mcp_used: boolean;
-  correct_tool: boolean;
-  correct_result: boolean;
-  latency_ms: number;
-  error_message: string | null;
-  response_preview: string;
-}
+/** O resultado de um caso, publicado assim que ele termina: o mesmo TestResult da bateria. */
+export type RunResultItem = TestResult;
 
 export interface RunState {
   run_id: string;

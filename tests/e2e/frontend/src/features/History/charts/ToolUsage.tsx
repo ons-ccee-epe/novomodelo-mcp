@@ -2,28 +2,30 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recha
 
 import type { BatchResult } from "@/shared/types";
 import { toolUsage } from "./chartData";
+import { AXIS_TICK, AXIS_LINE, TOOLTIP } from "@/shared/charts/axis";
 
-const ROW_HEIGHT_PX = 24;
-const MIN_HEIGHT_PX = 220;
-const AXIS_PADDING_PX = 40;
-const LABEL_WIDTH_PX = 130;
+const HEIGHT_PX = 320;
+/** Altura dos rótulos inclinados do eixo X: os nomes das tools são longos. */
+const LABEL_HEIGHT_PX = 110;
+const MAX_BAR_PX = 48;
 
 export function ToolUsage({ batch }: { batch: BatchResult }) {
   const data = toolUsage(batch);
-  const height = Math.max(MIN_HEIGHT_PX, data.length * ROW_HEIGHT_PX + AXIS_PADDING_PX);
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }}>
-        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-        <YAxis
-          type="category"
+    <ResponsiveContainer width="100%" height={HEIGHT_PX}>
+      <BarChart data={data} margin={{ top: 8, left: 32, right: 16 }}>
+        <XAxis
+          stroke={AXIS_LINE}
           dataKey="tool"
-          width={LABEL_WIDTH_PX}
           interval={0}
-          tick={{ fontSize: 10 }}
+          angle={-45}
+          textAnchor="end"
+          height={LABEL_HEIGHT_PX}
+          tick={AXIS_TICK}
         />
-        <Tooltip />
-        <Bar dataKey="calls" name="Chamadas" fill="var(--cobre-primary)" />
+        <YAxis stroke={AXIS_LINE} allowDecimals={false} tick={AXIS_TICK} />
+        <Tooltip {...TOOLTIP} />
+        <Bar dataKey="calls" name="Chamadas" fill="var(--cobre-primary)" maxBarSize={MAX_BAR_PX} />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +7,9 @@ import { fetchIndex } from "@/services/resultsApi";
 
 vi.mock("@/services/resultsApi", () => ({
   fetchIndex: vi.fn(),
+}));
+vi.mock("@/services/launcherApi", () => ({
+  launcherHealthy: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/features/Functional", () => ({
   Functional: () => <div>tela funcional</div>,
@@ -47,7 +50,24 @@ describe("AppLayout", () => {
     );
     expect(screen.getByRole("link", { name: "Testes de Carga" })).toHaveAttribute("href", "/carga");
     expect(screen.getByRole("link", { name: "Histórico" })).toHaveAttribute("href", "/historico");
-    await screen.findByText("Bateria 20261025_100000_abc · v1.2.3");
+    await waitFor(() => expect(mockedIndex).toHaveBeenCalled());
+  });
+
+  it("mostra a última bateria, a versão e o launcher na engrenagem", async () => {
+    renderAt("/funcionais");
+    await waitFor(() => expect(mockedIndex).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Informações do ambiente" }));
+    expect(await screen.findByText("20261025_100000_abc")).toBeInTheDocument();
+    expect(screen.getByText("v1.2.3")).toBeInTheDocument();
+    expect(await screen.findByText("online")).toBeInTheDocument();
+    expect(screen.getByText("stdio")).toBeInTheDocument();
+  });
+
+  it("alterna o modo noturno", () => {
+    renderAt("/funcionais");
+    const before = document.documentElement.dataset.theme;
+    fireEvent.click(screen.getByRole("button", { name: /Usar modo (noturno|claro)/ }));
+    expect(document.documentElement.dataset.theme).not.toBe(before);
   });
 
   it.each(["/", "/qualquer"])("%s cai em Testes Funcionais", async (path) => {
@@ -82,13 +102,16 @@ describe("AppLayout", () => {
       batches: [{ batch_id: "20261025_100000_abc", version: "unknown" }],
     } as never);
     renderAt("/funcionais");
-    expect(await screen.findByText("Bateria 20261025_100000_abc")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Informações do ambiente" }));
+    expect(await screen.findByText("20261025_100000_abc")).toBeInTheDocument();
+    expect(screen.queryByText(/^v[0-9]/)).not.toBeInTheDocument();
   });
 
   it("não mostra nada quando o index falha", async () => {
     mockedIndex.mockRejectedValue(new Error("falhou"));
     renderAt("/funcionais");
     await waitFor(() => expect(mockedIndex).toHaveBeenCalled());
-    expect(screen.queryByText(/^Bateria /)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Informações do ambiente" }));
+    expect(screen.queryByText(/^2026/)).not.toBeInTheDocument();
   });
 });

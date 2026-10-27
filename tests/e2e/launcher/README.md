@@ -83,7 +83,7 @@ terminar, a bateria fica disponível na aba **Histórico**.
 | DELETE | `/api/baselines/{conjunto}` | remove a baseline do conjunto |
 | POST | `/api/runs` | dispara (body: `provider?`, `tags?`, `case_id?`, `timeout_seconds?`); 409 se já houver um run ativo |
 | GET | `/api/runs` | runs desta sessão |
-| GET | `/api/runs/{run_id}` | estado de um run (polling) |
+| GET | `/api/runs/{run_id}` | estado de um run (polling), com o `TestResult` completo de cada caso já terminado |
 | POST | `/api/runs/{run_id}/cancel` | para o run (interrompe o caso atual; não grava bateria) |
 | GET | `/api/load-tools` | tools do catálogo de carga, se há fonte para cada uma, se gravam (cópia por sessão), se são pesadas, se são do mix padrão, as barradas com o motivo, e os limites do modo tools |
 | GET | `/api/load-cases` | casos por agente, com `available`/`reason` (se podem entrar na carga), `writes`, `heavy` e os limites do modo agent |

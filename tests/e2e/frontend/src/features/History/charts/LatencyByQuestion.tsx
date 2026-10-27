@@ -1,36 +1,54 @@
-import { Bar, BarChart, Cell, Customized, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Customized,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import type { BatchResult } from "@/shared/types";
 import { latencyLegend, latencyRows, statusColor, TOOL_TIME_COLOR } from "./chartData";
 import { SvgLegend } from "@/shared/charts/SvgLegend";
+import { AXIS_TICK, AXIS_LINE, TOOLTIP, tooltipNumber } from "@/shared/charts/axis";
 
-const ROW_HEIGHT_PX = 22;
-const MIN_HEIGHT_PX = 220;
-const AXIS_PADDING_PX = 60;
-const LABEL_WIDTH_PX = 110;
+const HEIGHT_PX = 400;
+/** Altura dos rótulos inclinados do eixo X: os ids das perguntas são longos. */
+const LABEL_HEIGHT_PX = 140;
+const MAX_BAR_PX = 32;
 
 export function LatencyByQuestion({ batch }: { batch: BatchResult }) {
   const data = latencyRows(batch);
-  const height = Math.max(MIN_HEIGHT_PX, data.length * ROW_HEIGHT_PX + AXIS_PADDING_PX);
+  const legend = latencyLegend(batch);
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} layout="vertical" margin={{ top: 44, left: 8, right: 16 }}>
-        <XAxis type="number" tick={{ fontSize: 10 }} unit=" ms" />
-        <YAxis
-          type="category"
+    <ResponsiveContainer width="100%" height={HEIGHT_PX}>
+      {/* barGap -100%: o tempo na tool (parte do total) fica sobreposto à coluna do total. */}
+      <BarChart data={data} barGap="-100%" margin={{ top: 28, left: 48, right: 16 }}>
+        <XAxis
+          stroke={AXIS_LINE}
           dataKey="test_id"
-          width={LABEL_WIDTH_PX}
           interval={0}
-          tick={{ fontSize: 10 }}
+          angle={-45}
+          textAnchor="end"
+          height={LABEL_HEIGHT_PX}
+          tick={AXIS_TICK}
         />
-        <Tooltip />
-        <Customized component={<SvgLegend items={latencyLegend(batch)} />} />
-        <Bar dataKey="total_ms" name="Total">
+        <YAxis stroke={AXIS_LINE} tick={AXIS_TICK} unit=" ms" width={70} />
+        <Tooltip {...TOOLTIP} formatter={(v) => `${tooltipNumber(Math.round(Number(v)))} ms`} />
+        <Customized component={<SvgLegend items={legend} perRow={legend.length} />} />
+        <Bar dataKey="total_ms" name="Total" maxBarSize={MAX_BAR_PX}>
           {data.map((r) => (
             <Cell key={r.test_id} fill={statusColor(r.status)} />
           ))}
         </Bar>
-        <Bar dataKey="tool_ms" name="Tempo na tool" fill={TOOL_TIME_COLOR} />
+        <Bar
+          dataKey="tool_ms"
+          name="Tempo na tool"
+          fill={TOOL_TIME_COLOR}
+          maxBarSize={MAX_BAR_PX}
+        />
       </BarChart>
     </ResponsiveContainer>
   );

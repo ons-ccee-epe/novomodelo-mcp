@@ -18,7 +18,7 @@ export function ProviderSelect({
 }: Props) {
   return (
     <div className="cobre-launcher-provider">
-      <label htmlFor={id} className="cobre-muted">
+      <label htmlFor={id} className="cobre-field-label">
         Provedor de IA
       </label>
       <select

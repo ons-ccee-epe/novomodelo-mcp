@@ -15,6 +15,8 @@ export function AppRoutes() {
         <Route path={ROUTES.load.path} element={<Load />} />
         <Route path={ROUTES.history.path} element={<History />} />
         <Route path={`${ROUTES.history.path}/:batchId`} element={<History />} />
+        <Route path={ROUTES.historyLoad.path} element={<History />} />
+        <Route path={`${ROUTES.historyLoad.path}/:loadId`} element={<History />} />
       </Route>
       <Route path="*" element={<Navigate to={ROUTES.functional.path} replace />} />
     </Routes>

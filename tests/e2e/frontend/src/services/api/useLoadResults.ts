@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { fetchLoadIndex, fetchLoadRun } from "@/services/loadApi";
 import { indexEntryMode, type LoadIndexEntry, type SavedLoadRun } from "@/shared/types";
@@ -13,12 +13,9 @@ export interface LoadResultsData {
   compareId: string | null;
   run: SavedLoadRun | null;
   compareRun: SavedLoadRun | null;
-  selectRun: (id: string) => void;
   /** ``null`` = sem comparação; ``undefined`` = voltar ao padrão (a anterior). */
   selectCompare: (id: string | null | undefined) => void;
   reload: () => void;
-  /** Seleciona uma carga recém-gravada assim que o index a listar. */
-  showNewest: () => void;
 }
 
 /** A carga imediatamente anterior do MESMO modo: tools e agente não se comparam. */
@@ -38,40 +35,27 @@ function sameMode(runs: LoadIndexEntry[], a: string | null, b: string): boolean 
 
 /**
  * Carrega as cargas gravadas (somente leitura, de /data/results/load): o index, a carga
- * selecionada (default = mais recente) e a de comparação (default = a anterior).
+ * pedida na URL (sem ela, a mais recente) e a de comparação (por padrão, a anterior).
  */
-export function useLoadResults(): LoadResultsData {
+export function useLoadResults(requestedId?: string): LoadResultsData {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [runs, setRuns] = useState<LoadIndexEntry[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [compareChoice, setCompareChoice] = useState<string | null | undefined>(undefined);
+  const [compare, setCompare] = useState<{ for: string | null; choice: string | null | undefined }>(
+    { for: null, choice: undefined },
+  );
   const [run, setRun] = useState<SavedLoadRun | null>(null);
   const [compareRun, setCompareRun] = useState<SavedLoadRun | null>(null);
   const [tick, setTick] = useState(0);
-  const followNewest = useRef(false);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  const showNewest = useCallback(() => {
-    followNewest.current = true;
-    setTick((t) => t + 1);
-  }, []);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setError(null);
     fetchLoadIndex()
-      .then((entries) => {
-        if (!alive) return;
-        setRuns(entries);
-        setSelectedId((current) => {
-          const keep = !followNewest.current && current;
-          if (keep && entries.some((r) => r.load_id === current)) return current;
-          return entries[0]?.load_id ?? null;
-        });
-        followNewest.current = false;
-      })
+      .then((entries) => alive && setRuns(entries))
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : String(e));
       })
@@ -83,8 +67,9 @@ export function useLoadResults(): LoadResultsData {
     };
   }, [tick]);
 
-  const compareId =
-    compareChoice === undefined ? previousOf(runs, selectedId) : compareChoice;
+  const selectedId = requestedId ?? runs[0]?.load_id ?? null;
+  const compareChoice = compare.for === selectedId ? compare.choice : undefined;
+  const compareId = compareChoice === undefined ? previousOf(runs, selectedId) : compareChoice;
   const effectiveCompareId =
     compareId && compareId !== selectedId && sameMode(runs, selectedId, compareId)
       ? compareId
@@ -96,6 +81,7 @@ export function useLoadResults(): LoadResultsData {
       return;
     }
     let alive = true;
+    setRun(null);
     fetchLoadRun(selectedId)
       .then((r) => alive && setRun(r))
       .catch((e: unknown) => {
@@ -120,10 +106,10 @@ export function useLoadResults(): LoadResultsData {
     };
   }, [effectiveCompareId]);
 
-  const selectRun = useCallback((id: string) => {
-    setSelectedId(id);
-    setCompareChoice(undefined);
-  }, []);
+  const selectCompare = useCallback(
+    (choice: string | null | undefined) => setCompare({ for: selectedId, choice }),
+    [selectedId],
+  );
 
   return {
     loading,
@@ -133,9 +119,7 @@ export function useLoadResults(): LoadResultsData {
     compareId: effectiveCompareId,
     run,
     compareRun,
-    selectRun,
-    selectCompare: setCompareChoice,
+    selectCompare,
     reload,
-    showNewest,
   };
 }
