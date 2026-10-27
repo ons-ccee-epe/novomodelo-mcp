@@ -203,8 +203,12 @@ def test_aviso_nao_usa_a_rede(pecas, monkeypatch):
     assert len(V.version_warnings(object())) == 1
 
 
-#: O link do release do MCP é o canal de instalação; fora dele, nada interno.
-_INTERNO = re.compile(r"página de instalação|\bcard\b|validação da v1|validadores|<organização interna>", re.I)
+#: As mensagens só apontam para os canais públicos: o produto é das três instituições.
+_PUBLICO = (
+    "https://github.com/ons-ccee-epe/",
+    "https://pypi.org/",
+    "https://docs.modelossetoreletrico.org.br/",
+)
 
 
 @pytest.mark.parametrize("executavel", ["0.17.0", "0.18.1", "0.19.0", None])
@@ -216,7 +220,8 @@ def test_produto_sem_referencia_interna(pecas, monkeypatch, executavel):
     texto = " ".join(V.version_warnings(object())) + " ".join(
         p.get("nota", "") for p in nova.values()
     )
-    assert not _INTERNO.search(texto.replace(V.MCP_RELEASE_TAG_URL, "")), texto
+    urls = re.findall(r"https?://[^\s`'\")]+", texto)
+    assert urls and all(u.startswith(_PUBLICO) for u in urls), urls
 
 
 def test_executavel_mais_velho_manda_instalar_a_versao_do_mcp(pecas):
@@ -252,7 +257,8 @@ def test_nenhum_aviso_manda_instalar_versao_diferente_da_do_mcp(pecas, executave
     estado.update(executavel=executavel, bridge=bridge)
     texto = " ".join(V.version_warnings(object()))
     for outra in ("0.17.0", "0.18.1"):
-        assert f"v{outra}/novomodelo-cli-installer" not in texto and f"=={outra}" not in texto
+        sem_o_mcp = texto.replace(V.mcp_install_command(outra), "")
+        assert f"v{outra}/novomodelo-cli-installer" not in texto and f"=={outra}" not in sem_o_mcp
 
 
 def test_leitura_das_pecas_uma_vez_por_processo(pecas):
@@ -323,6 +329,7 @@ def test_aviso_que_quebra_nao_derruba_a_tool(monkeypatch):
         "https://github.com/ons-ccee-epe/novomodelo/releases/download/v0.18.0/x",
         "https://api.github.com/repos/ons-ccee-epe/novomodelo/releases/latest",
         "https://pypi.org/pypi/novomodelo-bridge/json",
+        "https://pypi.org/pypi/novomodelo-mcp/json",
     ],
 )
 def test_dominios_permitidos(url):
@@ -334,7 +341,7 @@ def test_dominios_permitidos(url):
     [
         "http://github.com/ons-ccee-epe/novomodelo",
         "https://github.com/outra-org/novomodelo",
-        "https://api.github.com/repos/<organização interna>/novomodelo-mcp/releases/latest",
+        "https://api.github.com/repos/outra-org/novomodelo-mcp/releases/latest",
         "https://pypi.org/pypi/outro-pacote/json",
         "https://release-assets.githubusercontent.com/x",
         "https://evil.example/ons-ccee-epe/",
@@ -424,11 +431,16 @@ def _respostas(
     notas=NOTAS,
     notas_bridge=NOTAS,
     tag_bridge=None,
+    mcp=None,
 ):
     def _abrir(req, *, timeout, context):
         time.sleep(atraso)
         url = req.full_url
-        if "novomodelo-bridge/releases" in url:
+        if "/pypi/novomodelo-mcp/" in url:
+            if mcp is None:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            corpo = {"info": {"version": mcp}}
+        elif "novomodelo-bridge/releases" in url:
             t = tag_bridge or f"v{bridge}"
             corpo = {
                 "tag_name": t,
@@ -509,6 +521,20 @@ def test_release_mais_novo_nao_da_o_mcp_novo_como_existente(pecas, monkeypatch):
     assert "MCP 0.19.0" in mcp["nota"] and V.mcp_install_command("0.19.0") in mcp["nota"]
 
 
+def test_mcp_novo_no_pypi_vem_com_o_comando_e_as_notas_do_novomodelo(pecas, monkeypatch):
+    _respostas(monkeypatch, mcp="0.19.0")
+    mcp = V.update_check(object())["mcp"]
+    assert mcp["status"] == "nova" and mcp["mais_recente"] == "0.19.0"
+    assert mcp["comando"] == V.mcp_install_command("0.19.0")
+    assert mcp["notas"] == "https://github.com/ons-ccee-epe/novomodelo/releases/tag/v0.19.0"
+
+
+def test_mcp_no_pypi_na_versao_atual_nao_sugere_atualizar(pecas, monkeypatch):
+    _respostas(monkeypatch, tag="v0.18.0", bridge="0.18.0", mcp="0.18.0")
+    mcp = V.update_check(object())["mcp"]
+    assert mcp["status"] == "atual" and "comando" not in mcp
+
+
 def test_release_mais_novo_nao_manda_instalar_so_o_executavel(pecas, monkeypatch):
     _respostas(monkeypatch)
     nova = V.update_check(object())
@@ -554,10 +580,10 @@ def test_verificacao_de_versao_nova_vale_por_6_horas(pecas, monkeypatch):
     V.update_check(object())
     agora[0] += 6 * 3600 - 1
     V.update_check(object())
-    assert len(chamadas) == 3  # novomodelo, bridge no PyPI e notas do bridge, uma vez nas 6 h
+    assert len(chamadas) == 4  # MCP e bridge no PyPI, novomodelo e notas do bridge, uma vez nas 6 h
     agora[0] += 2
     V.update_check(object())
-    assert len(chamadas) == 6  # passadas as 6 h, consulta de novo (e as notas junto)
+    assert len(chamadas) == 8  # passadas as 6 h, consulta de novo (e as notas junto)
 
 
 def test_docs_de_outra_versao_avisam_e_sem_manifesto_nao(pecas, monkeypatch):
@@ -577,8 +603,6 @@ def test_docs_embutidas_reais_tem_a_versao_do_manifesto():
 
 def test_comando_de_instalar_o_mcp_compila_o_bytecode():
     assert V.mcp_install_command("0.19.0") == (
-        "baixe o novomodelo_mcp-0.19.0-py3-none-any.whl de "
-        "https://github.com/<organização interna>/novomodelo-mcp/releases/tag/v0.19.0 e rode "
-        "`uv tool install --force --compile-bytecode ./novomodelo_mcp-0.19.0-py3-none-any.whl` "
+        "`uv tool install --force --compile-bytecode novomodelo-mcp==0.19.0` "
         "(o bridge, a biblioteca e as docs vêm junto)"
     )

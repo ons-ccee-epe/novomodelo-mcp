@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..names import BINDING_DIST, BRIDGE_CLI, BRIDGE_DIST, MCP_DIST, MCP_RELEASE_TAG_URL
+from ..names import BINDING_DIST, BRIDGE_CLI, BRIDGE_DIST, MCP_DIST
 from .discovery import bridge_origin, bridge_version
 
 CLI_RELEASES = "https://github.com/ons-ccee-epe/novomodelo/releases"
@@ -30,6 +30,8 @@ BRIDGE_PYPI = "https://pypi.org/pypi/novomodelo-bridge/json"
 BRIDGE_RELEASES = "https://github.com/ons-ccee-epe/novomodelo-bridge/releases"
 BRIDGE_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo-bridge/releases/latest"
 BRIDGE_PAGE = "https://pypi.org/project/novomodelo-bridge/"
+MCP_PYPI = "https://pypi.org/pypi/novomodelo-mcp/json"
+MCP_PAGE = "https://pypi.org/project/novomodelo-mcp/"
 UPDATE_BUDGET_S = 3.0
 UPDATE_TTL_S = 6 * 3600
 NOTES_MAX_LINES = 6
@@ -43,6 +45,7 @@ _ALLOWED = (
     ("github.com", "/ons-ccee-epe/"),
     ("api.github.com", "/repos/ons-ccee-epe/"),
     ("pypi.org", "/pypi/novomodelo-bridge/"),
+    ("pypi.org", "/pypi/novomodelo-mcp/"),
 )
 _REDIRECT_ONLY = ("release-assets.githubusercontent.com",)
 
@@ -133,10 +136,9 @@ ASK_AGENT_TO_INSTALL = (
 
 
 def mcp_install_command(version: str) -> str:
-    wheel = f"novomodelo_mcp-{version}-py3-none-any.whl"
     return (
-        f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
-        f"`uv tool install --force --compile-bytecode ./{wheel}` (o bridge, a biblioteca e as docs vêm junto)"
+        f"`uv tool install --force --compile-bytecode {MCP_DIST}=={version}` "
+        "(o bridge, a biblioteca e as docs vêm junto)"
     )
 
 
@@ -412,8 +414,9 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     pieces = local_versions(settings)
     current = expected_version() or pieces["executavel"]["versao"]
     origin = pieces["bridge"].get("origem")
-    pool = ThreadPoolExecutor(max_workers=3)
+    pool = ThreadPoolExecutor(max_workers=4)
     futures = {
+        "mcp": pool.submit(fetch_json, MCP_PYPI, timeout=budget_s),
         "novomodelo": pool.submit(fetch_json, NOVOMODELO_LATEST, timeout=budget_s),
         "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s),
         "bridge_notas": pool.submit(fetch_json, BRIDGE_LATEST, timeout=budget_s),
@@ -443,6 +446,9 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
             "versao": bridge["mais_recente"],
             **_release_notes(got["bridge_notas"], bridge["mais_recente"], BRIDGE_RELEASES),
         }
+    mcp = _newer(current, got["mcp"], lambda d: d["info"]["version"], MCP_PAGE, mcp_install_command)
+    if mcp["status"] == "nova":
+        mcp["notas"] = f"{CLI_RELEASES}/tag/v{mcp['mais_recente']}"
     if cli["status"] == "nova":
         newest = cli["mais_recente"]
         note = _release_note("novomodelo", newest, current)
@@ -451,8 +457,9 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
             | {"nota": note}
             | {k: v for k, v in notes["novomodelo"].items() if k != "versao"}
         )
-        mcp = {"status": "a_conferir", "novomodelo": newest, "nota": note}
-    else:
+        if mcp["status"] != "nova":
+            mcp = {"status": "a_conferir", "novomodelo": newest, "nota": note}
+    elif mcp["status"] == "nao_foi_possivel_verificar":
         mcp = {"status": cli["status"], "nota": "inferida pela versão do novomodelo"}
     if bridge["status"] == "nova":
         bridge = (
