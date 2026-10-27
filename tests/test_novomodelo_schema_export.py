@@ -68,7 +68,7 @@ def fake_novomodelo_bin(tmp_path):
 
 def test_happy_path_status_ok(monkeypatch, fake_novomodelo_bin):
     monkeypatch.setenv("NOVOMODELO_MCP_SOLVER_BIN", fake_novomodelo_bin)
-    # smoke_* siblings leak NOVOMODELO_MCP_WORKSPACE; drop it so the guard lets us reach the fake CLI.
+    # the caller's environment may set NOVOMODELO_MCP_WORKSPACE; drop it so the guard lets us reach the fake CLI.
     monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
     env = _schema_export_tool(load_settings())()
     assert env["status"] == "ok"

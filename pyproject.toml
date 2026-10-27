@@ -68,9 +68,9 @@ exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md"]
 dev = ["pytest>=8", "ruff>=0.6", "hypothesis>=6"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
-python_files = ["test_*.py", "smoke_*.py"]
+python_files = ["test_*.py"]
 
 [tool.ruff]
 line-length = 100

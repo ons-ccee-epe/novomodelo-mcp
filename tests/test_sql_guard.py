@@ -1,22 +1,10 @@
-#!/usr/bin/env python3
-"""Smoke test do deck_sql / adapters.sql.
+"""deck_sql / adapters.sql: o guard textual (a parte crítica de segurança) e a execução."""
 
-Duas camadas:
-  - GUARD (puro, stdlib): sempre roda — e a parte critica de seguranca.
-  - EXECUCAO (DuckDB + Polars): so roda se as libs existirem; senao, SKIP.
-
-Roda: python3 tests/smoke_sql.py
-"""
-
-import os
-import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
-from novomodelo_mcp.adapters import sql as S  # noqa: E402
+from novomodelo_mcp.adapters import sql as S
 
 WS = [Path("/work").resolve()]
 
@@ -100,31 +88,18 @@ def test_guard_unrestricted_allows_any_local_path():
     assert S.guard_sql("SELECT * FROM read_parquet('http://h/a.parquet')", [])["exit_code"] == 13
 
 
-# ---------- EXECUCAO (precisa de duckdb + polars) ----------
+# ---------- EXECUCAO ----------
 
 
-def _has_exec_libs() -> bool:
-    try:
-        import duckdb  # noqa: F401
-        import polars  # noqa: F401
-
-        return True
-    except ModuleNotFoundError:
-        return False
-
-
-def _settings_for(ws: str):
-    os.environ["NOVOMODELO_MCP_WORKSPACE"] = ws
-    os.environ["NOVOMODELO_MCP_TIMEOUT"] = "30"
+def _settings_for(monkeypatch, ws: str):
+    monkeypatch.setenv("NOVOMODELO_MCP_WORKSPACE", ws)
+    monkeypatch.setenv("NOVOMODELO_MCP_TIMEOUT", "30")
     from novomodelo_mcp.config import load_settings
 
     return load_settings()
 
 
-def test_exec_group_by_and_conditional_count():
-    if not _has_exec_libs():
-        print("  SKIP test_exec_group_by_and_conditional_count (sem duckdb/polars)")
-        return
+def test_exec_group_by_and_conditional_count(monkeypatch):
     import polars as pl
 
     with tempfile.TemporaryDirectory() as d:
@@ -135,7 +110,7 @@ def test_exec_group_by_and_conditional_count():
                 "value_m3s": [-5.0, 10.0, 20.0, 3.0, -1.0],
             }
         ).write_parquet(p)
-        st = _settings_for(d)
+        st = _settings_for(monkeypatch, d)
         q = (
             f"SELECT hydro_id, min(value_m3s) AS mn, "
             f"count(*) FILTER (WHERE value_m3s < 0) AS n_neg "
@@ -148,35 +123,26 @@ def test_exec_group_by_and_conditional_count():
         assert rows[1]["n_neg"] == 1, out
 
 
-def test_exec_truncation_flag():
-    if not _has_exec_libs():
-        print("  SKIP test_exec_truncation_flag (sem duckdb/polars)")
-        return
+def test_exec_truncation_flag(monkeypatch):
     import polars as pl
 
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "t.parquet"
         pl.DataFrame({"x": list(range(10))}).write_parquet(p)
-        st = _settings_for(d)
+        st = _settings_for(monkeypatch, d)
         out = S.run_readonly_sql(f"SELECT x FROM read_parquet('{p}')", settings=st, max_rows=3)
         assert out["status"] == "ok" and out["row_count"] == 3, out
         assert out["truncated"] is True, out
 
 
-def test_exec_path_outside_workspace_blocked_before_run():
-    if not _has_exec_libs():
-        print("  SKIP test_exec_path_outside_workspace_blocked_before_run (sem duckdb/polars)")
-        return
+def test_exec_path_outside_workspace_blocked_before_run(monkeypatch):
     with tempfile.TemporaryDirectory() as d:
-        st = _settings_for(d)
+        st = _settings_for(monkeypatch, d)
         out = S.run_readonly_sql("SELECT * FROM read_parquet('/etc/x.parquet')", settings=st)
         assert out["status"] == "error" and out["exit_code"] == 13, out
 
 
-def test_exec_date_is_jsonable():
-    if not _has_exec_libs():
-        print("  SKIP test_exec_date_is_jsonable (sem duckdb/polars)")
-        return
+def test_exec_date_is_jsonable(monkeypatch):
     import json
 
     import polars as pl
@@ -186,25 +152,7 @@ def test_exec_date_is_jsonable():
         pl.DataFrame({"d": [pl.date(2026, 1, 1)]}).select(
             pl.date(2026, 1, 1).alias("d")
         ).write_parquet(p)
-        st = _settings_for(d)
+        st = _settings_for(monkeypatch, d)
         out = S.run_readonly_sql(f"SELECT d FROM read_parquet('{p}')", settings=st)
         assert out["status"] == "ok", out
         json.dumps(out["rows"])  # nao pode lancar (date -> isoformat str)
-
-
-def main():
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
-    failed = 0
-    for t in tests:
-        try:
-            t()
-            print(f"  PASS {t.__name__}")
-        except AssertionError as e:
-            failed += 1
-            print(f"  FAIL {t.__name__}: {e}")
-    print(f"\n{len(tests) - failed}/{len(tests)} passaram")
-    sys.exit(1 if failed else 0)
-
-
-if __name__ == "__main__":
-    main()

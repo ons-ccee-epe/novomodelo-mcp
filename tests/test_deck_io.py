@@ -1,20 +1,12 @@
-#!/usr/bin/env python3
-"""Smoke test do manipulador de decks (stdlib puro; não usa polars/jsonschema).
-
-Novomodelo: caminhos de campo (get/set), edição de JSON com backup + escrita atômica,
-dry_run, resolução de schema e localização da raiz do caso.
-Roda com: python3 tests/smoke_deck.py
-"""
+"""Manipulador de decks: caminhos de campo (get/set), edição de JSON com backup e
+escrita atômica, dry_run, resolução de schema e localização da raiz do caso."""
 
 import json
-import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
-from novomodelo_mcp.adapters import deck_io  # noqa: E402
+from novomodelo_mcp.adapters import deck_io
 
 
 def test_path_get_set():
@@ -71,21 +63,3 @@ def test_resolve_schema_and_case_dir():
         assert deck_io.resolve_schema(str(case / "config.json"), str(schemas))
         assert deck_io.resolve_schema(str(hydros), str(schemas)) is None  # sem schema
         assert deck_io.find_case_dir(str(hydros)) == str(case.resolve())
-
-
-def main():
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
-    failed = 0
-    for t in tests:
-        try:
-            t()
-            print(f"  PASS {t.__name__}")
-        except AssertionError as e:
-            failed += 1
-            print(f"  FAIL {t.__name__}: {e}")
-    print(f"\n{len(tests) - failed}/{len(tests)} passaram")
-    sys.exit(1 if failed else 0)
-
-
-if __name__ == "__main__":
-    main()

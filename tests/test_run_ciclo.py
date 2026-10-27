@@ -1,31 +1,24 @@
-#!/usr/bin/env python3
-"""Smoke test de init / plano / apply / run assíncrono (stdlib puro, offline).
+"""init / plano / apply / run assíncrono, offline.
 
 Usa o `novomodelo` falso (tests/fake_novomodelo.py, via lançador portável em _fakes.py) e
 uma máquina MOCKADA (machine_id, hostname, cores, RAM) com metadata/config
 sintéticos -> veredito determinístico em qualquer SO. Cada teste usa um state
 dir temporário (NOVOMODELO_MCP_STATE_DIR) — nunca o do usuário.
-A execução REAL do solver só roda com NOVOMODELO_MCP_REAL_SOLVER=1 (fora do CI).
-Roda com: python3 tests/smoke_run.py
 """
 
 import contextlib
 import json
 import os
 import socket
-import sys
 import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "tests"))
 
-from _fakes import fake_bin  # noqa: E402
-from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state  # noqa: E402
-from novomodelo_mcp.config import load_settings  # noqa: E402
-from novomodelo_mcp.tools.run import make_plan, register_run  # noqa: E402
+from _fakes import fake_bin
+from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state
+from novomodelo_mcp.config import load_settings
+from novomodelo_mcp.tools.run import make_plan, register_run
 
 FAKE = fake_bin("fake_novomodelo.py")
 HOST = "host-sintetico"
@@ -630,21 +623,3 @@ def test_real_solver_gated():
         r = t["run_start"](case, threads=1, override=True)
         st = _wait(t, r["job_id"], timeout=300)
         assert st["state"] == "succeeded", (st, t["run_logs"](r["job_id"]))
-
-
-def main():
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
-    failed = 0
-    for t in tests:
-        try:
-            t()
-            print(f"  PASS {t.__name__}")
-        except AssertionError as e:
-            failed += 1
-            print(f"  FAIL {t.__name__}: {e}")
-    print(f"\n{len(tests) - failed}/{len(tests)} passaram")
-    sys.exit(1 if failed else 0)
-
-
-if __name__ == "__main__":
-    main()
