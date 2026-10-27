@@ -247,8 +247,8 @@ def run_readonly_sql(
     if roots:
         # Confinamento no motor: o guard textual nao enxerga caminho montado por
         # expressao (chr(47) || ...). Fail-closed: sem ele, a query nao roda.
-        # Literal, nao parametro (`?`): o parametro faz o DuckDB importar pandas/numpy, e esse
-        # import com o servidor no ar trava no Windows. A releitura mantem o fail-closed.
+        # Literal, nao parametro (`?`): o parametro faz o DuckDB importar pandas e numpy na
+        # primeira consulta. A releitura mantem o fail-closed.
         pastas = [r.as_posix().rstrip("/") + "/" for r in roots]
         lista = ", ".join(_sql_text(p) for p in pastas)
         try:
