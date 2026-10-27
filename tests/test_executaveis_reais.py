@@ -9,6 +9,7 @@ próprios (`--newave-src`, `--decomp-src`); sem eles, ficam puladas.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -593,6 +594,53 @@ def test_bridge_compare_decomp_tolerancia(cliente, caso_bridge, rodada):
     src = _caso(caso_bridge, "decomp")
     argumentos = {"decomp_dir": str(src), "output_dir": rodada["output"], "tolerance": 1.5}
     _tem_status(cliente.chamar("bridge_compare_decomp", argumentos))
+
+
+# ---------- Claude Code: aprovação das tools (modo não interativo) ----------
+
+_LEITURA = "Chame a tool mcp__novomodelo__server_info uma vez e responda apenas OK."
+
+
+@pytest.mark.parametrize(
+    ("tool", "negada", "com_lista"),
+    [
+        pytest.param("server_info", None, False, id="leitura-sem-lista-informativo"),
+        pytest.param("server_info", False, True, id="leitura-com-lista-roda"),
+        pytest.param("case_init", True, False, id="escrita-sem-lista-negada"),
+    ],
+)
+def test_claude_code_aprovacao(request, ws, tool, negada, com_lista):
+    """Em `claude -p`, uma tool que precisaria de aprovação é negada e aparece em
+    `permission_denials`. A leitura sem lista só informa se o cliente usa o hint."""
+    if not request.config.getoption("--claude-code"):
+        pytest.skip("só com --claude-code")
+    exe = shutil.which("claude")
+    assert exe, "comando `claude` não está no PATH"
+    if tool == "server_info":
+        pedido = _LEITURA
+    else:
+        pedido = (
+            f"Chame a tool mcp__novomodelo__case_init com directory={ws / '_e2e' / 'aprovacao'} "
+            "e template=1dtoy, uma vez, e responda apenas OK."
+        )
+    extra = []
+    if com_lista:
+        extra = ["--allowedTools", ",".join(f"mcp__novomodelo__{n}" for n in sorted(READ_ONLY))]
+    proc = subprocess.run(
+        [exe, "-p", pedido, "--output-format", "json", "--max-turns", "3", *extra],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+        check=False,
+    )
+    dados = json.loads(proc.stdout or "{}")
+    assert "permission_denials" in dados, "a saída não tem `permission_denials`"
+    foi_negada = any(tool in json.dumps(d) for d in dados["permission_denials"])
+    if negada is None:
+        print("negada: o Claude Code não usa o hint" if foi_negada else "rodou: usa o hint")
+        return
+    assert foi_negada is negada, "negada" if foi_negada else "rodou sem aprovação"
 
 
 # ---------- fechamento: dependem de todos os anteriores ----------

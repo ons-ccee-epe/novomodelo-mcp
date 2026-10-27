@@ -53,6 +53,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
     grupo.addoption("--newave-src", metavar="PASTA", help="caso NEWAVE próprio")
     grupo.addoption("--decomp-src", metavar="PASTA", help="caso DECOMP próprio")
+    grupo.addoption(
+        "--claude-code",
+        action="store_true",
+        default=False,
+        help="confere, com o Claude Code em modo não interativo, a aprovação das tools",
+    )
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
