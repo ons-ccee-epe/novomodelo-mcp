@@ -69,6 +69,8 @@ python_files = ["test_*.py", "smoke_*.py"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Regras de agente: os exemplos de código nos .md não são código do produto.
+extend-exclude = [".claude", ".kiro"]
 
 [tool.ruff.lint]
 # PLW1514 (open/read_text/write_text sem `encoding`) só existe em preview; o
