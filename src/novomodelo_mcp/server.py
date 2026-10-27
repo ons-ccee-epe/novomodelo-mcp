@@ -202,7 +202,7 @@ def _stdin_proprio() -> None:
 
     No Windows, a leitura pendente do protocolo no pipe do stdin trava a carga de DLL
     nativa (o numpy, numa tool) até chegar a próxima mensagem; com o fd 0 no NUL, a
-    DLL e os subprocessos não tocam no pipe do protocolo.
+    carga da DLL não espera o pipe do protocolo.
     """
     try:
         copia = os.dup(0)
