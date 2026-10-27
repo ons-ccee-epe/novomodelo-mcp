@@ -1,6 +1,6 @@
 """Regressão: caso minúsculo com orçamento estourado não pode quebrar o plano.
 
-Achado pela bateria e2e (scripts/e2e_live.py): `1dtoy` com 1 000 000 de iterações e
+Achado pela bateria de ponta a ponta (tests/test_executaveis_reais.py): `1dtoy` com 1 000 000 de iterações e
 orçamento de 1 s. O tempo de UMA iteração (≈0,003 s) era arredondado para 0,0 e a
 redução de iterações dividia por zero (`ZeroDivisionError`), derrubando o run_start.
 """
