@@ -14,6 +14,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import pytest
+
 
 from _fakes import fake_bin
 from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state
@@ -607,11 +609,9 @@ def test_job_lost_when_runner_dies():
         assert jobs.prune_jobs(settings, keep_days=0) == [d.name]
 
 
-def test_real_solver_gated():
-    """Execução REAL (novomodelo init 1dtoy + 1 iteração). Só com NOVOMODELO_MCP_REAL_SOLVER=1."""
-    if os.environ.get("NOVOMODELO_MCP_REAL_SOLVER") != "1":
-        print("    (pulado: defina NOVOMODELO_MCP_REAL_SOLVER=1 para rodar o solver real)")
-        return
+@pytest.mark.executaveis_reais
+def test_real_solver():
+    """Execução real: novomodelo init 1dtoy + 1 iteração."""
     with _sandbox() as d:
         t = _tools()
         case = str(d / "toy")

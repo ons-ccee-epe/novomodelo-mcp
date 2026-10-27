@@ -71,6 +71,11 @@ dev = ["pytest>=8", "ruff>=0.6", "hypothesis>=6"]
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+addopts = ["--strict-markers"]
+markers = [
+    "executaveis_reais: precisa do novomodelo e do novomodelo-bridge instalados (--executaveis-reais)",
+    "rede: acessa a rede, só os domínios oficiais (--com-rede)",
+]
 
 [tool.ruff]
 line-length = 100

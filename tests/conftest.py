@@ -1,0 +1,43 @@
+"""Opções da suíte: o que depende do ambiente só roda quando pedido.
+
+Por padrão a suíte é offline e usa os binários falsos. Um teste marcado com
+`executaveis_reais` (o `novomodelo` e o `novomodelo-bridge` instalados) ou com `rede`
+(domínios oficiais) é pulado, com o motivo, a menos que a opção correspondente seja
+passada; com a opção, a falta do executável ou da rede vira falha do teste.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+pytest_plugins = ("pytester",)
+
+OPCOES = {
+    "executaveis_reais": "--executaveis-reais",
+    "rede": "--com-rede",
+}
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--executaveis-reais",
+        action="store_true",
+        default=False,
+        help="roda os testes com o novomodelo e o novomodelo-bridge instalados",
+    )
+    parser.addoption(
+        "--com-rede",
+        action="store_true",
+        default=False,
+        help="roda os testes que acessam a rede (domínios oficiais)",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    for marcador, opcao in OPCOES.items():
+        if config.getoption(opcao):
+            continue
+        pular = pytest.mark.skip(reason=f"precisa de {opcao}")
+        for item in items:
+            if marcador in item.keywords:
+                item.add_marker(pular)
