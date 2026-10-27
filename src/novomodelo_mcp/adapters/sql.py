@@ -201,6 +201,10 @@ def guard_sql(query: str, roots: list[Path]) -> dict | None:
     return None
 
 
+def _sql_text(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
 def _jsonable(v: Any) -> Any:
     if isinstance(v, (_dt.date, _dt.datetime, _dt.time)):
         return v.isoformat()
@@ -243,11 +247,16 @@ def run_readonly_sql(
     if roots:
         # Confinamento no motor: o guard textual nao enxerga caminho montado por
         # expressao (chr(47) || ...). Fail-closed: sem ele, a query nao roda.
+        # Literal, nao parametro (`?`): o parametro faz o DuckDB importar pandas/numpy, e esse
+        # import com o servidor no ar trava no Windows. A releitura mantem o fail-closed.
+        pastas = [r.as_posix().rstrip("/") + "/" for r in roots]
+        lista = ", ".join(_sql_text(p) for p in pastas)
         try:
-            con.execute(
-                "SET allowed_directories=?", [[r.as_posix().rstrip("/") + "/" for r in roots]]
-            )
+            con.execute(f"SET allowed_directories=[{lista}]")
             con.execute("SET enable_external_access=false")
+            gravadas = con.execute("SELECT current_setting('allowed_directories')").fetchone()[0]
+            if not set(pastas) <= set(gravadas):
+                raise ValueError(f"allowed_directories gravado diverge: {gravadas}")
         except Exception as exc:  # noqa: BLE001 - qualquer falha aqui recusa a query
             con.close()
             return error(13, "nao foi possivel confinar o SQL ao workspace", str(exc))

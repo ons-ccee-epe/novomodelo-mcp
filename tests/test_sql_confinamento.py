@@ -96,3 +96,36 @@ def test_barra_de_progresso_desligada_porque_ela_sai_no_stdout_do_protocolo(ws):
     )
     out = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout.strip().splitlines()[-1]) == [{"barra": False}], out.stdout
+
+
+def test_consulta_confinada_nao_importa_o_pandas(ws):
+    """Num parâmetro (`?`), o DuckDB importa o pandas e o numpy. No Windows, esse import com o
+    servidor MCP no ar trava o `deck_sql`; o confinamento não pode depender de parâmetro."""
+    import json
+    import subprocess
+    import sys
+
+    settings, dentro, _ = ws
+    codigo = (
+        "import dataclasses, json, sys\n"
+        "from novomodelo_mcp.config import load_settings\n"
+        "from novomodelo_mcp.adapters.sql import run_readonly_sql\n"
+        f"s = dataclasses.replace(load_settings(), workspace={str(dentro)!r})\n"
+        f"r = run_readonly_sql(\"SELECT sum(x) s FROM read_csv('{dentro.as_posix()}/**/*.csv')\", settings=s)\n"
+        "print(json.dumps([r['status'], 'pandas' in sys.modules, 'numpy' in sys.modules]))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout.strip().splitlines()[-1]) == ["ok", False, False], out.stdout
+
+
+def test_pasta_com_aspa_continua_confinada(tmp_path):
+    dentro, fora = tmp_path / "estudo d'água", tmp_path / "fora"
+    dentro.mkdir()
+    fora.mkdir()
+    (dentro / "a.csv").write_text("x\n1\n", encoding="utf-8")
+    (fora / "segredo.csv").write_text("s\nvalor-secreto-q7\n", encoding="utf-8")
+    settings = dataclasses.replace(load_settings(), workspace=str(dentro))
+    literal = (dentro / "a.csv").as_posix().replace("'", "''")
+    r = run_readonly_sql(f"SELECT sum(x) s FROM read_csv('{literal}')", settings=settings)
+    assert r["status"] == "ok" and r["rows"] == [{"s": 1}], r
+    assert _recusado(run_readonly_sql(f'SELECT * FROM "{fora}/segredo.csv"', settings=settings))
