@@ -31,6 +31,28 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="roda os testes que acessam a rede (domínios oficiais)",
     )
+    grupo = parser.getgroup("executaveis_reais", "ponta a ponta (com --executaveis-reais)")
+    grupo.addoption(
+        "--mcp-instalado",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="CAMINHO",
+        help="sobe o novomodelo-mcp instalado (PATH ou CAMINHO) em vez do código-fonte",
+    )
+    grupo.addoption(
+        "--instalar-executavel",
+        action="store_true",
+        default=False,
+        help="antes da bateria, instala o executável pela tool instalar_novomodelo",
+    )
+    grupo.addoption(
+        "--bridge-repo",
+        metavar="PASTA",
+        help="clone do novomodelo-bridge: usa os decks mínimos públicos de tests/decks/",
+    )
+    grupo.addoption("--newave-src", metavar="PASTA", help="caso NEWAVE próprio")
+    grupo.addoption("--decomp-src", metavar="PASTA", help="caso DECOMP próprio")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
