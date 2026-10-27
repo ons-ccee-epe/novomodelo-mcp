@@ -75,10 +75,11 @@ jobs:
           sparse-checkout: tests/decks
           persist-credentials: false
 
-      - name: e2e_live
+      - name: Testes com os executáveis reais (pytest)
+        # A ordem dos arquivos importa: o primeiro instala o executável que o solver real usa.
         run: >
-          uv run python scripts/e2e_live.py --workspace "$RUNNER_TEMP/estudos"
-          --bridge-repo _bridge --instalar-executavel
+          uv run pytest -rs tests/test_executaveis_reais.py tests/test_run_ciclo.py
+          --executaveis-reais --com-rede --instalar-executavel --bridge-repo _bridge
 
   rename-guard:
     # TEMPORÁRIO: existe só enquanto o MCP vive fora do repo do novomodelo.
