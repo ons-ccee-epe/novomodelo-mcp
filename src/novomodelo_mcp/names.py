@@ -5,6 +5,7 @@ evita repetir a mesma string em vários módulos. Não é mecanismo de rename �
 rename do produto é feito pela ferramenta `rebrand.py` + `map.toml`, que
 reescreve este arquivo junto com o resto do repositório.
 """
+
 from __future__ import annotations
 
 #: Nome do servidor MCP (o cliente prefixa as tools com ele: `mcp__<nome>__<tool>`).

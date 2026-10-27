@@ -1,4 +1,5 @@
 """`bridge_convert_decomp(importar_fcf=False)` passa `--no-fcf`; o NEWAVE não tem a opção."""
+
 import inspect
 
 import pytest
@@ -15,14 +16,20 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
 @pytest.fixture
 def tools(monkeypatch):
     argvs = []
-    monkeypatch.setattr(pre_run, "run_bridge", lambda argv, **kw: argvs.append(argv)
-                        or {"status": "ok", "exit_code": 0, "diagnostics": []})
+    monkeypatch.setattr(
+        pre_run,
+        "run_bridge",
+        lambda argv, **kw: (
+            argvs.append(argv) or {"status": "ok", "exit_code": 0, "diagnostics": []}
+        ),
+    )
     monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
     mcp = _CaptureMCP()
     pre_run.register_pre_run(mcp, load_settings())

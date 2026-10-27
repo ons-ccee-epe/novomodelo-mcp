@@ -7,6 +7,7 @@ Uso:
 Não é um teste de CI (não usa pytest). É um "smoke" interativo para ver o
 servidor conversando com o novomodelo-bridge real.
 """
+
 from __future__ import annotations
 
 import asyncio

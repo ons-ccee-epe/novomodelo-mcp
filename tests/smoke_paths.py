@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Smoke test do guard de workspace (stdlib puro). Roda: python3 tests/smoke_paths.py"""
+
 import os
 import sys
 import tempfile
@@ -8,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from novomodelo_mcp.config import load_settings              # noqa: E402
+from novomodelo_mcp.config import load_settings  # noqa: E402
 from novomodelo_mcp.adapters.paths import ensure_in_workspace  # noqa: E402
 
 
@@ -51,9 +52,12 @@ class _Ambiente:
     """Workspace, state dir e HOME temporários; restaura o ambiente na saída."""
 
     def __init__(self, roots, base):
-        self.vals = {"NOVOMODELO_MCP_WORKSPACE": os.pathsep.join(str(r) for r in roots),
-                     "NOVOMODELO_MCP_STATE_DIR": str(Path(base) / "state"),
-                     "USERPROFILE": str(Path(base) / "casa"), "HOME": str(Path(base) / "casa")}
+        self.vals = {
+            "NOVOMODELO_MCP_WORKSPACE": os.pathsep.join(str(r) for r in roots),
+            "NOVOMODELO_MCP_STATE_DIR": str(Path(base) / "state"),
+            "USERPROFILE": str(Path(base) / "casa"),
+            "HOME": str(Path(base) / "casa"),
+        }
 
     def __enter__(self):
         self.old = {k: os.environ.get(k) for k in _VARS}
@@ -71,6 +75,7 @@ class _Ambiente:
 
 def test_refusal_tells_agent_not_to_bypass_and_suggests_the_folder():
     from novomodelo_mcp.adapters.paths import NAO_CONTORNE
+
     with tempfile.TemporaryDirectory() as d:
         ws, fora = Path(d) / "ws", Path(d) / "Meus Estudos"
         ws.mkdir()
@@ -105,6 +110,7 @@ def test_refusal_suggests_the_resolved_folder_not_the_dotdot_text():
 
 def test_included_folders_are_accepted_at_once_and_others_still_refused():
     from novomodelo_mcp.adapters.paths import include_folders
+
     with tempfile.TemporaryDirectory() as d:
         ws, a, b, c = (Path(d) / n for n in ("ws", "a", "b", "c"))
         for p in (ws, a, b, c):
@@ -112,7 +118,10 @@ def test_included_folders_are_accepted_at_once_and_others_still_refused():
         with _Ambiente([ws], d) as st:
             assert ensure_in_workspace(str(a), settings=st)["exit_code"] == 13
             out = include_folders([str(a), str(b)], settings=st)
-            assert out["status"] == "ok" and out["incluidas"] == [str(a.resolve()), str(b.resolve())], out
+            assert out["status"] == "ok" and out["incluidas"] == [
+                str(a.resolve()),
+                str(b.resolve()),
+            ], out
             assert ensure_in_workspace(str(a / "caso"), str(b), settings=st) is None
             assert ensure_in_workspace(str(ws), settings=st) is None
             assert ensure_in_workspace(str(c), settings=st)["exit_code"] == 13
@@ -122,13 +131,20 @@ def test_included_folders_are_accepted_at_once_and_others_still_refused():
 
 def test_include_refuses_home_root_config_and_missing_folders():
     from novomodelo_mcp.adapters.paths import include_folders
+
     with tempfile.TemporaryDirectory() as d:
         ws = Path(d) / "ws"
         ws.mkdir()
         with _Ambiente([ws], d) as st:
             casa = Path(os.environ["HOME"])
-            perigosas = [str(casa), str(casa / ".ssh"), str(Path(d)), Path(d).anchor,
-                         str(Path(d) / "nao-existe"), str(Path(d) / "state")]
+            perigosas = [
+                str(casa),
+                str(casa / ".ssh"),
+                str(Path(d)),
+                Path(d).anchor,
+                str(Path(d) / "nao-existe"),
+                str(Path(d) / "state"),
+            ]
             out = include_folders(perigosas, settings=st)
             assert out["status"] == "error" and out["exit_code"] == 22, out
             assert len(out["recusadas"]) == len(perigosas), out
@@ -145,8 +161,10 @@ def test_unreadable_included_file_grants_nothing():
         with _Ambiente([ws], d) as st:
             assert ensure_in_workspace(str(fora), settings=st)["exit_code"] == 13
 
+
 def test_results_query_entity_traversal_blocked():
     from novomodelo_mcp.adapters.results import simulation_query
+
     with tempfile.TemporaryDirectory() as d:
         ws = Path(d) / "ws"
         (ws / "output" / "simulation").mkdir(parents=True)
@@ -159,6 +177,7 @@ def test_results_query_entity_traversal_blocked():
 def test_find_case_dir_stops_at_workspace_root():
     from novomodelo_mcp.adapters.deck_io import find_case_dir
     from novomodelo_mcp.adapters.paths import allowed_roots
+
     with tempfile.TemporaryDirectory() as d:
         (Path(d) / "config.json").write_text("{}", encoding="utf-8")
         ws = Path(d) / "ws"
@@ -172,19 +191,21 @@ def test_find_case_dir_stops_at_workspace_root():
 
 def test_schema_tipo_must_be_a_plain_name():
     from novomodelo_mcp.adapters.reference import read_schema
+
     for tipo in ("D:segredo", "../config", "a.b"):
         assert read_schema(load_settings(), tipo)["status"] == "error", tipo
 
 
 def main():
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
     for t in tests:
         try:
-            t(); print(f"  PASS {t.__name__}")
+            t()
+            print(f"  PASS {t.__name__}")
         except AssertionError as e:
-            failed += 1; print(f"  FAIL {t.__name__}: {e}")
+            failed += 1
+            print(f"  FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passaram")
     sys.exit(1 if failed else 0)
 

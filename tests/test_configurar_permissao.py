@@ -1,5 +1,6 @@
 """O `configurar` não abre a config do cliente para outros usuários: o arquivo regravado
 e o backup saem sempre em 0600."""
+
 import os
 import stat
 import sys

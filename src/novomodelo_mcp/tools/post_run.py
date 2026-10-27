@@ -2,6 +2,7 @@
 
 Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,14 +21,16 @@ FormatoCompare = Literal["console", "html", "csv", "parquet", "json", "all"]
 
 
 def _tolerance_type_error(tolerance) -> dict | None:
-    if tolerance is None or (isinstance(tolerance, (int, float))
-                             and not isinstance(tolerance, bool)):
+    if tolerance is None or (
+        isinstance(tolerance, (int, float)) and not isinstance(tolerance, bool)
+    ):
         return None
     return error(2, "tolerance deve ser número", f"recebido: {tolerance!r}")
 
 
-def _compare(kind: str, src_dir: str, output_dir: str, tolerance, fmt, out_dir,
-             settings: Settings) -> dict:
+def _compare(
+    kind: str, src_dir: str, output_dir: str, tolerance, fmt, out_dir, settings: Settings
+) -> dict:
     argv = ["compare", kind, src_dir, output_dir]
     if tolerance is not None:
         argv += ["--tolerance", str(tolerance)]
@@ -64,12 +67,11 @@ def register_post_run(mcp, settings: Settings) -> None:
         vários, uma chamada por formato. O veredito de aderência está no envelope
         (`status`/`diagnostics`), não no código de saída.
         """
-        if (err := ensure_in_workspace(newave_dir, output_dir, out_dir, settings=settings)):
+        if err := ensure_in_workspace(newave_dir, output_dir, out_dir, settings=settings):
             return err
-        if (err := _tolerance_type_error(tolerance)):
+        if err := _tolerance_type_error(tolerance):
             return err
-        return _compare("newave", newave_dir, output_dir, tolerance, fmt, out_dir,
-                        settings)
+        return _compare("newave", newave_dir, output_dir, tolerance, fmt, out_dir, settings)
 
     @mcp.tool(annotations=WRITES)
     def bridge_compare_decomp(
@@ -87,12 +89,11 @@ def register_post_run(mcp, settings: Settings) -> None:
         chamada por formato); o relatório HTML acrescenta seções de REE,
         restrições e evaporação.
         """
-        if (err := ensure_in_workspace(decomp_dir, output_dir, out_dir, settings=settings)):
+        if err := ensure_in_workspace(decomp_dir, output_dir, out_dir, settings=settings):
             return err
-        if (err := _tolerance_type_error(tolerance)):
+        if err := _tolerance_type_error(tolerance):
             return err
-        return _compare("decomp", decomp_dir, output_dir, tolerance, fmt, out_dir,
-                        settings)
+        return _compare("decomp", decomp_dir, output_dir, tolerance, fmt, out_dir, settings)
 
     @mcp.tool(annotations=WRITES)
     def bridge_dashboard(case_dir: str, output: str | None = None) -> dict:
@@ -103,7 +104,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         pasta precisa existir. O caminho volta em `artifacts.dashboard`.
         Nunca devolve o HTML inteiro — apenas metadados e caminho.
         """
-        if (err := ensure_in_workspace(case_dir, output, settings=settings)):
+        if err := ensure_in_workspace(case_dir, output, settings=settings):
             return err
         argv = ["dashboard", case_dir]
         if output:

@@ -1,4 +1,5 @@
 """Argumentos comuns a todo subprocesso que o servidor lança."""
+
 from __future__ import annotations
 
 import subprocess
@@ -10,5 +11,6 @@ from typing import Any
 # flag abre uma janela. `test_subprocess_sem_janela` cobra isso em toda chamada.
 NO_WINDOW: dict[str, Any] = (
     {"creationflags": subprocess.CREATE_NO_WINDOW}  # type: ignore[attr-defined]  # só existe no Windows
-    if sys.platform == "win32" else {}
+    if sys.platform == "win32"
+    else {}
 )

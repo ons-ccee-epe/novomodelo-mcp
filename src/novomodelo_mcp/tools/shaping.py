@@ -1,4 +1,5 @@
 """Moldagem de saída: garante que nenhuma resposta estoure o contexto do agente."""
+
 from __future__ import annotations
 
 import json
@@ -52,8 +53,7 @@ def cap_envelope(envelope: dict[str, Any], settings: Settings) -> dict[str, Any]
 _VARIABLE_PARTS = re.compile(r"'[^']*'|\"[^\"]*\"|`[^`]*`|\d+(?:\.\d+)?")
 
 
-def group_diagnostics(items: list[Any], max_groups: int,
-                      max_examples: int = 3) -> dict[str, Any]:
+def group_diagnostics(items: list[Any], max_groups: int, max_examples: int = 3) -> dict[str, Any]:
     """Agrupa diagnósticos por `kind` + mensagem sem números e trechos entre aspas.
 
     Só conta, nada some: somados todos os grupos (antes do teto `max_groups`), os
@@ -66,11 +66,17 @@ def group_diagnostics(items: list[Any], max_groups: int,
         else:
             kind, message = None, str(item)
         template = _VARIABLE_PARTS.sub("…", message)
-        group = groups.setdefault((kind, template), {
-            "kind": kind, "mensagem_modelo": template, "count": 0, "exemplos": []})
+        group = groups.setdefault(
+            (kind, template),
+            {"kind": kind, "mensagem_modelo": template, "count": 0, "exemplos": []},
+        )
         group["count"] += 1
         if len(group["exemplos"]) < max_examples:
             group["exemplos"].append(item)
     ordered = sorted(groups.values(), key=lambda g: (-g["count"], str(g["kind"])))
-    return {"grupos": ordered[:max_groups], "total": len(items),
-            "grupos_total": len(ordered), "grupos_truncados": len(ordered) > max_groups}
+    return {
+        "grupos": ordered[:max_groups],
+        "total": len(items),
+        "grupos_total": len(ordered),
+        "grupos_truncados": len(ordered) > max_groups,
+    }

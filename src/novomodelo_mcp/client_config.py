@@ -6,6 +6,7 @@ padrão: vem de `--workspace`, da pergunta no terminal, ou é recusada de propó
 `--irrestrito`. Antes de gravar faz backup
 `<arquivo>.bak-AAAAMMDD-HHMMSS`; grava de forma atômica e relê o JSON.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,8 +39,12 @@ class ConfigError(Exception):
 def read_only_tools() -> list[str]:
     """As tools com `readOnlyHint=True` do servidor montado (fonte única)."""
     from .server import build_server
-    return sorted(t.name for t in build_server()._tool_manager.list_tools()
-                  if t.annotations and t.annotations.readOnlyHint)
+
+    return sorted(
+        t.name
+        for t in build_server()._tool_manager.list_tools()
+        if t.annotations and t.annotations.readOnlyHint
+    )
 
 
 def server_command() -> tuple[str, list[str]]:
@@ -89,13 +94,15 @@ def _install_paths(client: str) -> list[Path]:
 
 def _config_dir(client: str) -> Path:
     return {"claude-code": _home() / ".claude", "kiro": _home() / ".kiro"}.get(
-        client, config_path(client).parent)
+        client, config_path(client).parent
+    )
 
 
 def client_found(client: str) -> bool:
     """O programa (no PATH ou no lugar de instalação) ou a pasta de configuração existe."""
-    return (any(shutil.which(name) for name in _PROGRAMS[client])
-            or any(p.exists() for p in [*_install_paths(client), _config_dir(client)]))
+    return any(shutil.which(name) for name in _PROGRAMS[client]) or any(
+        p.exists() for p in [*_install_paths(client), _config_dir(client)]
+    )
 
 
 def server_entry(client: str, workspace: list[str]) -> dict[str, Any]:
@@ -116,8 +123,10 @@ def _load(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_bytes().decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ConfigError(f"{path} não é um JSON válido ({exc}); corrija ou mova o "
-                          "arquivo e rode de novo. Nada foi gravado.") from None
+        raise ConfigError(
+            f"{path} não é um JSON válido ({exc}); corrija ou mova o "
+            "arquivo e rode de novo. Nada foi gravado."
+        ) from None
     if not isinstance(data, dict):
         raise ConfigError(f"{path} não contém um objeto JSON. Nada foi gravado.")
     return data
@@ -151,8 +160,11 @@ def _instructions_change(client: str) -> tuple[Path, str] | None:
         current = path.read_bytes().decode("utf-8") if path.exists() else ""
         if INSTRUCTIONS_MARK in current:
             return path, current
-        sep = "" if not current or current.endswith("\n\n") else (
-            "\n" if current.endswith("\n") else "\n\n")
+        sep = (
+            ""
+            if not current or current.endswith("\n\n")
+            else ("\n" if current.endswith("\n") else "\n\n")
+        )
         return path, f"{current}{sep}{INSTRUCTIONS_MARK}\n{INSTRUCTIONS_LINE}\n"
     if client == "kiro":
         path = home / ".kiro" / "steering" / "novomodelo.md"
@@ -166,13 +178,19 @@ def plan(client: str, workspace: list[str], instructions: bool) -> list[tuple[Pa
     pode trazer histórico e dados de outros servidores."""
     entry = server_entry(client, workspace)
     path = config_path(client)
-    changes = [(path, _dump(_with_server(_load(path), entry)),
-                _dump({"mcpServers": {SERVER_NAME: entry}}))]
+    changes = [
+        (path, _dump(_with_server(_load(path), entry)), _dump({"mcpServers": {SERVER_NAME: entry}}))
+    ]
     if client == "claude-code":
         settings = _home() / ".claude" / "settings.json"
         rules = allow_rules(read_only_tools())
-        changes.append((settings, _dump(_with_allow(_load(settings), rules)),
-                        _dump({"permissions": {"allow": rules}})))
+        changes.append(
+            (
+                settings,
+                _dump(_with_allow(_load(settings), rules)),
+                _dump({"permissions": {"allow": rules}}),
+            )
+        )
     if instructions and (extra := _instructions_change(client)):
         changes.append((*extra, f"{INSTRUCTIONS_MARK}\n{INSTRUCTIONS_LINE}\n"))
     return changes
@@ -236,23 +254,27 @@ def apply(changes: list[tuple[Path, str, str]]) -> list[dict[str, str]]:
 
 _BEFORE_WRITE = {
     "claude-code": "Feche o Claude Code antes de gravar: ele reescreve o ~/.claude.json "
-                   "enquanto está aberto.",
+    "enquanto está aberto.",
 }
 _NOTES = {
     "claude-desktop": "No Claude Desktop não há lista de liberação: na primeira chamada de "
-                      "cada tool de leitura, escolha \"sempre permitir\".",
+    'cada tool de leitura, escolha "sempre permitir".',
     "kiro": "O mcp.json de um workspace (.kiro/settings/mcp.json) vence o do usuário.",
 }
 REOPEN = "Feche e abra o cliente e peça o server_info."
-SEM_PASTA = ("erro: informe a pasta de estudos com --workspace <pasta> (repita para mais de "
-             "uma). Para liberar todas as pastas, use --irrestrito. Nada foi gravado.")
+SEM_PASTA = (
+    "erro: informe a pasta de estudos com --workspace <pasta> (repita para mais de "
+    "uma). Para liberar todas as pastas, use --irrestrito. Nada foi gravado."
+)
 
 
 def ask_workspace() -> list[str]:
     """Pergunta as pastas de estudos no terminal; resposta vazia pergunta de novo, sem padrão."""
     print("Em que pasta ficam seus estudos (decks e casos)? O MCP só lê e grava dentro dela.")
-    print("Uma pasta por linha; linha vazia termina. Se ainda não tem uma, digite, por "
-          f"exemplo, {_home() / 'novomodelo'} (a pasta é criada).")
+    print(
+        "Uma pasta por linha; linha vazia termina. Se ainda não tem uma, digite, por "
+        f"exemplo, {_home() / 'novomodelo'} (a pasta é criada)."
+    )
     pastas: list[str] = []
     while True:
         try:
@@ -268,17 +290,28 @@ def ask_workspace() -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog=f"{MCP_DIST} configurar",
-        description="Grava a entrada do MCP no arquivo de configuração do cliente.")
+        description="Grava a entrada do MCP no arquivo de configuração do cliente.",
+    )
     parser.add_argument("--cliente", choices=CLIENTS, required=True)
     pasta = parser.add_mutually_exclusive_group()
-    pasta.add_argument("--workspace", action="append", default=[], metavar="PASTA",
-                       help="pasta de estudos permitida (repita para mais de uma)")
-    pasta.add_argument("--irrestrito", action="store_true",
-                       help="sem pasta de trabalho: o MCP lê e grava em qualquer pasta")
-    parser.add_argument("--mostrar", action="store_true",
-                        help="só mostra o que seria gravado, sem tocar em nada")
-    parser.add_argument("--instrucoes", action="store_true",
-                        help="também grava uma linha nas instruções do cliente")
+    pasta.add_argument(
+        "--workspace",
+        action="append",
+        default=[],
+        metavar="PASTA",
+        help="pasta de estudos permitida (repita para mais de uma)",
+    )
+    pasta.add_argument(
+        "--irrestrito",
+        action="store_true",
+        help="sem pasta de trabalho: o MCP lê e grava em qualquer pasta",
+    )
+    parser.add_argument(
+        "--mostrar", action="store_true", help="só mostra o que seria gravado, sem tocar em nada"
+    )
+    parser.add_argument(
+        "--instrucoes", action="store_true", help="também grava uma linha nas instruções do cliente"
+    )
     args = parser.parse_args(argv)
     if not args.workspace and not args.irrestrito:
         if not sys.stdin.isatty():
@@ -296,8 +329,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cliente in _BEFORE_WRITE:
         print(_BEFORE_WRITE[args.cliente])
     if not client_found(args.cliente):
-        print(f"{CLIENT_NAMES[args.cliente]} não encontrado nesta máquina; a configuração fica "
-              "pronta para quando você instalar.")
+        print(
+            f"{CLIENT_NAMES[args.cliente]} não encontrado nesta máquina; a configuração fica "
+            "pronta para quando você instalar."
+        )
     if args.mostrar:
         for path, _, fragment in changes:
             print(f"── {path} (só o trecho que muda; o resto do arquivo é mantido)\n{fragment}")
@@ -305,8 +340,10 @@ def main(argv: list[str] | None = None) -> int:
         try:
             created = create_workspaces(args.workspace)
         except OSError as exc:
-            print(f"erro: não foi possível criar a pasta do workspace ({exc}). Nada foi gravado.",
-                  file=sys.stderr)
+            print(
+                f"erro: não foi possível criar a pasta do workspace ({exc}). Nada foi gravado.",
+                file=sys.stderr,
+            )
             return 1
         for root in created:
             print(f"pasta criada: {root}")

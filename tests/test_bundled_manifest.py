@@ -1,4 +1,5 @@
 """`sync_bundled`: páginas resolvidas (sem `_impl`), manifesto, índice FTS5 e `--check`."""
+
 import json
 import sqlite3
 import subprocess
@@ -97,15 +98,25 @@ def _fixture(tmp_path: Path) -> Path:
     (docs / "index.mdx").write_text(INDEX, encoding="utf-8")
     (docs / "reference" / "glossary.md").write_text(GLOSSARY, encoding="utf-8")
     (src / "public" / "schemas").mkdir(parents=True)
-    (src / "public" / "schemas" / "config.schema.json").write_text('{"type": "object"}', encoding="utf-8")
-    (src / "versions.json").write_text(json.dumps(
-        {"latest": {"label": "latest", "base": "/", "novomodelo": "v0.18.0"}, "versions": []}), encoding="utf-8")
+    (src / "public" / "schemas" / "config.schema.json").write_text(
+        '{"type": "object"}', encoding="utf-8"
+    )
+    (src / "versions.json").write_text(
+        json.dumps(
+            {"latest": {"label": "latest", "base": "/", "novomodelo": "v0.18.0"}, "versions": []}
+        ),
+        encoding="utf-8",
+    )
     return src
 
 
 def _sync(src: Path, dest: Path, *extra: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(SCRIPT), "--source", str(src), "--dest", str(dest),
-                           *extra], capture_output=True, encoding="utf-8", errors="replace")
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "--source", str(src), "--dest", str(dest), *extra],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+    )
 
 
 @pytest.fixture
@@ -138,8 +149,12 @@ def test_nenhum_componente_mdx_sobra(synced):
         text = p.read_text(encoding="utf-8")
         for tag in ("<Tabs", "<TabItem", "<CardGrid", "<LinkCard", "{/*"):
             assert tag not in text, (p, tag)
-    assert "**Configure**" in (dest / "docs" / "math" / "sddp-algorithm.mdx").read_text(encoding="utf-8")
-    assert "[Getting started](/getting-started/)" in (dest / "docs" / "index.mdx").read_text(encoding="utf-8")
+    assert "**Configure**" in (dest / "docs" / "math" / "sddp-algorithm.mdx").read_text(
+        encoding="utf-8"
+    )
+    assert "[Getting started](/getting-started/)" in (dest / "docs" / "index.mdx").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_manifesto_e_uma_linha_por_secao(synced):
@@ -148,10 +163,15 @@ def test_manifesto_e_uma_linha_por_secao(synced):
     assert man["docs_versao"] == "0.18.0" and man["paginas"] == 3
     assert {"docs_commit", "gerado_em", "secoes"} <= set(man)
     con = sqlite3.connect(dest / "docs_index.sqlite")
-    rows = con.execute("SELECT pagina, titulo, ancora FROM secoes WHERE pagina = 'math/sddp-algorithm'"
-                       ).fetchall()
-    assert [r[2] for r in rows] == ["", "32-backward-pass", "scheduler-configuration",
-                                    "trainingparallelism"]
+    rows = con.execute(
+        "SELECT pagina, titulo, ancora FROM secoes WHERE pagina = 'math/sddp-algorithm'"
+    ).fetchall()
+    assert [r[2] for r in rows] == [
+        "",
+        "32-backward-pass",
+        "scheduler-configuration",
+        "trainingparallelism",
+    ]
     assert man["secoes"] == con.execute("SELECT count(*) FROM secoes").fetchone()[0]
 
 
@@ -185,8 +205,10 @@ def test_indice_do_script_e_o_de_memoria_tem_as_mesmas_secoes(synced):
 
 def test_slug_no_formato_do_site():
     assert REF.slugify("3.2 Backward Pass") == "32-backward-pass"
-    assert REF.slugify("`training.parallelism` — Backward-Pass Scheduler") == \
-        "trainingparallelism--backward-pass-scheduler"
+    assert (
+        REF.slugify("`training.parallelism` — Backward-Pass Scheduler")
+        == "trainingparallelism--backward-pass-scheduler"
+    )
     assert REF.slugify("2 Conditional Value-at-Risk (CVaR)") == "2-conditional-value-at-risk-cvar"
 
 
@@ -199,15 +221,21 @@ def test_bundled_do_repositorio_tem_manifesto_e_indice_pequeno():
 
 def test_docs_embutidas_na_versao_do_mcp():
     import novomodelo_mcp
+
     man = json.loads((BUNDLED / "manifest.json").read_text(encoding="utf-8"))
     menor = lambda v: tuple(v.split(".")[:2])  # noqa: E731
     assert menor(man["docs_versao"]) == menor(novomodelo_mcp.__version__), (
-        "docs embutidas de outra versão: rode scripts/sync_bundled.py com as docs da versão do MCP")
+        "docs embutidas de outra versão: rode scripts/sync_bundled.py com as docs da versão do MCP"
+    )
 
 
 def test_docs_embutidas_trazem_a_truncagem_do_larroyd(monkeypatch):
     from novomodelo_mcp.config import load_settings
+
     monkeypatch.delenv("NOVOMODELO_MCP_DOCS_DIR", raising=False)
     hits = REF.search_docs(load_settings(), "Relation to Larroyd", k=5)
-    assert any(h["pagina"] == "math/inflow-nonnegativity" and h["titulo"].startswith("6.2 Relation to Larroyd")
-               for h in hits["resultados"])
+    assert any(
+        h["pagina"] == "math/inflow-nonnegativity"
+        and h["titulo"].startswith("6.2 Relation to Larroyd")
+        for h in hits["resultados"]
+    )

@@ -4,6 +4,7 @@ No Windows, com uma leitura pendente do servidor nesse pipe, o filho que consult
 stdin (a inicialização do Python faz isso) fica bloqueado até o cliente mandar outra
 mensagem; como o cliente espera a resposta da tool, a chamada só sai no timeout.
 """
+
 import ast
 import json
 import os
@@ -26,10 +27,14 @@ def _chamadas_sem_stdin():
     faltando = []
     for arquivo in sorted(SRC.rglob("*.py")):
         for no in ast.walk(ast.parse(arquivo.read_text(encoding="utf-8"))):
-            if (isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute)
-                    and isinstance(no.func.value, ast.Name) and no.func.value.id == "subprocess"
-                    and no.func.attr in CHAMADAS
-                    and not any(k.arg == "stdin" for k in no.keywords)):
+            if (
+                isinstance(no, ast.Call)
+                and isinstance(no.func, ast.Attribute)
+                and isinstance(no.func.value, ast.Name)
+                and no.func.value.id == "subprocess"
+                and no.func.attr in CHAMADAS
+                and not any(k.arg == "stdin" for k in no.keywords)
+            ):
                 faltando.append(f"{arquivo.relative_to(SRC)}:{no.lineno}")
     return faltando
 
@@ -46,8 +51,13 @@ def test_bridge_responde_pelo_servidor_aberto_por_um_cliente_mcp(tmp_path):
         params = StdioServerParameters(
             command=sys.executable,
             args=["-c", "from novomodelo_mcp.server import main; main()"],
-            env={**os.environ, "NOVOMODELO_MCP_BRIDGE_BIN": fake_bin("fake_novomodelo_bridge.py"),
-                 "NOVOMODELO_MCP_WORKSPACE": str(tmp_path), "NOVOMODELO_MCP_TIMEOUT": "30"})
+            env={
+                **os.environ,
+                "NOVOMODELO_MCP_BRIDGE_BIN": fake_bin("fake_novomodelo_bridge.py"),
+                "NOVOMODELO_MCP_WORKSPACE": str(tmp_path),
+                "NOVOMODELO_MCP_TIMEOUT": "30",
+            },
+        )
         async with stdio_client(params) as (r, w), mcp.ClientSession(r, w) as sessao:
             await sessao.initialize()
             inicio = time.monotonic()

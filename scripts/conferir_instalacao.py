@@ -6,6 +6,7 @@ Confere que o `initialize` anuncia a versão esperada e que as tools aparecem. C
 `--server-info`, também chama o `server_info` (usa a rede para a versão nova) e confere
 a versão do MCP e as docs embutidas. Só biblioteca padrão: roda fora do checkout.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,14 +20,22 @@ class Falha(Exception):
 
 
 def _sessao(cmd: list[str]):
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, encoding="utf-8", errors="replace")
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+    )
     ids = iter(range(1, 1000))
 
     def pedir(method: str, params: dict | None = None) -> dict:
         req_id = next(ids)
-        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": req_id, "method": method,
-                                     "params": params or {}}) + "\n")
+        proc.stdin.write(
+            json.dumps({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params or {}})
+            + "\n"
+        )
         proc.stdin.flush()
         while True:
             line = proc.stdout.readline()
@@ -49,8 +58,14 @@ def conferir(cmd: list[str], versao: str, server_info: bool) -> list[str]:
     proc, pedir, avisar = _sessao(cmd)
     linhas = []
     try:
-        init = pedir("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
-                                    "clientInfo": {"name": "conferir_instalacao", "version": "1"}})
+        init = pedir(
+            "initialize",
+            {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "conferir_instalacao", "version": "1"},
+            },
+        )
         avisar("notifications/initialized")
         anunciada = init["serverInfo"]["version"]
         if anunciada != versao:
@@ -68,8 +83,12 @@ def conferir(cmd: list[str], versao: str, server_info: bool) -> list[str]:
             if info.get("docs", {}).get("origem") != "embutidas":
                 raise Falha(f"docs não são as embutidas: {info.get('docs')}")
             pecas = info.get("versoes", {})
-            linhas.append("server_info: " + ", ".join(
-                f"{k} {v.get('versao')}" for k, v in pecas.items() if isinstance(v, dict)))
+            linhas.append(
+                "server_info: "
+                + ", ".join(
+                    f"{k} {v.get('versao')}" for k, v in pecas.items() if isinstance(v, dict)
+                )
+            )
             linhas += [f"aviso: {a}" for a in info.get("avisos_de_versao", [])]
     finally:
         proc.stdin.close()

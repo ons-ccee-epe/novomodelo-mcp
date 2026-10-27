@@ -1,4 +1,5 @@
 """Avisos repetidos do `case_validate` viram grupos com contagem; nenhum some da conta."""
+
 import dataclasses
 
 import novomodelo_mcp.tools.pre_run as pre_run
@@ -7,10 +8,24 @@ from novomodelo_mcp.tools.shaping import group_diagnostics
 
 
 def _repetidos():
-    hidro = [{"kind": "hydro", "message": f"usina {i} sem curva de 'jusante_{i}'",
-              "file": "system/hydros.json", "entity": f"hydro {i}"} for i in range(490)]
-    outro = [{"kind": "stage", "message": f"estágio {i} com duração 0.5 h",
-              "file": "stages.json", "entity": f"stage {i}"} for i in range(6)]
+    hidro = [
+        {
+            "kind": "hydro",
+            "message": f"usina {i} sem curva de 'jusante_{i}'",
+            "file": "system/hydros.json",
+            "entity": f"hydro {i}",
+        }
+        for i in range(490)
+    ]
+    outro = [
+        {
+            "kind": "stage",
+            "message": f"estágio {i} com duração 0.5 h",
+            "file": "stages.json",
+            "entity": f"stage {i}",
+        }
+        for i in range(6)
+    ]
     return hidro + outro
 
 
@@ -53,6 +68,7 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -60,9 +76,18 @@ def test_case_validate_agrupa_avisos_e_mantem_erros_um_a_um(tmp_path, monkeypatc
     monkeypatch.delenv("NOVOMODELO_MCP_WORKSPACE", raising=False)
     settings = dataclasses.replace(load_settings(), max_diagnostics=50)
     erros = [{"kind": "hydro", "message": f"erro {i}"} for i in range(60)]
-    monkeypatch.setattr(pre_run, "validate_deck_binding", lambda case, settings, output_dir=None: {
-        "status": "error", "exit_code": 1, "diagnostics": [], "valid": False,
-        "errors": erros, "warnings": _repetidos()})
+    monkeypatch.setattr(
+        pre_run,
+        "validate_deck_binding",
+        lambda case, settings, output_dir=None: {
+            "status": "error",
+            "exit_code": 1,
+            "diagnostics": [],
+            "valid": False,
+            "errors": erros,
+            "warnings": _repetidos(),
+        },
+    )
     mcp = _CaptureMCP()
     pre_run.register_pre_run(mcp, settings)
     env = mcp.tools["case_validate"](str(tmp_path))

@@ -1,4 +1,5 @@
 """As tools de resultados recusam a pasta do caso e apontam a pasta da rodada."""
+
 import dataclasses
 import json
 
@@ -17,6 +18,7 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -35,7 +37,8 @@ def caso(tmp_path):
     caso = tmp_path / "caso"
     (caso / "output" / "training").mkdir(parents=True)
     (caso / "output" / "training" / "metadata.json").write_text(
-        json.dumps({"status": "complete"}), encoding="utf-8")
+        json.dumps({"status": "complete"}), encoding="utf-8"
+    )
     mcp = _CaptureMCP()
     register_results(mcp, dataclasses.replace(load_settings(), workspace=str(tmp_path)))
     return caso, mcp.tools
@@ -62,6 +65,7 @@ def test_instrucoes_mandam_direto_para_as_tools_de_resultados():
 
 def test_busca_de_rodadas_nao_segue_link_para_fora(tmp_path):
     from novomodelo_mcp.adapters.results import find_runs
+
     fora = tmp_path / "fora"
     (fora / "training").mkdir(parents=True)
     (fora / "training" / "metadata.json").write_text("{}", encoding="utf-8")

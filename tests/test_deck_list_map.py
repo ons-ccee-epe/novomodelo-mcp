@@ -3,6 +3,7 @@
 Motivação (12/out): num caso real com 2 000 cenários, a versão antiga listava
 18 053 arquivos (≈5,5 MB de resposta); só 28 eram o deck.
 """
+
 import json
 
 from novomodelo_mcp.adapters.deck_io import case_map
@@ -19,7 +20,7 @@ def _make_case(root, n_scenarios=50):
     (root / "scenarios").mkdir()
     (root / "scenarios" / "inflow_history.parquet").write_bytes(b"x")
     (root / "dashboard.html").write_text("<html/>", encoding="utf-8")
-    out = root / "output_variante"          # nome qualquer: o contrato é training/metadata.json
+    out = root / "output_variante"  # nome qualquer: o contrato é training/metadata.json
     (out / "training").mkdir(parents=True)
     (out / "training" / "metadata.json").write_text("{}", encoding="utf-8")
     (out / "training" / "_SUCCESS").write_text("", encoding="utf-8")
@@ -33,8 +34,12 @@ def test_entradas_listadas_e_rodada_resumida(tmp_path):
     _make_case(tmp_path)
     m = case_map(str(tmp_path), TYPES, max_files=500)
     rels = {f["rel"] for f in m["files"]}
-    assert rels == {"config.json", "stages.json", "system/hydros.json",
-                    "scenarios/inflow_history.parquet"}
+    assert rels == {
+        "config.json",
+        "stages.json",
+        "system/hydros.json",
+        "scenarios/inflow_history.parquet",
+    }
     assert {f["rel"]: f.get("schema") for f in m["files"]}["system/hydros.json"] == "hydros"
     assert len(m["runs"]) == 1
     run = m["runs"][0]

@@ -1,4 +1,5 @@
 """Docs sempre as embutidas; `NOVOMODELO_MCP_DOCS_DIR` só para desenvolvimento, com aviso."""
+
 import dataclasses
 import urllib.error
 
@@ -13,8 +14,11 @@ from novomodelo_mcp.server import build_server
 @pytest.fixture(autouse=True)
 def _sem_rede_e_caches(monkeypatch):
     V.reset_caches()
-    monkeypatch.setattr(V, "_open", lambda req, **k: (_ for _ in ()).throw(
-        urllib.error.URLError("sem rede no teste")))
+    monkeypatch.setattr(
+        V,
+        "_open",
+        lambda req, **k: (_ for _ in ()).throw(urllib.error.URLError("sem rede no teste")),
+    )
     yield
     V.reset_caches()
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Smoke test das tools de referência (schema/docs), stdlib puro.
 Roda: python3 tests/smoke_reference.py"""
+
 import os
 import sys
 import tempfile
@@ -9,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from novomodelo_mcp.adapters import reference as REF   # noqa: E402
-from novomodelo_mcp.config import load_settings         # noqa: E402
+from novomodelo_mcp.adapters import reference as REF  # noqa: E402
+from novomodelo_mcp.config import load_settings  # noqa: E402
 
 
 def test_schema_list_and_get():
@@ -78,14 +79,15 @@ def test_docs_unavailable_messages_when_bundled_missing():
 
 
 def main():
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
     for t in tests:
         try:
-            t(); print(f"  PASS {t.__name__}")
+            t()
+            print(f"  PASS {t.__name__}")
         except AssertionError as e:
-            failed += 1; print(f"  FAIL {t.__name__}: {e}")
+            failed += 1
+            print(f"  FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passaram")
     sys.exit(1 if failed else 0)
 

@@ -3,6 +3,7 @@
 É o mesmo critério do checador de nome do repositório de destino: o trecho, em
 qualquer caixa, em qualquer arquivo de texto.
 """
+
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]

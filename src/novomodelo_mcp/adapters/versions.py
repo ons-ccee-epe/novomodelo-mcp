@@ -5,6 +5,7 @@ Dono único da comparação de versões (nenhuma tool compara por conta própria
 curto, certificados do sistema por um contexto local do `truststore`. Nunca levanta:
 falha vira `aviso_rede`.
 """
+
 from __future__ import annotations
 
 import functools
@@ -38,12 +39,16 @@ _NOTES_SECTIONS = ("changed", "fixed")
 _MAX_BYTES = 64 * 1024 * 1024
 
 #: (host, prefixo de caminho) permitidos; o CDN do GitHub só como destino de redirecionamento.
-_ALLOWED = (("github.com", "/ons-ccee-epe/"), ("api.github.com", "/repos/ons-ccee-epe/"),
-            ("pypi.org", "/pypi/novomodelo-bridge/"))
+_ALLOWED = (
+    ("github.com", "/ons-ccee-epe/"),
+    ("api.github.com", "/repos/ons-ccee-epe/"),
+    ("pypi.org", "/pypi/novomodelo-bridge/"),
+)
 _REDIRECT_ONLY = ("release-assets.githubusercontent.com",)
 
 
 # ── versões ───────────────────────────────────────────────────────────────────
+
 
 def normalize_version(version: Any) -> str | None:
     """`"v0.18.0"`, `"0.18.0.post2"` → `"0.18.0"`; vazio ou None → None."""
@@ -78,6 +83,7 @@ def _piece(version: Any, missing: str) -> dict[str, Any]:
 
 def _read_local(settings) -> dict[str, dict[str, Any]]:
     from .novomodelo import version_cli
+
     cli = version_cli(settings=settings)
     try:
         lib = metadata.version(BINDING_DIST)
@@ -86,8 +92,9 @@ def _read_local(settings) -> dict[str, dict[str, Any]]:
     bridge_path, origin = bridge_origin(settings)
     bridge = bridge_version(bridge_path, origin)
     return {
-        "executavel": _piece(cli.get("version") if cli.get("status") == "ok" else None,
-                             "não encontrado"),
+        "executavel": _piece(
+            cli.get("version") if cli.get("status") == "ok" else None, "não encontrado"
+        ),
         "biblioteca": _piece(lib, "não encontrada no ambiente do MCP"),
         "bridge": _piece(bridge.split()[-1] if bridge else None, "não encontrado")
         | {"origem": origin},
@@ -97,11 +104,13 @@ def _read_local(settings) -> dict[str, dict[str, Any]]:
 
 def _docs_piece() -> dict[str, Any]:
     from .reference import bundled_manifest
+
     manifest = bundled_manifest()
     if not manifest:
         return {"versao": None, "motivo": "sem manifesto"}
     return _piece(manifest.get("docs_versao"), "manifesto sem versão") | {
-        "commit": manifest.get("docs_commit")}
+        "commit": manifest.get("docs_commit")
+    }
 
 
 @functools.lru_cache(maxsize=8)
@@ -112,19 +121,23 @@ def local_versions(settings) -> dict[str, dict[str, Any]]:
 def cli_install_command(version: str) -> str:
     base = f"{CLI_RELEASES}/download/v{version}"
     if sys.platform == "win32":
-        return (f'powershell -ExecutionPolicy Bypass -c "irm {base}/novomodelo-cli-installer.ps1'
-                ' | iex"')
+        return (
+            f'powershell -ExecutionPolicy Bypass -c "irm {base}/novomodelo-cli-installer.ps1 | iex"'
+        )
     return f"curl --proto '=https' --tlsv1.2 -LsSf {base}/novomodelo-cli-installer.sh | sh"
 
 
-ASK_AGENT_TO_INSTALL = ("Peça ao agente: “instale o executável do novomodelo” "
-                        "(tool instalar_novomodelo)")
+ASK_AGENT_TO_INSTALL = (
+    "Peça ao agente: “instale o executável do novomodelo” (tool instalar_novomodelo)"
+)
 
 
 def mcp_install_command(version: str) -> str:
     wheel = f"novomodelo_mcp-{version}-py3-none-any.whl"
-    return (f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
-            f"`uv tool install --force --compile-bytecode ./{wheel}` (o bridge, a biblioteca e as docs vêm junto)")
+    return (
+        f"baixe o {wheel} de {MCP_RELEASE_TAG_URL}v{version} e rode "
+        f"`uv tool install --force --compile-bytecode ./{wheel}` (o bridge, a biblioteca e as docs vêm junto)"
+    )
 
 
 def _bridge_command(version: str, origin: str | None = None) -> str:
@@ -136,9 +149,11 @@ def _bridge_command(version: str, origin: str | None = None) -> str:
 def _newer_piece_warning(label: str, version: str, expected: str, align: str) -> str:
     name = label[0].upper() + label[1:]
     verb = "estão" if label.startswith("as ") else "está"
-    return (f"{name} {verb} na {version} e o MCP na {expected}; o MCP foi testado com as peças "
-            f"na versão dele. Para alinhar, atualize o MCP, se já houver o MCP "
-            f"{version} ({mcp_install_command(version)}), ou volte {label} para a {expected}: {align}.")
+    return (
+        f"{name} {verb} na {version} e o MCP na {expected}; o MCP foi testado com as peças "
+        f"na versão dele. Para alinhar, atualize o MCP, se já houver o MCP "
+        f"{version} ({mcp_install_command(version)}), ou volte {label} para a {expected}: {align}."
+    )
 
 
 def _piece_warnings(settings, expected: str) -> list[str]:
@@ -150,8 +165,10 @@ def _piece_warnings(settings, expected: str) -> list[str]:
     """
     pieces = local_versions(settings)
     actions = {
-        "executavel": ("o executável novomodelo",
-                       f"{ASK_AGENT_TO_INSTALL}. Manual: {cli_install_command(expected)}"),
+        "executavel": (
+            "o executável novomodelo",
+            f"{ASK_AGENT_TO_INSTALL}. Manual: {cli_install_command(expected)}",
+        ),
         "biblioteca": ("a biblioteca novomodelo-python", mcp_install_command(expected)),
         "bridge": (f"o {BRIDGE_CLI}", _bridge_command(expected, pieces["bridge"].get("origem"))),
         "docs": ("as docs embutidas", mcp_install_command(expected)),
@@ -170,10 +187,14 @@ def _piece_warnings(settings, expected: str) -> list[str]:
             verb = "" if key == "executavel" else "Atualize: "
             lines.append(f"{name} na versão {version}; a do MCP é {expected}. {verb}{action}")
         elif _version_key(version) > _version_key(expected):
-            notes = {"executavel": ("novomodelo", CLI_RELEASES),
-                     "bridge": ("bridge", BRIDGE_RELEASES)}.get(key)
-            lines.append(_newer_piece_warning(label, version, expected, action)
-                         + (_notes_text(notes[0], version, notes[1]) if notes else ""))
+            notes = {
+                "executavel": ("novomodelo", CLI_RELEASES),
+                "bridge": ("bridge", BRIDGE_RELEASES),
+            }.get(key)
+            lines.append(
+                _newer_piece_warning(label, version, expected, action)
+                + (_notes_text(notes[0], version, notes[1]) if notes else "")
+            )
     return lines
 
 
@@ -181,17 +202,21 @@ def version_warnings(settings) -> list[str]:
     """Uma linha por peça ausente ou de outra versão, com o comando para corrigir; e o
     aviso de docs lidas de uma pasta de desenvolvimento."""
     from .reference import docs_origin
+
     expected = expected_version()
     lines = _piece_warnings(settings, expected) if expected else []
     origin = docs_origin(settings)
     if origin["origem"] == "pasta_de_desenvolvimento":
-        lines.append(f"docs lidas de uma pasta de desenvolvimento ({origin['caminho']}), não "
-                     "das embutidas da versão do MCP; tire NOVOMODELO_MCP_DOCS_DIR da "
-                     "configuração para usar as embutidas")
+        lines.append(
+            f"docs lidas de uma pasta de desenvolvimento ({origin['caminho']}), não "
+            "das embutidas da versão do MCP; tire NOVOMODELO_MCP_DOCS_DIR da "
+            "configuração para usar as embutidas"
+        )
     return lines
 
 
 # ── rede ──────────────────────────────────────────────────────────────────────
+
 
 def allowed_url(url: str, *, redirect: bool = False) -> bool:
     parts = urlsplit(url)
@@ -208,6 +233,7 @@ def _ssl_context() -> ssl.SSLContext:
     # processo inteiro (FastMCP, DuckDB, o próprio bridge em processo).
     try:
         import truststore
+
         return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     except Exception:  # noqa: BLE001 - sem truststore (ou falha ao carregá-lo): contexto padrão
         return ssl.create_default_context()
@@ -217,13 +243,15 @@ class _AllowlistRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if not allowed_url(newurl, redirect=True):
             raise urllib.error.URLError(
-                f"redirecionamento para domínio não permitido: {urlsplit(newurl).hostname}")
+                f"redirecionamento para domínio não permitido: {urlsplit(newurl).hostname}"
+            )
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def _open(req: urllib.request.Request, *, timeout: float, context: ssl.SSLContext) -> bytes:
-    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context),
-                                         _AllowlistRedirect())
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=context), _AllowlistRedirect()
+    )
     with opener.open(req, timeout=timeout) as resp:
         return resp.read(_MAX_BYTES)
 
@@ -276,18 +304,25 @@ def fetch_json(url: str, *, timeout: float) -> dict[str, Any]:
 _UPDATE: dict[str, Any] = {}
 
 
-def _newer(current: str | None, fetched: dict[str, Any], extract, manual: str,
-           command) -> dict[str, Any]:
+def _newer(
+    current: str | None, fetched: dict[str, Any], extract, manual: str, command
+) -> dict[str, Any]:
     if "aviso_rede" in fetched:
-        return {"status": "nao_foi_possivel_verificar", "aviso_rede": fetched["aviso_rede"],
-                "verifique_em": manual}
+        return {
+            "status": "nao_foi_possivel_verificar",
+            "aviso_rede": fetched["aviso_rede"],
+            "verifique_em": manual,
+        }
     try:
         latest = normalize_version(extract(fetched["dados"]))
     except (KeyError, TypeError):
         latest = None
     if not latest:
-        return {"status": "nao_foi_possivel_verificar", "aviso_rede": "resposta sem versão",
-                "verifique_em": manual}
+        return {
+            "status": "nao_foi_possivel_verificar",
+            "aviso_rede": "resposta sem versão",
+            "verifique_em": manual,
+        }
     if current and _version_key(latest) <= _version_key(current):
         return {"status": "atual", "mais_recente": latest}
     return {"status": "nova", "mais_recente": latest, "comando": command(latest)}
@@ -296,7 +331,7 @@ def _newer(current: str | None, fetched: dict[str, Any], extract, manual: str,
 def _shorten(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
-    return text[:limit - 1].rsplit(" ", 1)[0] + "…"
+    return text[: limit - 1].rsplit(" ", 1)[0] + "…"
 
 
 def release_changes(body: str | None) -> list[str]:
@@ -358,8 +393,10 @@ def _notes_text(piece: str, version: str, releases: str) -> str:
 
 
 def _release_note(piece: str, newest: str, current: str | None) -> str:
-    return (f"o {piece} {newest} saiu; o MCP está na {current}. Quando sair o MCP {newest}, "
-            f"atualize as peças juntas: {mcp_install_command(newest)}.")
+    return (
+        f"o {piece} {newest} saiu; o MCP está na {current}. Quando sair o MCP {newest}, "
+        f"atualize as peças juntas: {mcp_install_command(newest)}."
+    )
 
 
 def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, Any]:
@@ -376,36 +413,53 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     current = expected_version() or pieces["executavel"]["versao"]
     origin = pieces["bridge"].get("origem")
     pool = ThreadPoolExecutor(max_workers=3)
-    futures = {"novomodelo": pool.submit(fetch_json, NOVOMODELO_LATEST, timeout=budget_s),
-               "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s),
-               "bridge_notas": pool.submit(fetch_json, BRIDGE_LATEST, timeout=budget_s)}
+    futures = {
+        "novomodelo": pool.submit(fetch_json, NOVOMODELO_LATEST, timeout=budget_s),
+        "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s),
+        "bridge_notas": pool.submit(fetch_json, BRIDGE_LATEST, timeout=budget_s),
+    }
     wait(futures.values(), timeout=budget_s)
     pool.shutdown(wait=False, cancel_futures=True)
     late = {"aviso_rede": f"tempo esgotado ({budget_s:g} s)"}
     got = {k: (f.result() if f.done() else late) for k, f in futures.items()}
-    cli = _newer(current, got["novomodelo"], lambda d: d["tag_name"], CLI_RELEASES,
-                 cli_install_command)
-    bridge = _newer(current, got["bridge"], lambda d: d["info"]["version"], BRIDGE_PAGE,
-                    lambda v: _bridge_command(v, origin))
+    cli = _newer(
+        current, got["novomodelo"], lambda d: d["tag_name"], CLI_RELEASES, cli_install_command
+    )
+    bridge = _newer(
+        current,
+        got["bridge"],
+        lambda d: d["info"]["version"],
+        BRIDGE_PAGE,
+        lambda v: _bridge_command(v, origin),
+    )
     notes: dict[str, dict[str, Any]] = {}
     if cli.get("mais_recente"):
-        notes["novomodelo"] = {"versao": cli["mais_recente"], **_release_notes(
-            got["novomodelo"], cli["mais_recente"], CLI_RELEASES)}
+        notes["novomodelo"] = {
+            "versao": cli["mais_recente"],
+            **_release_notes(got["novomodelo"], cli["mais_recente"], CLI_RELEASES),
+        }
     if bridge.get("mais_recente"):
-        notes["bridge"] = {"versao": bridge["mais_recente"], **_release_notes(
-            got["bridge_notas"], bridge["mais_recente"], BRIDGE_RELEASES)}
+        notes["bridge"] = {
+            "versao": bridge["mais_recente"],
+            **_release_notes(got["bridge_notas"], bridge["mais_recente"], BRIDGE_RELEASES),
+        }
     if cli["status"] == "nova":
         newest = cli["mais_recente"]
         note = _release_note("novomodelo", newest, current)
-        cli = {k: v for k, v in cli.items() if k != "comando"} | {"nota": note} | {
-            k: v for k, v in notes["novomodelo"].items() if k != "versao"}
+        cli = (
+            {k: v for k, v in cli.items() if k != "comando"}
+            | {"nota": note}
+            | {k: v for k, v in notes["novomodelo"].items() if k != "versao"}
+        )
         mcp = {"status": "a_conferir", "novomodelo": newest, "nota": note}
     else:
         mcp = {"status": cli["status"], "nota": "inferida pela versão do novomodelo"}
     if bridge["status"] == "nova":
-        bridge = {k: v for k, v in bridge.items() if k != "comando"} | {
-            "nota": _release_note(BRIDGE_CLI, bridge["mais_recente"], current)} | {
-            k: v for k, v in notes["bridge"].items() if k != "versao"}
+        bridge = (
+            {k: v for k, v in bridge.items() if k != "comando"}
+            | {"nota": _release_note(BRIDGE_CLI, bridge["mais_recente"], current)}
+            | {k: v for k, v in notes["bridge"].items() if k != "versao"}
+        )
     _UPDATE["resultado"] = {"novomodelo": cli, "bridge": bridge, "mcp": mcp}
     _UPDATE["notas"] = notes
     _UPDATE["quando"] = time.monotonic()

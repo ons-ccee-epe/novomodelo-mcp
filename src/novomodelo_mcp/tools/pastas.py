@@ -1,4 +1,5 @@
 """Inclusão de pastas de estudo nas raízes do guard, a pedido do usuário."""
+
 from __future__ import annotations
 
 from ..adapters.envelope import as_error

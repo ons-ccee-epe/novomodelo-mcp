@@ -1,8 +1,11 @@
 """Ponto de entrada do servidor MCP do Novomodelo (transporte stdio)."""
+
 from __future__ import annotations
 
 import asyncio
 import functools
+import os
+import sys
 
 from mcp.server.fastmcp import FastMCP
 
@@ -12,8 +15,13 @@ from .adapters import versions
 from .adapters.envelope import as_error
 
 from .adapters.discovery import bridge_origin, bridge_version, find_novomodelo, tool_version
-from .adapters.paths import (AVISO_NA_TOOL, NAO_CONTORNE, allowed_roots, included_roots,
-                             is_guarded_tool)
+from .adapters.paths import (
+    AVISO_NA_TOOL,
+    NAO_CONTORNE,
+    allowed_roots,
+    included_roots,
+    is_guarded_tool,
+)
 from .adapters.reference import docs_origin
 from .adapters.state import state_dir
 from .config import load_settings
@@ -71,6 +79,7 @@ def _never_raise(fn):
     """A falha de uma tool vira envelope, inclusive `BaseException` de biblioteca nativa
     (o pânico do PyO3 não é `Exception` e derrubaria o stdio); só o que é do próprio
     processo (interrupção, saída, cancelamento) segue adiante."""
+
     @functools.wraps(fn)
     def guarded(*a, **k):
         try:
@@ -79,6 +88,7 @@ def _never_raise(fn):
             raise
         except BaseException as exc:  # noqa: BLE001 - never-raise: envelope em vez de derrubar o servidor
             return as_error(exc)
+
     return guarded
 
 
@@ -126,15 +136,15 @@ def build_server() -> FastMCP:
     server._mcp_server.version = __version__
     mcp = _WithVersionWarnings(server, settings)
 
-    register_pre_run(mcp, settings)     # pré-rodada: check / convert / validate
-    register_post_run(mcp, settings)    # pós-rodada: compare_* / dashboard
-    register_deck(mcp, settings)        # manipulador de decks (JSON/Parquet)
-    register_results(mcp, settings)     # leitura/análise de resultados (pós-rodada)
-    register_reference(mcp, settings)   # schemas + documentação (referência)
+    register_pre_run(mcp, settings)  # pré-rodada: check / convert / validate
+    register_post_run(mcp, settings)  # pós-rodada: compare_* / dashboard
+    register_deck(mcp, settings)  # manipulador de decks (JSON/Parquet)
+    register_results(mcp, settings)  # leitura/análise de resultados (pós-rodada)
+    register_reference(mcp, settings)  # schemas + documentação (referência)
     register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
-    register_run(mcp, settings)         # init / plano / apply / run assíncrono
-    register_prompts(mcp, settings)     # prompts: metodologia
-    register_pastas(mcp, settings)      # inclusão de pastas de estudo no guard
+    register_run(mcp, settings)  # init / plano / apply / run assíncrono
+    register_prompts(mcp, settings)  # prompts: metodologia
+    register_pastas(mcp, settings)  # inclusão de pastas de estudo no guard
 
     @mcp.tool(annotations=READ_ONLY_NET)
     def server_info() -> dict:
@@ -157,13 +167,21 @@ def build_server() -> FastMCP:
             "versao_mcp": __version__,
             "versoes": {**pieces, "esperada": versions.expected_version()},
             "versao_nova": newer,
-            "bridge": {"path": bridge, "version": bridge_version(bridge, bridge_from),
-                       "available": bridge is not None, "origem": bridge_from},
-            "novomodelo": {"path": novomodelo, "version": tool_version(novomodelo),
-                      "available": novomodelo is not None},
+            "bridge": {
+                "path": bridge,
+                "version": bridge_version(bridge, bridge_from),
+                "available": bridge is not None,
+                "origem": bridge_from,
+            },
+            "novomodelo": {
+                "path": novomodelo,
+                "version": tool_version(novomodelo),
+                "available": novomodelo is not None,
+            },
             "schemas_dir": settings.schemas_dir,
             "docs": docs_origin(settings),
-            "workspace": [str(r) for r in allowed_roots(settings)] or "irrestrito (defina NOVOMODELO_MCP_WORKSPACE)",
+            "workspace": [str(r) for r in allowed_roots(settings)]
+            or "irrestrito (defina NOVOMODELO_MCP_WORKSPACE)",
             "pastas_incluidas": [str(r) for r in included_roots(settings)],
             "allow_force": settings.allow_force,
             "state_dir": str(state_dir(settings)),
@@ -179,12 +197,30 @@ def build_server() -> FastMCP:
     return server
 
 
+def _stdin_proprio() -> None:
+    """O protocolo passa a ler de uma cópia do stdin, e o fd 0 do processo vai para o NUL.
+
+    No Windows, a leitura pendente do protocolo no pipe do stdin trava a carga de DLL
+    nativa (o numpy, numa tool) até chegar a próxima mensagem; com o fd 0 no NUL, a
+    carga da DLL não espera o pipe do protocolo.
+    """
+    try:
+        copia = os.dup(0)
+    except OSError:  # sem stdin não há protocolo a proteger; o FastMCP acusa sozinho
+        return
+    sys.stdin = open(copia, encoding="utf-8", errors="replace", closefd=True)
+    nul = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(nul, 0)
+    os.close(nul)
+
+
 def main() -> None:
     """Executável `novomodelo-mcp`: sobe o servidor no stdio; `configurar` grava o cliente."""
-    import sys
     if sys.argv[1:2] == ["configurar"]:
         from .client_config import main as configure
+
         raise SystemExit(configure(sys.argv[2:]))
+    _stdin_proprio()
     build_server().run()
 
 

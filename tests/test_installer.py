@@ -2,6 +2,7 @@
 
 Sem rede real: a API do GitHub e o download são substituídos; o instalador é um fake.
 """
+
 import hashlib
 import json
 import os
@@ -38,8 +39,10 @@ def rede(monkeypatch):
         if estado["falha"]:
             return {"aviso_rede": estado["falha"]}
         if url.startswith("https://api.github.com/"):
-            assets = [{"name": n, "digest": f"sha256:{estado['digest']}"}
-                      for n in ("novomodelo-cli-installer.sh", "novomodelo-cli-installer.ps1")]
+            assets = [
+                {"name": n, "digest": f"sha256:{estado['digest']}"}
+                for n in ("novomodelo-cli-installer.sh", "novomodelo-cli-installer.ps1")
+            ]
             return json.dumps({"tag_name": f"v{VERSAO}", "assets": assets}).encode()
         return estado["script"]
 
@@ -71,13 +74,17 @@ def instalador(monkeypatch, tmp_path):
 
     monkeypatch.setattr(I, "_run_installer", _run)
     if sys.platform == "win32":
-        monkeypatch.setattr(I, "tool_version", lambda path: (
-            f"novomodelo   v{VERSAO}" if os.path.basename(path) == BINARIO else None))
+        monkeypatch.setattr(
+            I,
+            "tool_version",
+            lambda path: f"novomodelo   v{VERSAO}" if os.path.basename(path) == BINARIO else None,
+        )
     return execucoes
 
 
 def types_proc(code, out, err):
     import types
+
     return types.SimpleNamespace(returncode=code, stdout=out, stderr=err)
 
 
@@ -116,8 +123,9 @@ def test_sem_rede_aviso_com_o_comando_manual(rede, instalador, tmp_path):
     assert instalador == []
 
 
-def test_variaveis_que_trocam_a_origem_nao_chegam_ao_instalador(rede, instalador, tmp_path,
-                                                                 monkeypatch):
+def test_variaveis_que_trocam_a_origem_nao_chegam_ao_instalador(
+    rede, instalador, tmp_path, monkeypatch
+):
     for var in I.SCRUBBED_ENV:
         monkeypatch.setenv(var, "https://evil.example/")
     env = I.install(confirmar=True, pasta=str(tmp_path / "nm"))
@@ -149,15 +157,22 @@ def test_redirecionamento_para_outro_host_e_recusado():
 
 def test_tool_nunca_levanta(monkeypatch):
     from novomodelo_mcp.server import build_server
+
     monkeypatch.setattr(I, "install", lambda **k: 1 / 0)
     fn = {t.name: t.fn for t in build_server()._tool_manager.list_tools()}["instalar_novomodelo"]
     assert fn()["status"] == "error"
 
 
 def test_aviso_de_executavel_ausente_sugere_a_tool(monkeypatch):
-    monkeypatch.setattr(V, "_read_local", lambda settings: {
-        "executavel": {"versao": None, "motivo": "não encontrado"},
-        "biblioteca": {"versao": VERSAO}, "bridge": {"versao": VERSAO},
-        "docs": {"versao": None, "motivo": "sem manifesto"}})
+    monkeypatch.setattr(
+        V,
+        "_read_local",
+        lambda settings: {
+            "executavel": {"versao": None, "motivo": "não encontrado"},
+            "biblioteca": {"versao": VERSAO},
+            "bridge": {"versao": VERSAO},
+            "docs": {"versao": None, "motivo": "sem manifesto"},
+        },
+    )
     avisos = V.version_warnings(object())
     assert len(avisos) == 1 and "instalar_novomodelo" in avisos[0]

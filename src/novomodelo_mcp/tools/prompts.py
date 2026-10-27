@@ -3,6 +3,7 @@
 No Claude Code o prompt aparece como `/novomodelo:metodologia`; os argumentos vão
 separados por espaço, por isso `tema` é opcional e de uma palavra.
 """
+
 from __future__ import annotations
 
 from ..config import Settings
@@ -25,16 +26,20 @@ novomodelo, que são as da versão instalada.
 def metodologia_text(tema: str | None = None) -> str:
     if tema and tema.strip():
         return f"Tema: {tema.strip()}\n\n{_METODOLOGIA}"
-    return (f"{_METODOLOGIA}\nA pergunta vem na próxima mensagem: espere por ela e siga os "
-            "passos acima, começando por `docs_search`.")
+    return (
+        f"{_METODOLOGIA}\nA pergunta vem na próxima mensagem: espere por ela e siga os "
+        "passos acima, começando por `docs_search`."
+    )
 
 
 def register_prompts(mcp, settings: Settings) -> None:
     """Registra os prompts MCP no servidor `mcp`."""
 
-    @mcp.prompt(name="metodologia",
-                description="Conversar sobre a metodologia do novomodelo com base nas docs "
-                            "oficiais, citando página e seção. `tema` (opcional, uma palavra, "
-                            "ex.: CVaR): sem ele, a pergunta vem na mensagem seguinte.")
+    @mcp.prompt(
+        name="metodologia",
+        description="Conversar sobre a metodologia do novomodelo com base nas docs "
+        "oficiais, citando página e seção. `tema` (opcional, uma palavra, "
+        "ex.: CVaR): sem ele, a pergunta vem na mensagem seguinte.",
+    )
     def metodologia(tema: str | None = None) -> str:
         return metodologia_text(tema)

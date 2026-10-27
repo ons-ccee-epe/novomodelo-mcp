@@ -1,4 +1,5 @@
 """Changelogs do novomodelo e do bridge nas docs embutidas, lidos por seção de versão."""
+
 import importlib.util
 import json
 import subprocess
@@ -57,10 +58,26 @@ def _clone(tmp_path: Path, nome: str, texto: str = CHANGELOG) -> Path:
     repo.mkdir()
     (repo / "CHANGELOG.md").write_text(texto, encoding="utf-8")
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "add", "."],
-                   check=True)
-    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t",
-                    "commit", "-q", "-m", "x"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "add", "."],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "-m",
+            "x",
+        ],
+        check=True,
+    )
     return repo
 
 
@@ -70,23 +87,41 @@ def _docs(tmp_path: Path) -> Path:
         return src
     docs = src / "src" / "content" / "docs"
     docs.mkdir(parents=True)
-    (docs / "index.mdx").write_text("---\ntitle: Home\n---\n\n## Start\n\nText.\n", encoding="utf-8")
+    (docs / "index.mdx").write_text(
+        "---\ntitle: Home\n---\n\n## Start\n\nText.\n", encoding="utf-8"
+    )
     (src / "public" / "schemas").mkdir(parents=True)
-    (src / "versions.json").write_text(json.dumps({"latest": {"novomodelo": "v0.19.0"}}),
-                                       encoding="utf-8")
+    (src / "versions.json").write_text(
+        json.dumps({"latest": {"novomodelo": "v0.19.0"}}), encoding="utf-8"
+    )
     return src
 
 
 def _sync(tmp_path: Path, *extra: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(SCRIPT), "--source", str(_docs(tmp_path)),
-                           "--dest", str(tmp_path / "bundled"), *extra],
-                          capture_output=True, encoding="utf-8", errors="replace")
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--source",
+            str(_docs(tmp_path)),
+            "--dest",
+            str(tmp_path / "bundled"),
+            *extra,
+        ],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+    )
 
 
 def test_pagina_so_da_0_18_em_diante():
     pagina = SB.changelog_page("novomodelo", CHANGELOG)
     assert [s["titulo"] for s in REF.section_list(pagina)] == [
-        "0.19.0", "Changed", "Fixed", "0.18.0"]
+        "0.19.0",
+        "Changed",
+        "Fixed",
+        "0.18.0",
+    ]
     assert ANTIGO not in pagina and "Unreleased" not in pagina and "0.17.0" not in pagina
 
 
@@ -141,30 +176,35 @@ def test_cada_secao_cabe_no_teto(produto):
 
 def test_instrucoes_apontam_o_changelog():
     from novomodelo_mcp.server import SERVER_INSTRUCTIONS
+
     assert "`changelog/novomodelo`" in SERVER_INSTRUCTIONS
     assert "`changelog/novomodelo-bridge`" in SERVER_INSTRUCTIONS
-    assert "docs_read(pagina, \"<versão>\")" in SERVER_INSTRUCTIONS
+    assert 'docs_read(pagina, "<versão>")' in SERVER_INSTRUCTIONS
 
 
 def _busca(consulta: str, k: int = 10) -> list[str]:
     from novomodelo_mcp.config import load_settings
+
     return [h["pagina"] for h in REF.search_docs(load_settings(), consulta, k)["resultados"]]
 
 
-@pytest.mark.parametrize("consulta", ["inflow non-negativity", "negative inflow", "CVaR",
-                                      "cut selection level1"])
+@pytest.mark.parametrize(
+    "consulta", ["inflow non-negativity", "negative inflow", "CVaR", "cut selection level1"]
+)
 def test_busca_sem_intencao_de_versao_nao_traz_changelog(consulta):
     assert not [p for p in _busca(consulta) if p.startswith("changelog/")]
 
 
-@pytest.mark.parametrize("consulta", ["what changed in 0.19.0", "changelog cut selection",
-                                      "breaking changes release"])
+@pytest.mark.parametrize(
+    "consulta", ["what changed in 0.19.0", "changelog cut selection", "breaking changes release"]
+)
 def test_busca_sobre_versao_traz_changelog(consulta):
     assert any(p.startswith("changelog/") for p in _busca(consulta, 5))
 
 
-@pytest.mark.parametrize("workflow", sorted((ROOT / ".github" / "workflows").glob("*.yml")),
-                         ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "workflow", sorted((ROOT / ".github" / "workflows").glob("*.yml")), ids=lambda p: p.name
+)
 def test_conferencia_das_docs_nos_workflows_passa_os_changelogs(workflow):
     """Um `sync_bundled --check` sem os changelogs do manifesto acusa as páginas como sobra."""
     produtos = json.loads((BUNDLED / "manifest.json").read_text(encoding="utf-8"))["changelogs"]
@@ -174,4 +214,6 @@ def test_conferencia_das_docs_nos_workflows_passa_os_changelogs(workflow):
         if "--check" not in trecho:
             continue
         for produto in produtos:
-            assert f"--changelog {produto}=" in trecho, f"{workflow.name}: falta --changelog {produto}"
+            assert f"--changelog {produto}=" in trecho, (
+                f"{workflow.name}: falta --changelog {produto}"
+            )

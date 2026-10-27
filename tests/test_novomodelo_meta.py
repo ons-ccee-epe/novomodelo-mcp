@@ -158,7 +158,8 @@ def test_version_parse_does_not_depend_on_program_name(monkeypatch):
     text = "qualquernome   v0.18.0\nsolver: HiGHS 1.13.1\narch:   aarch64-macos\n"
     monkeypatch.setattr(adapter, "find_novomodelo", lambda settings: "/fake/bin")
     monkeypatch.setattr(
-        adapter.subprocess, "run",
+        adapter.subprocess,
+        "run",
         lambda *a, **k: subprocess.CompletedProcess(a[0], 0, stdout=text, stderr=""),
     )
     env = adapter.version_cli(settings=load_settings())

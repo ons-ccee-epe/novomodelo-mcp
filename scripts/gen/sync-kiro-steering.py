@@ -65,9 +65,7 @@ def parse_front_matter(text: str) -> tuple[dict, str]:
             continue
         if stripped.startswith("- "):
             if current_list_key is not None:
-                fm.setdefault(current_list_key, []).append(
-                    stripped[2:].strip().strip("\"'")
-                )
+                fm.setdefault(current_list_key, []).append(stripped[2:].strip().strip("\"'"))
             continue
         if ":" in line and not line.startswith(" "):
             key, _, val = line.partition(":")
@@ -98,12 +96,7 @@ def kiro_front_matter(source_rel: str, claude_fm: dict, overrides: dict) -> str:
     if paths:
         # Kiro's fileMatchPattern takes a single pattern, so multiple globs join as brace-alternation.
         pattern = paths[0] if len(paths) == 1 else "{" + ",".join(paths) + "}"
-        return (
-            "---\n"
-            "inclusion: fileMatch\n"
-            f"fileMatchPattern: '{pattern}'\n"
-            "---\n"
-        )
+        return f"---\ninclusion: fileMatch\nfileMatchPattern: '{pattern}'\n---\n"
     return "---\ninclusion: always\n---\n"
 
 
@@ -138,9 +131,7 @@ def build_outputs(root: Path, overrides: dict) -> dict[Path, str]:
         content = f"{fm}\n{banner}\n{body}"
         if not content.endswith("\n"):
             content += "\n"
-        outputs[steering_dir / steering_name(source_rel, source_path, overrides)] = (
-            content
-        )
+        outputs[steering_dir / steering_name(source_rel, source_path, overrides)] = content
     return outputs
 
 

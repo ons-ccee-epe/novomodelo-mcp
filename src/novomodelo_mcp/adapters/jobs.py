@@ -16,6 +16,7 @@ arquivos na pasta do job (sinal só no último recurso) e nunca usa `os.kill(pid
 
 O estado sobrevive a restart do servidor. Sem regra de domínio.
 """
+
 from __future__ import annotations
 
 import json
@@ -81,8 +82,9 @@ def update_meta(settings: Settings, job_id: str, **fields: Any) -> None:
     meta = read_meta(settings, job_id)
     if meta is not None:
         meta.update(fields)
-        atomic_write_text(_job_dir(settings, job_id) / "job.json",
-                          json.dumps(meta, indent=2, ensure_ascii=False))
+        atomic_write_text(
+            _job_dir(settings, job_id) / "job.json", json.dumps(meta, indent=2, ensure_ascii=False)
+        )
 
 
 def _exit_code(d: Path) -> int | None:
@@ -123,15 +125,23 @@ def job_state(settings: Settings, job_id: str) -> dict[str, Any] | None:
     if rc is not None:
         state = "cancelled" if cancelled else ("succeeded" if rc == 0 else "failed")
         end = _mtime(d / "exit_code")
-    elif own_alive or (beat is not None and time.time() - beat < STALE_S) \
-            or (beat is None and time.time() - meta["started_at"] < STALE_S):
+    elif (
+        own_alive
+        or (beat is not None and time.time() - beat < STALE_S)
+        or (beat is None and time.time() - meta["started_at"] < STALE_S)
+    ):
         state, end = "running", None
     else:
         state = "cancelled" if cancelled else "lost"
         end = beat
     elapsed = (end or time.time()) - meta["started_at"]
-    return {"job_id": job_id, "state": state, "exit_code": rc,
-            "elapsed_seconds": round(max(0.0, elapsed), 1), **meta}
+    return {
+        "job_id": job_id,
+        "state": state,
+        "exit_code": rc,
+        "elapsed_seconds": round(max(0.0, elapsed), 1),
+        **meta,
+    }
 
 
 def list_jobs(settings: Settings) -> list[dict[str, Any]]:
@@ -159,14 +169,22 @@ def prune_jobs(settings: Settings, keep_days: float = KEEP_DAYS) -> list[str]:
 
 def _spawn_kwargs() -> dict[str, Any]:
     if _WIN:
-        flags = (subprocess.CREATE_NEW_PROCESS_GROUP          # type: ignore[attr-defined]
-                 | subprocess.CREATE_NO_WINDOW)               # type: ignore[attr-defined]
+        flags = (
+            subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+            | subprocess.CREATE_NO_WINDOW
+        )  # type: ignore[attr-defined]
         return {"creationflags": flags}
     return {"start_new_session": True}
 
 
-def start_job(settings: Settings, cmd: list[str], *, info: dict[str, Any] | None = None,
-              max_running: int | None = None, cwd: str | None = None) -> dict[str, Any]:
+def start_job(
+    settings: Settings,
+    cmd: list[str],
+    *,
+    info: dict[str, Any] | None = None,
+    max_running: int | None = None,
+    cwd: str | None = None,
+) -> dict[str, Any]:
     """Lança `cmd` em background e devolve os metadados do job na hora.
 
     `max_running`: recusa (RuntimeError) se já houver esse nº de jobs rodando. A
@@ -181,15 +199,30 @@ def start_job(settings: Settings, cmd: list[str], *, info: dict[str, Any] | None
         job_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}"
         d = root / job_id
         d.mkdir(parents=True)
-        meta = {"job_id": job_id, "cmd": cmd, "started_at": time.time(),
-                "job_dir": str(d), **(info or {})}
+        meta = {
+            "job_id": job_id,
+            "cmd": cmd,
+            "started_at": time.time(),
+            "job_dir": str(d),
+            **(info or {}),
+        }
         atomic_write_text(d / "job.json", json.dumps(meta, indent=2, ensure_ascii=False))
         with open(d / "stdout.log", "wb") as out, open(d / "stderr.log", "wb") as err:
             # argv em lista e sem shell: os caminhos do agente chegam como argumentos
             # literais (absolutos, já validados pelo guard em tools.run), nunca interpretados.
-            proc = subprocess.Popen([sys.executable, _RUNNER, str(d), *cmd],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                                    stdin=subprocess.DEVNULL, stdout=out, stderr=err,
-                                    cwd=cwd, **_spawn_kwargs())
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    _RUNNER,
+                    str(d),
+                    *cmd,
+                ],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+                cwd=cwd,
+                **_spawn_kwargs(),
+            )
         _PROCS[job_id] = proc
         update_meta(settings, job_id, pid=proc.pid)
     return {**meta, "pid": proc.pid}
@@ -207,19 +240,23 @@ def _tail(path: Path, lines: int, max_chars: int) -> str:
     return "\n".join(text.splitlines()[-lines:])[-max_chars:]
 
 
-def job_logs(settings: Settings, job_id: str, *, lines: int = 100,
-             max_chars: int = 20000) -> dict[str, Any] | None:
+def job_logs(
+    settings: Settings, job_id: str, *, lines: int = 100, max_chars: int = 20000
+) -> dict[str, Any] | None:
     if read_meta(settings, job_id) is None:
         return None
     d = _job_dir(settings, job_id)
     if (d / "saida.log").exists():
         return {"saida": _tail(d / "saida.log", lines, max_chars)}
-    return {"stdout": _tail(d / "stdout.log", lines, max_chars),
-            "stderr": _tail(d / "stderr.log", lines, max_chars)}
+    return {
+        "stdout": _tail(d / "stdout.log", lines, max_chars),
+        "stderr": _tail(d / "stderr.log", lines, max_chars),
+    }
 
 
-def job_stderr(settings: Settings, job_id: str, *, lines: int = 20,
-               max_chars: int = 20000) -> str | None:
+def job_stderr(
+    settings: Settings, job_id: str, *, lines: int = 20, max_chars: int = 20000
+) -> str | None:
     """Só o stderr do run: os erros e avisos do novomodelo, em qualquer versão."""
     if read_meta(settings, job_id) is None:
         return None
@@ -229,8 +266,19 @@ def job_stderr(settings: Settings, job_id: str, *, lines: int = 20,
 def _force_kill_runner(pid: int, child_pid: int | None = None) -> None:
     """Último recurso, se o runner não responde: derruba o runner E a árvore dele."""
     if _WIN:
-        subprocess.run([_job_runner._taskkill(), "/T", "/F", "/PID", str(int(pid))],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
-                       stdin=subprocess.DEVNULL, capture_output=True, check=False, **NO_WINDOW)
+        subprocess.run(
+            [
+                _job_runner._taskkill(),
+                "/T",
+                "/F",
+                "/PID",
+                str(int(pid)),
+            ],  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            **NO_WINDOW,
+        )
         return
     # O runner e o comando lideram cada um a própria sessão.
     for leader in (pid, child_pid):
@@ -256,7 +304,11 @@ def cancel_job(settings: Settings, job_id: str) -> dict[str, Any] | None:
         time.sleep(0.1)
     else:
         if st.get("pid"):
-            child = (d / "child_pid").read_text(encoding="utf-8").strip() if (d / "child_pid").exists() else ""
+            child = (
+                (d / "child_pid").read_text(encoding="utf-8").strip()
+                if (d / "child_pid").exists()
+                else ""
+            )
             _force_kill_runner(st["pid"], int(child) if child.isdigit() else None)
     proc = _PROCS.get(job_id)
     if proc is not None:

@@ -5,6 +5,7 @@ saída acentuada vira texto trocado, ou some: no Windows a thread que lê o pipe
 morre no erro de decodificação e o `stdout` chega como `None`. O teste chama os
 adaptadores num processo filho com uma locale que não é UTF-8.
 """
+
 import json
 import os
 import subprocess
@@ -42,12 +43,12 @@ def _programa_falso(tmp_path: Path) -> str:
     script.write_text(_PROGRAMA, encoding="utf-8")
     if os.name == "nt":
         launcher = tmp_path / "programa.cmd"
-        launcher.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n',
-                            encoding="utf-8")
+        launcher.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
     else:
         launcher = tmp_path / "programa"
-        launcher.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n',
-                            encoding="utf-8")
+        launcher.write_text(
+            f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n', encoding="utf-8"
+        )
         launcher.chmod(0o755)
     return str(launcher)
 
@@ -55,22 +56,37 @@ def _programa_falso(tmp_path: Path) -> str:
 def _locale_nao_utf8() -> str | None:
     if os.name == "nt":
         return None
-    available = subprocess.run(["locale", "-a"], capture_output=True, encoding="utf-8",
-                               errors="replace").stdout.split()
-    return next((n for n in ("pt_BR.ISO8859-1", "en_US.ISO8859-1", "pt_BR.iso88591",
-                             "en_US.iso88591") if n in available), None)
+    available = subprocess.run(
+        ["locale", "-a"], capture_output=True, encoding="utf-8", errors="replace"
+    ).stdout.split()
+    return next(
+        (
+            n
+            for n in ("pt_BR.ISO8859-1", "en_US.ISO8859-1", "pt_BR.iso88591", "en_US.iso88591")
+            if n in available
+        ),
+        None,
+    )
 
 
 def _adaptadores_numa_locale_nao_utf8(tmp_path: Path) -> dict:
     programa = _programa_falso(tmp_path)
-    env = {k: v for k, v in os.environ.items()
-           if not k.startswith(("LC_", "NOVOMODELO_MCP_", "PYTHONIOENCODING"))}
-    env.update(PYTHONUTF8="0", PYTHONPATH=str(SRC), NOVOMODELO_MCP_SOLVER_BIN=programa,
-               NOVOMODELO_MCP_BRIDGE_BIN=programa)
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith(("LC_", "NOVOMODELO_MCP_", "PYTHONIOENCODING"))
+    }
+    env.update(
+        PYTHONUTF8="0",
+        PYTHONPATH=str(SRC),
+        NOVOMODELO_MCP_SOLVER_BIN=programa,
+        NOVOMODELO_MCP_BRIDGE_BIN=programa,
+    )
     if name := _locale_nao_utf8():
         env.update(LC_ALL=name, LANG=name)
-    proc = subprocess.run([sys.executable, "-c", _DRIVER, programa], capture_output=True,
-                          env=env, timeout=60)
+    proc = subprocess.run(
+        [sys.executable, "-c", _DRIVER, programa], capture_output=True, env=env, timeout=60
+    )
     assert proc.returncode == 0, proc.stderr.decode("utf-8", errors="replace")
     return json.loads(proc.stdout.decode("ascii"))
 

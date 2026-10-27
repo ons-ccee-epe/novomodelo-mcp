@@ -3,6 +3,7 @@
 Também registra o resource `novomodelo://schema/{tipo}` como afordância para o agente
 consultar sem uma chamada de tool. Sem regra de negócio.
 """
+
 from __future__ import annotations
 
 import json
@@ -56,14 +57,18 @@ def register_reference(mcp, settings: Settings) -> None:
         Sem `page`: a lista de páginas, como o docs_list.
         """
         if not page:
-            return {**cap_envelope(REF.list_docs(settings, None), settings),
-                    "aviso": "faltou `page`: escolha uma das páginas abaixo e chame docs_read(page, secao)"}
-        return cap_envelope(REF.read_doc(settings, page, settings.max_summary_chars, secao),
-                            settings)
+            return {
+                **cap_envelope(REF.list_docs(settings, None), settings),
+                "aviso": "faltou `page`: escolha uma das páginas abaixo e chame docs_read(page, secao)",
+            }
+        return cap_envelope(
+            REF.read_doc(settings, page, settings.max_summary_chars, secao), settings
+        )
 
     # Afordância de resource (best-effort: não derruba o servidor se o cliente/SDK
     # não suportar templates de resource).
     try:
+
         @mcp.resource(f"{URI_SCHEME}://schema/{{tipo}}")
         def _schema_resource(tipo: str) -> str:  # pragma: no cover
             r = REF.read_schema(settings, tipo)
