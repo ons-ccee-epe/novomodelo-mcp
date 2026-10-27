@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import os
+import sys
 
 from mcp.server.fastmcp import FastMCP
 
@@ -195,14 +197,30 @@ def build_server() -> FastMCP:
     return server
 
 
+def _stdin_proprio() -> None:
+    """O protocolo passa a ler de uma cópia do stdin, e o fd 0 do processo vai para o NUL.
+
+    No Windows, a leitura pendente do protocolo no pipe do stdin trava a carga de DLL
+    nativa (o numpy, numa tool) até chegar a próxima mensagem; com o fd 0 no NUL, a
+    carga da DLL não espera o pipe do protocolo.
+    """
+    try:
+        copia = os.dup(0)
+    except OSError:  # sem stdin não há protocolo a proteger; o FastMCP acusa sozinho
+        return
+    sys.stdin = open(copia, encoding="utf-8", errors="replace", closefd=True)
+    nul = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(nul, 0)
+    os.close(nul)
+
+
 def main() -> None:
     """Executável `novomodelo-mcp`: sobe o servidor no stdio; `configurar` grava o cliente."""
-    import sys
-
     if sys.argv[1:2] == ["configurar"]:
         from .client_config import main as configure
 
         raise SystemExit(configure(sys.argv[2:]))
+    _stdin_proprio()
     build_server().run()
 
 
