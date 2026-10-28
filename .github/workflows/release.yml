@@ -1,7 +1,8 @@
 name: Release
 
-# Tag `v<versão>` (a do pyproject): gera o wheel e o sdist, confere a instalação limpa
-# nos três sistemas e publica no release do GitHub com o SHA256SUMS.
+# Tag `v<versão>` (a do pyproject): confere as docs embutidas, roda os testes, gera o wheel
+# e o sdist, confere a instalação limpa em cada alvo e versão do Python suportados e publica
+# no PyPI e no release do GitHub.
 # O ensaio faz tudo, menos publicar (os arquivos ficam como artefato da execução): push
 # numa branch `ensaio/**`, ou `workflow_dispatch`, que o GitHub só oferece depois que
 # este arquivo estiver na branch padrão.
@@ -15,17 +16,22 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Pacote
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.versao.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Instalar uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7.6.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         with:
           python-version: "3.12"
 
@@ -44,7 +50,7 @@ jobs:
         run: echo "commit=$(python3 -c "import json;print(json.load(open('src/novomodelo_mcp/_bundled/manifest.json'))['docs_commit'])")" >> "$GITHUB_OUTPUT"
 
       - name: novomodelo-docs nesse commit
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ons-ccee-epe/novomodelo-docs
           ref: ${{ steps.manifesto.outputs.commit }}
@@ -62,7 +68,7 @@ jobs:
           PY
 
       - name: novomodelo nesse commit (CHANGELOG.md)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ons-ccee-epe/novomodelo
           ref: ${{ steps.changelogs.outputs.novomodelo }}
@@ -72,7 +78,7 @@ jobs:
           persist-credentials: false
 
       - name: novomodelo-bridge nesse commit (CHANGELOG.md)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ons-ccee-epe/novomodelo-bridge
           ref: ${{ steps.changelogs.outputs.bridge }}
@@ -88,7 +94,7 @@ jobs:
 
       - name: Testes
         run: |
-          uv sync --dev
+          uv sync --dev --locked
           uv run pytest -q
 
       - name: Wheel e sdist
@@ -96,40 +102,48 @@ jobs:
           uv build --out-dir dist
           cd dist && sha256sum ./*.whl ./*.tar.gz | sed 's# \./# #' > SHA256SUMS && cat SHA256SUMS
 
+      - name: Toda dependência tem wheel em cada alvo e versão do Python
+        run: scripts/conferir_wheels.sh dist/novomodelo_mcp-${{ steps.versao.outputs.version }}-py3-none-any.whl
+
       - name: Sdist sem regras de agente, caches nem checkouts
         run: |
           sobra=$(tar -tzf dist/*.tar.gz | cut -d/ -f2 | sort -u \
             | grep -E '^([._]|CLAUDE\.md$|AGENTS\.md$)' | grep -vx '.gitignore' || true)
           if [ -n "$sobra" ]; then echo "::error::no sdist: $sobra"; exit 1; fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: novomodelo-mcp-${{ steps.versao.outputs.version }}
           path: dist/
           if-no-files-found: error
 
   instalacao:
-    # O wheel é o mesmo nos três sistemas, mas a biblioteca e o bridge que ele puxa não:
-    # a instalação limpa (sem o checkout, sem PYTHONPATH) é conferida em cada um.
-    name: Instalação limpa (${{ matrix.os }})
+    # O wheel é o mesmo em todo alvo, mas as dependências que ele puxa não: a instalação
+    # limpa (sem o checkout, sem PYTHONPATH, sem o uv.lock, como a de quem usa) é conferida
+    # em cada alvo e versão do Python. A falta de wheel de uma dependência é conferida no
+    # job anterior (scripts/conferir_wheels.sh): o runner tem compiladores que a máquina de
+    # quem usa pode não ter.
+    name: Instalação limpa (${{ matrix.os }}, Python ${{ matrix.python }})
     needs: build
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        python: ["3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: scripts/conferir_instalacao.py
           sparse-checkout-cone-mode: false
 
       - name: Instalar uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7.6.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: novomodelo-mcp-${{ needs.build.outputs.version }}
           path: dist
@@ -139,28 +153,56 @@ jobs:
         env:
           UV_TOOL_DIR: ${{ runner.temp }}/tools
           UV_TOOL_BIN_DIR: ${{ runner.temp }}/bin
-        run: uv tool install dist/novomodelo_mcp-${{ needs.build.outputs.version }}-py3-none-any.whl
+        run: >
+          uv tool install --python ${{ matrix.python }}
+          dist/novomodelo_mcp-${{ needs.build.outputs.version }}-py3-none-any.whl
 
       - name: initialize e server_info pelo stdio
         shell: bash
         working-directory: ${{ runner.temp }}
         run: >
-          uv run --no-project --python 3.12 python
+          uv run --no-project --python ${{ matrix.python }} python
           "$GITHUB_WORKSPACE/scripts/conferir_instalacao.py"
           --versao "${{ needs.build.outputs.version }}" --server-info
           -- "${{ runner.temp }}/bin/novomodelo-mcp"
 
+  pypi:
+    # O trusted publisher do PyPI está ligado ao repositório público, a este arquivo e ao
+    # environment `pypi`: em qualquer outro repositório, o job não roda.
+    name: Publicar no PyPI
+    needs: [build, instalacao]
+    if: github.ref_type == 'tag' && github.repository == 'ons-ccee-epe/novomodelo-mcp'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/novomodelo-mcp
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: novomodelo-mcp-${{ needs.build.outputs.version }}
+          path: dist
+
+      # O PyPI recusa o que não é distribuição.
+      - name: Só o wheel e o sdist
+        run: rm dist/SHA256SUMS
+
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
+
   publicar:
     # Só na tag. Se a organização não der `contents: write` ao GITHUB_TOKEN, este job
-    # falha e o anexo vira passo manual (README, "Release").
+    # falha e o anexo vira passo manual (CONTRIBUTING.md, "Release").
     name: Publicar no release
     needs: [build, instalacao]
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: novomodelo-mcp-${{ needs.build.outputs.version }}
           path: dist
@@ -172,6 +214,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/*
           --repo "$GITHUB_REPOSITORY"
           --title "novomodelo-mcp ${{ needs.build.outputs.version }}"
-          --notes "MCP do novomodelo ${{ needs.build.outputs.version }}. Instale o wheel com
-          \`uv tool install ./novomodelo_mcp-${{ needs.build.outputs.version }}-py3-none-any.whl\`
-          e confira os arquivos com o SHA256SUMS."
+          --notes "MCP do novomodelo ${{ needs.build.outputs.version }}. Instale com
+          \`uv tool install novomodelo-mcp==${{ needs.build.outputs.version }}\`, ou o wheel
+          deste release, e confira os arquivos com o SHA256SUMS."
