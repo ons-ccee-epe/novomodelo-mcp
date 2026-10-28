@@ -44,9 +44,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://docs.modelossetoreletrico.org.br/"
-Repository = "https://github.com/ons-ccee-epe/novomodelo"
+Repository = "https://github.com/ons-ccee-epe/novomodelo-mcp"
 Documentation = "https://docs.modelossetoreletrico.org.br/"
-"Bug Tracker" = "https://github.com/ons-ccee-epe/novomodelo/issues"
+"Bug Tracker" = "https://github.com/ons-ccee-epe/novomodelo-mcp/issues"
 
 [project.scripts]
 novomodelo-mcp = "novomodelo_mcp.server:main"

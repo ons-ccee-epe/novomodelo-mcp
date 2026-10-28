@@ -521,12 +521,12 @@ def test_release_mais_novo_nao_da_o_mcp_novo_como_existente(pecas, monkeypatch):
     assert "MCP 0.19.0" in mcp["nota"] and V.mcp_install_command("0.19.0") in mcp["nota"]
 
 
-def test_mcp_novo_no_pypi_vem_com_o_comando_e_as_notas_do_novomodelo(pecas, monkeypatch):
+def test_mcp_novo_no_pypi_vem_com_o_comando_e_as_notas_do_proprio_repo(pecas, monkeypatch):
     _respostas(monkeypatch, mcp="0.19.0")
     mcp = V.update_check(object())["mcp"]
     assert mcp["status"] == "nova" and mcp["mais_recente"] == "0.19.0"
     assert mcp["comando"] == V.mcp_install_command("0.19.0")
-    assert mcp["notas"] == "https://github.com/ons-ccee-epe/novomodelo/releases/tag/v0.19.0"
+    assert mcp["notas"] == "https://github.com/ons-ccee-epe/novomodelo-mcp/releases/tag/v0.19.0"
 
 
 def test_mcp_no_pypi_na_versao_atual_nao_sugere_atualizar(pecas, monkeypatch):

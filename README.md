@@ -280,5 +280,6 @@ Apache-2.0, a mesma do novomodelo.
 ## Links
 
 - Docs: <https://docs.modelossetoreletrico.org.br/>
-- Repositório: <https://github.com/ons-ccee-epe/novomodelo>
-- Issues: <https://github.com/ons-ccee-epe/novomodelo/issues>
+- Repositório: <https://github.com/ons-ccee-epe/novomodelo-mcp>
+- Issues: <https://github.com/ons-ccee-epe/novomodelo-mcp/issues>
+- Notas de cada versão: <https://github.com/ons-ccee-epe/novomodelo-mcp/releases>
