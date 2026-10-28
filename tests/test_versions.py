@@ -141,7 +141,7 @@ def _bridge_do_pacote(monkeypatch):
     )
 
 
-def test_caso_da_decisora_executavel_0_19_com_mcp_0_18(pecas, monkeypatch):
+def test_executavel_0_19_com_mcp_0_18(pecas, monkeypatch):
     estado, _ = pecas
     estado["executavel"] = "0.19.0"
     _bridge_do_pacote(monkeypatch)
