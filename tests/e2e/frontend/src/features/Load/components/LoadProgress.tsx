@@ -64,16 +64,16 @@ function agentHeadline(run: LoadRunState, progress: AgentLoadProgress | null): s
 function Metric({ label, children }: { label: string; children: ReactNode }) {
   return (
     <span>
-      <span className="cobre-muted">{label}</span> {children}
+      <span className="nm-muted">{label}</span> {children}
     </span>
   );
 }
 
 function ToolsLive({ progress }: { progress: ToolsLoadProgress }) {
   return (
-    <div className="cobre-load-live" aria-label="Métricas ao vivo">
+    <div className="nm-load-live" aria-label="Métricas ao vivo">
       <span>
-        <span className="cobre-muted">Sessões abertas</span> {progress.clients.ready}/
+        <span className="nm-muted">Sessões abertas</span> {progress.clients.ready}/
         {progress.clients.requested}
       </span>
       <Metric label="Chamadas">{progress.calls}</Metric>
@@ -92,7 +92,7 @@ function AgentLive({ progress }: { progress: AgentLoadProgress }) {
   const s = progress.sessions;
   return (
     <>
-      <div className="cobre-load-live" aria-label="Métricas ao vivo">
+      <div className="nm-load-live" aria-label="Métricas ao vivo">
         <Metric label="Sessões">
           {s.ready}/{s.requested} abertas · {s.running} em execução · {s.finished} concluídas
           {s.failed > 0 ? ` · ${s.failed} falharam` : ""}
@@ -107,7 +107,7 @@ function AgentLive({ progress }: { progress: AgentLoadProgress }) {
         <Metric label="p95">{fmtMs(progress.p95_ms)}</Metric>
       </div>
       {progress.in_flight.length > 0 && (
-        <ul className="cobre-tool-call-list" aria-label="Casos em curso">
+        <ul className="nm-tool-call-list" aria-label="Casos em curso">
           {progress.in_flight.map((item) => (
             <li key={`${item.session}-${item.case_id}`}>
               sessão {item.session} · <code>{item.case_id}</code> ·{" "}
@@ -139,11 +139,11 @@ export function LoadProgress({ run, stopping, onStop, action, summary }: Props) 
     (agentProgress ? ["running", "finishing"].includes(progress.phase) : progress.calls > 0);
 
   return (
-    <div className="cobre-launcher-progress" data-status={run.status}>
-      <div className="cobre-progress-head">
+    <div className="nm-launcher-progress" data-status={run.status}>
+      <div className="nm-progress-head">
         <strong>{headline(run, stopping)}</strong>
-        <span className="cobre-progress-actions">
-          <span className="cobre-muted">
+        <span className="nm-progress-actions">
+          <span className="nm-muted">
             {run.config.mode === "agent" ? `${run.config.provider} · ` : ""}
             {run.config.concurrency} sessões simultâneas · {run.config.duration_seconds} s
             {progress && progress.phase === "running"
@@ -153,7 +153,7 @@ export function LoadProgress({ run, stopping, onStop, action, summary }: Props) 
           {active && (
             <button
               type="button"
-              className="cobre-btn cobre-btn-danger"
+              className="nm-btn nm-btn-danger"
               onClick={onStop}
               disabled={stopping}
               title={
@@ -168,8 +168,8 @@ export function LoadProgress({ run, stopping, onStop, action, summary }: Props) 
           {!active && action}
         </span>
       </div>
-      <div className="cobre-progress-bar" aria-hidden>
-        <div className="cobre-progress-fill" style={{ width: `${pct}%` }} />
+      <div className="nm-progress-bar" aria-hidden>
+        <div className="nm-progress-fill" style={{ width: `${pct}%` }} />
       </div>
 
       {showLive && agentProgress && <AgentLive progress={agentProgress} />}
@@ -192,7 +192,7 @@ export function LoadProgress({ run, stopping, onStop, action, summary }: Props) 
         />
       )}
       {run.status === "error" && run.error && (
-        <div className="cobre-banner cobre-banner-stacked" data-kind="critical">
+        <div className="nm-banner nm-banner-stacked" data-kind="critical">
           {run.error}
         </div>
       )}

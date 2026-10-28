@@ -4,7 +4,7 @@
  *   npm run dev:launcher
  *
  * - Lanca `python -m tests.e2e.launcher.serve` (porta 5175) a partir da raiz
- *   do <repositório anterior>.
+ *   do novomodelo-mcp.
  * - Espera o /api/health responder.
  * - Sobe o Vite (porta 5174), cujo proxy /api -> 5175 ja esta no vite.config.ts.
  * - Encerra ambos ao receber Ctrl+C.
@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontendDir = resolve(here, "..");
-const projectRoot = resolve(frontendDir, "..", "..", ".."); // tests/e2e/frontend -> <repositório anterior>
+const projectRoot = resolve(frontendDir, "..", "..", ".."); // tests/e2e/frontend -> novomodelo-mcp
 
 // Mesmo default do vite.config.ts; o proxy /api e o launcher precisam concordar.
 const LAUNCHER_URL = new URL(process.env.VITE_LAUNCHER_URL || "http://127.0.0.1:5175");

@@ -9,6 +9,7 @@ que não usa o MCP (não exercita o servidor) e o caso cuja fonte (``requires``)
 as dicas do servidor (pré-voo), sai ainda a tool que ele anuncia com rede, ou como escrita
 sem ser das que rodam na cópia.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping

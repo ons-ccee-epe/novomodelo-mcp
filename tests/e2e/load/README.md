@@ -125,7 +125,7 @@ latências longas e dos timeouts dos casos `bridge-*` na esteira.
 - **Percentis** por interpolação linear entre postos vizinhos (a mesma definição
   do default do numpy).
 - **Série temporal:** buckets de 1 s pelo instante de conclusão, com chamadas,
-  falhas, p50 e p95. O gráfico descarta o último bucket quando a janela mal o cobre.
+  falhas, p50 e p95. O gráfico descarta o último bucket quando a janela mal o abrange.
 - **Subida dos servidores, à parte:** tempo por cliente, até todos prontos,
   aquecimento e pré-voo. O relógio da carga só começa depois que **todos** os
   clientes estão prontos. Com cópia das fixtures, o tempo dela fica em `copy_ms` de
@@ -160,7 +160,7 @@ Quando a seleção tem tool ou caso que grava, cada sessão recebe, na pasta tem
 run, uma cópia própria das fixtures (`sandbox.py`), feita na subida da sessão:
 
 - só as subárvores que a seleção usa (`categoria/caso`, como
-  `newave/cobre-caso-reduzido` ou `results/sample_run`), com o layout das originais,
+  `newave/novomodelo-caso-reduzido` ou `results/sample_run`), com o layout das originais,
   mais uma `scratch/` vazia; um caminho que não existe nas fixtures também não existe
   na cópia (os casos de erro continuam dando erro);
 - os argumentos das chamadas (modo tools) e o prompt e as fontes de cada caso (modo
@@ -264,7 +264,7 @@ Cada execução tem dois resultados separados:
 - **Transporte**: `ok` (o agente completou), `timeout` ou `error` (exceção, agente sem
   resposta nem tool-call, erro da API como limite de taxa ou, no claude, servidor MCP
   que não conectou). Alimenta a taxa de erro; a latência ponta a ponta (p50/p95/p99)
-  cobre só as execuções completas.
+  abrange só as execuções completas.
 - **Validação** (o mesmo `QueryValidator` da esteira): `pass`, `partial` ou `fail`.
   Alimenta a taxa de aprovação. Um `fail` é uma execução completa.
 
@@ -324,7 +324,7 @@ uv run --no-sync pytest tests/e2e/load
 ```
 
 Os testes unitários usam clientes e runners falsos (`fakes.py`): não sobem o
-servidor nem um agente, e não gastam tokens. `test_sandbox_unit.py` cobre a cópia por
+servidor nem um agente, e não gastam tokens. `test_sandbox_unit.py` abrange a cópia por
 sessão (o que é copiado, caminhos distintos, prompt reescrito, workspace só da cópia,
 reset entre execuções, disco e limpeza).
 `test_load_integration.py` usa um servidor MCP falso (`fake_mcp_server.py`) por

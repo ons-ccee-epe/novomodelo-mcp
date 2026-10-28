@@ -32,7 +32,7 @@ function detailed(b: BatchResult): BatchResult {
     test_results,
     total_tests: test_results.length,
     passed,
-    cobre_mcp_version: "1.2.3",
+    mcp_version: "1.2.3",
     git_commit_sha: "abcdef0123456789",
     metrics: {
       avg_latency_ms: 1234,
@@ -107,7 +107,7 @@ describe("BatchHeader", () => {
   });
 
   it("omite a versão quando é unknown", () => {
-    setup({ batch: { ...CUR, cobre_mcp_version: "unknown" } });
+    setup({ batch: { ...CUR, mcp_version: "unknown" } });
     expect(screen.queryByText(/vunknown/)).toBeNull();
   });
 

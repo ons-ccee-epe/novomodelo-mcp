@@ -19,6 +19,7 @@ processos dividido pelas sessões que subiram; entre as cargas recentes vale o m
 errar para menos sessões. Memória e disco livres são instantâneos do momento da consulta.
 Sem psutil só os núcleos (e o disco) entram, com um aviso.
 """
+
 from __future__ import annotations
 
 import math
@@ -269,7 +270,9 @@ def estimate_capacity(
 
     cores = cpu_count() or 1
     usable_cores = max(cores - RESERVED_CORES, 1)
-    cpu_limit = max(math.floor(usable_cores / cost.cpu_cores), 0) if cost.cpu_cores > 0 else hard_cap
+    cpu_limit = (
+        max(math.floor(usable_cores / cost.cpu_cores), 0) if cost.cpu_cores > 0 else hard_cap
+    )
 
     psutil = psutil_loader()
     memory: dict[str, float] | None = None

@@ -63,13 +63,13 @@ export function funnel(
   ];
 }
 
-export const statusColor = (status: TestStatus) => `var(--cobre-${status})`;
+export const statusColor = (status: TestStatus) => `var(--nm-${status})`;
 
 import { STATUS_LABEL } from "@/shared/constants/status";
 
 export { STATUS_LABEL };
 
-export const TOOL_TIME_COLOR = "var(--cobre-text-muted)";
+export const TOOL_TIME_COLOR = "var(--nm-text-muted)";
 
 export function latencyLegend(b: BatchResult): Array<{ label: string; color: string }> {
   const present = new Set(b.test_results.map((r) => r.status));

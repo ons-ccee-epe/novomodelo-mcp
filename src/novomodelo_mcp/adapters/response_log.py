@@ -10,12 +10,13 @@ Ligado por NOVOMODELO_MCP_RESPONSE_LOG=<caminho>. Grava um arquivo JSONL com:
 Este log permite que testes E2E validem não só que a tool foi chamada,
 mas também o que ela retornou.
 """
+
 from __future__ import annotations
 
 import json
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +39,7 @@ def log_tool_call(
     duration_ms: float,
 ) -> None:
     """Grava uma entrada de chamada de tool no log JSONL.
-    
+
     Args:
         tool_name: Nome da tool MCP chamada
         arguments: Argumentos passados para a tool
@@ -48,19 +49,19 @@ def log_tool_call(
     log_path = get_response_log_path()
     if not log_path:
         return
-    
+
     entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "tool": tool_name,
         "arguments": _safe_serialize(arguments),
         "result": _safe_serialize(result),
         "duration_ms": round(duration_ms, 2),
     }
-    
+
     try:
         # Garante que o diretório existe
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Escrita atômica com lock
         with _write_lock:
             with open(log_path, "a", encoding="utf-8") as f:
@@ -73,7 +74,7 @@ def _safe_serialize(obj: Any, max_depth: int = 10, max_str_len: int = 10000) -> 
     """Serializa objeto de forma segura, truncando strings muito longas."""
     if max_depth <= 0:
         return "<<max depth reached>>"
-    
+
     if obj is None:
         return None
     if isinstance(obj, (bool, int, float)):
@@ -88,7 +89,7 @@ def _safe_serialize(obj: Any, max_depth: int = 10, max_str_len: int = 10000) -> 
         return {str(k): _safe_serialize(v, max_depth - 1, max_str_len) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_safe_serialize(item, max_depth - 1, max_str_len) for item in obj]
-    
+
     # Fallback para outros tipos
     try:
         return str(obj)
@@ -108,9 +109,9 @@ def read_log() -> list[dict[str, Any]]:
     log_path = get_response_log_path()
     if not log_path or not log_path.exists():
         return []
-    
+
     entries = []
-    with open(log_path, "r", encoding="utf-8") as f:
+    with open(log_path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:

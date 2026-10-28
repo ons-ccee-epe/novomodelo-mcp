@@ -6,6 +6,7 @@ traz ``mode`` (``tools`` ou ``agent``); um JSON gravado antes do modo agent não
 campo e é lido como ``tools``. O bloco ``sandbox`` (cópia das fixtures por sessão) também
 pode faltar nos JSONs antigos, que não tinham cópia.
 """
+
 from __future__ import annotations
 
 import json

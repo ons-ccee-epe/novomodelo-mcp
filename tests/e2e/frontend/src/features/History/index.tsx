@@ -27,18 +27,18 @@ function BatchHistory({ collapsed, onToggleCollapsed }: CollapseProps) {
     null;
 
   return (
-    <div className="cobre-history" data-collapsed={collapsed}>
+    <div className="nm-history" data-collapsed={collapsed}>
       {error && (
-        <div className="cobre-banner" data-kind="critical" role="alert">
+        <div className="nm-banner" data-kind="critical" role="alert">
           {error}
         </div>
       )}
-      <aside className="cobre-history-side">
+      <aside className="nm-history-side">
         {!collapsed && <HistoryKindSwitch loads={false} />}
         {loading && batches.length === 0 ? (
-          <p className="cobre-no-data">Carregando baterias…</p>
+          <p className="nm-no-data">Carregando baterias…</p>
         ) : !error && batches.length === 0 ? (
-          <p className="cobre-no-data">Nenhuma bateria gravada</p>
+          <p className="nm-no-data">Nenhuma bateria gravada</p>
         ) : (
           <BatchList
             batches={batches}
@@ -49,7 +49,7 @@ function BatchHistory({ collapsed, onToggleCollapsed }: CollapseProps) {
           />
         )}
         {unreadable > 0 && !collapsed && (
-          <p className="cobre-muted">
+          <p className="nm-muted">
             {unreadable}{" "}
             {unreadable === 1
               ? "bateria não pôde ser lida"
@@ -57,7 +57,7 @@ function BatchHistory({ collapsed, onToggleCollapsed }: CollapseProps) {
           </p>
         )}
       </aside>
-      <div className="cobre-history-main">
+      <div className="nm-history-main">
         {selected ? (
           <BatchDashboard
             key={selected.batch_id}
@@ -69,7 +69,7 @@ function BatchHistory({ collapsed, onToggleCollapsed }: CollapseProps) {
           />
         ) : (
           <section
-            className="cobre-history-empty"
+            className="nm-history-empty"
             aria-label="Dashboard da bateria"
           >
             Selecione uma bateria

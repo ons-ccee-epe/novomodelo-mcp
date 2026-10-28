@@ -1,4 +1,5 @@
 """Testes das rotas do modo agent da carga: validação, provedor, seleção, casos e capacidade."""
+
 from __future__ import annotations
 
 import sys
@@ -6,17 +7,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
-
-from fastapi.testclient import TestClient  # noqa: E402 - depois do importorskip
-
-from tests.e2e.launcher import app as app_mod  # noqa: E402
-from tests.e2e.launcher.load_service import LoadRunService, build_command  # noqa: E402
-from tests.e2e.load.agent_cases import CaseSelection  # noqa: E402
-from tests.e2e.load.agent_engine import AgentLoadConfig  # noqa: E402
-from tests.e2e.load.fakes import make_case  # noqa: E402
+from tests.e2e.launcher import app as app_mod
+from tests.e2e.launcher.load_service import LoadRunService, build_command
+from tests.e2e.load.agent_cases import CaseSelection
+from tests.e2e.load.agent_engine import AgentLoadConfig
+from tests.e2e.load.fakes import make_case
 
 LOCAL = "http://127.0.0.1:5175"
 HEADER = {"X-Launcher": "1"}
@@ -38,8 +35,9 @@ def client() -> TestClient:
 
 @pytest.fixture(autouse=True)
 def fake_catalog():
-    with patch.object(app_mod, "load_cases", return_value=CASES), patch.object(
-        app_mod, "resolve_provider", return_value=CLAUDE
+    with (
+        patch.object(app_mod, "load_cases", return_value=CASES),
+        patch.object(app_mod, "resolve_provider", return_value=CLAUDE),
     ):
         yield
 
@@ -103,7 +101,9 @@ class TestStart:
     def test_valid_agent_body_reaches_the_service_with_the_resolved_provider(
         self, client: TestClient
     ) -> None:
-        resp, start = _post(client, {**AGENT, "group": "docs", "iterations": 1, "timeout_seconds": 90})
+        resp, start = _post(
+            client, {**AGENT, "group": "docs", "iterations": 1, "timeout_seconds": 90}
+        )
         assert resp.status_code == 200
         config = start.call_args.args[0]
         assert isinstance(config, AgentLoadConfig)
@@ -122,7 +122,9 @@ class TestStart:
 
 
 class TestCatalogRoutes:
-    def test_load_cases_lists_availability_reasons_and_agent_limits(self, client: TestClient) -> None:
+    def test_load_cases_lists_availability_reasons_and_agent_limits(
+        self, client: TestClient
+    ) -> None:
         data = client.get("/api/load-cases").json()
         by_id = {c["id"]: c for c in data["cases"]}
         assert by_id["docs-list-all"]["available"] is True
@@ -136,7 +138,9 @@ class TestCatalogRoutes:
         assert data["limits"]["default_timeout_seconds"] is None
 
     def test_capacity_passes_mode_and_provider(self, client: TestClient) -> None:
-        with patch.object(app_mod, "estimate_capacity", return_value={"recommended": 2}) as estimate:
+        with patch.object(
+            app_mod, "estimate_capacity", return_value={"recommended": 2}
+        ) as estimate:
             resp = client.get("/api/load-capacity", params={"mode": "agent", "provider": "claude"})
         assert resp.status_code == 200
         assert resp.json() == {"recommended": 2}
@@ -156,10 +160,13 @@ class TestCatalogRoutes:
     def test_capacity_profile_follows_the_selection(
         self, client: TestClient, tmp_path, params: dict, heavy: bool, writes: bool
     ) -> None:
-        deck = tmp_path / "newave" / "cobre-caso-reduzido"
+        deck = tmp_path / "newave" / "novomodelo-caso-reduzido"
         deck.mkdir(parents=True)
         (deck / "config.json").write_text("{}", encoding="utf-8")
-        with patch.object(app_mod, "estimate_capacity", return_value={}) as estimate,                 patch.object(app_mod, "_FIXTURES_DIR", tmp_path):
+        with (
+            patch.object(app_mod, "estimate_capacity", return_value={}) as estimate,
+            patch.object(app_mod, "_FIXTURES_DIR", tmp_path),
+        ):
             resp = client.get("/api/load-capacity", params=params)
         assert resp.status_code == 200
         profile = estimate.call_args.kwargs["profile"]

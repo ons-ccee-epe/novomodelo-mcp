@@ -50,7 +50,7 @@ function canvasContext(width: number, height: number, scale: number, background?
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas indisponível");
   ctx.scale(scale, scale);
-  ctx.fillStyle = background || cssVar("--cobre-surface") || "#ffffff";
+  ctx.fillStyle = background || cssVar("--nm-surface") || "#ffffff";
   ctx.fillRect(0, 0, width, height);
   return { canvas, ctx };
 }
@@ -179,13 +179,13 @@ export async function summaryPngBlob(
     SUMMARY_WIDTH_PX,
     totalHeight,
     scale,
-    cssVar("--cobre-bg") || undefined,
+    cssVar("--nm-bg") || undefined,
   );
   const font = pageFont();
-  const text = cssVar("--cobre-text") || "#1e293b";
-  const muted = cssVar("--cobre-text-muted") || "#64748b";
-  const surface = cssVar("--cobre-surface") || "#ffffff";
-  const border = cssVar("--cobre-border") || "#e2e8f0";
+  const text = cssVar("--nm-text") || "#1e293b";
+  const muted = cssVar("--nm-text-muted") || "#64748b";
+  const surface = cssVar("--nm-surface") || "#ffffff";
+  const border = cssVar("--nm-border") || "#e2e8f0";
   ctx.textBaseline = "top";
   ctx.fillStyle = text;
   ctx.font = `bold 22px ${font}`;

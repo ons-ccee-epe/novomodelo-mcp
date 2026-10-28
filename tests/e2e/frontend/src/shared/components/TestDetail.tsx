@@ -18,8 +18,8 @@ function MetaItem({ term, children }: { term: string; children: ReactNode }) {
 
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="cobre-detail-section">
-      <div className="cobre-muted cobre-detail-label">{label}</div>
+    <div className="nm-detail-section">
+      <div className="nm-muted nm-detail-label">{label}</div>
       {children}
     </div>
   );
@@ -27,27 +27,27 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 
 function ToolCalls({ calls }: { calls: TestResult["all_tool_calls"] }) {
   if (calls.length === 0) {
-    return <p className="cobre-muted cobre-detail-hint">Nenhuma tool chamada.</p>;
+    return <p className="nm-muted nm-detail-hint">Nenhuma tool chamada.</p>;
   }
   return (
-    <ol className="cobre-call-list">
+    <ol className="nm-call-list">
       {calls.map((tc, i) => {
         const { [PURPOSE_KEY]: purpose, ...args } = tc.args ?? {};
         const head = (
           <>
-            <code className="cobre-call-name">{tc.name}</code>
-            {typeof purpose === "string" && <span className="cobre-call-purpose">{purpose}</span>}
+            <code className="nm-call-name">{tc.name}</code>
+            {typeof purpose === "string" && <span className="nm-call-purpose">{purpose}</span>}
           </>
         );
         return (
-          <li key={tc.tool_id ?? i} className="cobre-call">
+          <li key={tc.tool_id ?? i} className="nm-call">
             {Object.keys(args).length > 0 ? (
               <details>
-                <summary className="cobre-call-head">{head}</summary>
-                <pre className="cobre-code">{JSON.stringify(args, null, 2)}</pre>
+                <summary className="nm-call-head">{head}</summary>
+                <pre className="nm-code">{JSON.stringify(args, null, 2)}</pre>
               </details>
             ) : (
-              <div className="cobre-call-head">{head}</div>
+              <div className="nm-call-head">{head}</div>
             )}
           </li>
         );
@@ -58,13 +58,13 @@ function ToolCalls({ calls }: { calls: TestResult["all_tool_calls"] }) {
 
 function Checks({ checks }: { checks: TestResult["validation_checks"] }) {
   return (
-    <ul className="cobre-check-list">
+    <ul className="nm-check-list">
       {checks.map((c, i) => {
         const passed = c.passed === true;
         const text = typeof c.message === "string" ? c.message : String(c.name ?? "");
         return (
           <li key={`${String(c.name)}-${i}`}>
-            <span className="cobre-status" data-status={passed ? "pass" : "fail"}>
+            <span className="nm-status" data-status={passed ? "pass" : "fail"}>
               {passed ? "✓ ok" : "✗ falhou"}
             </span>
             <span>{text}</span>
@@ -96,8 +96,8 @@ export function TestDetail({
   const response =
     tr.agent_response ?? (tr as { response_preview?: string }).response_preview ?? "";
   return (
-    <div className="cobre-test-detail">
-      <dl className="cobre-detail-meta">
+    <div className="nm-test-detail">
+      <dl className="nm-detail-meta">
         <MetaItem term="Tool esperada">
           <code>{expected}</code>
         </MetaItem>
@@ -111,7 +111,7 @@ export function TestDetail({
         {tags.length > 0 && (
           <MetaItem term="Tags">
             {tags.map((t) => (
-              <span key={t} className="cobre-tag-chip">
+              <span key={t} className="nm-tag-chip">
                 {t}
               </span>
             ))}
@@ -130,12 +130,12 @@ export function TestDetail({
       )}
       {tr.error_message && (
         <Section label="Erro">
-          <pre className="cobre-code cobre-detail-error">{tr.error_message}</pre>
+          <pre className="nm-code nm-detail-error">{tr.error_message}</pre>
         </Section>
       )}
       {response && (
         <Section label="Resposta do agente">
-          <div className="cobre-markdown cobre-detail-response">
+          <div className="nm-markdown nm-detail-response">
             <Markdown remarkPlugins={[remarkGfm]}>{response}</Markdown>
           </div>
         </Section>

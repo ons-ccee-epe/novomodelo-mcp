@@ -13,5 +13,3 @@ Fluxo:
                                                       tool MCP novomodelo::*
     frontend <--/data/*-- ResultStore (results/*.json, metrics/history.jsonl)
 """
-
-__all__ = ["app"]

@@ -1,4 +1,5 @@
 """Clientes e runners falsos para testar a carga sem subir o servidor MCP nem um agente."""
+
 from __future__ import annotations
 
 import asyncio
@@ -14,7 +15,13 @@ from tests.e2e.load.client import CallOutcome
 from tests.e2e.load.engine import LoadConfig, LoadOutcome
 from tests.e2e.load.mix import CallSpec, Excluded, Selection, ToolHints
 from tests.e2e.load.stats import Sample
-from tests.e2e.queries.models import ExpectedResult, QueryResult, QueryTestCase, TestResult, ToolCall
+from tests.e2e.queries.models import (
+    ExpectedResult,
+    QueryResult,
+    QueryTestCase,
+    TestResult,
+    ToolCall,
+)
 
 READ_ONLY = ToolHints(read_only=True, open_world=False)
 WRITES = ToolHints(read_only=False, open_world=False)
@@ -100,24 +107,51 @@ def make_outcome(
     excluded: list[Any] | None = None,
 ) -> LoadOutcome:
     """Resultado sintético para testar persistência e relatório sem rodar a carga."""
-    samples = samples if samples is not None else [
-        Sample("docs_list", 0.1, 100.0, "ok"),
-        Sample("docs_list", 0.5, 140.0, "ok"),
-        Sample("docs_search", 0.7, 30.0, "ok"),
-        Sample("docs_search", 1.2, 31.0, "error", "falha simulada"),
-    ]
+    samples = (
+        samples
+        if samples is not None
+        else [
+            Sample("docs_list", 0.1, 100.0, "ok"),
+            Sample("docs_list", 0.5, 140.0, "ok"),
+            Sample("docs_search", 0.7, 30.0, "ok"),
+            Sample("docs_search", 1.2, 31.0, "error", "falha simulada"),
+        ]
+    )
     return LoadOutcome(
         config=config or LoadConfig(concurrency=2, duration_s=2.0),
         selection=Selection(
-            specs=[CallSpec("docs_list#todas", "docs_list", {}),
-                   CallSpec("docs_search#sddp", "docs_search", {"consulta": "SDDP"})],
+            specs=[
+                CallSpec("docs_list#todas", "docs_list", {}),
+                CallSpec("docs_search#sddp", "docs_search", {"consulta": "SDDP"}),
+            ],
             excluded=excluded or [],
         ),
         samples=samples,
         startups=[
-            {"client": -1, "kind": "preflight", "ms": 900.0, "warmup_ms": None, "ok": True, "error": None},
-            {"client": 0, "kind": "initial", "ms": 700.0, "warmup_ms": 120.0, "ok": True, "error": None},
-            {"client": 1, "kind": "initial", "ms": 760.0, "warmup_ms": 110.0, "ok": True, "error": None},
+            {
+                "client": -1,
+                "kind": "preflight",
+                "ms": 900.0,
+                "warmup_ms": None,
+                "ok": True,
+                "error": None,
+            },
+            {
+                "client": 0,
+                "kind": "initial",
+                "ms": 700.0,
+                "warmup_ms": 120.0,
+                "ok": True,
+                "error": None,
+            },
+            {
+                "client": 1,
+                "kind": "initial",
+                "ms": 760.0,
+                "warmup_ms": 110.0,
+                "ok": True,
+                "error": None,
+            },
         ],
         duration_s=duration_s,
         startup_wall_s=0.9,
@@ -248,13 +282,29 @@ class FakeCaseRunner:
 def make_agent_outcome(samples: list[AgentSample] | None = None, **config: Any) -> AgentOutcome:
     """Resultado sintético do modo agent para testar persistência e relatório."""
     cases = [make_case("docs-list-all"), make_case("schema-list-all", tool="schema_list")]
-    samples = samples if samples is not None else [
-        AgentSample("docs-list-all", "docs", 0, 0.0, 10_000.0, "ok", "pass", 2, 1),
-        AgentSample("docs-list-all", "docs", 1, 0.5, 14_000.0, "ok", "fail", 3, 1, "tool errada"),
-        AgentSample("schema-list-all", "schema", 0, 10.0, 8_000.0, "ok", "pass", 1, 1),
-        AgentSample("schema-list-all", "schema", 1, 15.0, 30_000.0, "timeout", "timeout", 0, 0,
-                    "sessão do agente encerrada após 30 s"),
-    ]
+    samples = (
+        samples
+        if samples is not None
+        else [
+            AgentSample("docs-list-all", "docs", 0, 0.0, 10_000.0, "ok", "pass", 2, 1),
+            AgentSample(
+                "docs-list-all", "docs", 1, 0.5, 14_000.0, "ok", "fail", 3, 1, "tool errada"
+            ),
+            AgentSample("schema-list-all", "schema", 0, 10.0, 8_000.0, "ok", "pass", 1, 1),
+            AgentSample(
+                "schema-list-all",
+                "schema",
+                1,
+                15.0,
+                30_000.0,
+                "timeout",
+                "timeout",
+                0,
+                0,
+                "sessão do agente encerrada após 30 s",
+            ),
+        ]
+    )
     values = {"concurrency": 2, "duration_s": 60.0, "provider": "claude"}
     values.update(config)
     return AgentOutcome(

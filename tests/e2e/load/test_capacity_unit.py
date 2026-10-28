@@ -1,5 +1,6 @@
 """Testes do limitador de sessões simultâneas: fórmula, histórico, perfil da seleção, disco,
 psutil ausente e tetos."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -60,7 +61,7 @@ def _estimate(
 def _copy_profile(copy_mb: float) -> SelectionProfile:
     plan = SandboxPlan(
         fixtures=Path("C:/fixtures"),
-        subtrees=("newave/cobre-caso-reduzido",),
+        subtrees=("newave/novomodelo-caso-reduzido",),
         enabled=True,
         copy_bytes=int(copy_mb * _MB),
     )
@@ -149,7 +150,11 @@ class TestHistory:
         _save_tools(store, "20261024_100000_abc1234", peak=400.0, cpu=160.0, started=2)
         result = _estimate(store=store, available_mb=1_000.0)
         assert result["per_session"] == {
-            "rss_mb": 200.0, "cpu_cores": 0.8, "source": "histórico", "runs": 1, "profile": "leve",
+            "rss_mb": 200.0,
+            "cpu_cores": 0.8,
+            "source": "histórico",
+            "runs": 1,
+            "profile": "leve",
         }
         assert result["limits"]["memory"] == 3  # 1000 × 0,75 ÷ 200
         assert "1 carga(s) gravada(s)" in result["explanation"]
@@ -211,7 +216,9 @@ class TestDisk:
         assert result["selection"]["writes"] is False
 
     def test_the_copy_plus_growth_bounds_the_sessions(self) -> None:
-        result = _estimate(profile=_copy_profile(400.0), free_disk_mb=2_000.0, available_mb=64_000.0)
+        result = _estimate(
+            profile=_copy_profile(400.0), free_disk_mb=2_000.0, available_mb=64_000.0
+        )
         assert result["disk"]["per_session_mb"] == pytest.approx(800.0)
         assert result["limits"]["disk"] == 2  # 2000 × 0,9 ÷ 800
         assert result["limiting_factor"] == "disco"
@@ -232,13 +239,13 @@ class TestProfilesFromTheSelection:
         assert not profile.heavy and not profile.writes
 
     def test_writing_and_heavy_tools_mark_the_profile(self, tmp_path: Path) -> None:
-        deck = tmp_path / "newave" / "cobre-caso-reduzido"
+        deck = tmp_path / "newave" / "novomodelo-caso-reduzido"
         deck.mkdir(parents=True)
         (deck / "config.json").write_text("{}", encoding="utf-8")
         profile = tools_profile(tmp_path, ["deck_edit_json", "run_plan", "docs_list"])
         assert profile.heavy_tools == ("run_plan",)
         assert profile.write_tools == ("deck_edit_json",)
-        assert profile.sandbox.subtrees == ("newave/cobre-caso-reduzido",)
+        assert profile.sandbox.subtrees == ("newave/novomodelo-caso-reduzido",)
         assert profile.sandbox.copy_bytes == 2
 
     def test_unknown_tool_is_refused(self, tmp_path: Path) -> None:

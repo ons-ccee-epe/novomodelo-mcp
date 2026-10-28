@@ -1,4 +1,5 @@
 """Testes da CLI do teste de carga (validação, saída, gravação e códigos de saída)."""
+
 from __future__ import annotations
 
 import json
@@ -233,7 +234,11 @@ _CLAUDE = SimpleNamespace(id="claude", label="Claude Code", binary="claude", pat
 def _fake_execute_agent(outcome=None, sandbox=None):
     def execute(_config, _args, _provider):
         server = {"command": ["mcp.exe"], "workspace": []}
-        return None, outcome or make_agent_outcome(), {"server": server, "sandbox": sandbox or NO_SANDBOX}
+        return (
+            None,
+            outcome or make_agent_outcome(),
+            {"server": server, "sandbox": sandbox or NO_SANDBOX},
+        )
 
     return execute
 
@@ -261,7 +266,9 @@ class TestAgentMode:
         assert run_mod.main([*AGENT, *extra]) == 2
         assert "erro:" in capsys.readouterr().err
 
-    @pytest.mark.parametrize("flag", [["--provider", "claude"], ["--case", "x"], ["--group", "docs"]])
+    @pytest.mark.parametrize(
+        "flag", [["--provider", "claude"], ["--case", "x"], ["--group", "docs"]]
+    )
     def test_agent_options_are_refused_in_tools_mode(self, flag: list[str], capsys) -> None:
         assert run_mod.main([*VALID, *flag]) == 2
         assert "não vale(m) no modo tools" in capsys.readouterr().err
@@ -349,7 +356,7 @@ class TestAgentMode:
 
 SANDBOX = {
     "enabled": True,
-    "subtrees": ["newave/cobre-caso-reduzido"],
+    "subtrees": ["newave/novomodelo-caso-reduzido"],
     "copy_mb": 19.2,
     "per_session_mb": 38.4,
     "growth": 1.0,
@@ -366,7 +373,10 @@ class TestSandboxRecord:
     ) -> None:
         monkeypatch.setattr(run_mod, "_execute", _fake_execute(sandbox=SANDBOX))
         assert run_mod.main([*VALID, "--results-dir", str(tmp_path)]) == 0
-        assert "Cópia por sessão: 19.2 MB (newave/cobre-caso-reduzido)" in capsys.readouterr().out
+        assert (
+            "Cópia por sessão: 19.2 MB (newave/novomodelo-caso-reduzido)"
+            in capsys.readouterr().out
+        )
         [saved] = (tmp_path / "load").glob("2*.json")
         record = json.loads(saved.read_text(encoding="utf-8"))
         assert record["sandbox"] == SANDBOX

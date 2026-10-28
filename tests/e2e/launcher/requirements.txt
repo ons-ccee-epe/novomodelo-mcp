@@ -1,8 +1,0 @@
-# Dependencias do launcher de DEV (nao vao para producao).
-# Instale num venv local: pip install -r tests/e2e/launcher/requirements.txt
-fastapi==0.159.1
-# Fixado a parte: e a starlette que carrega as CVEs; nao deixar o fastapi resolver uma antiga.
-starlette==1.9.0
-uvicorn[standard]==0.54.0
-pydantic==2.14.1
-# Opcional: psutil mede CPU/RSS dos servidores no teste de carga (pip install psutil).

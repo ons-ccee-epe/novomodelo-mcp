@@ -15,7 +15,7 @@ export function LoadFinished({ run }: { run: LoadRunState }) {
   return (
     <button
       type="button"
-      className="cobre-btn cobre-btn-primary cobre-btn-sm"
+      className="nm-btn nm-btn-primary nm-btn-sm"
       onClick={() => navigate(historyLoadPath(loadId))}
     >
       Ver no Histórico
@@ -26,7 +26,7 @@ export function LoadFinished({ run }: { run: LoadRunState }) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <span>
-      <span className="cobre-muted">{label}</span> {value}
+      <span className="nm-muted">{label}</span> {value}
     </span>
   );
 }
@@ -49,7 +49,7 @@ export function LoadDoneSummary({ loadId }: { loadId: string }) {
   const t = saved.totals;
 
   return (
-    <div className="cobre-load-live" aria-label="Resumo da carga concluída">
+    <div className="nm-load-live" aria-label="Resumo da carga concluída">
       {isAgentRun(saved) ? (
         <>
           <Metric label="Execuções" value={String(saved.totals.calls)} />

@@ -58,7 +58,7 @@ export interface LoadLauncherData {
 }
 
 /**
- * Interação com o launcher de dev para o teste de carga: descobre as tools, os casos, os
+ * Interação com o launcher de dev para o teste de carga: lista as tools, os casos, os
  * provedores e os limites, dispara, acompanha por polling e para. Ao reabrir a tela com uma carga em andamento,
  * retoma o acompanhamento. Ao terminar com sucesso, chama onFinished.
  */

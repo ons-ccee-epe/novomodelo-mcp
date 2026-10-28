@@ -32,11 +32,11 @@ export function LoadSummaryCards({ run }: Props) {
   ];
 
   return (
-    <div className="cobre-summary" aria-label="Resumo da carga">
+    <div className="nm-summary" aria-label="Resumo da carga">
       {cards.map((c) => (
-        <div key={c.label} className="cobre-card" data-accent={c.accent || undefined}>
-          <div className="cobre-card-value">{c.value}</div>
-          <div className="cobre-card-label">{c.label}</div>
+        <div key={c.label} className="nm-card" data-accent={c.accent || undefined}>
+          <div className="nm-card-value">{c.value}</div>
+          <div className="nm-card-label">{c.label}</div>
         </div>
       ))}
     </div>

@@ -1,4 +1,4 @@
-# Dashboard de Testes E2E — <repositório anterior> (frontend)
+# Dashboard de Testes E2E — novomodelo-mcp (frontend)
 
 Frontend único que **consome os resultados dos testes** em vez de gerar HTML a
 cada execução. Os runners de teste gravam JSON; este frontend lê esses JSON e se

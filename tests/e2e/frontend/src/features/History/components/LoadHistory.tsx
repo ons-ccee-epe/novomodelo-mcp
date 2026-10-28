@@ -16,21 +16,21 @@ export function LoadHistory({ collapsed, onToggleCollapsed }: Props) {
   const d = useLoadResults(loadId);
 
   return (
-    <div className="cobre-history" data-collapsed={collapsed}>
+    <div className="nm-history" data-collapsed={collapsed}>
       {d.error && (
-        <div className="cobre-banner" data-kind="critical" role="alert">
+        <div className="nm-banner" data-kind="critical" role="alert">
           Erro ao carregar as cargas gravadas: {d.error}
-          <div className="cobre-banner-note">
+          <div className="nm-banner-note">
             Verifique se o dev server serve <code>/data/results/load/</code>.
           </div>
         </div>
       )}
-      <aside className="cobre-history-side">
+      <aside className="nm-history-side">
         {!collapsed && <HistoryKindSwitch loads />}
         {d.loading && d.runs.length === 0 ? (
-          <p className="cobre-no-data">Carregando cargas…</p>
+          <p className="nm-no-data">Carregando cargas…</p>
         ) : !d.error && d.runs.length === 0 ? (
-          <p className="cobre-no-data">Nenhuma carga gravada</p>
+          <p className="nm-no-data">Nenhuma carga gravada</p>
         ) : (
           <LoadList
             runs={d.runs}
@@ -41,14 +41,14 @@ export function LoadHistory({ collapsed, onToggleCollapsed }: Props) {
           />
         )}
       </aside>
-      <div className="cobre-history-main cobre-load-main">
+      <div className="nm-history-main nm-load-main">
         {d.run ? (
           <LoadResult key={d.run.load_id} run={d.run} data={d} />
         ) : d.runs.length > 0 ? (
-          <div className="cobre-muted">Carregando a carga selecionada…</div>
+          <div className="nm-muted">Carregando a carga selecionada…</div>
         ) : (
           !d.loading && (
-            <section className="cobre-history-empty" aria-label="Dashboard da carga">
+            <section className="nm-history-empty" aria-label="Dashboard da carga">
               Dispare uma carga em Testes de Carga, ou rode{" "}
               <code>python -m tests.e2e.load.run --concurrency 2 --duration 10</code>.
             </section>

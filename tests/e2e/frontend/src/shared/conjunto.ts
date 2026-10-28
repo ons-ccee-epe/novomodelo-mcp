@@ -41,9 +41,9 @@ export function conjuntoTitle(batch: BatchResult): string {
 }
 
 export function conjuntoColor(c: string): string {
-  if (c === "todos") return "var(--cobre-set-todos)";
-  if (c.startsWith("pergunta:")) return "var(--cobre-set-avulsa)";
+  if (c === "todos") return "var(--nm-set-todos)";
+  if (c.startsWith("pergunta:")) return "var(--nm-set-avulsa)";
   let hash = 0;
   for (const ch of c) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return `var(--cobre-set-${(hash % PALETTE_SIZE) + 1})`;
+  return `var(--nm-set-${(hash % PALETTE_SIZE) + 1})`;
 }

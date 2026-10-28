@@ -6,6 +6,7 @@ Este módulo implementa o CasesLoader, responsável por:
 - Expansão da variável {FIXTURES} para caminhos absolutos
 - Filtragem por tags e case_id
 """
+
 from __future__ import annotations
 
 from pathlib import Path

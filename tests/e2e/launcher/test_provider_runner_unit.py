@@ -11,6 +11,7 @@ eventos: runStarted / sessionUpdate(tool_call|tool_call_update|
 agent_message_chunk) / runFinished). Embutimos o sample como constante para o
 teste não depender do arquivo de notas.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -20,7 +21,6 @@ import pytest
 from tests.e2e.launcher.provider_runner import ProviderQueryRunner
 from tests.e2e.launcher.providers import ProviderInfo
 from tests.e2e.queries.validator import MCP_TOOLS
-
 
 # ---------------------------------------------------------------------------
 # Fixtures de stream-json
@@ -36,7 +36,7 @@ ACP_SAMPLE = r"""{"type":"runStarted","data":{"payloadSchema":"acp","acpProtocol
 {"type":"sessionUpdate","data":{"sessionId":"sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"e a 0.18.0."}}}}
 {"type":"metadata","data":{"sessionId":"sess-1","contextUsagePercentage":8.0,"turnDurationMs":36048}}
 {"type":"runFinished","data":{"sessionId":"sess-1","status":"success","stopReason":"end_turn","finalText":"A versao instalada do novomodelo e a 0.18.0.","finalTextTruncated":false}}
-"""
+"""  # noqa: E501 - amostra bruta de log, a quebra alteraria o formato testado
 
 
 # Amostra claude (stream-json Anthropic-style), reduzida — para regressão.
@@ -44,7 +44,7 @@ CLAUDE_SAMPLE = r"""{"type":"system","subtype":"init","session_id":"c-1"}
 {"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_claude_1","name":"mcp__novomodelo__solver_version","input":{"x":1}}]}}
 {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_claude_1","content":[{"type":"text","text":"{\"status\": \"ok\", \"version\": \"0.18.0\"}"}]}]}}
 {"type":"result","result":"A versao do solver e 0.18.0."}
-"""
+"""  # noqa: E501 - amostra bruta de log, a quebra alteraria o formato testado
 
 
 def _make_runner(provider_id: str) -> ProviderQueryRunner:
@@ -111,9 +111,7 @@ class TestKiroAcpParsing:
     def test_extract_agent_response_falls_back_to_chunks(self, kiro_runner):
         # Sem runFinished.finalText, concatena os agent_message_chunk.
         no_final = "\n".join(
-            line
-            for line in ACP_SAMPLE.splitlines()
-            if '"runFinished"' not in line
+            line for line in ACP_SAMPLE.splitlines() if '"runFinished"' not in line
         )
         response = kiro_runner._extract_agent_response(no_final)
         assert response == "A versao instalada e a 0.18.0."

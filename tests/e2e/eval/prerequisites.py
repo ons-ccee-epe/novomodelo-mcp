@@ -1,11 +1,12 @@
 """Verificação de pré-requisitos para execução dos testes e2e."""
+
 from __future__ import annotations
 
+import importlib
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-
 
 # Diretório de fixtures
 E2E_ROOT = Path(__file__).parent.parent
@@ -15,97 +16,99 @@ FIXTURES_DIR = E2E_ROOT / "fixtures"
 @dataclass
 class PrerequisiteStatus:
     """Status de um pré-requisito."""
+
     name: str
     ok: bool
     message: str
     version: str | None = None
 
 
-def check_cobre_bridge() -> PrerequisiteStatus:
-    """Verifica se cobre-bridge CLI está disponível."""
-    path = shutil.which("cobre-bridge")
+def check_novomodelo_bridge() -> PrerequisiteStatus:
+    """Verifica se novomodelo-bridge CLI está disponível."""
+    path = shutil.which("novomodelo-bridge")
     if path is None:
         return PrerequisiteStatus(
-            name="cobre-bridge",
+            name="novomodelo-bridge",
             ok=False,
-            message="CLI não encontrada no PATH. Instale via: cargo install cobre-bridge",
+            message="CLI não encontrada no PATH. Instale via: cargo install novomodelo-bridge",
         )
 
     try:
         result = subprocess.run(
-            ["cobre-bridge", "--version"],
+            ["novomodelo-bridge", "--version"],
             capture_output=True,
             text=True,
             timeout=10,
         )
         version = result.stdout.strip() or result.stderr.strip()
         return PrerequisiteStatus(
-            name="cobre-bridge",
+            name="novomodelo-bridge",
             ok=True,
             message=f"Encontrada em {path}",
             version=version,
         )
     except Exception as e:
         return PrerequisiteStatus(
-            name="cobre-bridge",
+            name="novomodelo-bridge",
             ok=False,
             message=f"Erro ao verificar versão: {e}",
         )
 
 
-def check_cobre() -> PrerequisiteStatus:
-    """Verifica se cobre CLI está disponível."""
-    path = shutil.which("cobre")
+def check_novomodelo() -> PrerequisiteStatus:
+    """Verifica se novomodelo CLI está disponível."""
+    path = shutil.which("novomodelo")
     if path is None:
         return PrerequisiteStatus(
-            name="cobre",
+            name="novomodelo",
             ok=False,
-            message="CLI não encontrada no PATH. Instale via: cargo install cobre",
+            message="CLI não encontrada no PATH. Instale via: cargo install novomodelo",
         )
 
     try:
         result = subprocess.run(
-            ["cobre", "--version"],
+            ["novomodelo", "--version"],
             capture_output=True,
             text=True,
             timeout=10,
         )
         version = result.stdout.strip() or result.stderr.strip()
         return PrerequisiteStatus(
-            name="cobre",
+            name="novomodelo",
             ok=True,
             message=f"Encontrada em {path}",
             version=version,
         )
     except Exception as e:
         return PrerequisiteStatus(
-            name="cobre",
+            name="novomodelo",
             ok=False,
             message=f"Erro ao verificar versão: {e}",
         )
 
 
-def check_cobre_mcp() -> PrerequisiteStatus:
-    """Verifica se o pacote cobre-mcp está instalado."""
+def check_novomodelo_mcp() -> PrerequisiteStatus:
+    """Verifica se o pacote novomodelo-mcp está instalado."""
     try:
-        from cobre_mcp.server import build_server
-        
+        importlib.import_module("novomodelo_mcp.server")
+
         # Tenta obter versão
         try:
             from importlib.metadata import version
-            ver = version("cobre-mcp")
+
+            ver = version("novomodelo-mcp")
         except Exception:
             ver = "unknown"
 
         return PrerequisiteStatus(
-            name="cobre-mcp",
+            name="novomodelo-mcp",
             ok=True,
             message="Pacote importado com sucesso",
             version=ver,
         )
     except ImportError as e:
         return PrerequisiteStatus(
-            name="cobre-mcp",
+            name="novomodelo-mcp",
             ok=False,
             message=f"Pacote não instalado: {e}. Instale via: pip install -e .",
         )
@@ -152,7 +155,7 @@ def check_prerequisites(target: str = "local", skip_cli: bool = False) -> bool:
 
     Args:
         target: "local" para modo local, URL para remoto
-        skip_cli: Se True, pula verificação de cobre/cobre-bridge
+        skip_cli: Se True, pula verificação de novomodelo/novomodelo-bridge
 
     Returns:
         True se todos os pré-requisitos estão OK.
@@ -161,12 +164,14 @@ def check_prerequisites(target: str = "local", skip_cli: bool = False) -> bool:
     return all(s.ok for s in statuses)
 
 
-def get_prerequisites_status(target: str = "local", skip_cli: bool = False) -> list[PrerequisiteStatus]:
+def get_prerequisites_status(
+    target: str = "local", skip_cli: bool = False
+) -> list[PrerequisiteStatus]:
     """Obtém status de todos os pré-requisitos.
 
     Args:
         target: "local" para modo local, URL para remoto
-        skip_cli: Se True, pula verificação de cobre/cobre-bridge
+        skip_cli: Se True, pula verificação de novomodelo/novomodelo-bridge
 
     Returns:
         Lista de PrerequisiteStatus.
@@ -174,20 +179,22 @@ def get_prerequisites_status(target: str = "local", skip_cli: bool = False) -> l
     statuses = []
 
     if target == "local":
-        # Modo local: precisa do pacote cobre-mcp
-        statuses.append(check_cobre_mcp())
-        
+        # Modo local: precisa do pacote novomodelo-mcp
+        statuses.append(check_novomodelo_mcp())
+
         if not skip_cli:
             # CLIs opcionais se skip_cli=True
-            statuses.append(check_cobre_bridge())
-            statuses.append(check_cobre())
+            statuses.append(check_novomodelo_bridge())
+            statuses.append(check_novomodelo())
     else:
         # Modo remoto: apenas verifica conectividade (futuro)
-        statuses.append(PrerequisiteStatus(
-            name="remote",
-            ok=False,
-            message=f"Modo remoto não implementado: {target}",
-        ))
+        statuses.append(
+            PrerequisiteStatus(
+                name="remote",
+                ok=False,
+                message=f"Modo remoto não implementado: {target}",
+            )
+        )
 
     # Fixtures são sempre necessárias
     statuses.append(check_fixtures())
@@ -200,7 +207,7 @@ def print_prerequisites_status(target: str = "local", skip_cli: bool = False) ->
 
     Args:
         target: "local" para modo local, URL para remoto
-        skip_cli: Se True, pula verificação de cobre/cobre-bridge
+        skip_cli: Se True, pula verificação de novomodelo/novomodelo-bridge
     """
     statuses = get_prerequisites_status(target, skip_cli=skip_cli)
 
@@ -211,6 +218,6 @@ def print_prerequisites_status(target: str = "local", skip_cli: bool = False) ->
         print(f"  {icon} {s.name}{version_str}")
         if not s.ok:
             print(f"      └─ {s.message}")
-    
+
     if skip_cli:
-        print("  ⚠ cobre/cobre-bridge: verificação pulada (--skip-cli-check)")
+        print("  ⚠ novomodelo/novomodelo-bridge: verificação pulada (--skip-cli-check)")

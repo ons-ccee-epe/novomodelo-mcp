@@ -69,29 +69,29 @@ export function LoadComparison({ current, previous }: Props) {
   if (!sameMode) return null;
 
   return (
-    <section className="cobre-section" aria-label="Comparação entre cargas">
-      <h2 className="cobre-section-title">
+    <section className="nm-section" aria-label="Comparação entre cargas">
+      <h2 className="nm-section-title">
         Comparação: {fmtLoadId(current.load_id)} vs {fmtLoadId(previous.load_id)}
       </h2>
       {differences.length > 0 && (
-        <div className="cobre-banner" data-kind="warning">
+        <div className="nm-banner" data-kind="warning">
           As cargas usaram parâmetros diferentes ({differences.join(", ")}): a comparação é só
           indicativa.
         </div>
       )}
-      <div className="cobre-metrics-grid">
+      <div className="nm-metrics-grid">
         {metrics.map((m) => (
-          <div key={m.spec.key} className="cobre-metrics-card">
+          <div key={m.spec.key} className="nm-metrics-card">
             <h4>{m.spec.label}</h4>
-            <span className="cobre-delta" data-trend={m.trend}>
+            <span className="nm-delta" data-trend={m.trend}>
               {arrowOf(m.delta)} {formatDelta(m)}
             </span>
-            <div className="cobre-metric-row">
-              <span className="cobre-muted">Agora</span>
+            <div className="nm-metric-row">
+              <span className="nm-muted">Agora</span>
               <span>{formatValue(m.spec.key, m.current)}</span>
             </div>
-            <div className="cobre-metric-row">
-              <span className="cobre-muted">Antes</span>
+            <div className="nm-metric-row">
+              <span className="nm-muted">Antes</span>
               <span>{formatValue(m.spec.key, m.previous)}</span>
             </div>
           </div>
@@ -99,7 +99,7 @@ export function LoadComparison({ current, previous }: Props) {
       </div>
 
       {tools.length > 0 && (
-        <table className="cobre-table cobre-load-compare-table" aria-label={agent ? "p95 por caso" : "p95 por tool"}>
+        <table className="nm-table nm-load-compare-table" aria-label={agent ? "p95 por caso" : "p95 por tool"}>
           <thead>
             <tr>
               <th>{agent ? "Caso" : "Tool"}</th>
@@ -117,7 +117,7 @@ export function LoadComparison({ current, previous }: Props) {
                 <td>{fmtMs(t.current)}</td>
                 <td>{fmtMs(t.previous)}</td>
                 <td>
-                  <span className="cobre-load-trend" data-trend={t.trend}>
+                  <span className="nm-load-trend" data-trend={t.trend}>
                     {arrowOf(t.delta)}{" "}
                     {t.delta === null
                       ? "—"

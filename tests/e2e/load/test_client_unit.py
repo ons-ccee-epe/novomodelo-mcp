@@ -1,4 +1,5 @@
 """Testes da classificação de resultados e do cliente MCP da carga (sessão falsa)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -23,7 +24,11 @@ class TestClassifyResult:
         assert classify_result(_result(json.dumps({"status": "ok"}))) == ("ok", None)
 
     def test_error_envelope_reports_the_first_diagnostic(self) -> None:
-        envelope = {"status": "error", "exit_code": 2, "diagnostics": ["arquivo nao existe: x", "y"]}
+        envelope = {
+            "status": "error",
+            "exit_code": 2,
+            "diagnostics": ["arquivo nao existe: x", "y"],
+        }
         assert classify_result(_result(json.dumps(envelope))) == ("error", "arquivo nao existe: x")
 
     def test_error_envelope_without_diagnostics_uses_the_message(self) -> None:

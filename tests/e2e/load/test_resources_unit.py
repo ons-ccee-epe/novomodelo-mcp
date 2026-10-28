@@ -1,4 +1,5 @@
 """Testes da amostragem opcional de CPU/RSS dos servidores."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -64,8 +65,12 @@ def test_process_objects_are_reused_between_samples_to_keep_cpu_deltas() -> None
     sampler.sample()
     psutil_replacement = _Process(1, 99.0, 1024)
     psutil.Process = type(
-        "Root", (), {"__init__": lambda self, pid: None,
-                     "children": lambda self, recursive: [psutil_replacement]}
+        "Root",
+        (),
+        {
+            "__init__": lambda self, pid: None,
+            "children": lambda self, recursive: [psutil_replacement],
+        },
     )
     assert sampler.sample()["cpu_percent"] == 10.0
 

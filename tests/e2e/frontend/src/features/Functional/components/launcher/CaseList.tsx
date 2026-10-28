@@ -13,17 +13,17 @@ interface Props {
 function CaseBadge({ running, result }: { running: boolean; result?: RunResultItem }) {
   if (running) {
     return (
-      <span className="cobre-status" data-status="running" aria-label="rodando">
-        <span className="cobre-spin" aria-hidden>
+      <span className="nm-status" data-status="running" aria-label="rodando">
+        <span className="nm-spin" aria-hidden>
           ↻
         </span>{" "}
         rodando
       </span>
     );
   }
-  if (!result) return <span className="cobre-status">pronto</span>;
+  if (!result) return <span className="nm-status">pronto</span>;
   return (
-    <span className="cobre-status" data-status={result.status}>
+    <span className="nm-status" data-status={result.status}>
       {statusIcon(result.status)} {STATUS_LABEL[result.status] ?? result.status}
     </span>
   );
@@ -39,8 +39,8 @@ export function CaseList({
   onSelectCase,
 }: Props) {
   return (
-    <aside className="cobre-case-list" aria-label="Testes">
-      <div className="cobre-case-list-head cobre-muted">
+    <aside className="nm-case-list" aria-label="Testes">
+      <div className="nm-case-list-head nm-muted">
         {cases.length} teste(s)
         {selectedGroup ? ` · grupo: ${selectedGroup}` : ""}
       </div>
@@ -52,14 +52,14 @@ export function CaseList({
             <li key={c.id}>
               <button
                 type="button"
-                className="cobre-case-item"
+                className="nm-case-item"
                 data-selected={selectedCaseId === c.id}
                 data-status={result?.status ?? (running ? "running" : "")}
                 onClick={() => onSelectCase(c.id)}
               >
-                <span className="cobre-case-item-query">{c.query}</span>
-                <span className="cobre-case-item-id">{c.id}</span>
-                <span className="cobre-case-item-side">
+                <span className="nm-case-item-query">{c.query}</span>
+                <span className="nm-case-item-id">{c.id}</span>
+                <span className="nm-case-item-side">
                   <CaseBadge running={running} result={result} />
                 </span>
               </button>

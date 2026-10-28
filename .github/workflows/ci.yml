@@ -73,6 +73,31 @@ jobs:
       - name: Testes (pytest)
         run: uv run pytest -q
 
+  e2e:
+    # A bateria de ponta a ponta (tests/e2e) tem o grupo de dependências próprio; o
+    # pytest padrão a ignora (addopts), então só este job a roda.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        python: ["3.12", "3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    name: e2e (${{ matrix.os }}, Python ${{ matrix.python }})
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Sincronizar dependências
+        run: uv sync --group e2e --locked
+
+      - name: Testes (pytest e2e)
+        run: uv run --group e2e pytest tests/e2e -q -o addopts=--strict-markers
+
   executaveis-reais:
     # Todas as tools contra o executável novomodelo, o novomodelo-bridge e o
     # novomodelo-python reais da versão esperada (o pin do bridge), em cada alvo.

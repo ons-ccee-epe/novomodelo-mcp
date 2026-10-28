@@ -8,10 +8,10 @@ interface Props {
 /** Contagens, taxa de erro, vazão e latência de cada tool do mix. */
 export function LoadToolTable({ perTool }: Props) {
   const rows = Object.entries(perTool).sort(([a], [b]) => a.localeCompare(b));
-  if (rows.length === 0) return <div className="cobre-no-data">Nenhuma chamada registrada</div>;
+  if (rows.length === 0) return <div className="nm-no-data">Nenhuma chamada registrada</div>;
 
   return (
-    <table className="cobre-table cobre-load-table" aria-label="Métricas por tool">
+    <table className="nm-table nm-load-table" aria-label="Métricas por tool">
       <thead>
         <tr>
           <th>Tool</th>

@@ -1,4 +1,5 @@
 """Testes da resolução de timeouts: caso > grupo > default, override e timeout por tool."""
+
 from __future__ import annotations
 
 import json
@@ -67,7 +68,9 @@ def test_invalid_defaults_are_rejected(tmp_path: Path) -> None:
 
 def _case(timeout_s: float | None) -> QueryTestCase:
     return QueryTestCase(
-        id="c1", query="q", expected=ExpectedResult(uses_mcp=True, tool="deck_list"),
+        id="c1",
+        query="q",
+        expected=ExpectedResult(uses_mcp=True, tool="deck_list"),
         timeout_s=timeout_s,
     )
 

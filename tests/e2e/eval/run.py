@@ -1,4 +1,4 @@
-"""CLI Runner para execução de testes e2e do <repositório anterior>.
+"""CLI Runner para execução de testes e2e do novomodelo-mcp.
 
 Uso:
     python -m tests.e2e.eval.run              # Executa todos os testes
@@ -7,6 +7,7 @@ Uso:
     python -m tests.e2e.eval.run --tag functional  # Filtra por tag
     python -m tests.e2e.eval.run --no-browser      # Não abre dashboard
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,7 +22,6 @@ from .prerequisites import check_prerequisites, print_prerequisites_status
 from .registry import TestRegistry, discover_cases
 from .reporter import format_summary_text, generate_json_report
 from .validator import validate
-
 
 # Caminhos relativos ao diretório e2e
 E2E_ROOT = Path(__file__).parent.parent
@@ -123,7 +123,7 @@ def run_tests(
 def main() -> None:
     """Entry point do CLI."""
     parser = argparse.ArgumentParser(
-        description="<repositório anterior> Tool Evaluation Framework",
+        description="novomodelo-mcp Tool Evaluation Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
@@ -168,7 +168,7 @@ Exemplos:
     parser.add_argument(
         "--skip-cli-check",
         action="store_true",
-        help="Pula verificação de cobre/cobre-bridge (útil para rodar só testes funcionais)",
+        help="Pula verificação de novomodelo/novomodelo-bridge (útil para rodar só testes funcionais)",
     )
 
     args = parser.parse_args()
@@ -177,7 +177,7 @@ Exemplos:
     # Banner
     if not args.quiet:
         print("=" * 60)
-        print("🔬 <repositório anterior> Tool Evaluation Framework")
+        print("🔬 novomodelo-mcp Tool Evaluation Framework")
         print("=" * 60)
         print()
 
@@ -190,7 +190,10 @@ Exemplos:
     if not prereq_ok:
         print("❌ Pré-requisitos não atendidos. Corrija os problemas acima.")
         if not args.skip_cli_check:
-            print("   Dica: use --skip-cli-check para rodar testes que não precisam de cobre/cobre-bridge")
+            print(
+                "   Dica: use --skip-cli-check para rodar testes que não precisam "
+                "de novomodelo/novomodelo-bridge"
+            )
         sys.exit(1)
 
     if args.check:

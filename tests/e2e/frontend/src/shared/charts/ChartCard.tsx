@@ -33,15 +33,15 @@ export function ChartCard({ title, fileName, wide = false, children }: Props) {
   };
 
   return (
-    <figure className="cobre-chart-card" data-chart-card data-wide={wide || undefined}>
-      <figcaption className="cobre-chart-card-head">
-        <h4 className="cobre-section-title">{title}</h4>
-        <button type="button" className="cobre-btn" onClick={download}>
+    <figure className="nm-chart-card" data-chart-card data-wide={wide || undefined}>
+      <figcaption className="nm-chart-card-head">
+        <h4 className="nm-section-title">{title}</h4>
+        <button type="button" className="nm-btn" onClick={download}>
           ⤓ PNG
         </button>
       </figcaption>
       {error && (
-        <p role="alert" className="cobre-muted">
+        <p role="alert" className="nm-muted">
           {error}
         </p>
       )}

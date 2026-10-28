@@ -6,9 +6,10 @@ Este módulo define todas as estruturas de dados usadas pelo framework:
 - Resultados de validação (ValidationCheck, ValidationResult)
 - Resultados de bateria (TestResult, BatchResult, BatchMetrics, TagMetrics, GroupMetrics)
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 __all__ = [
@@ -201,7 +202,9 @@ class ValidationResult:
     """
 
     valid: bool
-    status: str  # "pass", "partial", "fail", "timeout", "skip" (partial = MCP ok but validation failed)
+    status: (
+        str  # "pass", "partial", "fail", "timeout", "skip" (partial = MCP ok but validation failed)
+    )
     checks: list[ValidationCheck]
     failure_reason: str | None = None
     details: dict[str, Any] | None = None
@@ -244,7 +247,9 @@ class TestResult:
     expected_tools: list[str] | None
     actual_tool: str | None
     all_tool_calls: list[dict[str, Any]]
-    status: str  # "pass", "partial", "fail", "timeout", "skip" (partial = MCP ok but validation failed)
+    status: (
+        str  # "pass", "partial", "fail", "timeout", "skip" (partial = MCP ok but validation failed)
+    )
     latency_ms: float
     tool_latency_ms: float | None
     mcp_used: bool
@@ -335,7 +340,7 @@ class BatchResult:
     Attributes:
         batch_id: ID único no formato {timestamp}_{git_sha} (ex: "20241215_143052_abc1234")
         timestamp: ISO 8601 timestamp da execução
-        cobre_mcp_version: Versão do pacote cobre-mcp
+        mcp_version: Versão do pacote novomodelo-mcp
         git_commit_sha: SHA completo do commit Git
         environment: Identificador do ambiente ("local" ou outro)
         total_tests: Total de testes executados
@@ -353,7 +358,7 @@ class BatchResult:
 
     batch_id: str
     timestamp: str
-    cobre_mcp_version: str
+    mcp_version: str
     git_commit_sha: str
     environment: str
     total_tests: int

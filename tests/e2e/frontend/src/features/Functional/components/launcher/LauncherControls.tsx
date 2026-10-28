@@ -22,7 +22,7 @@ export function LauncherControls({
   onRunAll,
 }: Props) {
   return (
-    <div className="cobre-launcher-row">
+    <div className="nm-launcher-row">
       <ProviderSelect
         providers={providers}
         value={selectedProvider}
@@ -32,7 +32,7 @@ export function LauncherControls({
 
       <button
         type="button"
-        className="cobre-btn cobre-btn-primary"
+        className="nm-btn nm-btn-primary"
         onClick={onRunAll}
         disabled={disabled || noProvider}
         title="Roda a esteira completa de testes das tools MCP"

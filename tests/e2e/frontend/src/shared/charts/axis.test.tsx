@@ -24,7 +24,7 @@ describe("tooltip dos gráficos", () => {
       />,
     );
     expect(screen.getByText("98.276,3")).toBeInTheDocument();
-    expect(screen.getByText("results-policy-get")).toHaveStyle({ color: "var(--cobre-text)" });
-    expect(screen.getByText("Total").closest("li")).toHaveStyle({ color: "var(--cobre-text)" });
+    expect(screen.getByText("results-policy-get")).toHaveStyle({ color: "var(--nm-text)" });
+    expect(screen.getByText("Total").closest("li")).toHaveStyle({ color: "var(--nm-text)" });
   });
 });

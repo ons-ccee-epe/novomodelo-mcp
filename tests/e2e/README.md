@@ -1,6 +1,6 @@
-# Testes End-to-End (E2E) do <repositório anterior>
+# Testes End-to-End (E2E) do novomodelo-mcp
 
-Framework de testes de integração reais para o servidor MCP do COBRE. Executa as tools MCP com CLIs reais (`cobre-bridge`, `cobre`) e dados reais, validando comportamento, coletando métricas e gerando relatórios/dashboards.
+Framework de testes de integração reais para o servidor MCP do NOVOMODELO. Executa as tools MCP com CLIs reais (`novomodelo-bridge`, `novomodelo`) e dados reais, validando comportamento, coletando métricas e gerando relatórios/dashboards.
 
 ## Estrutura
 
@@ -25,10 +25,10 @@ tests/e2e/
 │   └── test_results.py      # results_convergence, results_query
 │
 ├── fixtures/                # Dados reais para testes (gitignored; workspace do MCP nos testes)
-│   ├── newave/              # newave-caso-reduzido (NEWAVE) + cobre-caso-reduzido (convertido)
-│   ├── decomp/              # decomp-mar-26-rv2-reduzido (DECOMP) + cobre-mar-26-rv2-reduzido (convertido)
+│   ├── newave/              # newave-caso-reduzido (NEWAVE) + novomodelo-caso-reduzido (convertido)
+│   ├── decomp/              # decomp-mar-26-rv2-reduzido (DECOMP) + novomodelo-mar-26-rv2-reduzido (convertido)
 │   ├── newave-determ/       # Casos NEWAVE determinístico
-│   ├── results/             # Output de cobre run (opcional)
+│   ├── results/             # Output de novomodelo run (opcional)
 │   └── scratch/             # Saídas gravadas pelos testes (case_init, schema_export)
 │
 ├── metrics/                 # Histórico de execuções
@@ -41,19 +41,19 @@ tests/e2e/
 
 ## Pré-requisitos
 
-1. **cobre-mcp** instalado no ambiente Python:
+1. **novomodelo-mcp** instalado no ambiente Python:
    ```bash
-   pip install -e .
+   uv sync --group e2e
    ```
 
-2. **cobre-bridge** CLI no PATH:
+2. **novomodelo-bridge** CLI no PATH:
    ```bash
-   cargo install cobre-bridge
+   cargo install novomodelo-bridge
    ```
 
-3. **cobre** CLI no PATH:
+3. **novomodelo** CLI no PATH:
    ```bash
-   cargo install cobre
+   cargo install novomodelo
    ```
 
 4. **Fixtures** na pasta `tests/e2e/fixtures/`
@@ -135,6 +135,7 @@ O resultado vai para `results/load/` e aparece na aba **Carga** do dashboard.
    ```python
    from pathlib import Path
    import sys
+
    sys.path.insert(0, str(Path(__file__).parent.parent))
    from eval.models import TestCase
 
@@ -149,6 +150,7 @@ O resultado vai para `results/load/` e aparece na aba **Carga** do dashboard.
            tags=("functional", "minha_tag"),
        ),
    ]
+
 
    def register(registry):
        for case in CASES:
@@ -176,7 +178,7 @@ O validador suporta matchers especiais em `expected_fields`:
 
 Exemplo:
 ```python
-expected_fields={
+expected_fields = {
     "count": "__gt__:0",
     "content": "__nonempty__",
     "message": "__contains__:sucesso",
@@ -193,10 +195,10 @@ Após execução, são gerados:
 
 ## Fixture de Resultados
 
-Para testar `results_convergence` e `results_query`, é necessário gerar output de `cobre run`:
+Para testar `results_convergence` e `results_query`, é necessário gerar output de `novomodelo run`:
 
 ```bash
-cobre run tests/e2e/fixtures/newave/cobre-caso-reduzido -o tests/e2e/fixtures/results/sample_run
+novomodelo run tests/e2e/fixtures/newave/novomodelo-caso-reduzido -o tests/e2e/fixtures/results/sample_run
 ```
 
 Sem esta fixture, os testes com tag `requires_run` falharão.

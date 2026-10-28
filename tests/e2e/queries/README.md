@@ -215,7 +215,7 @@ Para validações flexíveis em `expected.content`:
 
 ## Cobertura de Tools
 
-O framework cobre todas as 37 tools MCP do novomodelo:
+O framework abrange todas as 37 tools MCP do novomodelo:
 
 | Grupo | Tools |
 |-------|-------|

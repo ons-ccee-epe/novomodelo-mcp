@@ -1,4 +1,5 @@
 """Validação de respostas MCP contra expectativas do TestCase."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -8,6 +9,7 @@ from .models import TestCase
 
 class _Missing:
     """Sentinel para campo ausente."""
+
     pass
 
 

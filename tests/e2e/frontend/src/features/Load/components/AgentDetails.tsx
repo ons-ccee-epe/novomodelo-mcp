@@ -10,7 +10,7 @@ function ConfigCard({ run }: Props) {
   const c = run.config;
   const denied = run.agent.denied_tools;
   return (
-    <div className="cobre-metrics-card">
+    <div className="nm-metrics-card">
       <h4>Configuração</h4>
       <Row label="Provedor" value={`${run.agent.label} (${run.agent.binary})`} />
       <Row label="Sessões simultâneas" value={String(c.concurrency)} />
@@ -38,9 +38,9 @@ function ConfigCard({ run }: Props) {
 function SessionsCard({ run }: Props) {
   const s = run.sessions;
   return (
-    <div className="cobre-metrics-card">
+    <div className="nm-metrics-card">
       <h4>Sessões</h4>
-      <div className="cobre-muted cobre-load-note">
+      <div className="nm-muted nm-load-note">
         O preparo (pré-voo e subida) é medido à parte e não entra na latência dos casos.
       </div>
       <Row label="Sessões preparadas" value={`${s.started}/${s.requested}`} />
@@ -58,31 +58,31 @@ export function AgentDetails({ run }: Props) {
   return (
     <>
       {run.interrupted && (
-        <div className="cobre-banner" data-kind="warning">
+        <div className="nm-banner" data-kind="warning">
           Carga interrompida antes do fim: o resultado é parcial.
         </div>
       )}
       {run.abandoned_calls > 0 && (
-        <div className="cobre-banner" data-kind="warning">
+        <div className="nm-banner" data-kind="warning">
           {run.abandoned_calls} caso(s) sem resposta foram abandonados ao fim da janela e não entram
           nas métricas.
         </div>
       )}
-      <details className="cobre-section cobre-load-details" aria-label="Detalhes da carga">
+      <details className="nm-section nm-load-details" aria-label="Detalhes da carga">
         <summary>Detalhes</summary>
-        <div className="cobre-load-details-body">
-          <div className="cobre-metrics-grid">
+        <div className="nm-load-details-body">
+          <div className="nm-metrics-grid">
             <ConfigCard run={run} />
             <SessionsCard run={run} />
             <ResourcesCard resources={run.resources} title="Recursos (agentes + servidores)" />
           </div>
 
           {failedSessions.length > 0 && (
-            <details className="cobre-load-excluded">
-              <summary className="cobre-summary-toggle">
+            <details className="nm-load-excluded">
+              <summary className="nm-summary-toggle">
                 Sessões que falharam ({failedSessions.length})
               </summary>
-              <ul className="cobre-tool-call-list">
+              <ul className="nm-tool-call-list">
                 {failedSessions.map((e) => (
                   <li key={e.session}>
                     sessão {e.session} — {e.error ?? "falha sem mensagem"}
@@ -93,11 +93,11 @@ export function AgentDetails({ run }: Props) {
           )}
 
           {denied.length > 0 && (
-            <details className="cobre-load-excluded">
-              <summary className="cobre-summary-toggle">
+            <details className="nm-load-excluded">
+              <summary className="nm-summary-toggle">
                 Tools de escrita negadas ao claude ({denied.length})
               </summary>
-              <ul className="cobre-tool-call-list">
+              <ul className="nm-tool-call-list">
                 {denied.map((tool) => (
                   <li key={tool}>
                     <code>{tool}</code>
@@ -109,8 +109,8 @@ export function AgentDetails({ run }: Props) {
 
           {run.errors.length > 0 && (
             <>
-              <h3 className="cobre-load-subtitle">Erros e timeouts por caso</h3>
-              <table className="cobre-table" aria-label="Erros agrupados">
+              <h3 className="nm-load-subtitle">Erros e timeouts por caso</h3>
+              <table className="nm-table" aria-label="Erros agrupados">
                 <thead>
                   <tr>
                     <th>Caso</th>
@@ -138,11 +138,11 @@ export function AgentDetails({ run }: Props) {
           )}
 
           {excluded.length > 0 && (
-            <details className="cobre-load-excluded">
-              <summary className="cobre-summary-toggle">
+            <details className="nm-load-excluded">
+              <summary className="nm-summary-toggle">
                 Casos fora da carga ({excluded.length})
               </summary>
-              <ul className="cobre-tool-call-list">
+              <ul className="nm-tool-call-list">
                 {excluded.map((item) => (
                   <li key={item.id}>
                     <code>{item.id}</code> — {item.reason}

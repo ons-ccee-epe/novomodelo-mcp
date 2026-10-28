@@ -42,16 +42,16 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
   );
 
   return (
-    <section className="cobre-panel" aria-label="Perguntas">
-      <h3 className="cobre-section-title">Perguntas</h3>
-      <div className="cobre-filters">
-        <div className="cobre-field">
-          <label htmlFor="question-status" className="cobre-field-label">
+    <section className="nm-panel" aria-label="Perguntas">
+      <h3 className="nm-section-title">Perguntas</h3>
+      <div className="nm-filters">
+        <div className="nm-field">
+          <label htmlFor="question-status" className="nm-field-label">
             Status
           </label>
           <select
             id="question-status"
-            className="cobre-filter-select"
+            className="nm-filter-select"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
@@ -63,13 +63,13 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
             ))}
           </select>
         </div>
-        <div className="cobre-field">
-          <label htmlFor="question-group" className="cobre-field-label">
+        <div className="nm-field">
+          <label htmlFor="question-group" className="nm-field-label">
             Grupo
           </label>
           <select
             id="question-group"
-            className="cobre-filter-select"
+            className="nm-filter-select"
             value={group}
             onChange={(e) => setGroup(e.target.value)}
           >
@@ -81,40 +81,40 @@ export function QuestionList({ results, changes, openId, onOpen }: Props) {
             ))}
           </select>
         </div>
-        <span className="cobre-muted cobre-filter-count">
+        <span className="nm-muted nm-filter-count">
           Mostrando {visible.length} de {results.length}
         </span>
       </div>
-      <ul className="cobre-question-list">
+      <ul className="nm-question-list">
         {visible.map((tr) => {
           const open = tr.test_id === openId;
           const change = changes.get(tr.test_id);
           return (
             <li
               key={tr.test_id}
-              className="cobre-question"
+              className="nm-question"
               data-question-id={tr.test_id}
             >
               <button
                 type="button"
-                className="cobre-question-row"
+                className="nm-question-row"
                 aria-expanded={open}
                 onClick={() => onOpen(open ? null : tr.test_id)}
               >
-                <span className="cobre-question-text">{tr.query}</span>
-                <span className="cobre-question-sub">
+                <span className="nm-question-text">{tr.query}</span>
+                <span className="nm-question-sub">
                   <code>{tr.test_id}</code>
                   {change && (
-                    <span className="cobre-change-marker" data-kind={change}>
+                    <span className="nm-change-marker" data-kind={change}>
                       {MARKER[change]}
                     </span>
                   )}
                 </span>
-                <span className="cobre-question-side">
-                  <span className="cobre-status" data-status={tr.status}>
+                <span className="nm-question-side">
+                  <span className="nm-status" data-status={tr.status}>
                     {statusIcon(tr.status)} {STATUS_LABEL[tr.status]}
                   </span>
-                  <span className="cobre-muted cobre-question-latency">
+                  <span className="nm-muted nm-question-latency">
                     {Math.round(tr.latency_ms)} ms
                   </span>
                 </span>

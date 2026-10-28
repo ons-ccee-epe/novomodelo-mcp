@@ -6,6 +6,7 @@ a mesma da esteira, com o path guard restrito às fixtures) e lê as dicas das t
 servidor que não sobe falha aqui, antes de qualquer sessão de agente. Se algum caso da
 seleção grava, o pré-voo monta o plano da cópia das fixtures por sessão e confere o disco.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -84,7 +85,9 @@ def server_tool_lister(server: dict[str, Any], errlog: TextIO) -> ToolLister:
 
 def _no_cases(selection: AgentSelection, what: str) -> LoadError:
     reasons = "; ".join(f"{e.id}: {e.reason}" for e in selection.excluded[:_REASONS_SHOWN])
-    return LoadError(f"nenhum caso da seleção ({what}) pode rodar na carga: {reasons or 'seleção vazia'}")
+    return LoadError(
+        f"nenhum caso da seleção ({what}) pode rodar na carga: {reasons or 'seleção vazia'}"
+    )
 
 
 def make_preflight(

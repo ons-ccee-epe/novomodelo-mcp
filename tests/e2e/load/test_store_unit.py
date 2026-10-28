@@ -1,4 +1,5 @@
 """Testes da persistência das cargas em results/load/."""
+
 from __future__ import annotations
 
 import json
@@ -52,7 +53,9 @@ def test_new_id_does_not_collide_with_an_existing_run(
     assert third == "20261024_100000_abc1234_3"
 
 
-def test_save_writes_under_load_subdir_and_keeps_the_battery_index_untouched(tmp_path: Path) -> None:
+def test_save_writes_under_load_subdir_and_keeps_the_battery_index_untouched(
+    tmp_path: Path,
+) -> None:
     battery_index = tmp_path / "index.json"
     battery_index.write_text('{"batches": []}', encoding="utf-8")
     store = LoadStore(tmp_path)
@@ -118,8 +121,20 @@ class TestBuildRecord:
     def test_has_the_sections_the_frontend_reads(self) -> None:
         record = _record()
         assert set(record) >= {
-            "load_id", "timestamp", "version", "git_commit_sha", "interrupted", "config", "server",
-            "mix", "startup", "duration_seconds", "totals", "per_tool", "series", "errors",
+            "load_id",
+            "timestamp",
+            "version",
+            "git_commit_sha",
+            "interrupted",
+            "config",
+            "server",
+            "mix",
+            "startup",
+            "duration_seconds",
+            "totals",
+            "per_tool",
+            "series",
+            "errors",
             "resources",
         }
         assert record["totals"]["calls"] == 4
@@ -165,10 +180,17 @@ def test_git_sha_does_not_hang_when_the_inherited_stdin_is_a_pipe_being_read() -
     import sys
 
     repo_root = Path(__file__).resolve().parents[3]
-    if shutil.which("git") is None or subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo_root, stdin=subprocess.DEVNULL, capture_output=True,
-        check=False,
-    ).returncode != 0:
+    if (
+        shutil.which("git") is None
+        or subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+        ).returncode
+        != 0
+    ):
         pytest.skip("sem git ou fora de um checkout")
 
     code = (
@@ -177,8 +199,11 @@ def test_git_sha_does_not_hang_when_the_inherited_stdin_is_a_pipe_being_read() -
         "from tests.e2e.load.store import git_sha; print(git_sha())"
     )
     child = subprocess.Popen(
-        [sys.executable, "-c", code], cwd=repo_root, stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE, text=True,
+        [sys.executable, "-c", code],
+        cwd=repo_root,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
     )
     try:
         output = child.stdout.read()

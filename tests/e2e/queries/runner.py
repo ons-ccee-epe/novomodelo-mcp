@@ -13,6 +13,7 @@ O fluxo de execução é:
 7. Extrair resposta do agente
 8. Retornar QueryResult para validação
 """
+
 from __future__ import annotations
 
 import json
@@ -129,7 +130,7 @@ class QueryRunner:
         self._forced_timeout = timeout_seconds
         self.timeout_seconds = timeout_seconds if timeout_seconds is not None else DEFAULT_TIMEOUT_S
         self.api_key = api_key
-        
+
         # Configurar diretório para logs de resposta MCP
         if response_log_dir:
             self._response_log_dir = Path(response_log_dir)
@@ -166,10 +167,10 @@ class QueryRunner:
 
         # Record log file size before test to read only new entries after
         log_size_before = log_file.stat().st_size if log_file.exists() else 0
-        
+
         # Build command (Req 2.1)
         cmd = self._build_command(test_case.query)
-        
+
         # Prepare environment with MCP response logging enabled
         env = os.environ.copy()
         env["NOVOMODELO_MCP_RESPONSE_LOG"] = str(log_file)
@@ -186,10 +187,10 @@ class QueryRunner:
         # Combine both streams for parsing to ensure we capture tool calls
         combined_log = (stderr or "") + "\n" + (stdout or "")
         tool_calls = self._parse_tool_calls(combined_log)
-        
+
         # Read MCP response envelopes from log file (only new entries)
         mcp_responses = self._read_mcp_response_log(log_file, offset=log_size_before)
-        
+
         # Match tool calls with their MCP envelopes
         envelope = self._extract_primary_envelope(tool_calls, mcp_responses)
 
@@ -209,14 +210,16 @@ class QueryRunner:
         )
 
     def _response_log_file(self, test_case: QueryTestCase) -> Path:
-        """Arquivo NOVOMODELO_MCP_RESPONSE_LOG do caso: env > mcp.json > um por caso no diretório do runner."""
+        """Arquivo NOVOMODELO_MCP_RESPONSE_LOG do caso: env, depois mcp.json, depois um por caso."""
         fixed_log_file = os.environ.get("NOVOMODELO_MCP_RESPONSE_LOG")
         if not fixed_log_file:
             fixed_log_file = self._read_log_path_from_mcp_json()
         if fixed_log_file:
             return Path(fixed_log_file)
         # Um arquivo por caso não funciona se o servidor já estiver rodando com outro caminho.
-        return self._response_log_dir / f"mcp_responses_{test_case.id}_{int(time.time() * 1000)}.jsonl"
+        return (
+            self._response_log_dir / f"mcp_responses_{test_case.id}_{int(time.time() * 1000)}.jsonl"
+        )
 
     def _agent_env(self) -> dict[str, str]:
         """Variáveis extras para o processo do agente (o kiro-cli não precisa de nenhuma)."""
@@ -227,7 +230,7 @@ class QueryRunner:
         if self._forced_timeout is not None:
             return self._forced_timeout
         return test_case.timeout_s or self.timeout_seconds
-    
+
     def _run_process(
         self, cmd: list[str], env: dict[str, str], timeout: float
     ) -> tuple[str, str, str]:
@@ -292,17 +295,17 @@ class QueryRunner:
 
     def _read_mcp_response_log(self, log_file: Path, offset: int = 0) -> list[dict[str, Any]]:
         """Lê o arquivo de log de respostas MCP.
-        
+
         Args:
             log_file: Caminho para o arquivo JSONL de log.
             offset: Posição em bytes a partir da qual ler (para ler só entradas novas).
-            
+
         Returns:
             Lista de entradas de log, cada uma com tool, arguments, result, duration_ms.
         """
         if not log_file.exists():
             return []
-        
+
         entries = []
         try:
             with open(log_file, encoding="utf-8") as f:
@@ -317,28 +320,28 @@ class QueryRunner:
                             pass
         except Exception:
             pass
-        
+
         return entries
-    
+
     def _extract_primary_envelope(
         self,
         tool_calls: list[ToolCall],
         mcp_responses: list[dict[str, Any]],
     ) -> dict[str, Any] | None:
         """Extrai o envelope MCP da tool principal.
-        
+
         Encontra a primeira tool MCP chamada e retorna seu envelope de resposta.
-        
+
         Args:
             tool_calls: Lista de tool calls detectadas no log.
             mcp_responses: Lista de respostas MCP do arquivo de log.
-            
+
         Returns:
             Envelope MCP da tool principal, ou None se não encontrado.
         """
         if not mcp_responses:
             return None
-        
+
         # Find the first MCP tool call
         for tc in tool_calls:
             if classify_tool(tc.name) == "mcp":
@@ -351,7 +354,7 @@ class QueryRunner:
                             "result": response.get("result"),
                             "duration_ms": response.get("duration_ms"),
                         }
-        
+
         # If no match found, return the first MCP response (fallback)
         if mcp_responses:
             first = mcp_responses[0]
@@ -361,7 +364,7 @@ class QueryRunner:
                 "result": first.get("result"),
                 "duration_ms": first.get("duration_ms"),
             }
-        
+
         return None
 
     def _build_command(self, query: str) -> list[str]:
@@ -429,10 +432,10 @@ class QueryRunner:
         seen_ids: set[str] = set()
 
         # Pattern 1: AssistantToolUse format (new Kiro format)
-        # Match: AssistantToolUse { id: "toolu_...", name: "tool_name", orig_name: "...", args: Object {...}, ... }
+        # Match: AssistantToolUse { tool_use_id: "toolu_...", name: "tool_name", args: Object {...}, ... }
         assistant_pattern = re.compile(
-            r'AssistantToolUse\s*\{\s*'
-            r'id:\s*["\']([^"\']+)["\'],?\s*'
+            r"AssistantToolUse\s*\{\s*"
+            r'(?:tool_use_)?id:\s*["\']([^"\']+)["\'],?\s*'
             r'name:\s*["\']([^"\']+)["\']',
             re.DOTALL | re.IGNORECASE,
         )
@@ -449,22 +452,24 @@ class QueryRunner:
             # Try to extract args from the full match context
             # Look for args: Object {...} or args: {...} after this match
             args_match = re.search(
-                rf'{re.escape(tool_id)}[^}}]*args:\s*(?:Object\s*)?(\{{[^}}]*\}})',
-                log_content
+                rf"{re.escape(tool_id)}[^}}]*(?:args|input):\s*(?:Object\s*)?(\{{[^}}]*\}})",
+                log_content,
             )
             args = self._parse_args(args_match.group(1)) if args_match else {}
 
-            tool_calls.append(ToolCall(
-                name=tool_name,
-                args=args,
-                tool_id=tool_id,
-            ))
+            tool_calls.append(
+                ToolCall(
+                    name=tool_name,
+                    args=args,
+                    tool_id=tool_id,
+                )
+            )
 
         # Pattern 2: Simpler AssistantToolUse format (alternative structure)
         # Match lines like: name: "deck_list" followed by input
         simple_pattern = re.compile(
             r'name:\s*["\']([a-z_]+)["\'].*?'
-            r'(?:input|args|arguments):\s*(\{[^}]*\})',
+            r"(?:input|args|arguments):\s*(\{[^}]*\})",
             re.DOTALL | re.IGNORECASE,
         )
 
@@ -474,15 +479,17 @@ class QueryRunner:
                 tool_name = match.group(1)
                 args_str = match.group(2)
                 args = self._parse_args(args_str)
-                tool_calls.append(ToolCall(
-                    name=tool_name,
-                    args=args,
-                    tool_id=None,
-                ))
+                tool_calls.append(
+                    ToolCall(
+                        name=tool_name,
+                        args=args,
+                        tool_id=None,
+                    )
+                )
 
         # Pattern 3: Tool call: tool_name({...})
         tool_call_pattern = re.compile(
-            r'Tool\s+call:\s*([a-z_]+)\s*\((\{.*?\})\)',
+            r"Tool\s+call:\s*([a-z_]+)\s*\((\{.*?\})\)",
             re.DOTALL | re.IGNORECASE,
         )
 
@@ -495,16 +502,18 @@ class QueryRunner:
             if any(tc.name == tool_name and tc.args == args for tc in tool_calls):
                 continue
 
-            tool_calls.append(ToolCall(
-                name=tool_name,
-                args=args,
-                tool_id=None,
-            ))
+            tool_calls.append(
+                ToolCall(
+                    name=tool_name,
+                    args=args,
+                    tool_id=None,
+                )
+            )
 
         # Pattern 4: Invoke MCP tool pattern
         # "Invoking tool deck_list" or "Calling MCP tool: deck_list"
         invoke_pattern = re.compile(
-            r'(?:Invoking|Calling)\s+(?:MCP\s+)?tool[:\s]+([a-z_]+)',
+            r"(?:Invoking|Calling)\s+(?:MCP\s+)?tool[:\s]+([a-z_]+)",
             re.IGNORECASE,
         )
 
@@ -512,11 +521,13 @@ class QueryRunner:
             tool_name = match.group(1)
             # Only add if not already present
             if not any(tc.name == tool_name for tc in tool_calls):
-                tool_calls.append(ToolCall(
-                    name=tool_name,
-                    args={},
-                    tool_id=None,
-                ))
+                tool_calls.append(
+                    ToolCall(
+                        name=tool_name,
+                        args={},
+                        tool_id=None,
+                    )
+                )
 
         # Pattern 5: Generic tool use from JSON-like output
         # "tool_use" or "tool_name" fields in JSON
@@ -530,16 +541,18 @@ class QueryRunner:
             for match in json_tool_pattern.finditer(log_content):
                 tool_name = match.group(1)
                 if tool_name and not any(tc.name == tool_name for tc in tool_calls):
-                    tool_calls.append(ToolCall(
-                        name=tool_name,
-                        args={},
-                        tool_id=None,
-                    ))
+                    tool_calls.append(
+                        ToolCall(
+                            name=tool_name,
+                            args={},
+                            tool_id=None,
+                        )
+                    )
 
         # Pattern 6: New Kiro CLI format (2024+)
         # "[tool] Running: @novomodelo/tool_name" or "[tool] Running: @server/tool_name"
         kiro_tool_pattern = re.compile(
-            r'\[tool\]\s+Running:\s+@(?:novomodelo|[a-z-]+)/([a-z_]+)',
+            r"\[tool\]\s+Running:\s+@(?:novomodelo|[a-z-]+)/([a-z_]+)",
             re.IGNORECASE,
         )
 
@@ -547,11 +560,13 @@ class QueryRunner:
             tool_name = match.group(1)
             # Only add if not already present
             if not any(tc.name == tool_name for tc in tool_calls):
-                tool_calls.append(ToolCall(
-                    name=tool_name,
-                    args={},
-                    tool_id=None,
-                ))
+                tool_calls.append(
+                    ToolCall(
+                        name=tool_name,
+                        args={},
+                        tool_id=None,
+                    )
+                )
 
         return tool_calls
 
@@ -596,8 +611,8 @@ class QueryRunner:
             for pair in pairs:
                 if ":" in pair:
                     key, value = pair.split(":", 1)
-                    key = key.strip().strip('"\'')
-                    value = value.strip().strip('"\'')
+                    key = key.strip().strip("\"'")
+                    value = value.strip().strip("\"'")
                     # Try to convert to appropriate type
                     if value.lower() in ("true", "false"):
                         result[key] = value.lower() == "true"
@@ -637,7 +652,7 @@ class QueryRunner:
         response = stdout.strip()
 
         # Remove ANSI escape codes (cores, formatação)
-        ansi_pattern = re.compile(r'\x1b\[[0-9;]*m')
+        ansi_pattern = re.compile(r"\x1b\[[0-9;]*m")
         response = ansi_pattern.sub("", response)
 
         # Remove spinner/progress characters
@@ -647,11 +662,11 @@ class QueryRunner:
 
         # Remove common Kiro CLI prefixes/prompts
         cli_patterns = [
-            r'^>\s*',  # Prompt markers
-            r'^\[kiro\]\s*',  # Kiro prefix
-            r'^\[agent\]\s*',  # Agent prefix
-            r'^Thinking\.\.\.\s*',  # Thinking indicator
-            r'^Processing\.\.\.\s*',  # Processing indicator
+            r"^>\s*",  # Prompt markers
+            r"^\[kiro\]\s*",  # Kiro prefix
+            r"^\[agent\]\s*",  # Agent prefix
+            r"^Thinking\.\.\.\s*",  # Thinking indicator
+            r"^Processing\.\.\.\s*",  # Processing indicator
         ]
         for pattern in cli_patterns:
             response = re.sub(pattern, "", response, flags=re.MULTILINE | re.IGNORECASE)
@@ -659,9 +674,9 @@ class QueryRunner:
         # Try to extract the final response block if there are markers
         # Look for common response delimiters
         response_markers = [
-            r'(?:Final\s+)?[Rr]esponse:\s*(.*)',
-            r'[Aa]ssistant:\s*(.*)',
-            r'[Aa]gent:\s*(.*)',
+            r"(?:Final\s+)?[Rr]esponse:\s*(.*)",
+            r"[Aa]ssistant:\s*(.*)",
+            r"[Aa]gent:\s*(.*)",
         ]
 
         for marker in response_markers:
@@ -674,15 +689,15 @@ class QueryRunner:
 
         # Remove trailing tool output markers
         tool_output_patterns = [
-            r'\n---\s*$',
-            r'\n\[end\]\s*$',
-            r'\n\[done\]\s*$',
+            r"\n---\s*$",
+            r"\n\[end\]\s*$",
+            r"\n\[done\]\s*$",
         ]
         for pattern in tool_output_patterns:
             response = re.sub(pattern, "", response, flags=re.IGNORECASE)
 
         # Clean up multiple newlines
-        response = re.sub(r'\n{3,}', "\n\n", response)
+        response = re.sub(r"\n{3,}", "\n\n", response)
 
         return response.strip()
 
@@ -721,13 +736,13 @@ class QueryRunner:
 
     def _read_log_path_from_mcp_json(self) -> str | None:
         """Lê o caminho do log de respostas MCP do arquivo mcp.json do Kiro.
-        
+
         O mcp.json pode estar em:
         - ~/.kiro/settings/mcp.json (user-level)
         - .kiro/settings/mcp.json (workspace-level)
-        
+
         Procura em mcpServers.novomodelo.env.NOVOMODELO_MCP_RESPONSE_LOG
-        
+
         Returns:
             Caminho do arquivo de log, ou None se não encontrado.
         """
@@ -736,24 +751,24 @@ class QueryRunner:
             Path.home() / ".kiro" / "settings" / "mcp.json",
             Path.cwd() / ".kiro" / "settings" / "mcp.json",
         ]
-        
+
         for mcp_json_path in candidates:
             if not mcp_json_path.exists():
                 continue
-            
+
             try:
                 with open(mcp_json_path, encoding="utf-8") as f:
                     config = json.load(f)
-                
+
                 # Procurar em mcpServers.novomodelo.env
                 servers = config.get("mcpServers", {})
                 novomodelo = servers.get("novomodelo", {})
                 env = novomodelo.get("env", {})
                 log_path = env.get("NOVOMODELO_MCP_RESPONSE_LOG")
-                
+
                 if log_path:
                     return log_path
             except (json.JSONDecodeError, OSError):
                 continue
-        
+
         return None

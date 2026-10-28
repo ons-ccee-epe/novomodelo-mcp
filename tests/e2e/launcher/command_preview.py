@@ -62,6 +62,9 @@ def command_preview(
         "terminal": terminal,
         "terminal_note": None
         if terminal
-        else f"O run_queries só executa com o kiro-cli; não há equivalente de terminal para {provider.label}.",
+        else (
+            "O run_queries só executa com o kiro-cli; "
+            f"não há equivalente de terminal para {provider.label}."
+        ),
         "agent": _join(command),
     }

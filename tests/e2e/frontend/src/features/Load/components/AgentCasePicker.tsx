@@ -73,9 +73,9 @@ function toCaseMeta(c: LoadCaseInfo): CaseMeta {
 
 function CaseSummary({ item }: { item: LoadCaseInfo }) {
   return (
-    <div className="cobre-case-detail" aria-label="Caso escolhido">
-      <code className="cobre-detail-id">{item.id}</code>
-      <dl className="cobre-detail-meta">
+    <div className="nm-case-detail" aria-label="Caso escolhido">
+      <code className="nm-detail-id">{item.id}</code>
+      <dl className="nm-detail-meta">
         <div>
           <dt>Grupo</dt>
           <dd>{item.group}</dd>
@@ -89,7 +89,7 @@ function CaseSummary({ item }: { item: LoadCaseInfo }) {
         {(item.writes || item.heavy) && (
           <div>
             <dt>Custo</dt>
-            <dd className="cobre-load-selection">
+            <dd className="nm-load-selection">
               <LoadBadges writes={item.writes} heavy={item.heavy} />
             </dd>
           </div>
@@ -101,7 +101,7 @@ function CaseSummary({ item }: { item: LoadCaseInfo }) {
           </div>
         )}
       </dl>
-      <pre className="cobre-code">{item.query}</pre>
+      <pre className="nm-code">{item.query}</pre>
     </div>
   );
 }
@@ -132,12 +132,12 @@ export function AgentCasePicker({
   const eligibleHeavy = eligible.filter((c) => c.heavy).length;
 
   return (
-    <fieldset className="cobre-tool-picker cobre-panel" disabled={disabled}>
-      <legend className="cobre-tool-picker-head">
-        <span className="cobre-panel-title">Casos da carga</span>
+    <fieldset className="nm-tool-picker nm-panel" disabled={disabled}>
+      <legend className="nm-tool-picker-head">
+        <span className="nm-panel-title">Casos da carga</span>
       </legend>
-      <div className="cobre-form-row">
-        <label className="cobre-tag-option" data-active={scope === "all"}>
+      <div className="nm-form-row">
+        <label className="nm-tag-option" data-active={scope === "all"}>
           <input
             type="radio"
             name="load-scope"
@@ -147,7 +147,7 @@ export function AgentCasePicker({
           Todos os casos ({eligible.length} elegíveis
           {describeWeight(eligibleWrites, eligibleHeavy)})
         </label>
-        <label className="cobre-tag-option" data-active={scope === "group"}>
+        <label className="nm-tag-option" data-active={scope === "group"}>
           <input
             type="radio"
             name="load-scope"
@@ -156,7 +156,7 @@ export function AgentCasePicker({
           />
           Grupo
         </label>
-        <label className="cobre-tag-option" data-active={scope === "case"}>
+        <label className="nm-tag-option" data-active={scope === "case"}>
           <input
             type="radio"
             name="load-scope"
@@ -168,13 +168,13 @@ export function AgentCasePicker({
       </div>
 
       {scope === "group" && (
-        <div className="cobre-field">
-          <label htmlFor="load-group" className="cobre-field-label">
+        <div className="nm-field">
+          <label htmlFor="load-group" className="nm-field-label">
             Grupo
           </label>
           <select
             id="load-group"
-            className="cobre-select"
+            className="nm-select"
             value={group ?? ""}
             onChange={(e) => onGroup(e.target.value || null)}
           >
@@ -191,13 +191,13 @@ export function AgentCasePicker({
 
       {scope === "case" && (
         <>
-          <div className="cobre-field">
-            <label htmlFor="load-case-group" className="cobre-field-label">
+          <div className="nm-field">
+            <label htmlFor="load-case-group" className="nm-field-label">
               Filtrar por grupo
             </label>
             <select
               id="load-case-group"
-              className="cobre-select"
+              className="nm-select"
               value={libraryGroup ?? ""}
               onChange={(e) => setLibraryGroup(e.target.value || null)}
             >
@@ -210,7 +210,7 @@ export function AgentCasePicker({
               ))}
             </select>
           </div>
-          <div className="cobre-launcher-split">
+          <div className="nm-launcher-split">
             <CaseList
               cases={libraryMeta}
               selectedGroup={libraryGroup}
@@ -222,16 +222,16 @@ export function AgentCasePicker({
             {chosen ? (
               <CaseSummary item={chosen} />
             ) : (
-              <div className="cobre-no-data">Selecione um caso à esquerda.</div>
+              <div className="nm-no-data">Selecione um caso à esquerda.</div>
             )}
           </div>
         </>
       )}
 
       {excluded.length > 0 && (
-        <details className="cobre-load-excluded">
-          <summary className="cobre-summary-toggle">Fora da carga ({excluded.length})</summary>
-          <ul className="cobre-tool-call-list">
+        <details className="nm-load-excluded">
+          <summary className="nm-summary-toggle">Fora da carga ({excluded.length})</summary>
+          <ul className="nm-tool-call-list">
             {excluded.map((c) => (
               <li key={c.id}>
                 <code>{c.id}</code> — {c.reason ?? "inelegível"}

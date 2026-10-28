@@ -8,7 +8,7 @@ function Ids({ ids, onSelect }: { ids: string[]; onSelect: (id: string) => void 
   return (
     <>
       {ids.map((id) => (
-        <button key={id} type="button" className="cobre-link-btn" onClick={() => onSelect(id)}>
+        <button key={id} type="button" className="nm-link-btn" onClick={() => onSelect(id)}>
           {id}
         </button>
       ))}
@@ -19,9 +19,9 @@ function Ids({ ids, onSelect }: { ids: string[]; onSelect: (id: string) => void 
 export function ChangesStrip({ broke, fixed, onSelect }: Props) {
   if (broke.length === 0 && fixed.length === 0) return null;
   return (
-    <section className="cobre-changes-strip" aria-label="Mudanças contra a referência">
+    <section className="nm-changes-strip" aria-label="Mudanças contra a referência">
       {broke.length > 0 && (
-        <div className="cobre-changes-group" data-kind="broke">
+        <div className="nm-changes-group" data-kind="broke">
           <strong>
             {broke.length === 1
               ? "1 pergunta passou a falhar"
@@ -31,7 +31,7 @@ export function ChangesStrip({ broke, fixed, onSelect }: Props) {
         </div>
       )}
       {fixed.length > 0 && (
-        <div className="cobre-changes-group" data-kind="fixed">
+        <div className="nm-changes-group" data-kind="fixed">
           <strong>
             {fixed.length === 1 ? "1 passou a passar" : `${fixed.length} passaram a passar`}
           </strong>

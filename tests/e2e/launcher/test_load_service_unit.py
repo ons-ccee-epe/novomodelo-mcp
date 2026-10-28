@@ -1,13 +1,13 @@
 """Testes do serviço de cargas do launcher: ciclo de vida, cancelamento e a trava compartilhada."""
+
 from __future__ import annotations
 
 import subprocess
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-
-from pathlib import Path
 
 import pytest
 

@@ -11,12 +11,13 @@ Cada disparo da UI vira um "run" com id proprio, executado numa thread de fundo.
 O frontend cria o run (POST) e faz polling (GET) ate terminar; ao terminar, a
 bateria ja esta gravada e o frontend a le normalmente via /data/*.
 """
+
 from __future__ import annotations
 
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -174,7 +175,7 @@ class RunService:
             run_id=run_id,
             provider=provider.id,
             status="pending",
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(UTC).isoformat(),
         )
         self._gate.acquire(run_id)
         with self._lock:
@@ -313,7 +314,7 @@ class RunService:
             state.batch_id = batch.batch_id
             state.current = None
             state.status = "done"
-            state.finished_at = datetime.now(timezone.utc).isoformat()
+            state.finished_at = datetime.now(UTC).isoformat()
             state.log.append(f"Bateria gravada: {batch.batch_id}")
         self._gate.release(state.run_id)
 
@@ -323,8 +324,7 @@ class RunService:
             state.completed += 1
             state.results.append(asdict(tr))
             state.log.append(
-                f"[{state.completed}/{state.total}] {case.id}: {tr.status} "
-                f"({tr.latency_ms:.0f}ms)"
+                f"[{state.completed}/{state.total}] {case.id}: {tr.status} ({tr.latency_ms:.0f}ms)"
             )
 
     def _execute_case(
@@ -361,7 +361,7 @@ class RunService:
         with self._lock:
             state.status = "cancelled"
             state.current = None
-            state.finished_at = datetime.now(timezone.utc).isoformat()
+            state.finished_at = datetime.now(UTC).isoformat()
             state.log.append(
                 f"Parado após {state.completed}/{state.total} caso(s); bateria não gravada."
             )
@@ -372,6 +372,6 @@ class RunService:
             state.status = "error"
             state.error = message
             state.current = None
-            state.finished_at = datetime.now(timezone.utc).isoformat()
+            state.finished_at = datetime.now(UTC).isoformat()
             state.log.append(f"ERRO: {message}")
         self._gate.release(state.run_id)

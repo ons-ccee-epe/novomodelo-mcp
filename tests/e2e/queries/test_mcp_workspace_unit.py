@@ -1,4 +1,5 @@
 """Testes unitários para o confinamento do MCP novomodelo ao workspace de fixtures."""
+
 from __future__ import annotations
 
 import json
@@ -54,11 +55,15 @@ def test_override_does_not_mutate_user_config(fake_home: Path, tmp_path: Path) -
 
     prepare_workspace(tmp_path / "fixtures")
 
-    user_cfg = json.loads((fake_home / ".kiro" / "settings" / "mcp.json").read_text(encoding="utf-8"))
+    user_cfg = json.loads(
+        (fake_home / ".kiro" / "settings" / "mcp.json").read_text(encoding="utf-8")
+    )
     assert user_cfg["mcpServers"]["novomodelo"]["env"][WORKSPACE_ENV] == "/u"
 
 
-def test_prepare_workspace_writes_workspace_level_kiro_config(fake_home: Path, tmp_path: Path) -> None:
+def test_prepare_workspace_writes_workspace_level_kiro_config(
+    fake_home: Path, tmp_path: Path
+) -> None:
     _write_user_config(fake_home, {"command": "novomodelo-mcp"})
     fixtures = tmp_path / "fixtures"
 
@@ -86,11 +91,11 @@ def test_linked_fixture_target_becomes_explicit_root(
 ) -> None:
     monkeypatch.setattr(mcp_workspace, "_REPO_ROOT", tmp_path.resolve())
     _write_user_config(fake_home, {"command": "novomodelo-mcp"})
-    real_case = tmp_path / "real_cases" / "cobre-caso-reduzido"
+    real_case = tmp_path / "real_cases" / "novomodelo-caso-reduzido"
     real_case.mkdir(parents=True)
     fixtures = tmp_path / "fixtures"
     (fixtures / "newave").mkdir(parents=True)
-    _link_dir(fixtures / "newave" / "cobre-caso-reduzido", real_case)
+    _link_dir(fixtures / "newave" / "novomodelo-caso-reduzido", real_case)
 
     server = server_config_for_workspace(fixtures)
 

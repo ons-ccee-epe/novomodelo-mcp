@@ -42,7 +42,7 @@ function costLine(capacity: LoadCapacity): string {
 export function LoadCapacityHint({ capacity, error }: Props) {
   if (!capacity) {
     return (
-      <div className="cobre-muted cobre-load-note">
+      <div className="nm-muted nm-load-note">
         {error
           ? `Capacidade da máquina indisponível: ${error}`
           : "Estimando a capacidade da máquina…"}
@@ -51,21 +51,21 @@ export function LoadCapacityHint({ capacity, error }: Props) {
   }
   const selection = capacity.selection;
   return (
-    <details className="cobre-load-capacity" aria-label="Capacidade da máquina">
-      <summary className="cobre-load-capacity-summary">
+    <details className="nm-load-capacity" aria-label="Capacidade da máquina">
+      <summary className="nm-load-capacity-summary">
         <span>
           Capacidade da máquina:{" "}
           <strong>{`até ≈ ${capacity.recommended} sessões simultâneas`}</strong>
-          <span className="cobre-muted">{` (limite: ${capacity.limiting_factor})`}</span>
+          <span className="nm-muted">{` (limite: ${capacity.limiting_factor})`}</span>
         </span>
-        <span className="cobre-mix-edit">Ver cálculo</span>
+        <span className="nm-mix-edit">Ver cálculo</span>
       </summary>
-      <div className="cobre-load-capacity-body">
-        <div className="cobre-muted cobre-load-note">{capacity.explanation}</div>
-        <div className="cobre-muted cobre-load-note">{`Limite por fator: ${factorsLine(capacity.limits)}`}</div>
-        <div className="cobre-muted cobre-load-note">{costLine(capacity)}</div>
+      <div className="nm-load-capacity-body">
+        <div className="nm-muted nm-load-note">{capacity.explanation}</div>
+        <div className="nm-muted nm-load-note">{`Limite por fator: ${factorsLine(capacity.limits)}`}</div>
+        <div className="nm-muted nm-load-note">{costLine(capacity)}</div>
         {selection && (selection.heavy || selection.writes) && (
-          <div className="cobre-load-note cobre-load-selection" aria-label="Custo da seleção">
+          <div className="nm-load-note nm-load-selection" aria-label="Custo da seleção">
             <LoadBadges writes={selection.writes} heavy={selection.heavy} />
             {selection.heavy && (
               <span title={selection.heavy_tools.join(", ")}>
@@ -81,7 +81,7 @@ export function LoadCapacityHint({ capacity, error }: Props) {
           </div>
         )}
         {capacity.warnings.map((message) => (
-          <div key={message} className="cobre-muted cobre-load-note">
+          <div key={message} className="nm-muted nm-load-note">
             ⚠ {message}
           </div>
         ))}

@@ -8,7 +8,7 @@ function mockEnv() {
   drawn.length = 0;
   vi.stubGlobal("getComputedStyle", () => ({
     fontFamily: "Segoe UI, sans-serif",
-    getPropertyValue: (n: string) => (n === "--cobre-pass" ? "#22c55e" : "#ffffff"),
+    getPropertyValue: (n: string) => (n === "--nm-pass" ? "#22c55e" : "#ffffff"),
   }));
   const ctx = {
     scale: vi.fn(),
@@ -48,7 +48,7 @@ function makeSvg(width = 100): SVGSVGElement {
   svg.setAttribute("width", String(width));
   svg.setAttribute("height", "50");
   const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  rect.setAttribute("fill", "var(--cobre-pass)");
+  rect.setAttribute("fill", "var(--nm-pass)");
   svg.appendChild(rect);
   return svg;
 }
@@ -66,12 +66,12 @@ describe("exportPng", () => {
     vi.restoreAllMocks();
   });
 
-  it("svgToPngBlob troca var(--cobre-*) pela cor computada", async () => {
+  it("svgToPngBlob troca var(--nm-*) pela cor computada", async () => {
     const { sources } = mockEnv();
     const blob = await svgToPngBlob(makeSvg());
     expect(blob.type).toBe("image/png");
     expect(sources[0]).toContain("#22c55e");
-    expect(sources[0]).not.toContain("var(--cobre-pass)");
+    expect(sources[0]).not.toContain("var(--nm-pass)");
   });
 
   it("svgToPngBlob leva a fonte da página para o SVG", async () => {

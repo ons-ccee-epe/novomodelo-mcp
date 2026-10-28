@@ -1,11 +1,11 @@
 """Registro de casos de teste com auto-descoberta."""
+
 from __future__ import annotations
 
 import importlib
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable
 
 from .models import TestCase
 
@@ -28,9 +28,7 @@ class TestRegistry:
         self._validate(case)
 
         if case.case_id in self._cases[case.tool_name]:
-            raise ValueError(
-                f"case_id duplicado: {case.tool_name}/{case.case_id}"
-            )
+            raise ValueError(f"case_id duplicado: {case.tool_name}/{case.case_id}")
 
         self._cases[case.tool_name][case.case_id] = case
 
@@ -75,7 +73,7 @@ class TestRegistry:
 
 
 def discover_cases(registry: TestRegistry, cases_dir: Path) -> int:
-    """Auto-descobre e registra casos de arquivos test_*.py.
+    """Detecta e registra casos de arquivos test_*.py.
 
     Cada arquivo deve ter uma função `register(registry)` ou uma
     variável `CASES` (lista de TestCase).
@@ -108,7 +106,7 @@ def discover_cases(registry: TestRegistry, cases_dir: Path) -> int:
 
             # Tenta variável CASES
             elif hasattr(module, "CASES"):
-                cases = getattr(module, "CASES")
+                cases = module.CASES
                 if isinstance(cases, list):
                     for case in cases:
                         if isinstance(case, TestCase):

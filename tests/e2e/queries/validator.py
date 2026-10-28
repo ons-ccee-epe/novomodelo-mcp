@@ -12,13 +12,13 @@ O fluxo de validação verifica:
 6. validation - Citações e keywords estão presentes?
 7. error_contains - Mensagem de erro contém substring?
 """
+
 from __future__ import annotations
 
 import re
 from typing import Any, ClassVar
 
 from tests.e2e.queries.models import (
-    ExpectedResult,
     QueryResult,
     QueryTestCase,
     ToolCall,
@@ -41,68 +41,72 @@ __all__ = [
 # =============================================================================
 
 # Tools do MCP novomodelo (37 tools)
-MCP_TOOLS: frozenset[str] = frozenset({
-    # Pre-run / bridge validation
-    "bridge_check_newave",
-    "bridge_check_decomp",
-    "bridge_convert_newave",
-    "bridge_convert_decomp",
-    "case_validate",
-    "case_summary",
-    "case_init",
-    # Post-run / bridge comparison
-    "bridge_compare_newave",
-    "bridge_compare_decomp",
-    "bridge_dashboard",
-    # Deck operations
-    "deck_list",
-    "deck_read_json",
-    "deck_read_parquet",
-    "deck_describe_parquet",
-    "deck_edit_json",
-    "deck_edit_parquet",
-    "deck_sql",
-    # Results
-    "results_status",
-    "results_convergence",
-    "results_query",
-    "results_list_entities",
-    "results_policy",
-    "results_stochastic",
-    # Reference / docs
-    "docs_list",
-    "docs_search",
-    "docs_read",
-    # Schema
-    "schema_list",
-    "schema_get",
-    "schema_export",
-    # Run
-    "run_plan",
-    "run_apply",
-    "run_start",
-    "run_status",
-    "run_logs",
-    "run_cancel",
-    # Meta
-    "server_info",
-    "solver_version",
-    "instalar_novomodelo",
-})
+MCP_TOOLS: frozenset[str] = frozenset(
+    {
+        # Pre-run / bridge validation
+        "bridge_check_newave",
+        "bridge_check_decomp",
+        "bridge_convert_newave",
+        "bridge_convert_decomp",
+        "case_validate",
+        "case_summary",
+        "case_init",
+        # Post-run / bridge comparison
+        "bridge_compare_newave",
+        "bridge_compare_decomp",
+        "bridge_dashboard",
+        # Deck operations
+        "deck_list",
+        "deck_read_json",
+        "deck_read_parquet",
+        "deck_describe_parquet",
+        "deck_edit_json",
+        "deck_edit_parquet",
+        "deck_sql",
+        # Results
+        "results_status",
+        "results_convergence",
+        "results_query",
+        "results_list_entities",
+        "results_policy",
+        "results_stochastic",
+        # Reference / docs
+        "docs_list",
+        "docs_search",
+        "docs_read",
+        # Schema
+        "schema_list",
+        "schema_get",
+        "schema_export",
+        # Run
+        "run_plan",
+        "run_apply",
+        "run_start",
+        "run_status",
+        "run_logs",
+        "run_cancel",
+        # Meta
+        "server_info",
+        "solver_version",
+        "instalar_novomodelo",
+    }
+)
 
 # Tools nativas do Kiro (conhecidas)
-NATIVE_TOOLS: frozenset[str] = frozenset({
-    "read_file",
-    "list_directory",
-    "glob",
-    "grep_search",
-    "fs_write",
-    "fs_append",
-    "str_replace",
-    "execute_pwsh",
-    "web_fetch",
-    "remote_web_search",
-})
+NATIVE_TOOLS: frozenset[str] = frozenset(
+    {
+        "read_file",
+        "list_directory",
+        "glob",
+        "grep_search",
+        "fs_write",
+        "fs_append",
+        "str_replace",
+        "execute_pwsh",
+        "web_fetch",
+        "remote_web_search",
+    }
+)
 
 
 # =============================================================================
@@ -112,6 +116,7 @@ NATIVE_TOOLS: frozenset[str] = frozenset({
 
 class _Missing:
     """Sentinel para campo ausente."""
+
     pass
 
 
@@ -307,7 +312,7 @@ class QueryValidator:
                 valid=False,
                 status="fail",
                 checks=[],
-                failure_reason=f"Query execution error: {result.stderr[:200] if result.stderr else 'unknown'}",
+                failure_reason=f"Query execution error: {(result.stderr or 'unknown')[:200]}",
                 details={"stderr": result.stderr},
             )
 
@@ -352,7 +357,7 @@ class QueryValidator:
         mcp_result = None
         if result.envelope and "result" in result.envelope:
             mcp_result = result.envelope.get("result")
-        
+
         # 4. Check status (Req 5.1)
         if expected.status is not None:
             check_status = self._check_status(mcp_result, expected.status)
@@ -526,7 +531,8 @@ class QueryValidator:
             # Req 4.5: Falhar com mensagem explicativa se nenhuma tool foi chamada
             if called_names:
                 actual = list(called_names)
-                message = f"Tool esperada '{expected_display}' não foi chamada, usou: {', '.join(sorted(called_names))}"
+                usadas = ", ".join(sorted(called_names))
+                message = f"Tool esperada '{expected_display}' não foi chamada, usou: {usadas}"
             else:
                 actual = "nenhuma"
                 message = f"Nenhuma tool foi chamada, esperava: {expected_display}"
@@ -599,7 +605,10 @@ class QueryValidator:
                 passed=False,
                 expected=expected_status,
                 actual="nenhum envelope MCP",
-                message="Nenhum envelope MCP disponível para verificar status (ative NOVOMODELO_MCP_RESPONSE_LOG)",
+                message=(
+                    "Nenhum envelope MCP disponível para verificar status "
+                    "(ative NOVOMODELO_MCP_RESPONSE_LOG)"
+                ),
             )
 
         actual_status = mcp_result.get("status")
@@ -643,7 +652,10 @@ class QueryValidator:
                 passed=False,
                 expected=expected_content,
                 actual="nenhum envelope MCP",
-                message="Nenhum envelope MCP disponível para verificar conteúdo (ative NOVOMODELO_MCP_RESPONSE_LOG)",
+                message=(
+                    "Nenhum envelope MCP disponível para verificar conteúdo "
+                    "(ative NOVOMODELO_MCP_RESPONSE_LOG)"
+                ),
             )
 
         # Check each expected field
@@ -757,7 +769,10 @@ class QueryValidator:
                 passed=False,
                 expected=f"erro contendo: '{expected_substring}'",
                 actual="nenhum envelope MCP",
-                message="Nenhum envelope MCP disponível para verificar erro (ative NOVOMODELO_MCP_RESPONSE_LOG)",
+                message=(
+                    "Nenhum envelope MCP disponível para verificar erro "
+                    "(ative NOVOMODELO_MCP_RESPONSE_LOG)"
+                ),
             )
 
         # Look for error message in common locations

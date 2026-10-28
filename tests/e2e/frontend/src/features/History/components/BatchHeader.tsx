@@ -26,17 +26,17 @@ export function BatchHeader({
   onDownloadSummary,
 }: Props) {
   return (
-    <header className="cobre-batch-header">
-      <div className="cobre-batch-header-id">
-        <h2 className="cobre-batch-title">
+    <header className="nm-batch-header">
+      <div className="nm-batch-header-id">
+        <h2 className="nm-batch-title">
           {headerName(batch)} — {formatDate(batch.timestamp)}
         </h2>
-        <code className="cobre-muted">{batch.batch_id}</code>
+        <code className="nm-muted">{batch.batch_id}</code>
       </div>
-      <div className="cobre-batch-header-actions">
+      <div className="nm-batch-header-actions">
         <button
           type="button"
-          className="cobre-btn"
+          className="nm-btn"
           aria-pressed={isBaseline}
           disabled={!canToggle}
           title={
@@ -48,7 +48,7 @@ export function BatchHeader({
         </button>
         <button
           type="button"
-          className="cobre-btn"
+          className="nm-btn"
           disabled={!onDownloadSummary}
           title={onDownloadSummary ? undefined : "Disponível com os gráficos"}
           onClick={onDownloadSummary}

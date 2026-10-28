@@ -30,7 +30,7 @@ export function LoadList({ runs, selectedId, collapsed, onToggleCollapsed, onRel
   const collapseButton = (
     <button
       type="button"
-      className="cobre-collapse-btn"
+      className="nm-collapse-btn"
       aria-label={collapsed ? "Mostrar a lista de cargas" : "Recolher a lista de cargas"}
       aria-expanded={!collapsed}
       onClick={onToggleCollapsed}
@@ -40,15 +40,15 @@ export function LoadList({ runs, selectedId, collapsed, onToggleCollapsed, onRel
   );
 
   if (collapsed) {
-    return <div className="cobre-batch-list-head">{collapseButton}</div>;
+    return <div className="nm-batch-list-head">{collapseButton}</div>;
   }
 
   return (
-    <div className="cobre-batch-list">
-      <div className="cobre-batch-list-head">
+    <div className="nm-batch-list">
+      <div className="nm-batch-list-head">
         <h2>Cargas</h2>
         <select
-          className="cobre-select"
+          className="nm-select"
           aria-label="Filtrar por modo"
           value={mode}
           onChange={(e) => setMode(e.target.value as LoadRunMode | "")}
@@ -59,19 +59,19 @@ export function LoadList({ runs, selectedId, collapsed, onToggleCollapsed, onRel
         </select>
         <button
           type="button"
-          className="cobre-collapse-btn"
+          className="nm-collapse-btn"
           aria-label="Atualizar a lista de cargas"
           title="Atualizar"
           onClick={handleReload}
           disabled={spinning}
         >
-          <span className={spinning ? "cobre-spin" : undefined} aria-hidden>
+          <span className={spinning ? "nm-spin" : undefined} aria-hidden>
             ↻
           </span>
         </button>
         {collapseButton}
       </div>
-      <ul className="cobre-batch-items" aria-label="Cargas gravadas">
+      <ul className="nm-batch-items" aria-label="Cargas gravadas">
         {visible.map((r) => (
           <LoadCard key={r.load_id} entry={r} selected={r.load_id === selectedId} />
         ))}

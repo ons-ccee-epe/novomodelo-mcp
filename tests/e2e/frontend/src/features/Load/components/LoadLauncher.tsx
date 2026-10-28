@@ -3,10 +3,10 @@ import { LoadForm } from "./LoadForm";
 
 function LauncherOffline() {
   return (
-    <div className="cobre-banner" data-kind="warning">
+    <div className="nm-banner" data-kind="warning">
       <strong>Launcher de testes offline.</strong> Para disparar uma carga pela UI, suba o launcher
       de dev em outro terminal:
-      <pre className="cobre-code">
+      <pre className="nm-code">
         pip install -r tests/e2e/launcher/requirements.txt{"\n"}
         python -m tests.e2e.launcher.serve
       </pre>
@@ -21,7 +21,7 @@ export function LoadLauncher({ launcher }: { launcher: LoadLauncherData }) {
 
   if (launcher.checking) {
     return (
-      <div className="cobre-launcher cobre-muted" data-state="checking">
+      <div className="nm-launcher nm-muted" data-state="checking">
         Verificando o launcher de testes…
       </div>
     );
@@ -43,12 +43,12 @@ export function LoadLauncher({ launcher }: { launcher: LoadLauncherData }) {
           onRequestCapacity={launcher.requestCapacity}
         />
       ) : (
-        <div className="cobre-banner" data-kind="critical">
+        <div className="nm-banner" data-kind="critical">
           O launcher não informou as tools e os limites do teste de carga.
         </div>
       )}
       {error && (
-        <div className="cobre-banner" data-kind="critical">
+        <div className="nm-banner" data-kind="critical">
           {error}
         </div>
       )}

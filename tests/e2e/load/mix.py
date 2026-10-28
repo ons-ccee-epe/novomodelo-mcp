@@ -15,12 +15,13 @@ modos, as de ``is_forbidden_tool`` (o solver e os jobs dele, e a rede), com o mo
 ``barred_reason``. Uma tool do catálogo entra no mix só se o servidor a anuncia sem
 ``openWorldHint`` e, se não for das que gravam, com ``readOnlyHint``.
 
-Os caminhos vêm de ``cases.yaml`` (decks ``cobre-caso-reduzido`` e
-``cobre-mar-26-rv2-reduzido``), do README das fixtures (``newave-determ`` e
+Os caminhos vêm de ``cases.yaml`` (decks ``novomodelo-caso-reduzido`` e
+``novomodelo-mar-26-rv2-reduzido``), do README das fixtures (``newave-determ`` e
 ``results/sample_run``) e dos exemplos nas docstrings das tools. Uma chamada cuja fonte
 falta (ou é uma pasta vazia) é pulada, não falha. ``{CALL}`` vira um número por chamada:
 ``case_init`` recusa uma pasta que já existe, e o ``force`` dele é travado no servidor.
 """
+
 from __future__ import annotations
 
 import re
@@ -75,14 +76,14 @@ BARRED_TOOLS: tuple[str, ...] = (
     "incluir_pastas",
 )
 
-_NEWAVE_AGO = "newave/cobre-caso-reduzido"
+_NEWAVE_AGO = "newave/novomodelo-caso-reduzido"
 _NEWAVE_AGO_SRC = "newave/newave-caso-reduzido"
-_DECOMP_MAR = "decomp/cobre-mar-26-rv2-reduzido"
+_DECOMP_MAR = "decomp/novomodelo-mar-26-rv2-reduzido"
 _DECOMP_MAR_SRC = "decomp/decomp-mar-26-rv2-reduzido"
-_NEWAVE_DETERM = "newave-determ/cobre-set-24-reduzido-calibrado-determ-2000"
+_NEWAVE_DETERM = "newave-determ/novomodelo-set-24-reduzido-calibrado-determ-2000"
 _RESULTS_SAMPLE = "results/sample_run"
-_RESULTS_NEWAVE_AGO = "newave/cobre-caso-reduzido/output"
-_RESULTS_DECOMP_MAR = "decomp/cobre-mar-26-rv2-reduzido/output"
+_RESULTS_NEWAVE_AGO = "newave/novomodelo-caso-reduzido/output"
+_RESULTS_DECOMP_MAR = "decomp/novomodelo-mar-26-rv2-reduzido/output"
 _SCRATCH = "scratch"
 
 _INFLOW_HISTORY = f"{_NEWAVE_DETERM}/scenarios/inflow_history.parquet"
@@ -204,7 +205,10 @@ def _deck_calls() -> list[CallTemplate]:
     ):
         calls.append(
             CallTemplate(
-                "deck_list", label, {"case_dir": f"{FIXTURES_TOKEN}/{deck}"}, (f"{deck}/config.json",)
+                "deck_list",
+                label,
+                {"case_dir": f"{FIXTURES_TOKEN}/{deck}"},
+                (f"{deck}/config.json",),
             )
         )
         for name in ("config.json", "penalties.json"):
@@ -223,14 +227,24 @@ def _parquet_calls() -> list[CallTemplate]:
     calls: list[CallTemplate] = []
     for tool, label, deck, name in (
         ("deck_read_parquet", "newave-ago26/stages", _NEWAVE_AGO, "stages.parquet"),
-        ("deck_read_parquet", "newave-determ/inflow_history", _NEWAVE_DETERM,
-         "scenarios/inflow_history.parquet"),
+        (
+            "deck_read_parquet",
+            "newave-determ/inflow_history",
+            _NEWAVE_DETERM,
+            "scenarios/inflow_history.parquet",
+        ),
         ("deck_describe_parquet", "newave-ago26/buses", _NEWAVE_AGO, "system/buses.parquet"),
-        ("deck_describe_parquet", "newave-determ/hydro_geometry", _NEWAVE_DETERM,
-         "system/hydro_geometry.parquet"),
+        (
+            "deck_describe_parquet",
+            "newave-determ/hydro_geometry",
+            _NEWAVE_DETERM,
+            "system/hydro_geometry.parquet",
+        ),
     ):
         calls.append(
-            CallTemplate(tool, label, {"path": f"{FIXTURES_TOKEN}/{deck}/{name}"}, (f"{deck}/{name}",))
+            CallTemplate(
+                tool, label, {"path": f"{FIXTURES_TOKEN}/{deck}/{name}"}, (f"{deck}/{name}",)
+            )
         )
     return calls
 
@@ -239,7 +253,9 @@ def _sql_calls() -> list[CallTemplate]:
     source = f"read_parquet('{FIXTURES_POSIX_TOKEN}/{_INFLOW_HISTORY}')"
     return [
         CallTemplate(
-            "deck_sql", "inflow-amostra", {"query": f"SELECT * FROM {source} LIMIT 10"},
+            "deck_sql",
+            "inflow-amostra",
+            {"query": f"SELECT * FROM {source} LIMIT 10"},
             (_INFLOW_HISTORY,),
         ),
         CallTemplate(
@@ -291,19 +307,27 @@ def _results_calls() -> list[CallTemplate]:
 def _heavy_read_calls() -> list[CallTemplate]:
     return [
         CallTemplate(
-            "bridge_check_newave", "newave-ago26", {"src": f"{FIXTURES_TOKEN}/{_NEWAVE_AGO_SRC}"},
+            "bridge_check_newave",
+            "newave-ago26",
+            {"src": f"{FIXTURES_TOKEN}/{_NEWAVE_AGO_SRC}"},
             (_NEWAVE_AGO_SRC,),
         ),
         CallTemplate(
-            "bridge_check_decomp", "decomp-mar26", {"src": f"{FIXTURES_TOKEN}/{_DECOMP_MAR_SRC}"},
+            "bridge_check_decomp",
+            "decomp-mar26",
+            {"src": f"{FIXTURES_TOKEN}/{_DECOMP_MAR_SRC}"},
             (_DECOMP_MAR_SRC,),
         ),
         CallTemplate(
-            "run_plan", "newave-ago26", {"case_dir": f"{FIXTURES_TOKEN}/{_NEWAVE_AGO}"},
+            "run_plan",
+            "newave-ago26",
+            {"case_dir": f"{FIXTURES_TOKEN}/{_NEWAVE_AGO}"},
             (f"{_NEWAVE_AGO}/config.json",),
         ),
         CallTemplate(
-            "run_plan", "decomp-mar26", {"case_dir": f"{FIXTURES_TOKEN}/{_DECOMP_MAR}"},
+            "run_plan",
+            "decomp-mar26",
+            {"case_dir": f"{FIXTURES_TOKEN}/{_DECOMP_MAR}"},
             (f"{_DECOMP_MAR}/config.json",),
         ),
     ]
@@ -340,11 +364,14 @@ def _write_calls() -> list[CallTemplate]:
             (f"{_NEWAVE_AGO}/constraints/thermal_bounds.parquet",),
         ),
         CallTemplate(
-            "run_apply", "newave-ago26", {"case_dir": deck, "overrides": {"forward_passes": 4}},
+            "run_apply",
+            "newave-ago26",
+            {"case_dir": deck, "overrides": {"forward_passes": 4}},
             config,
         ),
         CallTemplate(
-            "case_init", "1dtoy",
+            "case_init",
+            "1dtoy",
             {"directory": f"{scratch}/case-init/{CALL_TOKEN}", "template": "1dtoy"},
         ),
         CallTemplate("schema_export", "scratch", {"output_dir": f"{scratch}/schemas"}),

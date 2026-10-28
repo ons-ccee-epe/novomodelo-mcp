@@ -170,7 +170,7 @@ describe("Load e a cópia por sessão (sandbox) dos registros", () => {
     expect(within(details).getByText("Cópia por sessão")).toBeInTheDocument();
     expect(
       within(details).getByText(
-        "23.4 MB (subárvores: newave/cobre-caso-reduzido), cópia em ~180 ms (máx 240 ms)",
+        "23.4 MB (subárvores: newave/novomodelo-caso-reduzido), cópia em ~180 ms (máx 240 ms)",
       ),
     ).toBeInTheDocument();
     unmount();

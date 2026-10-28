@@ -7,18 +7,14 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
 
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
-
-from fastapi.testclient import TestClient  # noqa: E402 - depois do importorskip
-
-from tests.e2e.launcher import app as app_mod  # noqa: E402
-from tests.e2e.launcher import service as service_mod  # noqa: E402
-from tests.e2e.launcher.service import RunService  # noqa: E402
-from tests.e2e.queries.models import ExpectedResult, QueryTestCase  # noqa: E402
-from tests.e2e.queries.preconditions import skipped_result  # noqa: E402
-from tests.e2e.queries.store import ResultStore  # noqa: E402
+from tests.e2e.launcher import app as app_mod
+from tests.e2e.launcher import service as service_mod
+from tests.e2e.launcher.service import RunService
+from tests.e2e.queries.models import ExpectedResult, QueryTestCase
+from tests.e2e.queries.preconditions import skipped_result
+from tests.e2e.queries.store import ResultStore
 
 LOCAL = "http://127.0.0.1:5175"
 HEADER = {"X-Launcher": "1"}

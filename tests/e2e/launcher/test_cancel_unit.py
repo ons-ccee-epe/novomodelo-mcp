@@ -1,4 +1,5 @@
 """Testes unitários da parada de runs: QueryRunner.cancel e RunService.cancel."""
+
 from __future__ import annotations
 
 import sys

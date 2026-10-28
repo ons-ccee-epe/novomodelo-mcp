@@ -12,6 +12,7 @@ alimenta a taxa de erro e a latência, e o da validação da esteira (``pass``,
 ``partial``, ``fail``), que alimenta a taxa de aprovação. Um ``fail`` é uma execução
 completa: misturá-lo aos erros faria a latência mentir.
 """
+
 from __future__ import annotations
 
 import json
@@ -119,7 +120,9 @@ class AgentLoadConfig:
         ):
             raise ValueError(f"timeout fora de (0, {MAX_TIMEOUT_S:g}] s")
         if self.provider is not None and self.provider not in PROVIDERS:
-            raise ValueError(f"provedor desconhecido: {self.provider} (aceitos: {', '.join(PROVIDERS)})")
+            raise ValueError(
+                f"provedor desconhecido: {self.provider} (aceitos: {', '.join(PROVIDERS)})"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -354,7 +357,9 @@ class AgentLoadRunner:
             self._deadline = self._t0 + cfg.duration_s
             self._phase = "running"
             threads = [
-                threading.Thread(target=self._session_loop, args=(i,), name=f"agent-s{i}", daemon=True)
+                threading.Thread(
+                    target=self._session_loop, args=(i,), name=f"agent-s{i}", daemon=True
+                )
                 for i in ready
             ]
             for thread in threads:
@@ -392,8 +397,12 @@ class AgentLoadRunner:
             runner = self._factory(index, preflight)
         except Exception as exc:  # noqa: BLE001 - uma sessão que não sobe não derruba a carga
             self._sessions.append(
-                {"session": index, "ok": False, "ms": (self._clock() - started) * 1000.0,
-                 "error": _describe(exc)}
+                {
+                    "session": index,
+                    "ok": False,
+                    "ms": (self._clock() - started) * 1000.0,
+                    "error": _describe(exc),
+                }
             )
             return
         with self._lock:
@@ -449,7 +458,9 @@ class AgentLoadRunner:
         except Exception as exc:  # noqa: BLE001 - uma execução falha não derruba a sessão
             if self._stop.is_set():
                 return None
-            return self._sample(case, index, started_s, started, "error", "error", error=_describe(exc))
+            return self._sample(
+                case, index, started_s, started, "error", "error", error=_describe(exc)
+            )
         if result.status == "cancelled" or self._stop.is_set():
             return None
         latency_ms = result.latency_ms
@@ -458,10 +469,14 @@ class AgentLoadRunner:
         counts = {"tool_calls": tool_calls, "mcp_calls": mcp_calls, "latency_ms": latency_ms}
         if result.status == "timeout":
             message = f"sessão do agente encerrada após {result.timeout_s or 0:.0f} s"
-            return self._sample(case, index, started_s, started, "timeout", "timeout", message, **counts)
+            return self._sample(
+                case, index, started_s, started, "timeout", "timeout", message, **counts
+            )
         failure = agent_failure(result)
         if failure:
-            return self._sample(case, index, started_s, started, "error", "error", failure, **counts)
+            return self._sample(
+                case, index, started_s, started, "error", "error", failure, **counts
+            )
         try:
             test_result = self._build_result(case, result, self._validator.validate(case, result))
         except Exception as exc:  # noqa: BLE001 - erro do validador vira erro da execução
@@ -546,7 +561,12 @@ class AgentLoadRunner:
                 "phase": phase,
                 "elapsed_seconds": min(elapsed, self._cfg.duration_s),
                 "duration_seconds": self._cfg.duration_s,
-                "clients": {"requested": requested, "ready": ready, "failed": failed, "respawns": 0},
+                "clients": {
+                    "requested": requested,
+                    "ready": ready,
+                    "failed": failed,
+                    "respawns": 0,
+                },
                 "sessions": {
                     "requested": requested,
                     "ready": ready,

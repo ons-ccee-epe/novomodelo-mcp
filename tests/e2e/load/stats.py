@@ -1,10 +1,11 @@
 """Estatísticas da carga: percentis, agregação por tool e série temporal.
 
-A latência (min/média/percentis/max) cobre só as chamadas ``ok``: o tempo de
+A latência (min/média/percentis/max) abrange só as chamadas ``ok``: o tempo de
 uma chamada que estourou o timeout é o próprio limite, não o de uma resposta, e
 uma falha rápida puxaria a média para baixo. Erros e timeouts entram na taxa de
 erro, que é ``(erros + timeouts) / chamadas``.
 """
+
 from __future__ import annotations
 
 import math
@@ -140,7 +141,6 @@ def aggregate(samples: Sequence[Sample], duration_s: float) -> dict[str, Any]:
         "per_tool": {tool: summarize(by_tool[tool], duration_s) for tool in sorted(by_tool)},
         "series": time_series(samples, duration_s),
     }
-
 
 
 class LiveStats:

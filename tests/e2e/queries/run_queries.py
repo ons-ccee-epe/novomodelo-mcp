@@ -24,6 +24,7 @@ Usage:
     python -m tests.e2e.queries.run_queries --set-baseline
     python -m tests.e2e.queries.run_queries --compare 20241215_143052_abc1234
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,8 +36,8 @@ from pathlib import Path
 
 from tests.e2e.queries.loader import CasesLoader, CasesLoaderError
 from tests.e2e.queries.models import (
-    QueryTestCase,
     QueryResult,
+    QueryTestCase,
     TestResult,
 )
 from tests.e2e.queries.preconditions import missing_sources, skipped_result
@@ -48,8 +49,6 @@ __all__ = ["main"]
 
 # Lock for thread-safe progress output
 _print_lock = threading.Lock()
-
-
 
 
 def _get_env_path(name: str, default: Path) -> Path:
@@ -108,8 +107,7 @@ def _build_test_result(
 
     # Serializar tool calls para JSON
     all_tool_calls = [
-        {"name": tc.name, "args": tc.args, "tool_id": tc.tool_id}
-        for tc in result.tool_calls
+        {"name": tc.name, "args": tc.args, "tool_id": tc.tool_id} for tc in result.tool_calls
     ]
 
     # Serializar validation checks
@@ -238,7 +236,6 @@ def main() -> int:
     results_dir = base_dir / "results"
     metrics_dir = base_dir / "metrics"
 
-
     # API key: via KIRO_API_KEY (Req 19.1, 19.4)
     api_key = os.environ.get("KIRO_API_KEY")
 
@@ -296,9 +293,9 @@ def main() -> int:
                 status_icon = "[PARTIAL]"
             else:
                 status_icon = "[FAIL]"
-            
+
             print(f"{status_icon} {test_result.status} ({result.latency_ms:.0f}ms)")
-            
+
             # Mostrar detalhes para partial e fail
             if test_result.status in ("partial", "fail"):
                 for check in validation.checks:
@@ -391,9 +388,7 @@ def main() -> int:
         test_results = [results_by_index[i] for i in range(total_cases)]
 
     # Criar e salvar batch
-    batch = store.create_batch(
-        test_results, conjunto=conjunto_from_filters(args.tags, args.case)
-    )
+    batch = store.create_batch(test_results, conjunto=conjunto_from_filters(args.tags, args.case))
     batch_path = store.save_batch(batch)
     store.append_metrics(batch)
 

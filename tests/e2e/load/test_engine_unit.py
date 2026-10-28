@@ -1,4 +1,5 @@
 """Testes do motor de carga com clientes falsos (sem subir o servidor MCP)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -50,7 +51,9 @@ class TestConfigValidation:
             LoadConfig(concurrency=1, duration_s=duration)
 
     @pytest.mark.parametrize("bound", [1, 1800])
-    def test_duration_bounds_are_inclusive(self, bound: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_duration_bounds_are_inclusive(
+        self, bound: int, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.undo()
         assert LoadConfig(concurrency=1, duration_s=bound).duration_s == bound
 
@@ -109,8 +112,9 @@ class TestRun:
 
     def test_without_warmup_every_call_is_measured(self, tmp_path: Path) -> None:
         factory = FakeFactory()
-        outcome = _run(_runner(tmp_path, factory, concurrency=2, duration_s=30, iterations=3,
-                               warmup=False))
+        outcome = _run(
+            _runner(tmp_path, factory, concurrency=2, duration_s=30, iterations=3, warmup=False)
+        )
         worker_calls = [c for c in factory.calls if c[0] >= 0]
         assert len(outcome.samples) == len(worker_calls) == 6
 
@@ -171,7 +175,9 @@ class TestPreflight:
         factory = FakeFactory(behaviors={"docs_list": Behavior(broken=True)})
         outcome = _run(_runner(tmp_path, factory, concurrency=1, duration_s=0.2))
         assert {s.tool for s in outcome.samples} >= {"schema_list"}
-        assert any("pré-voo" in e.reason for e in outcome.selection.excluded if e.tool == "docs_list")
+        assert any(
+            "pré-voo" in e.reason for e in outcome.selection.excluded if e.tool == "docs_list"
+        )
 
     def test_tool_that_the_server_does_not_declare_read_only_leaves_the_mix(
         self, tmp_path: Path
@@ -179,8 +185,9 @@ class TestPreflight:
         factory = FakeFactory(tools=("docs_list", "schema_list"))
         outcome = _run(_runner(tmp_path, factory, concurrency=1, duration_s=0.2))
         assert "docs_search" not in {s.tool for s in outcome.samples}
-        assert any(e.tool == "docs_search" and "ausente" in e.reason
-                   for e in outcome.selection.excluded)
+        assert any(
+            e.tool == "docs_search" and "ausente" in e.reason for e in outcome.selection.excluded
+        )
 
     def test_empty_mix_is_a_load_error_with_the_reasons(self, tmp_path: Path) -> None:
         factory = FakeFactory(tools=())
@@ -192,8 +199,9 @@ class TestStop:
     def test_request_stop_from_another_thread_interrupts_and_cancels_in_flight_calls(
         self, tmp_path: Path
     ) -> None:
-        factory = FakeFactory(behaviors={tool: Behavior(hang=False, delay_s=0.5)
-                                         for tool in NO_FIXTURE_TOOLS})
+        factory = FakeFactory(
+            behaviors={tool: Behavior(hang=False, delay_s=0.5) for tool in NO_FIXTURE_TOOLS}
+        )
         stop_scheduled = threading.Event()
 
         def stop_shortly_after_the_load_starts(snapshot: dict) -> None:
@@ -201,8 +209,12 @@ class TestStop:
                 stop_scheduled.set()
                 threading.Timer(0.2, runner.request_stop).start()
 
-        runner = LoadRunner(_config(concurrency=2, duration_s=60), tmp_path, factory,
-                            on_progress=stop_shortly_after_the_load_starts)
+        runner = LoadRunner(
+            _config(concurrency=2, duration_s=60),
+            tmp_path,
+            factory,
+            on_progress=stop_shortly_after_the_load_starts,
+        )
 
         started = time.monotonic()
         outcome = _run(runner)
@@ -217,8 +229,9 @@ class TestStop:
     ) -> None:
         monkeypatch.setattr(engine, "DRAIN_GRACE_S", 0.3)
         factory = FakeFactory(behaviors={"docs_list": Behavior(hang_only_workers=True)})
-        runner = _runner(tmp_path, factory, concurrency=1, duration_s=0.3, warmup=False,
-                         tools=("docs_list",))
+        runner = _runner(
+            tmp_path, factory, concurrency=1, duration_s=0.3, warmup=False, tools=("docs_list",)
+        )
 
         started = time.monotonic()
         outcome = _run(runner)
@@ -227,7 +240,9 @@ class TestStop:
         assert not outcome.interrupted
         assert time.monotonic() - started < 10
 
-    def test_stop_before_the_run_starts_returns_an_interrupted_outcome(self, tmp_path: Path) -> None:
+    def test_stop_before_the_run_starts_returns_an_interrupted_outcome(
+        self, tmp_path: Path
+    ) -> None:
         runner = _runner(tmp_path, FakeFactory())
         runner.request_stop()
         outcome = _run(runner)
@@ -238,8 +253,9 @@ class TestStop:
 class TestProgress:
     def test_phases_advance_and_counters_grow(self, tmp_path: Path) -> None:
         snapshots: list[dict] = []
-        runner = LoadRunner(_config(duration_s=0.6), tmp_path, FakeFactory(),
-                            on_progress=snapshots.append)
+        runner = LoadRunner(
+            _config(duration_s=0.6), tmp_path, FakeFactory(), on_progress=snapshots.append
+        )
         _run(runner)
 
         phases = []
@@ -256,7 +272,7 @@ class TestProgress:
 
 
 def _deck_fixtures(root: Path) -> Path:
-    deck = root / "fixtures" / "newave" / "cobre-caso-reduzido"
+    deck = root / "fixtures" / "newave" / "novomodelo-caso-reduzido"
     (deck / "constraints").mkdir(parents=True)
     (deck / "config.json").write_text("{}", encoding="utf-8")
     (deck / "constraints" / "thermal_bounds.parquet").write_bytes(b"x")
@@ -287,21 +303,30 @@ class TestSessionsWithCopy:
     def test_every_call_points_to_the_copy_of_its_own_session(self, tmp_path: Path) -> None:
         fixtures, sessions, factory, _ = self._run_with_copy(tmp_path, duration_s=30, iterations=4)
         run_root = (tmp_path / "run").resolve()
-        paths = [(index, value) for index, tool, args in factory.arguments
-                 for value in args.values() if isinstance(value, str) and Path(value).is_absolute()]
+        paths = [
+            (index, value)
+            for index, tool, args in factory.arguments
+            for value in args.values()
+            if isinstance(value, str) and Path(value).is_absolute()
+        ]
         assert {index for index, _ in paths} == {-1, 0, 1}
         for index, value in paths:
             folder = "preflight" if index < 0 else f"s{index}"
             assert Path(value).is_relative_to(run_root / folder / "fixtures"), value
             assert not Path(value).is_relative_to(fixtures.resolve())
-        assert (run_root / "s0" / "fixtures" / "newave/cobre-caso-reduzido/config.json").is_file()
+        assert (
+            run_root / "s0" / "fixtures" / "newave/novomodelo-caso-reduzido/config.json"
+        ).is_file()
         assert sessions.close()
         assert not run_root.exists()
 
     def test_case_init_gets_a_new_folder_on_every_call_of_a_session(self, tmp_path: Path) -> None:
         _, sessions, factory, _ = self._run_with_copy(tmp_path, duration_s=30, iterations=6)
-        folders = [args["directory"] for index, tool, args in factory.arguments
-                   if tool == "case_init" and index == 0]
+        folders = [
+            args["directory"]
+            for index, tool, args in factory.arguments
+            if tool == "case_init" and index == 0
+        ]
         assert len(folders) >= 2
         assert len(set(folders)) == len(folders)
         sessions.close()
@@ -316,7 +341,7 @@ class TestSessionsWithCopy:
         assert not (tmp_path / "run" / "preflight").exists()
         summary = sessions.summary()
         assert summary["enabled"] and summary["sessions"] == 2
-        assert summary["subtrees"] == ["newave/cobre-caso-reduzido"]
+        assert summary["subtrees"] == ["newave/novomodelo-caso-reduzido"]
         sessions.close()
 
     def test_sessions_get_their_own_folders_workspace_and_no_solver_runs(
@@ -342,9 +367,10 @@ class TestSessionsWithCopy:
             tools=tools,
             behaviors={"bridge_check_newave": Behavior(broken=True)},
         )
-        outcome = _run(LoadRunner(_config(tools=tools, concurrency=1, duration_s=0.2), fixtures,
-                                  factory))
+        outcome = _run(
+            LoadRunner(_config(tools=tools, concurrency=1, duration_s=0.2), fixtures, factory)
+        )
         reasons = {e.tool: e.reason for e in outcome.selection.excluded}
         assert BRIDGE_STDIN_HINT in reasons["bridge_check_newave"]
         assert "não chamada" in reasons["bridge_check_decomp"]
-        assert ("bridge_check_decomp" not in {tool for _index, tool in factory.calls})
+        assert "bridge_check_decomp" not in {tool for _index, tool in factory.calls}

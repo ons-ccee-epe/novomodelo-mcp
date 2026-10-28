@@ -8,16 +8,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
-
-from fastapi.testclient import TestClient  # noqa: E402 - depois do importorskip
-
-from tests.e2e.launcher import app as app_mod  # noqa: E402
-from tests.e2e.launcher.command_preview import command_preview  # noqa: E402
-from tests.e2e.launcher.providers import ProviderInfo, build_command  # noqa: E402
-from tests.e2e.queries.models import ExpectedResult, QueryTestCase  # noqa: E402
+from tests.e2e.launcher import app as app_mod
+from tests.e2e.launcher.command_preview import command_preview
+from tests.e2e.launcher.providers import ProviderInfo, build_command
+from tests.e2e.queries.models import ExpectedResult, QueryTestCase
 
 LOCAL = "http://127.0.0.1:5175"
 KIRO = ProviderInfo("kiro-cli", "Kiro CLI", "kiro-cli", True, "/opt/abs/kiro-cli")

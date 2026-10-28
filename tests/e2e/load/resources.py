@@ -5,6 +5,7 @@ exatamente a árvore da carga: os servidores no modo tools; os CLIs de agente, o
 servidores deles e os demais filhos no modo agent. Sem psutil o relatório diz ``available: false`` e
 a carga segue normalmente.
 """
+
 from __future__ import annotations
 
 import os

@@ -9,12 +9,12 @@ function point(t: number, calls = 10): LoadSeriesPoint {
 }
 
 describe("trimPartialTail", () => {
-  it("descarta o último bucket quando a janela mal o cobre", () => {
+  it("descarta o último bucket quando a janela mal o abrange", () => {
     const series = [point(0), point(1), point(2), point(3, 2)];
     expect(trimPartialTail(series, 3.1).map((p) => p.t)).toEqual([0, 1, 2]);
   });
 
-  it("mantém o último bucket quando a janela o cobre por pelo menos meio segundo", () => {
+  it("mantém o último bucket quando a janela o abrange por pelo menos meio segundo", () => {
     const series = [point(0), point(1), point(2)];
     expect(trimPartialTail(series, 2.5)).toBe(series);
     expect(trimPartialTail(series, 3)).toBe(series);

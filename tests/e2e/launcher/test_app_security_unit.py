@@ -1,18 +1,15 @@
 """Testes das proteções do launcher de dev (host, header, limites, path traversal)."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
-
-from fastapi.testclient import TestClient  # noqa: E402 - depois do importorskip
-
-from tests.e2e.launcher import app as app_mod  # noqa: E402
-from tests.e2e.launcher.service import RunAlreadyActiveError  # noqa: E402
+from tests.e2e.launcher import app as app_mod
+from tests.e2e.launcher.service import RunAlreadyActiveError
 
 LOCAL = "http://127.0.0.1:5175"
 HEADER = {"X-Launcher": "1"}

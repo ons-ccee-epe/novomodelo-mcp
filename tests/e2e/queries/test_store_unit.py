@@ -6,6 +6,7 @@ Este módulo testa:
 - set_baseline() e get_baseline() para baseline (Req 10.5, 10.6)
 - list_batches() para listagem ordenada
 """
+
 from __future__ import annotations
 
 import json
@@ -21,8 +22,8 @@ from tests.e2e.queries.models import (
     TestResult,
 )
 from tests.e2e.queries.store import (
-    ResultStore,
     TOOL_GROUPS,
+    ResultStore,
     conjunto_from_filters,
     infer_conjunto,
 )
@@ -90,7 +91,7 @@ def sample_batch() -> BatchResult:
     return BatchResult(
         batch_id="20241215_143052_abc1234",
         timestamp="2024-12-15T14:30:52",
-        cobre_mcp_version="1.0.0",
+        mcp_version="1.0.0",
         git_commit_sha="abc1234567890",
         environment="test",
         total_tests=2,
@@ -113,7 +114,11 @@ def sample_batch() -> BatchResult:
         },
         metrics_by_group={
             "deck": GroupMetrics(
-                total=1, pct_pass=100.0, pct_mcp_used=100.0, pct_correct_tool=100.0, avg_latency_ms=100.0
+                total=1,
+                pct_pass=100.0,
+                pct_mcp_used=100.0,
+                pct_correct_tool=100.0,
+                avg_latency_ms=100.0,
             ),
             "docs": GroupMetrics(
                 total=1, pct_pass=0.0, pct_mcp_used=0.0, pct_correct_tool=0.0, avg_latency_ms=150.0
@@ -153,7 +158,7 @@ class TestSaveBatch:
         """save_batch salva conteúdo correto (Req 8.3, 8.4)."""
         batch_path = store.save_batch(sample_batch)
 
-        with open(batch_path, "r", encoding="utf-8") as f:
+        with open(batch_path, encoding="utf-8") as f:
             data = json.load(f)
 
         assert data["batch_id"] == sample_batch.batch_id
@@ -168,7 +173,7 @@ class TestSaveBatch:
         store.save_batch(sample_batch)
 
         assert store.index_path.exists()
-        with open(store.index_path, "r", encoding="utf-8") as f:
+        with open(store.index_path, encoding="utf-8") as f:
             index = json.load(f)
 
         assert len(index["batches"]) == 1
@@ -201,7 +206,7 @@ class TestUpdateIndex:
         """Index contém campos obrigatórios (Req 8.9)."""
         store.save_batch(sample_batch)
 
-        with open(store.index_path, "r", encoding="utf-8") as f:
+        with open(store.index_path, encoding="utf-8") as f:
             index = json.load(f)
 
         batch_entry = index["batches"][0]
@@ -218,7 +223,7 @@ class TestUpdateIndex:
         store.save_batch(sample_batch)
         store.save_batch(sample_batch)
 
-        with open(store.index_path, "r", encoding="utf-8") as f:
+        with open(store.index_path, encoding="utf-8") as f:
             index = json.load(f)
 
         assert len(index["batches"]) == 1
@@ -241,7 +246,7 @@ class TestListBatches:
         batch2 = BatchResult(
             batch_id="20241216_100000_def5678",
             timestamp="2024-12-16T10:00:00",
-            cobre_mcp_version="1.0.0",
+            mcp_version="1.0.0",
             git_commit_sha="def5678901234",
             environment="test",
             total_tests=1,
@@ -286,12 +291,10 @@ class TestSetBaseline:
         store.save_batch(sample_batch)
         store.set_baseline(sample_batch.batch_id)
 
-        with open(store.baseline_path, "r", encoding="utf-8") as f:
+        with open(store.baseline_path, encoding="utf-8") as f:
             baseline_data = json.load(f)
 
-        assert baseline_data == {
-            "baselines": {"todos": sample_batch.batch_id}
-        }
+        assert baseline_data == {"baselines": {"todos": sample_batch.batch_id}}
 
     def test_set_baseline_replaces_previous(self, store: ResultStore, sample_batch: BatchResult):
         """set_baseline substitui baseline anterior (Req 10.5)."""
@@ -302,7 +305,7 @@ class TestSetBaseline:
         batch2 = BatchResult(
             batch_id="20241216_100000_def5678",
             timestamp="2024-12-16T10:00:00",
-            cobre_mcp_version="1.0.0",
+            mcp_version="1.0.0",
             git_commit_sha="def5678901234",
             environment="test",
             total_tests=1,
@@ -325,7 +328,7 @@ class TestSetBaseline:
         store.save_batch(batch2)
         store.set_baseline(batch2.batch_id)
 
-        with open(store.baseline_path, "r", encoding="utf-8") as f:
+        with open(store.baseline_path, encoding="utf-8") as f:
             baseline_data = json.load(f)
 
         assert baseline_data == {"baselines": {"todos": batch2.batch_id}}
@@ -408,14 +411,8 @@ def test_conjunto_from_filters():
 
 def test_infer_conjunto():
     assert infer_conjunto([_result("q1", "docs_list")]) == "pergunta:q1"
-    assert (
-        infer_conjunto([_result("a", "docs_list"), _result("b", "docs_read")])
-        == "grupo:docs"
-    )
-    assert (
-        infer_conjunto([_result("a", "docs_list"), _result("b", "deck_list")])
-        == "todos"
-    )
+    assert infer_conjunto([_result("a", "docs_list"), _result("b", "docs_read")]) == "grupo:docs"
+    assert infer_conjunto([_result("a", "docs_list"), _result("b", "deck_list")]) == "todos"
 
 
 def test_create_batch_records_conjunto_in_batch_and_index(store: ResultStore):
@@ -427,12 +424,8 @@ def test_create_batch_records_conjunto_in_batch_and_index(store: ResultStore):
 
 
 def test_set_baseline_per_conjunto_keeps_other_conjuntos(store: ResultStore):
-    todos = _stored_batch(
-        store, "b_todos", [_result("a", "docs_list"), _result("b", "deck_list")]
-    )
-    docs = _stored_batch(
-        store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs"
-    )
+    todos = _stored_batch(store, "b_todos", [_result("a", "docs_list"), _result("b", "deck_list")])
+    docs = _stored_batch(store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs")
 
     assert store.set_baseline(todos.batch_id) == "todos"
     assert store.set_baseline(docs.batch_id) == "grupo:docs"
@@ -444,26 +437,18 @@ def test_set_baseline_per_conjunto_keeps_other_conjuntos(store: ResultStore):
 
 
 def test_legacy_baseline_file_maps_to_batch_conjunto(store: ResultStore):
-    batch = _stored_batch(
-        store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs"
-    )
-    store.baseline_path.write_text(
-        json.dumps({"batch_id": batch.batch_id}), encoding="utf-8"
-    )
+    batch = _stored_batch(store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs")
+    store.baseline_path.write_text(json.dumps({"batch_id": batch.batch_id}), encoding="utf-8")
 
     assert store.get_baselines() == {"grupo:docs": "b_docs"}
     assert store.get_baseline().batch_id == "b_docs"
 
 
 def test_baseline_to_missing_batch_is_ignored(store: ResultStore):
-    store.baseline_path.write_text(
-        json.dumps({"batch_id": "sumiu"}), encoding="utf-8"
-    )
+    store.baseline_path.write_text(json.dumps({"batch_id": "sumiu"}), encoding="utf-8")
     assert store.get_baselines() == {}
 
-    store.baseline_path.write_text(
-        json.dumps({"baselines": {"todos": "sumiu"}}), encoding="utf-8"
-    )
+    store.baseline_path.write_text(json.dumps({"baselines": {"todos": "sumiu"}}), encoding="utf-8")
     assert store.get_baselines() == {}
 
 
@@ -472,17 +457,13 @@ def test_get_baselines_without_file_is_empty(store: ResultStore):
 
 
 def test_set_baseline_rejects_conjunto_mismatch(store: ResultStore):
-    batch = _stored_batch(
-        store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs"
-    )
+    batch = _stored_batch(store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs")
     with pytest.raises(ValueError):
         store.set_baseline(batch.batch_id, "todos")
 
 
 def test_clear_baseline(store: ResultStore):
-    batch = _stored_batch(
-        store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs"
-    )
+    batch = _stored_batch(store, "b_docs", [_result("a", "docs_list")], conjunto="grupo:docs")
     store.set_baseline(batch.batch_id)
 
     assert store.clear_baseline("grupo:docs") is True

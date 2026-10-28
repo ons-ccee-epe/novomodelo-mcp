@@ -1,9 +1,9 @@
 {
-  "name": "cobre-mcp-e2e-dashboard",
+  "name": "novomodelo-mcp-e2e-dashboard",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Frontend do dashboard de resultados dos testes E2E do <repositório anterior> (consome os JSON de tests/e2e/results e tests/e2e/metrics; nao gera HTML).",
+  "description": "Frontend do dashboard de resultados dos testes E2E do novomodelo-mcp (consome os JSON de tests/e2e/results e tests/e2e/metrics; nao gera HTML).",
   "scripts": {
     "dev": "vite",
     "dev:launcher": "node scripts/dev-launcher.mjs",

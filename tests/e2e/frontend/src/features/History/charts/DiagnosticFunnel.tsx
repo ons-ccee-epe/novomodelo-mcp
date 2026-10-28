@@ -29,7 +29,7 @@ export function DiagnosticFunnel({ batch }: { batch: BatchResult }) {
           tick={AXIS_TICK}
         />
         <Tooltip {...TOOLTIP} formatter={(v) => `${decimal(Number(v))}%`} />
-        <Bar dataKey="pct" name="Percentual" fill="var(--cobre-primary)" />
+        <Bar dataKey="pct" name="Percentual" fill="var(--nm-primary)" />
       </BarChart>
     </ResponsiveContainer>
   );

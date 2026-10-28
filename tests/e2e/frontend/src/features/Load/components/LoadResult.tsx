@@ -17,12 +17,12 @@ export function LoadResult({ run, data }: { run: SavedLoadRun; data: LoadResults
   const agent = isAgentRun(run);
 
   return (
-    <article className="cobre-load-result" aria-label="Resultado da carga">
-      <header className="cobre-load-result-head">
+    <article className="nm-load-result" aria-label="Resultado da carga">
+      <header className="nm-load-result-head">
         <h2>
           {agent ? "Carga do agente" : "Carga de tools"} — {fmtLoadId(run.load_id)}
         </h2>
-        <p className="cobre-muted cobre-load-meta">
+        <p className="nm-muted nm-load-meta">
           <code>{run.load_id}</code> · ambiente {run.environment} · versão {run.version}
           {isAgentRun(run) ? ` · agente ${run.agent.label}` : ""}
         </p>
@@ -30,7 +30,7 @@ export function LoadResult({ run, data }: { run: SavedLoadRun; data: LoadResults
 
       {isAgentRun(run) ? <AgentSummaryCards run={run} /> : <LoadSummaryCards run={run} />}
 
-      <section className="cobre-section">
+      <section className="nm-section">
         <LoadCompareSelect
           runs={data.runs}
           selectedId={data.selectedId}
@@ -40,8 +40,8 @@ export function LoadResult({ run, data }: { run: SavedLoadRun; data: LoadResults
         {data.compareRun && <LoadComparison current={run} previous={data.compareRun} />}
       </section>
 
-      <section className="cobre-section">
-        <h2 className="cobre-section-title">Ao longo do tempo</h2>
+      <section className="nm-section">
+        <h2 className="nm-section-title">Ao longo do tempo</h2>
         {isAgentRun(run) ? (
           <LoadCharts
             series={run.series}
@@ -62,8 +62,8 @@ export function LoadResult({ run, data }: { run: SavedLoadRun; data: LoadResults
         )}
       </section>
 
-      <section className="cobre-section">
-        <h2 className="cobre-section-title">{agent ? "Por caso" : "Por tool"}</h2>
+      <section className="nm-section">
+        <h2 className="nm-section-title">{agent ? "Por caso" : "Por tool"}</h2>
         <LoadPerToolChart run={run} />
         {isAgentRun(run) ? (
           <AgentCaseTable perCase={run.per_case} />

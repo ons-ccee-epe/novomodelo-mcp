@@ -1,4 +1,5 @@
 """Testes da persistência das cargas do modo agent e da leitura de registros antigos."""
+
 from __future__ import annotations
 
 import json
@@ -26,7 +27,9 @@ def no_git(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _agent_record(load_id: str = "20261024_110000_abc1234", **kwargs) -> dict:
-    return build_agent_record(load_id, make_agent_outcome(**kwargs), AGENT, server={"command": ["x"]})
+    return build_agent_record(
+        load_id, make_agent_outcome(**kwargs), AGENT, server={"command": ["x"]}
+    )
 
 
 class TestAgentRecord:
@@ -68,14 +71,18 @@ class TestAgentRecord:
     def test_errors_group_every_execution_that_did_not_pass(self) -> None:
         errors = _agent_record()["errors"]
         assert {(e["case_id"], e["status"]) for e in errors} == {
-            ("docs-list-all", "fail"), ("schema-list-all", "timeout"),
+            ("docs-list-all", "fail"),
+            ("schema-list-all", "timeout"),
         }
 
     def test_cases_sessions_and_mode_are_recorded(self) -> None:
         record = _agent_record()
         assert record["mode"] == "agent"
         assert record["cases"]["selection"] == "todos os casos"
-        assert [c["id"] for c in record["cases"]["selected"]] == ["docs-list-all", "schema-list-all"]
+        assert [c["id"] for c in record["cases"]["selected"]] == [
+            "docs-list-all",
+            "schema-list-all",
+        ]
         assert record["cases"]["excluded"][0]["id"] == "deck-edit-json"
         assert record["sessions"]["started"] == 2 and record["sessions"]["failed"] == 0
         assert record["config"]["provider"] == "claude"
@@ -133,7 +140,9 @@ class TestSandboxAndProfile:
         assert tools["sandbox"] == {"enabled": False}
         assert agent["sandbox"] == {"enabled": False}
         copy = {"enabled": True, "copy_mb": 19.0, "subtrees": ["newave/x"]}
-        assert build_record("20261024_110000_abc1234", make_outcome(), sandbox=copy)["sandbox"] == copy
+        assert (
+            build_record("20261024_110000_abc1234", make_outcome(), sandbox=copy)["sandbox"] == copy
+        )
 
     def test_old_records_without_the_copy_block_still_load(self, tmp_path: Path) -> None:
         record = build_record("20261024_110000_abc1234", make_outcome())
@@ -154,5 +163,7 @@ class TestSandboxAndProfile:
         assert record_is_heavy(build_record("20261024_110000_abc1234", outcome)) is True
         agent = _agent_record()
         assert record_is_heavy(agent) is False
-        agent["cases"]["selected"].append({"id": "b", "group": "bridge", "tool": "case_validate/bridge_check_newave"})
+        agent["cases"]["selected"].append(
+            {"id": "b", "group": "bridge", "tool": "case_validate/bridge_check_newave"}
+        )
         assert record_is_heavy(agent) is True

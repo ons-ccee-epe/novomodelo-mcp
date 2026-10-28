@@ -7,18 +7,18 @@ const DEBOUNCE_MS = 300;
 
 function CopyableCommand({ title, text }: { title: string; text: string }) {
   return (
-    <div className="cobre-command">
-      <div className="cobre-command-head">
+    <div className="nm-command">
+      <div className="nm-command-head">
         <strong>{title}</strong>
         <button
           type="button"
-          className="cobre-btn cobre-btn-sm"
+          className="nm-btn nm-btn-sm"
           onClick={() => void navigator.clipboard?.writeText(text)}
         >
           Copiar
         </button>
       </div>
-      <pre className="cobre-code">{text}</pre>
+      <pre className="nm-code">{text}</pre>
     </div>
   );
 }
@@ -54,13 +54,13 @@ export function CommandPreview({
 
   if (!preview) return null;
   return (
-    <details className="cobre-command-preview" aria-label="Comando equivalente">
+    <details className="nm-command-preview" aria-label="Comando equivalente">
       <summary>Comando equivalente</summary>
-      <div className="cobre-command-preview-body">
+      <div className="nm-command-preview-body">
         {preview.terminal ? (
           <CopyableCommand title="Bateria pelo terminal" text={preview.terminal} />
         ) : (
-          <p className="cobre-muted">{preview.terminal_note}</p>
+          <p className="nm-muted">{preview.terminal_note}</p>
         )}
         <CopyableCommand title="Comando do agente por pergunta" text={preview.agent} />
       </div>

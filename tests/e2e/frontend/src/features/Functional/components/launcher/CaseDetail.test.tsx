@@ -82,7 +82,7 @@ describe("CaseDetail", () => {
     expect(screen.getByRole("heading", { name: "Páginas" })).toBeInTheDocument();
     expect(screen.getByText("math/sddp").tagName).toBe("STRONG");
     expect(screen.getByText("overview").tagName).toBe("CODE");
-    expect(document.querySelector(".cobre-markdown script")).toBeNull();
+    expect(document.querySelector(".nm-markdown script")).toBeNull();
   });
 
   it("cada tool chamada com argumentos abre e fecha; sem argumentos, é só a linha", () => {

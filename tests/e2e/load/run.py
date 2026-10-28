@@ -18,6 +18,7 @@ temporária do run, dentro de ``--work-dir``, apagada ao fim, inclusive em erro 
 O launcher passa uma ``--work-dir`` própria e a apaga depois que a árvore do motor morre:
 um cancelamento mata o motor sem dar tempo de limpar.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -113,12 +114,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         required=True,
         help=(
-            f"Sessões simultâneas (tools: 1..{MAX_CONCURRENCY}; "
-            f"agent: 1..{MAX_AGENT_CONCURRENCY})."
+            f"Sessões simultâneas (tools: 1..{MAX_CONCURRENCY}; agent: 1..{MAX_AGENT_CONCURRENCY})."
         ),
     )
     parser.add_argument(
-        "--duration", type=float, required=True, help=f"Janela de carga em segundos (1..{MAX_DURATION_S:g})."
+        "--duration",
+        type=float,
+        required=True,
+        help=f"Janela de carga em segundos (1..{MAX_DURATION_S:g}).",
     )
     parser.add_argument(
         "--iterations",
@@ -157,7 +160,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--group", default=None, help="Só agent: um grupo (o da tool esperada: deck, docs, ...)."
     )
     parser.add_argument(
-        "--tags", default=None, help="Só agent: tags separadas por vírgula (casos com qualquer uma)."
+        "--tags",
+        default=None,
+        help="Só agent: tags separadas por vírgula (casos com qualquer uma).",
     )
     parser.add_argument(
         "--no-warmup",
@@ -165,16 +170,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Não aquece cada cliente: as primeiras chamadas (frias) entram nas métricas.",
     )
     parser.add_argument("--no-save", action="store_true", help="Não grava em results/load/.")
-    parser.add_argument("--fixtures", type=Path, default=DEFAULT_FIXTURES, help="Raiz das fixtures.")
     parser.add_argument(
-        "--results-dir", type=Path, default=DEFAULT_RESULTS, help="Pasta de results (grava em load/)."
+        "--fixtures", type=Path, default=DEFAULT_FIXTURES, help="Raiz das fixtures."
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=Path,
+        default=DEFAULT_RESULTS,
+        help="Pasta de results (grava em load/).",
     )
     parser.add_argument(
         "--server-command",
         default=None,
         help="Comando do servidor (default: o Python do .venv do projeto com -m novomodelo_mcp).",
     )
-    parser.add_argument("--server-log", type=Path, default=None, help="Arquivo para o stderr dos servidores.")
+    parser.add_argument(
+        "--server-log", type=Path, default=None, help="Arquivo para o stderr dos servidores."
+    )
     parser.add_argument(
         "--work-dir",
         type=Path,
@@ -280,7 +292,8 @@ def format_agent_report(record: dict[str, Any]) -> str:
     lines = [
         f"Carga {record['load_id']} (agent, {record['agent']['provider']}): "
         f"{sessions['requested']} sessão(ões), {record['cases']['selection']}, "
-        f"{record['duration_seconds']:.1f} s" + (" (interrompida)" if record["interrupted"] else ""),
+        f"{record['duration_seconds']:.1f} s"
+        + (" (interrompida)" if record["interrupted"] else ""),
         f"Sessões: {sessions['started']}/{sessions['requested']} preparadas em "
         f"{sessions['setup_ms'] / 1000:.1f} s",
         f"Total: {totals['calls']} execuções; aprovados {statuses['pass']}, parciais "

@@ -8,6 +8,7 @@ Implements:
 - Req 8.2: Persistência em tests/e2e/results/{batch_id}.json
 - Req 8.3: Metadados obrigatórios no Batch_Result
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -205,7 +206,7 @@ class ResultStore:
         if not batch_path.exists():
             raise FileNotFoundError(f"Batch not found: {batch_id}")
 
-        with open(batch_path, "r", encoding="utf-8") as f:
+        with open(batch_path, encoding="utf-8") as f:
             data = json.load(f)
 
         return self._dict_to_batch(data)
@@ -222,7 +223,7 @@ class ResultStore:
         if not self.index_path.exists():
             return []
 
-        with open(self.index_path, "r", encoding="utf-8") as f:
+        with open(self.index_path, encoding="utf-8") as f:
             index = json.load(f)
 
         # Return batches sorted by timestamp (most recent first)
@@ -286,8 +287,7 @@ class ResultStore:
         batch_conjunto = self.conjunto_of(batch)
         if conjunto is not None and conjunto != batch_conjunto:
             raise ValueError(
-                f"Bateria {batch_id} é do conjunto {batch_conjunto}, "
-                f"não de {conjunto}"
+                f"Bateria {batch_id} é do conjunto {batch_conjunto}, não de {conjunto}"
             )
 
         baselines = self._read_baseline_map()
@@ -367,7 +367,7 @@ class ResultStore:
         return self._git_sha
 
     def _get_version(self) -> str:
-        """Obtém versão do pacote cobre-mcp.
+        """Obtém versão do pacote novomodelo-mcp.
 
         Returns:
             Versão do pacote, ou "unknown" se não disponível.
@@ -375,7 +375,8 @@ class ResultStore:
         if self._version is None:
             try:
                 from importlib.metadata import version
-                self._version = version("cobre-mcp")
+
+                self._version = version("novomodelo-mcp")
             except Exception:
                 self._version = "unknown"
         return self._version
@@ -390,7 +391,7 @@ class ResultStore:
         """
         # Load existing index or create new
         if self.index_path.exists():
-            with open(self.index_path, "r", encoding="utf-8") as f:
+            with open(self.index_path, encoding="utf-8") as f:
                 index = json.load(f)
         else:
             index = {"batches": []}
@@ -399,7 +400,7 @@ class ResultStore:
         batch_summary = {
             "batch_id": batch.batch_id,
             "timestamp": batch.timestamp,
-            "version": batch.cobre_mcp_version,
+            "version": batch.mcp_version,
             "conjunto": self.conjunto_of(batch),
             "summary": {
                 "total": batch.total_tests,
@@ -411,10 +412,7 @@ class ResultStore:
         }
 
         # Remove existing entry with same batch_id if any
-        index["batches"] = [
-            b for b in index["batches"]
-            if b.get("batch_id") != batch.batch_id
-        ]
+        index["batches"] = [b for b in index["batches"] if b.get("batch_id") != batch.batch_id]
 
         # Add new batch
         index["batches"].append(batch_summary)
@@ -435,7 +433,7 @@ class ResultStore:
         return {
             "batch_id": batch.batch_id,
             "timestamp": batch.timestamp,
-            "cobre_mcp_version": batch.cobre_mcp_version,
+            "mcp_version": batch.mcp_version,
             "git_commit_sha": batch.git_commit_sha,
             "environment": batch.environment,
             "conjunto": batch.conjunto,
@@ -445,17 +443,13 @@ class ResultStore:
             "failed": batch.failed,
             "skipped": batch.skipped,
             "timeout": batch.timeout,
-            "test_results": [
-                self._test_result_to_dict(tr) for tr in batch.test_results
-            ],
+            "test_results": [self._test_result_to_dict(tr) for tr in batch.test_results],
             "metrics": dataclasses.asdict(batch.metrics),
             "metrics_by_tag": {
-                tag: dataclasses.asdict(m)
-                for tag, m in batch.metrics_by_tag.items()
+                tag: dataclasses.asdict(m) for tag, m in batch.metrics_by_tag.items()
             },
             "metrics_by_group": {
-                group: dataclasses.asdict(m)
-                for group, m in batch.metrics_by_group.items()
+                group: dataclasses.asdict(m) for group, m in batch.metrics_by_group.items()
             },
         }
 
@@ -500,10 +494,7 @@ class ResultStore:
             ValueError: Se campos obrigatórios estão ausentes.
         """
         # Reconstruct test results
-        test_results = [
-            self._dict_to_test_result(tr)
-            for tr in data.get("test_results", [])
-        ]
+        test_results = [self._dict_to_test_result(tr) for tr in data.get("test_results", [])]
 
         # Reconstruct metrics
         metrics_data = data.get("metrics", {})
@@ -540,7 +531,7 @@ class ResultStore:
         return BatchResult(
             batch_id=data["batch_id"],
             timestamp=data["timestamp"],
-            cobre_mcp_version=data.get("cobre_mcp_version", "unknown"),
+            mcp_version=data.get("mcp_version", "unknown"),
             git_commit_sha=data.get("git_commit_sha", "unknown"),
             environment=data.get("environment", "local"),
             total_tests=data.get("total_tests", 0),
@@ -613,12 +604,10 @@ class ResultStore:
             "pct_correct_result": batch.metrics.pct_correct_result,
             "avg_latency_ms": batch.metrics.avg_latency_ms,
             "metrics_by_tag": {
-                tag: dataclasses.asdict(m)
-                for tag, m in batch.metrics_by_tag.items()
+                tag: dataclasses.asdict(m) for tag, m in batch.metrics_by_tag.items()
             },
             "metrics_by_group": {
-                group: dataclasses.asdict(m)
-                for group, m in batch.metrics_by_group.items()
+                group: dataclasses.asdict(m) for group, m in batch.metrics_by_group.items()
             },
             "alerts": alerts,
         }
@@ -698,7 +687,7 @@ class ResultStore:
             return []
 
         records: list[dict[str, Any]] = []
-        with open(self.history_path, "r", encoding="utf-8") as f:
+        with open(self.history_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -731,7 +720,7 @@ class ResultStore:
             current: Métricas da bateria atual.
 
         Returns:
-            Dict com trends: trend_mcp_used, trend_correct_tool, 
+            Dict com trends: trend_mcp_used, trend_correct_tool,
             trend_correct_result, trend_latency.
         """
         # Default to stable if no history
@@ -773,7 +762,7 @@ class ResultStore:
 
         # Calculate trends for latency (inverted - lower is better)
         # improving: current < avg
-        # stable: within 5% of avg  
+        # stable: within 5% of avg
         # degrading: current > avg + 5%
         def calc_latency_trend(current_val: float, avg_val: float) -> str:
             if avg_val == 0:
@@ -786,18 +775,12 @@ class ResultStore:
             else:
                 return "stable"
 
-        trends["trend_mcp_used"] = calc_pct_trend(
-            current.pct_mcp_used, avg_mcp_used
-        )
-        trends["trend_correct_tool"] = calc_pct_trend(
-            current.pct_correct_tool, avg_correct_tool
-        )
+        trends["trend_mcp_used"] = calc_pct_trend(current.pct_mcp_used, avg_mcp_used)
+        trends["trend_correct_tool"] = calc_pct_trend(current.pct_correct_tool, avg_correct_tool)
         trends["trend_correct_result"] = calc_pct_trend(
             current.pct_correct_result, avg_correct_result
         )
-        trends["trend_latency"] = calc_latency_trend(
-            current.avg_latency_ms, avg_latency
-        )
+        trends["trend_latency"] = calc_latency_trend(current.avg_latency_ms, avg_latency)
 
         return trends
 
@@ -844,7 +827,7 @@ class ResultStore:
         return BatchResult(
             batch_id=batch_id,
             timestamp=timestamp,
-            cobre_mcp_version=self._get_version(),
+            mcp_version=self._get_version(),
             git_commit_sha=self._get_git_sha(),
             environment=environment,
             total_tests=len(test_results),
@@ -911,9 +894,7 @@ class ResultStore:
             p95_latency_ms=p95_latency_ms,
         )
 
-    def _calculate_metrics_by_tag(
-        self, results: list[TestResult]
-    ) -> dict[str, TagMetrics]:
+    def _calculate_metrics_by_tag(self, results: list[TestResult]) -> dict[str, TagMetrics]:
         """Calcula métricas agregadas por tag.
 
         Implements Req 9.2: Para cada tag, totais de passed, failed,
@@ -952,9 +933,7 @@ class ResultStore:
 
         return metrics_by_tag
 
-    def _calculate_metrics_by_group(
-        self, results: list[TestResult]
-    ) -> dict[str, GroupMetrics]:
+    def _calculate_metrics_by_group(self, results: list[TestResult]) -> dict[str, GroupMetrics]:
         """Calcula métricas por grupo de tools.
 
         Implements Req 9.3: Métricas por grupo (bridge_*, deck_*, docs_*,

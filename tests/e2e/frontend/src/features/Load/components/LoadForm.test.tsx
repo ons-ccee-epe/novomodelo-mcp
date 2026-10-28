@@ -196,7 +196,7 @@ describe("LoadForm", () => {
   it("mostra os selos: grava, pesada ou os dois; as leves não têm selo", () => {
     render(<LoadForm tools={TOOLS} limits={LIMITS} disabled={false} onStart={vi.fn()} />);
     const slot = (name: string) =>
-      screen.getByRole("checkbox", { name }).closest(".cobre-load-tool") as HTMLElement;
+      screen.getByRole("checkbox", { name }).closest(".nm-load-tool") as HTMLElement;
 
     expect(within(slot("deck_edit_json")).getByText("grava · cópia por sessão")).toBeInTheDocument();
     expect(within(slot("deck_edit_json")).queryByText("pesada")).not.toBeInTheDocument();
@@ -208,7 +208,7 @@ describe("LoadForm", () => {
     expect(
       within(slot("bridge_convert_newave")).getByText("grava · cópia por sessão"),
     ).toBeInTheDocument();
-    expect(slot("deck_list").querySelector(".cobre-load-badge")).toBeNull();
+    expect(slot("deck_list").querySelector(".nm-load-badge")).toBeNull();
   });
 
   it("a legenda não diz mais que o mix é somente leitura", () => {

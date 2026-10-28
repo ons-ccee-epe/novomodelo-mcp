@@ -1,4 +1,5 @@
 """Testes do motor do modo agent com runners falsos (sem agente real nem tokens)."""
+
 from __future__ import annotations
 
 import json
@@ -93,7 +94,9 @@ class TestConfig:
         assert config.to_dict()["mode"] == "agent"
 
     def test_selection_is_kept_in_the_dict(self) -> None:
-        config = AgentLoadConfig(concurrency=1, duration_s=10, selection=CaseSelection(group="docs"))
+        config = AgentLoadConfig(
+            concurrency=1, duration_s=10, selection=CaseSelection(group="docs")
+        )
         assert config.to_dict()["selection"] == {"case_id": None, "group": "docs", "tags": None}
 
 
@@ -128,7 +131,9 @@ class TestExecution:
 
     def test_tool_calls_are_counted_per_execution(self) -> None:
         factory = _Factory(
-            respond=lambda case: make_query_result(case, tools=("docs_list", "read_file", "docs_read"))
+            respond=lambda case: make_query_result(
+                case, tools=("docs_list", "read_file", "docs_read")
+            )
         )
         sample = _runner(factory=factory).run().samples[0]
         assert (sample.tool_calls, sample.mcp_calls) == (3, 2)
@@ -137,13 +142,20 @@ class TestExecution:
         ("result", "outcome", "status", "message"),
         [
             (lambda c: make_query_result(c, status="timeout"), "timeout", "timeout", "encerrada"),
-            (lambda c: make_query_result(c, tools=(), response=""), "error", "error", "sem resposta"),
+            (
+                lambda c: make_query_result(c, tools=(), response=""),
+                "error",
+                "error",
+                "sem resposta",
+            ),
             (
                 lambda c: make_query_result(
                     c,
                     tools=(),
                     response="",
-                    stdout=json.dumps({"type": "result", "is_error": True, "result": "429 rate limit"}),
+                    stdout=json.dumps(
+                        {"type": "result", "is_error": True, "result": "429 rate limit"}
+                    ),
                 ),
                 "error",
                 "error",
@@ -265,14 +277,20 @@ class TestAgentFailure:
     def test_mcp_server_that_did_not_connect_is_an_error_even_with_tool_calls(
         self, status: str
     ) -> None:
-        init = {"type": "system", "subtype": "init",
-                "mcp_servers": [{"name": "novomodelo", "status": status}]}
+        init = {
+            "type": "system",
+            "subtype": "init",
+            "mcp_servers": [{"name": "novomodelo", "status": status}],
+        }
         result = make_query_result(CASE_A, tools=("Glob", "Bash"), stdout=json.dumps(init))
         assert f"não conectou no agente (status: {status})" in agent_failure(result)
 
     def test_connected_mcp_server_is_not_a_failure(self) -> None:
-        init = {"type": "system", "subtype": "init",
-                "mcp_servers": [{"name": "novomodelo", "status": "connected"}]}
+        init = {
+            "type": "system",
+            "subtype": "init",
+            "mcp_servers": [{"name": "novomodelo", "status": "connected"}],
+        }
         assert agent_failure(make_query_result(CASE_A, stdout=json.dumps(init))) is None
 
     def test_stderr_tail_is_kept_in_the_message(self) -> None:
@@ -308,13 +326,13 @@ class TestPreflightPlan:
         from tests.e2e.load.mix import ToolHints
 
         fixtures = tmp_path / "fixtures"
-        deck = fixtures / "newave" / "cobre-caso-reduzido"
+        deck = fixtures / "newave" / "novomodelo-caso-reduzido"
         deck.mkdir(parents=True)
         (deck / "config.json").write_text("{}", encoding="utf-8")
         cases = tmp_path / "cases.yaml"
         cases.write_text(
             "- id: deck-edit-json\n"
-            "  query: No caso {FIXTURES}/newave/cobre-caso-reduzido, edite o config.json\n"
+            "  query: No caso {FIXTURES}/newave/novomodelo-caso-reduzido, edite o config.json\n"
             "  expected: {uses_mcp: true, tool: deck_edit_json, status: ok}\n"
             "- id: docs-list-all\n"
             "  query: Liste as docs\n"
@@ -334,7 +352,7 @@ class TestPreflightPlan:
         result = make_preflight(_config(), fixtures, lister, cases, work_dir=tmp_path)()
         assert [c.id for c in result.selection.cases] == ["deck-edit-json", "docs-list-all"]
         assert result.sandbox_plan.enabled
-        assert result.sandbox_plan.subtrees == ("newave/cobre-caso-reduzido",)
+        assert result.sandbox_plan.subtrees == ("newave/novomodelo-caso-reduzido",)
 
     def test_a_read_only_selection_needs_no_copy(self, tmp_path) -> None:
         from tests.e2e.load.agent_setup import make_preflight

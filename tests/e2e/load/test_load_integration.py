@@ -1,10 +1,11 @@
 """Motor de carga contra um servidor MCP falso via stdio real (SDK ``mcp``, sem novomodelo).
 
-Cobre o que os fakes em processo não alcançam: o transporte stdio de verdade, o
+Novomodelo o que os fakes em processo não alcançam: o transporte stdio de verdade, o
 timeout por chamada com recriação do cliente e o encerramento da árvore de
 processos do servidor. Pula se o SDK ``mcp`` não está instalado. A carga contra o
 servidor real roda só com ``LOAD_E2E_REAL=1``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,7 +40,10 @@ def _server_processes(marker: str) -> list[str]:
         )
         out = subprocess.run(
             ["powershell", "-NoProfile", "-Command", script],
-            capture_output=True, text=True, timeout=60, check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
         ).stdout
     else:
         out = subprocess.run(
@@ -83,8 +87,9 @@ def test_a_session_that_stops_answering_times_out_and_is_recreated(
     marker: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(engine, "DRAIN_GRACE_S", 3.0)
-    outcome = asyncio.run(_runner(marker, hang_after=14, duration_s=4, concurrency=1,
-                                  timeout_s=1.0).run())
+    outcome = asyncio.run(
+        _runner(marker, hang_after=14, duration_s=4, concurrency=1, timeout_s=1.0).run()
+    )
 
     timeouts = [s for s in outcome.samples if s.outcome == "timeout"]
     respawns = [s for s in outcome.startups if s["kind"] == "respawn"]
@@ -114,13 +119,28 @@ def _cli(marker: str, results_dir: Path, extra: list[str]) -> subprocess.Popen:
     command_line = subprocess.list2cmdline(server) if os.name == "nt" else shlex.join(server)
     return subprocess.Popen(
         [
-            sys.executable, "-m", "tests.e2e.load.run", "--json-progress",
-            "--concurrency", "1", "--tools", ",".join(TOOLS), "--timeout", "5",
-            "--results-dir", str(results_dir), "--server-command", command_line, *extra,
+            sys.executable,
+            "-m",
+            "tests.e2e.load.run",
+            "--json-progress",
+            "--concurrency",
+            "1",
+            "--tools",
+            ",".join(TOOLS),
+            "--timeout",
+            "5",
+            "--results-dir",
+            str(results_dir),
+            "--server-command",
+            command_line,
+            *extra,
         ],
         cwd=Path(__file__).resolve().parents[3],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, encoding="utf-8",
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
     )
 
 
@@ -136,7 +156,9 @@ def test_cli_json_mode_end_to_end_writes_the_run_and_reports_events(
     assert kinds[-1] == "saved"
     assert "progress" in kinds
     assert {e["phase"] for e in events if e["event"] == "progress"} >= {"preflight", "running"}
-    saved = json.loads((tmp_path / "load" / f"{events[-1]['load_id']}.json").read_text(encoding="utf-8"))
+    saved = json.loads(
+        (tmp_path / "load" / f"{events[-1]['load_id']}.json").read_text(encoding="utf-8")
+    )
     assert saved["totals"]["calls"] > 10
     assert saved["server"]["command"][0] == sys.executable
     assert (tmp_path / "load" / "index.json").exists()
@@ -167,8 +189,9 @@ def test_real_server_short_load(tmp_path: Path) -> None:
     factory = stdio_client_factory(
         command, args, {WORKSPACE_ENV: str(fixtures)}, open(os.devnull, "w", encoding="utf-8")
     )
-    config = LoadConfig(concurrency=1, duration_s=3, tools=("docs_list", "schema_list"),
-                        timeout_s=60)
+    config = LoadConfig(
+        concurrency=1, duration_s=3, tools=("docs_list", "schema_list"), timeout_s=60
+    )
     outcome = asyncio.run(LoadRunner(config, fixtures, factory).run())
     assert outcome.samples
     assert all(s.outcome == "ok" for s in outcome.samples)

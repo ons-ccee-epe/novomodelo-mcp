@@ -1,4 +1,4 @@
-"""Query E2E Test Framework para <repositório anterior>.
+"""Query E2E Test Framework para novomodelo-mcp.
 
 Este módulo implementa um framework de testes E2E via query para validar que o
 Kiro/Claude usa o MCP do novomodelo quando deveria, em vez de ler arquivos
@@ -33,7 +33,7 @@ from tests.e2e.queries.models import (
     ValidationSpec,
 )
 from tests.e2e.queries.runner import QueryRunner
-from tests.e2e.queries.store import ResultStore, TOOL_GROUPS
+from tests.e2e.queries.store import TOOL_GROUPS, ResultStore
 from tests.e2e.queries.validator import (
     MCP_TOOLS,
     NATIVE_TOOLS,

@@ -49,8 +49,8 @@ export function ConjuntoEvolution({ batch, all, baselines }: Props) {
   if (data.length < 2) return null;
 
   return (
-    <section className="cobre-panel" aria-label="Evolução do conjunto">
-      <h3 className="cobre-section-title">Evolução do conjunto</h3>
+    <section className="nm-panel" aria-label="Evolução do conjunto">
+      <h3 className="nm-section-title">Evolução do conjunto</h3>
       <ResponsiveContainer width="100%" height={CHART_HEIGHT_PX}>
         <LineChart
           data={data}
@@ -74,17 +74,17 @@ export function ConjuntoEvolution({ batch, all, baselines }: Props) {
             type="linear"
             dataKey="rate"
             name="Aprovação"
-            stroke="var(--cobre-primary)"
+            stroke="var(--nm-primary)"
             strokeWidth={2}
-            dot={{ r: 3, fill: "var(--cobre-primary)" }}
+            dot={{ r: 3, fill: "var(--nm-primary)" }}
           />
           {baseline && baseline.rate !== null && (
             <ReferenceDot
               x={baseline.label}
               y={baseline.rate}
               r={7}
-              fill="var(--cobre-partial)"
-              stroke="var(--cobre-text)"
+              fill="var(--nm-partial)"
+              stroke="var(--nm-text)"
               label={{ value: "baseline", fontSize: 10, position: "top" }}
             />
           )}

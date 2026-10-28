@@ -1,4 +1,5 @@
 """Data models para o framework de avaliação de tools MCP."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -75,7 +76,7 @@ class MetricRecord:
         timestamp: ISO 8601 timestamp
         environment: "local" ou URL do servidor
         error_message: Mensagem de erro (se houver)
-        cobre_mcp_version: Versão do pacote cobre-mcp
+        mcp_version: Versão do pacote novomodelo-mcp
         git_commit_sha: SHA do commit atual
     """
 
@@ -86,7 +87,7 @@ class MetricRecord:
     timestamp: str
     environment: str
     error_message: str | None = None
-    cobre_mcp_version: str = "unknown"
+    mcp_version: str = "unknown"
     git_commit_sha: str = "unknown"
 
     def to_dict(self) -> dict[str, Any]:
@@ -99,7 +100,7 @@ class MetricRecord:
             "timestamp": self.timestamp,
             "environment": self.environment,
             "error_message": self.error_message,
-            "cobre_mcp_version": self.cobre_mcp_version,
+            "mcp_version": self.mcp_version,
             "git_commit_sha": self.git_commit_sha,
         }
 
@@ -114,14 +115,17 @@ class MetricRecord:
             timestamp=data["timestamp"],
             environment=data["environment"],
             error_message=data.get("error_message"),
-            cobre_mcp_version=data.get("cobre_mcp_version", "unknown"),
+            mcp_version=data.get("mcp_version", "unknown"),
             git_commit_sha=data.get("git_commit_sha", "unknown"),
         )
 
     @classmethod
     def from_execution_result(
-        cls, result: ExecutionResult, environment: str,
-        version: str = "unknown", git_sha: str = "unknown"
+        cls,
+        result: ExecutionResult,
+        environment: str,
+        version: str = "unknown",
+        git_sha: str = "unknown",
     ) -> MetricRecord:
         """Cria MetricRecord a partir de ExecutionResult."""
         return cls(
@@ -132,6 +136,6 @@ class MetricRecord:
             timestamp=result.timestamp.isoformat(),
             environment=environment,
             error_message=result.failure_reason,
-            cobre_mcp_version=version,
+            mcp_version=version,
             git_commit_sha=git_sha,
         )

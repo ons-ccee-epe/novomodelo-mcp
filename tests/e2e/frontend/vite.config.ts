@@ -49,7 +49,7 @@ function resultsDataPlugin(): Plugin {
   }
 
   return {
-    name: "cobre-results-data",
+    name: "nm-results-data",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ? req.url.split("?")[0] : "";

@@ -11,6 +11,7 @@ Cada carga recebe uma ``--work-dir`` criada aqui (pastas das sessões e cópias 
 fixtures), apagada depois que a árvore do motor termina: matar o motor no cancelamento não
 lhe dá tempo de limpar.
 """
+
 from __future__ import annotations
 
 import collections

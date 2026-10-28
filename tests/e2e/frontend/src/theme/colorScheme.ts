@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 
 export type ColorScheme = "light" | "dark";
 
-const STORAGE_KEY = "cobre-color-scheme";
+const STORAGE_KEY = "nm-color-scheme";
 
 function stored(): ColorScheme | null {
   try {

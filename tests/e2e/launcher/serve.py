@@ -11,6 +11,7 @@ Variaveis de ambiente relevantes (herdadas pelo subprocess do provedor):
     QUERY_TIMEOUT_S              -> força um timeout unico; sem ele, cada caso usa o
                                     timeout_s do cases.yaml (por caso/grupo)
 """
+
 from __future__ import annotations
 
 import argparse

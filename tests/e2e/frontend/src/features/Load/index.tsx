@@ -11,7 +11,7 @@ export function Load() {
   const run = launcher.run;
 
   return (
-    <div className="cobre-shell">
+    <div className="nm-shell">
       <LoadLauncher launcher={launcher} />
       {run && (launcher.busy || run.status !== "pending") && (
         <LoadProgress

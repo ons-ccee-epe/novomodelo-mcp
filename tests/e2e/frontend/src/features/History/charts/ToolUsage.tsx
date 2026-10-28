@@ -25,7 +25,7 @@ export function ToolUsage({ batch }: { batch: BatchResult }) {
         />
         <YAxis stroke={AXIS_LINE} allowDecimals={false} tick={AXIS_TICK} />
         <Tooltip {...TOOLTIP} />
-        <Bar dataKey="calls" name="Chamadas" fill="var(--cobre-primary)" maxBarSize={MAX_BAR_PX} />
+        <Bar dataKey="calls" name="Chamadas" fill="var(--nm-primary)" maxBarSize={MAX_BAR_PX} />
       </BarChart>
     </ResponsiveContainer>
   );

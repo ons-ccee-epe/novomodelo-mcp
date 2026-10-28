@@ -16,7 +16,7 @@ describe("LoadSummaryCards", () => {
         }}
       />,
     );
-    const card = screen.getByText("Sessões simultâneas").closest(".cobre-card");
+    const card = screen.getByText("Sessões simultâneas").closest(".nm-card");
     expect(card).toHaveTextContent("4");
   });
 

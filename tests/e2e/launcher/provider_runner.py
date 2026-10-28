@@ -13,6 +13,7 @@ conforme o provedor resolvido. Sobrescreve:
 A execucao via subprocess e a captura de stdout/stderr sao herdadas sem
 alteracao. O frontend ve exatamente a mesma bateria, qualquer que seja o provedor.
 """
+
 from __future__ import annotations
 
 import json
@@ -58,7 +59,7 @@ class ProviderQueryRunner(QueryRunner):
     def _validate_kiro_cli(self) -> None:
         """Valida o binario do provedor escolhido (nao fixo em kiro-cli).
 
-        O nome do metodo e herdado por compatibilidade; a validacao agora cobre
+        O nome do metodo e herdado por compatibilidade; a validacao agora abrange
         qualquer provedor. O ProviderInfo ja garante installed=True na resolucao,
         entao aqui apenas reafirmamos.
 
@@ -133,7 +134,7 @@ class ProviderQueryRunner(QueryRunner):
     def _strip_mcp_prefix(name: str) -> str:
         """Normaliza o nome da tool para o nome bare (casa com MCP_TOOLS).
 
-        Cobre os dois prefixos observados:
+        Novomodelo os dois prefixos observados:
           - claude:   mcp__<server>__<tool>  -> <tool>
           - kiro-cli: @<server>/<tool>       -> <tool>
         """
@@ -449,7 +450,10 @@ class ProviderQueryRunner(QueryRunner):
                     final_text = text
             elif etype == "sessionUpdate":
                 update = evt.get("data", {}).get("update", {})
-                if isinstance(update, dict) and update.get("sessionUpdate") == "agent_message_chunk":
+                if (
+                    isinstance(update, dict)
+                    and update.get("sessionUpdate") == "agent_message_chunk"
+                ):
                     content = update.get("content", {})
                     if isinstance(content, dict) and isinstance(content.get("text"), str):
                         chunks.append(content["text"])

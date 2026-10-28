@@ -1,4 +1,5 @@
 """Testes unitários de percentis, agregação e série temporal da carga."""
+
 from __future__ import annotations
 
 import pytest
@@ -54,7 +55,12 @@ class TestSummarize:
             Sample("a", 0.3, 60000, "timeout", "sem resposta"),
         ]
         summary = summarize(samples, duration_s=2.0)
-        assert (summary["calls"], summary["ok"], summary["errors"], summary["timeouts"]) == (4, 2, 1, 1)
+        assert (summary["calls"], summary["ok"], summary["errors"], summary["timeouts"]) == (
+            4,
+            2,
+            1,
+            1,
+        )
         assert summary["error_rate"] == 0.5
         assert summary["throughput_cps"] == 2.0
 
@@ -99,7 +105,11 @@ class TestTimeSeries:
         assert series[4]["calls"] == 1
 
     def test_failed_counts_errors_and_timeouts(self) -> None:
-        samples = [Sample("a", 0.0, 10, "error"), Sample("a", 0.1, 10, "timeout"), _ok("a", 0.2, 10)]
+        samples = [
+            Sample("a", 0.0, 10, "error"),
+            Sample("a", 0.1, 10, "timeout"),
+            _ok("a", 0.2, 10),
+        ]
         assert time_series(samples, 1.0)[0]["failed"] == 2
 
 

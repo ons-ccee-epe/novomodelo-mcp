@@ -1,11 +1,11 @@
 """Persistência de métricas de execução em formato JSONL."""
+
 from __future__ import annotations
 
 import json
 import os
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from .models import ExecutionResult, MetricRecord
 
@@ -14,7 +14,7 @@ class MetricStore:
     """Armazena métricas de execução em arquivo JSONL (append-only).
 
     Uso:
-        store = MetricStore()  # usa path padrão ou COBRE_MCP_METRICS_PATH
+        store = MetricStore()  # usa path padrão ou NOVOMODELO_MCP_METRICS_PATH
         store.append(result, environment="local")
         history = store.read_all()
     """
@@ -26,12 +26,12 @@ class MetricStore:
 
         Args:
             path: Caminho do arquivo JSONL. Se None, usa env var
-                  COBRE_MCP_METRICS_PATH ou path padrão.
+                  NOVOMODELO_MCP_METRICS_PATH ou path padrão.
         """
         if path is not None:
             self.path = Path(path)
         else:
-            env_path = os.environ.get("COBRE_MCP_METRICS_PATH")
+            env_path = os.environ.get("NOVOMODELO_MCP_METRICS_PATH")
             if env_path:
                 self.path = Path(env_path)
             else:
@@ -100,7 +100,7 @@ class MetricStore:
             return []
 
         records = []
-        with open(self.path, "r", encoding="utf-8") as f:
+        with open(self.path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -150,11 +150,12 @@ class MetricStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _get_version(self) -> str:
-        """Obtém versão do pacote cobre-mcp."""
+        """Obtém versão do pacote novomodelo-mcp."""
         if self._version is None:
             try:
                 from importlib.metadata import version
-                self._version = version("cobre-mcp")
+
+                self._version = version("novomodelo-mcp")
             except Exception:
                 self._version = "unknown"
         return self._version

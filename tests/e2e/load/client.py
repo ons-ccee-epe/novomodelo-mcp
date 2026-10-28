@@ -4,6 +4,7 @@ Cada ``LoadClient`` abre e fecha dentro da mesma task: ``stdio_client`` e
 ``ClientSession`` usam task groups do anyio, que não podem ser encerrados por
 outra task.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -132,7 +133,9 @@ class McpStdioClient:
         except Exception as exc:  # noqa: BLE001 - uma chamada falha não derruba o worker
             error = getattr(exc, "error", None)
             if getattr(error, "code", None) == _SDK_TIMEOUT_CODE:
-                return CallOutcome("timeout", elapsed_ms(), f"sem resposta em {timeout_s:g} s", True)
+                return CallOutcome(
+                    "timeout", elapsed_ms(), f"sem resposta em {timeout_s:g} s", True
+                )
             return CallOutcome(
                 "error", elapsed_ms(), f"{type(exc).__name__}: {exc}"[:_ERROR_CHARS], True
             )

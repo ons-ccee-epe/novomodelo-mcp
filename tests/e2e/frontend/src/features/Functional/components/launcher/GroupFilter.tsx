@@ -21,11 +21,11 @@ export function GroupFilter({
   onRunGroup,
 }: Props) {
   return (
-    <div className="cobre-launcher-groups">
-      <span className="cobre-field-label">Grupo</span>
+    <div className="nm-launcher-groups">
+      <span className="nm-field-label">Grupo</span>
       <button
         type="button"
-        className="cobre-btn cobre-btn-ghost"
+        className="nm-btn nm-btn-ghost"
         data-active={selectedGroup === null}
         onClick={() => onSelectGroup(null)}
         disabled={busy}
@@ -36,7 +36,7 @@ export function GroupFilter({
         <button
           key={g}
           type="button"
-          className="cobre-btn cobre-btn-ghost"
+          className="nm-btn nm-btn-ghost"
           data-active={selectedGroup === g}
           onClick={() => onSelectGroup(g)}
           disabled={busy}
@@ -49,7 +49,7 @@ export function GroupFilter({
       {selectedGroup && (
         <button
           type="button"
-          className="cobre-btn cobre-btn-primary cobre-btn-run-group"
+          className="nm-btn nm-btn-primary nm-btn-run-group"
           onClick={() => onRunGroup(selectedGroup)}
           disabled={!canRun}
           title={`Executa os ${visibleCount} caso(s) do grupo ${selectedGroup}`}

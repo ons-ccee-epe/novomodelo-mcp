@@ -1,4 +1,5 @@
 """Cliente MCP unificado para testes locais e remotos."""
+
 from __future__ import annotations
 
 import json
@@ -14,7 +15,7 @@ class MCPClient:
     Modo remoto: (futuro) comunica via HTTP/stdio.
 
     Uso:
-        client = MCPClient()  # usa COBRE_MCP_TARGET ou "local"
+        client = MCPClient()  # usa NOVOMODELO_MCP_TARGET ou "local"
         envelope, elapsed_ms = client.call_tool("bridge_check_newave", src="/path")
     """
 
@@ -23,9 +24,9 @@ class MCPClient:
 
         Args:
             target: "local" para importação direta, URL para servidor remoto.
-                   Se None, usa env var COBRE_MCP_TARGET (default: "local").
+                   Se None, usa env var NOVOMODELO_MCP_TARGET (default: "local").
         """
-        self.target = target or os.environ.get("COBRE_MCP_TARGET", "local")
+        self.target = target or os.environ.get("NOVOMODELO_MCP_TARGET", "local")
         self._server = None
         self._tools: dict[str, Any] = {}
 
@@ -37,12 +38,13 @@ class MCPClient:
     def _init_local(self) -> None:
         """Inicializa cliente local importando o servidor MCP."""
         try:
-            from cobre_mcp.server import build_server
+            from novomodelo_mcp.server import build_server
+
             self._server = build_server()
             self._discover_tools()
         except ImportError as e:
             raise RuntimeError(
-                f"Falha ao importar cobre_mcp: {e}. "
+                f"Falha ao importar novomodelo_mcp: {e}. "
                 "Certifique-se de que o pacote está instalado."
             ) from e
 
@@ -55,7 +57,7 @@ class MCPClient:
         )
 
     def _discover_tools(self) -> None:
-        """Descobre tools disponíveis no servidor local."""
+        """Lista as tools disponíveis no servidor local."""
         if self._server is None:
             return
 
@@ -106,9 +108,10 @@ class MCPClient:
         try:
             # Tenta usar event loop existente ou cria novo
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # Se já tem loop rodando, cria task
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     future = pool.submit(asyncio.run, _async_call())
                     result = future.result(timeout=120)
@@ -149,7 +152,11 @@ class MCPClient:
                 try:
                     return json.loads(first.text)
                 except json.JSONDecodeError:
-                    return {"status": "error", "message": "Resposta não é JSON válido", "raw": first.text}
+                    return {
+                        "status": "error",
+                        "message": "Resposta não é JSON válido",
+                        "raw": first.text,
+                    }
             # Ou pode ser dict direto
             if isinstance(first, dict):
                 return first

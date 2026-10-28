@@ -7,11 +7,11 @@
  * de abrir o server.
  *
  * Fluxo:
- *   1. Executa `python -m tests.e2e.queries.run_queries` na raiz do <repositório anterior>.
+ *   1. Executa `python -m tests.e2e.queries.run_queries` na raiz do novomodelo-mcp.
  *   2. Verifica que results/index.json existe e tem >= 1 bateria.
  *   3. So entao faz spawn do Vite (vite).
  *
- * Se os testes NAO puderem rodar (ex.: CLIs cobre/cobre-bridge ausentes) mas
+ * Se os testes NAO puderem rodar (ex.: CLIs novomodelo/novomodelo-bridge ausentes) mas
  * JA existir pelo menos uma bateria em results/, o server sobe mesmo assim,
  * com um aviso — nunca bloqueia a visualizacao de resultados que ja existem.
  *
@@ -27,7 +27,7 @@ import { readFile, access } from "node:fs/promises";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontendDir = resolve(here, "..");
-// tests/e2e/frontend -> tests/e2e -> tests -> <raiz do <repositório anterior>>
+// tests/e2e/frontend -> tests/e2e -> tests -> <raiz do novomodelo-mcp>
 const projectRoot = resolve(frontendDir, "..", "..", "..");
 const indexJson = resolve(frontendDir, "..", "results", "index.json");
 
@@ -89,7 +89,7 @@ async function main() {
   const after = await countBatches();
   if (after === 0) {
     log("ERRO: nenhuma bateria em tests/e2e/results/ — nao ha o que mostrar.");
-    log("Rode os testes com sucesso ao menos uma vez, ou verifique as CLIs cobre/cobre-bridge.");
+    log("Rode os testes com sucesso ao menos uma vez, ou verifique as CLIs novomodelo/novomodelo-bridge.");
     process.exit(1);
   }
 

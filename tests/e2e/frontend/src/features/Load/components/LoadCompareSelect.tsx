@@ -30,14 +30,14 @@ export function LoadCompareSelect({ runs, selectedId, compareId, onCompare }: Pr
   const selectedMode = selected ? indexEntryMode(selected) : null;
 
   return (
-    <div className="cobre-topbar cobre-load-compare">
-      <div className="cobre-field">
-        <label htmlFor="load-compare-select" className="cobre-field-label">
+    <div className="nm-topbar nm-load-compare">
+      <div className="nm-field">
+        <label htmlFor="load-compare-select" className="nm-field-label">
           Comparar com
         </label>
         <select
           id="load-compare-select"
-          className="cobre-select"
+          className="nm-select"
           value={compareId ?? ""}
           onChange={(e) => onCompare(e.target.value || null)}
         >
@@ -52,7 +52,7 @@ export function LoadCompareSelect({ runs, selectedId, compareId, onCompare }: Pr
         </select>
       </div>
 
-      <button type="button" onClick={() => onCompare(undefined)} className="cobre-reload">
+      <button type="button" onClick={() => onCompare(undefined)} className="nm-reload">
         Comparar com a anterior
       </button>
     </div>

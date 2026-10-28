@@ -25,7 +25,7 @@ function formatDuration(seconds: number): string {
 /** O que se sabe do caso antes de ele rodar: tool esperada, timeout e tags. */
 function PendingMeta({ caseMeta }: { caseMeta: CaseSummary }) {
   return (
-    <dl className="cobre-detail-meta">
+    <dl className="nm-detail-meta">
       <div>
         <dt>Tool esperada</dt>
         <dd>
@@ -43,7 +43,7 @@ function PendingMeta({ caseMeta }: { caseMeta: CaseSummary }) {
           <dt>Tags</dt>
           <dd>
             {caseMeta.tags.map((t) => (
-              <span key={t} className="cobre-tag-chip">
+              <span key={t} className="nm-tag-chip">
                 {t}
               </span>
             ))}
@@ -58,18 +58,18 @@ function PendingMeta({ caseMeta }: { caseMeta: CaseSummary }) {
 export function CaseDetail({ caseMeta, result, running, canRun, onRun }: Props) {
   return (
     <>
-      <div className="cobre-detail-head">
+      <div className="nm-detail-head">
         <div>
-          <h2 className="cobre-detail-question">{caseMeta.query}</h2>
-          <div className="cobre-detail-sub">
-            <code className="cobre-detail-id">{caseMeta.id}</code>
+          <h2 className="nm-detail-question">{caseMeta.query}</h2>
+          <div className="nm-detail-sub">
+            <code className="nm-detail-id">{caseMeta.id}</code>
             {result && (
-              <span className="cobre-status" data-status={result.status}>
+              <span className="nm-status" data-status={result.status}>
                 {statusIcon(result.status)} {STATUS_LABEL[result.status] ?? result.status}
               </span>
             )}
             {running && (
-              <span className="cobre-status" data-status="running">
+              <span className="nm-status" data-status="running">
                 rodando…
               </span>
             )}
@@ -77,7 +77,7 @@ export function CaseDetail({ caseMeta, result, running, canRun, onRun }: Props) 
         </div>
         <button
           type="button"
-          className="cobre-btn cobre-btn-primary"
+          className="nm-btn nm-btn-primary"
           onClick={onRun}
           disabled={!canRun}
           title="Dispara só este caso no provedor selecionado"
@@ -96,7 +96,7 @@ export function CaseDetail({ caseMeta, result, running, canRun, onRun }: Props) 
         <>
           <PendingMeta caseMeta={caseMeta} />
           {!running && (
-            <div className="cobre-muted cobre-detail-hint">
+            <div className="nm-muted nm-detail-hint">
               Este teste ainda não rodou nesta sessão. Clique em “rodar este teste” ou dispare a
               esteira/grupo.
             </div>

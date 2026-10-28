@@ -42,44 +42,44 @@ export function ToolMixPicker({
   const unavailable = listed.length - available.length;
 
   return (
-    <fieldset className="cobre-tool-picker cobre-panel" disabled={disabled}>
-      <legend className="cobre-tool-picker-head">
-        <span className="cobre-panel-title">Tools do mix</span>
+    <fieldset className="nm-tool-picker nm-panel" disabled={disabled}>
+      <legend className="nm-tool-picker-head">
+        <span className="nm-panel-title">Tools do mix</span>
       </legend>
-      <details className="cobre-mix">
-        <summary className="cobre-mix-summary">
+      <details className="nm-mix">
+        <summary className="nm-mix-summary">
           <span>{summary(chosen, available.length, isDefault)}</span>
           {unavailable > 0 && (
-            <span className="cobre-muted" title="Faltam as fontes que essas tools leem">
+            <span className="nm-muted" title="Faltam as fontes que essas tools leem">
               {unavailable} indisponíveis aqui
             </span>
           )}
-          <span className="cobre-mix-edit">Personalizar</span>
+          <span className="nm-mix-edit">Personalizar</span>
         </summary>
-        <div className="cobre-mix-body">
-          <div className="cobre-mix-actions">
-            <button type="button" className="cobre-btn cobre-btn-sm" onClick={onDefault}>
+        <div className="nm-mix-body">
+          <div className="nm-mix-actions">
+            <button type="button" className="nm-btn nm-btn-sm" onClick={onDefault}>
               padrão
             </button>
-            <button type="button" className="cobre-btn cobre-btn-sm" onClick={() => onAll(true)}>
+            <button type="button" className="nm-btn nm-btn-sm" onClick={() => onAll(true)}>
               todas
             </button>
-            <button type="button" className="cobre-btn cobre-btn-sm" onClick={() => onAll(false)}>
+            <button type="button" className="nm-btn nm-btn-sm" onClick={() => onAll(false)}>
               nenhuma
             </button>
           </div>
-          <div className="cobre-muted cobre-load-note">
+          <div className="nm-muted nm-load-note">
             O mix padrão só tem tools que leem e são leves. Marque por sua conta as que gravam
             (rodam numa cópia das fixtures por sessão) ou as pesadas (sobem o bridge ou o solver).
           </div>
           {groups.map(([toolGroup, items]) => (
-            <div key={toolGroup} className="cobre-tool-group">
-              <span className="cobre-muted cobre-tool-group-name">{toolGroup}</span>
-              <div className="cobre-tool-group-items">
+            <div key={toolGroup} className="nm-tool-group">
+              <span className="nm-muted nm-tool-group-name">{toolGroup}</span>
+              <div className="nm-tool-group-items">
                 {items.map((t) => (
-                  <span key={t.tool} className="cobre-load-tool">
+                  <span key={t.tool} className="nm-load-tool">
                     <label
-                      className="cobre-tag-option"
+                      className="nm-tag-option"
                       data-active={selected.has(t.tool) && t.available}
                       title={
                         t.available ? `${t.calls} chamada(s) no mix` : (t.reason ?? "indisponível")
@@ -100,9 +100,9 @@ export function ToolMixPicker({
             </div>
           ))}
           {barred.length > 0 && (
-            <details className="cobre-load-excluded">
-              <summary className="cobre-summary-toggle">Fora da carga ({barred.length})</summary>
-              <ul className="cobre-tool-call-list">
+            <details className="nm-load-excluded">
+              <summary className="nm-summary-toggle">Fora da carga ({barred.length})</summary>
+              <ul className="nm-tool-call-list">
                 {barred.map((t) => (
                   <li key={t.tool}>
                     <code>{t.tool}</code> — {t.reason ?? "fora da carga"}

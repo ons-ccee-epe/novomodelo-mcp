@@ -55,8 +55,8 @@ describe("conjuntoTag e conjuntoTitle", () => {
   });
 
   it("as avulsas têm uma cor só, separada da paleta dos grupos", () => {
-    expect(conjuntoColor("pergunta:q1")).toBe("var(--cobre-set-avulsa)");
-    expect(conjuntoColor("pergunta:q2")).toBe("var(--cobre-set-avulsa)");
+    expect(conjuntoColor("pergunta:q1")).toBe("var(--nm-set-avulsa)");
+    expect(conjuntoColor("pergunta:q2")).toBe("var(--nm-set-avulsa)");
   });
 
   it("o título de uma avulsa é o texto da pergunta", () => {
@@ -80,12 +80,12 @@ describe("conjuntoLabel", () => {
 
 describe("conjuntoColor", () => {
   it("todos usa o token próprio", () => {
-    expect(conjuntoColor("todos")).toBe("var(--cobre-set-todos)");
+    expect(conjuntoColor("todos")).toBe("var(--nm-set-todos)");
   });
 
   it("é estável e fica entre 1 e 8", () => {
     const c = conjuntoColor("grupo:docs");
     expect(conjuntoColor("grupo:docs")).toBe(c);
-    expect(c).toMatch(/^var\(--cobre-set-[1-8]\)$/);
+    expect(c).toMatch(/^var\(--nm-set-[1-8]\)$/);
   });
 });

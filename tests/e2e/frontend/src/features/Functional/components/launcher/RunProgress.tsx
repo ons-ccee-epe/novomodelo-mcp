@@ -31,11 +31,11 @@ export function RunProgress({ run, stopping, onStop, action }: Props) {
   const pct = run.total ? (run.completed / run.total) * 100 : 0;
   const active = !isFinished(run.status);
   return (
-    <div className="cobre-launcher-progress" data-status={run.status}>
-      <div className="cobre-progress-head">
+    <div className="nm-launcher-progress" data-status={run.status}>
+      <div className="nm-progress-head">
         <strong>{statusLabel(run, stopping)}</strong>
-        <span className="cobre-progress-actions">
-          <span className="cobre-muted">
+        <span className="nm-progress-actions">
+          <span className="nm-muted">
             {run.completed}/{run.total || "?"}
             {run.current ? ` · ${run.current}` : ""}
             {run.provider ? ` · ${run.provider}` : ""}
@@ -43,7 +43,7 @@ export function RunProgress({ run, stopping, onStop, action }: Props) {
           {active && (
             <button
               type="button"
-              className="cobre-btn cobre-btn-danger"
+              className="nm-btn nm-btn-danger"
               onClick={onStop}
               disabled={stopping}
               title="Interrompe o teste em andamento e não roda os restantes"
@@ -54,8 +54,8 @@ export function RunProgress({ run, stopping, onStop, action }: Props) {
           {action}
         </span>
       </div>
-      <div className="cobre-progress-bar" aria-hidden>
-        <div className="cobre-progress-fill" style={{ width: `${pct}%` }} />
+      <div className="nm-progress-bar" aria-hidden>
+        <div className="nm-progress-fill" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 """Testes do mix de carga: classes das tools, mix padrão, fontes presentes, dicas do servidor."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,7 +23,7 @@ from tests.e2e.load.mix import (
     writes_files,
 )
 
-DETERM = "newave-determ/cobre-set-24-reduzido-calibrado-determ-2000"
+DETERM = "newave-determ/novomodelo-set-24-reduzido-calibrado-determ-2000"
 
 BARRED = ["run_start", "run_status", "run_logs", "run_cancel", "instalar_novomodelo", "server_info"]
 WRITES = [
@@ -48,11 +49,18 @@ def _touch(root: Path, relative: str) -> None:
 
 @pytest.fixture
 def fixtures(tmp_path: Path) -> Path:
-    for name in ("config.json", "penalties.json", "scenarios/inflow_history.parquet",
-                 "system/hydro_geometry.parquet"):
+    for name in (
+        "config.json",
+        "penalties.json",
+        "scenarios/inflow_history.parquet",
+        "system/hydro_geometry.parquet",
+    ):
         _touch(tmp_path, f"{DETERM}/{name}")
-    for name in ("training/metadata.json", "training/convergence.parquet",
-                 "simulation/costs/part.parquet"):
+    for name in (
+        "training/metadata.json",
+        "training/convergence.parquet",
+        "simulation/costs/part.parquet",
+    ):
         _touch(tmp_path, f"results/sample_run/{name}")
     return tmp_path
 
@@ -126,7 +134,7 @@ class TestSelection:
         copy = tmp_path / "s0" / "fixtures"
         spec = next(s for s in select_specs(all_sources, ["deck_edit_json"]).specs)
         bound = spec.bind(copy)
-        assert Path(bound["path"]) == copy / "newave/cobre-caso-reduzido/config.json"
+        assert Path(bound["path"]) == copy / "newave/novomodelo-caso-reduzido/config.json"
         assert spec.arguments["path"].startswith(str(all_sources.resolve()))
 
     def test_case_init_gets_a_new_folder_per_call(self, tmp_path: Path) -> None:
@@ -136,7 +144,7 @@ class TestSelection:
         assert first["directory"].endswith("1") and second["directory"].endswith("2")
 
     def test_empty_directory_and_missing_file_are_skipped_with_reason(self, tmp_path: Path) -> None:
-        (tmp_path / "newave" / "cobre-caso-reduzido").mkdir(parents=True)
+        (tmp_path / "newave" / "novomodelo-caso-reduzido").mkdir(parents=True)
         selection = select_specs(tmp_path, tools=["deck_list", "deck_read_json"])
         assert selection.specs == []
         reasons = {item.id: item.reason for item in selection.excluded}
@@ -158,8 +166,9 @@ class TestSelection:
             "docs_list": ToolHints(read_only=True, open_world=True),
             "docs_search": ToolHints(read_only=True, open_world=False),
         }
-        selection = select_specs(fixtures, tools=["deck_list", "docs_list", "docs_search"],
-                                 server_tools=hints)
+        selection = select_specs(
+            fixtures, tools=["deck_list", "docs_list", "docs_search"], server_tools=hints
+        )
         assert {spec.tool for spec in selection.specs} == {"docs_search"}
         reasons = {item.tool: item.reason for item in selection.excluded}
         assert "somente leitura" in reasons["deck_list"]
@@ -194,8 +203,12 @@ class TestSelection:
 
 def test_hints_from_tools_reads_the_mcp_annotations() -> None:
     tools = [
-        SimpleNamespace(name="a", annotations=SimpleNamespace(readOnlyHint=True, openWorldHint=False)),
-        SimpleNamespace(name="b", annotations=SimpleNamespace(readOnlyHint=False, openWorldHint=None)),
+        SimpleNamespace(
+            name="a", annotations=SimpleNamespace(readOnlyHint=True, openWorldHint=False)
+        ),
+        SimpleNamespace(
+            name="b", annotations=SimpleNamespace(readOnlyHint=False, openWorldHint=None)
+        ),
         SimpleNamespace(name="c", annotations=None),
     ]
     hints = hints_from_tools(tools)

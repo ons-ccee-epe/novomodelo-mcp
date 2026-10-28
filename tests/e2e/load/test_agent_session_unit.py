@@ -1,4 +1,5 @@
 """Testes do isolamento das sessões de agente: nenhuma grava onde outra lê."""
+
 from __future__ import annotations
 
 import json
@@ -9,10 +10,10 @@ import pytest
 
 from tests.e2e.launcher import provider_runner
 from tests.e2e.launcher.providers import ProviderInfo
+from tests.e2e.load.agent_cases import AgentSelection
 from tests.e2e.load.agent_engine import PreflightResult
 from tests.e2e.load.agent_session import AgentSessionRunner, SessionPaths, prepare_session
 from tests.e2e.load.agent_setup import denied_tools, session_factory
-from tests.e2e.load.agent_cases import AgentSelection
 from tests.e2e.load.fakes import make_case
 from tests.e2e.load.mix import ToolHints
 
@@ -52,7 +53,11 @@ class TestPaths:
         paths = prepare_session(tmp_path, 0, SERVER, "claude")
         env = paths.env()
         assert set(env) == {
-            "NOVOMODELO_MCP_RESPONSE_LOG", "NOVOMODELO_MCP_STATE_DIR", "TEMP", "TMP", "TMPDIR",
+            "NOVOMODELO_MCP_RESPONSE_LOG",
+            "NOVOMODELO_MCP_STATE_DIR",
+            "TEMP",
+            "TMP",
+            "TMPDIR",
         }
         assert all(Path(value).is_relative_to(paths.root) for value in env.values())
         assert paths.tmp.is_dir() and paths.state.is_dir()
@@ -74,7 +79,9 @@ class TestConfigs:
 
     def test_claude_session_gets_its_own_mcp_config(self, tmp_path: Path) -> None:
         paths = prepare_session(tmp_path, 0, SERVER, "claude")
-        server = json.loads(paths.claude_config.read_text(encoding="utf-8"))["mcpServers"]["novomodelo"]
+        server = json.loads(paths.claude_config.read_text(encoding="utf-8"))["mcpServers"][
+            "novomodelo"
+        ]
         assert set(server) == {"command", "args", "env"}
         assert server["env"]["NOVOMODELO_MCP_STATE_DIR"] == str(paths.state)
         assert not paths.kiro_workspace.exists()
@@ -102,7 +109,9 @@ class TestRunner:
         self, tmp_path: Path
     ) -> None:
         paths = prepare_session(tmp_path, 0, SERVER, "claude")
-        runner = AgentSessionRunner(CLAUDE, paths, tmp_path / "fixtures", denied_tools=["deck_edit_json"])
+        runner = AgentSessionRunner(
+            CLAUDE, paths, tmp_path / "fixtures", denied_tools=["deck_edit_json"]
+        )
         cmd = runner._build_command("pergunta")
         assert cmd[0] == "C:/bin/claude.exe" and cmd[-1] == "pergunta"
         assert "--no-session-persistence" in cmd
@@ -206,7 +215,7 @@ class TestMcpStartup:
 
 
 def _fixtures(root: Path) -> Path:
-    deck = root / "fixtures" / "newave" / "cobre-caso-reduzido"
+    deck = root / "fixtures" / "newave" / "novomodelo-caso-reduzido"
     deck.mkdir(parents=True)
     (deck / "config.json").write_text('{"a": 1}', encoding="utf-8")
     return (root / "fixtures").resolve()
@@ -215,9 +224,14 @@ def _fixtures(root: Path) -> Path:
 def _writing_case(fixtures: Path):
     from dataclasses import replace
 
-    case = make_case("deck-edit-json", tool="deck_edit_json",
-                     requires=(str(fixtures / "newave" / "cobre-caso-reduzido"),))
-    return replace(case, query=f"No caso {fixtures / 'newave' / 'cobre-caso-reduzido'}, edite")
+    case = make_case(
+        "deck-edit-json",
+        tool="deck_edit_json",
+        requires=(str(fixtures / "newave" / "novomodelo-caso-reduzido"),),
+    )
+    return replace(
+        case, query=f"No caso {fixtures / 'newave' / 'novomodelo-caso-reduzido'}, edite"
+    )
 
 
 class TestSandbox:
@@ -241,7 +255,7 @@ class TestSandbox:
             assert env["NOVOMODELO_MCP_WORKSPACE"] == str(paths.sandbox.root)
             assert env["NOVOMODELO_MCP_MAX_JOBS"] == "0"
             assert paths.sandbox.root.is_relative_to(paths.root)
-            assert (paths.sandbox.root / "newave/cobre-caso-reduzido/config.json").is_file()
+            assert (paths.sandbox.root / "newave/novomodelo-caso-reduzido/config.json").is_file()
             roots.append(paths.sandbox.root)
         assert roots[0] != roots[1]
 
@@ -256,7 +270,9 @@ class TestSandbox:
         self, tmp_path: Path
     ) -> None:
         paths = prepare_session(tmp_path / "run", 0, SERVER, "claude", None)
-        env = json.loads(paths.claude_config.read_text(encoding="utf-8"))["mcpServers"]["novomodelo"]["env"]
+        env = json.loads(paths.claude_config.read_text(encoding="utf-8"))["mcpServers"][
+            "novomodelo"
+        ]["env"]
         assert paths.sandbox is None
         assert env["NOVOMODELO_MCP_WORKSPACE"] == "C:/fixtures"
         assert env["NOVOMODELO_MCP_MAX_JOBS"] == "0"
@@ -275,22 +291,24 @@ class TestSandbox:
             seen.append(cmd[-1])
             leftovers.append((box / "scratch" / "saida.json").exists())
             (box / "scratch" / "saida.json").write_text("{}", encoding="utf-8")
-            (box / "newave/cobre-caso-reduzido/config.json").write_text("{}", encoding="utf-8")
+            (box / "newave/novomodelo-caso-reduzido/config.json").write_text(
+                "{}", encoding="utf-8"
+            )
             return "completed", "", ""
 
         runner._run_process = run_process  # type: ignore[method-assign]
         case = _writing_case(fixtures)
         runner.execute(case)
-        assert str(box / "newave" / "cobre-caso-reduzido") in seen[0]
+        assert str(box / "newave" / "novomodelo-caso-reduzido") in seen[0]
         assert str(fixtures) not in seen[0]
         runner.execute(case)
         assert leftovers == [False, False]
-        assert (fixtures / "newave/cobre-caso-reduzido/config.json").read_text(
+        assert (fixtures / "newave/novomodelo-caso-reduzido/config.json").read_text(
             encoding="utf-8"
         ) == '{"a": 1}'
         paths.sandbox.reset()
         assert not (box / "scratch" / "saida.json").exists()
-        assert (box / "newave/cobre-caso-reduzido/config.json").read_text(
+        assert (box / "newave/novomodelo-caso-reduzido/config.json").read_text(
             encoding="utf-8"
         ) == '{"a": 1}'
 
@@ -304,8 +322,9 @@ class TestSandbox:
     def test_the_factory_registers_the_copies_for_the_summary(self, tmp_path: Path) -> None:
         fixtures = _fixtures(tmp_path)
         sandboxes: list = []
-        factory = session_factory(CLAUDE, tmp_path / "run", SERVER, fixtures, None,
-                                  sandboxes=sandboxes)
+        factory = session_factory(
+            CLAUDE, tmp_path / "run", SERVER, fixtures, None, sandboxes=sandboxes
+        )
         preflight = PreflightResult(AgentSelection(), {}, sandbox_plan=self._plan(fixtures))
         factory(0, preflight)
         factory(1, preflight)
@@ -321,5 +340,8 @@ class TestSandbox:
         }
         assert denied_tools(hints, sandboxed=True) == ["instalar_novomodelo", "run_start"]
         assert denied_tools(hints, sandboxed=False) == [
-            "case_init", "deck_edit_json", "instalar_novomodelo", "run_start",
+            "case_init",
+            "deck_edit_json",
+            "instalar_novomodelo",
+            "run_start",
         ]

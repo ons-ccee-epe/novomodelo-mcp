@@ -13,7 +13,7 @@ export function ToolsPerQuestion({ batch }: { batch: BatchResult }) {
         <XAxis stroke={AXIS_LINE} dataKey="bucket" tick={AXIS_TICK} />
         <YAxis stroke={AXIS_LINE} allowDecimals={false} tick={AXIS_TICK} />
         <Tooltip {...TOOLTIP} />
-        <Bar dataKey="count" name="Perguntas" fill="var(--cobre-primary)" />
+        <Bar dataKey="count" name="Perguntas" fill="var(--nm-primary)" />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -16,8 +16,8 @@ import { AXIS_TICK, AXIS_LINE, GRID_STROKE, TOOLTIP } from "@/shared/charts/axis
 
 const HEIGHT_PX = 280;
 const LEGEND = [
-  { label: "p95 (ms)", color: "var(--cobre-chart-p95)" },
-  { label: "erros e timeouts", color: "var(--cobre-chart-failed)" },
+  { label: "p95 (ms)", color: "var(--nm-chart-p95)" },
+  { label: "erros e timeouts", color: "var(--nm-chart-failed)" },
 ];
 
 export interface PerToolRow {
@@ -69,20 +69,20 @@ export function LoadPerToolChart({ run }: { run: LoadRun | AgentLoadRun }) {
               yAxisId="ms"
               dataKey="p95_ms"
               name="p95 (ms)"
-              fill="var(--cobre-chart-p95)"
+              fill="var(--nm-chart-p95)"
               isAnimationActive={false}
             />
             <Bar
               yAxisId="err"
               dataKey="failed"
               name="erros e timeouts"
-              fill="var(--cobre-chart-failed)"
+              fill="var(--nm-chart-failed)"
               isAnimationActive={false}
             />
           </BarChart>
         </ResponsiveContainer>
       ) : (
-        <div className="cobre-no-data">Sem chamadas</div>
+        <div className="nm-no-data">Sem chamadas</div>
       )}
     </ChartCard>
   );

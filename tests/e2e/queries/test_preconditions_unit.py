@@ -1,4 +1,5 @@
 """Testes unitários dos pré-requisitos de fonte (requires) dos casos."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -70,10 +71,21 @@ def test_loader_expands_fixtures_in_requires(tmp_path: Path) -> None:
 
 def _result(test_id: str, status: str, mcp_used: bool) -> TestResult:
     return TestResult(
-        test_id=test_id, query="q", expected_tool="deck_list", expected_tools=None,
-        actual_tool="deck_list" if mcp_used else None, all_tool_calls=[], status=status,
-        latency_ms=100.0, tool_latency_ms=None, mcp_used=mcp_used, correct_tool=mcp_used,
-        correct_result=mcp_used, agent_response="", error_message=None, tags=["deck"],
+        test_id=test_id,
+        query="q",
+        expected_tool="deck_list",
+        expected_tools=None,
+        actual_tool="deck_list" if mcp_used else None,
+        all_tool_calls=[],
+        status=status,
+        latency_ms=100.0,
+        tool_latency_ms=None,
+        mcp_used=mcp_used,
+        correct_tool=mcp_used,
+        correct_result=mcp_used,
+        agent_response="",
+        error_message=None,
+        tags=["deck"],
         validation_checks=[],
     )
 

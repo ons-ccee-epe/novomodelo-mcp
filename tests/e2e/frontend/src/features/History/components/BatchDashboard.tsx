@@ -69,8 +69,8 @@ export function BatchDashboard({
     setSummaryError(null);
     try {
       const cards = [...root.querySelectorAll("[data-stat]")].map((c) => ({
-        label: c.querySelector("dt, .cobre-card-label")?.textContent ?? "",
-        value: c.querySelector("dd, .cobre-rate")?.textContent ?? "",
+        label: c.querySelector("dt, .nm-card-label")?.textContent ?? "",
+        value: c.querySelector("dd, .nm-rate")?.textContent ?? "",
       }));
       const charts = [...root.querySelectorAll<HTMLElement>("[data-chart-card]")].flatMap((c) => {
         const svg = chartSvg(c);
@@ -86,7 +86,7 @@ export function BatchDashboard({
   };
 
   return (
-    <section ref={rootRef} className="cobre-batch-dashboard" aria-label="Dashboard da bateria">
+    <section ref={rootRef} className="nm-batch-dashboard" aria-label="Dashboard da bateria">
       <BatchHeader
         batch={batch}
         isBaseline={baselines[conjuntoOf(batch)] === batch.batch_id}
@@ -97,7 +97,7 @@ export function BatchDashboard({
       {[toggleError, summaryError].map(
         (msg) =>
           msg && (
-            <p key={msg} role="alert" className="cobre-run-finished-error">
+            <p key={msg} role="alert" className="nm-run-finished-error">
               {msg}
             </p>
           ),

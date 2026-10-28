@@ -3,6 +3,7 @@
 Cada run sobe uma árvore de processos (agente + servidor MCP, ou N servidores);
 dois ao mesmo tempo esgotam a máquina e falseiam as medições um do outro.
 """
+
 from __future__ import annotations
 
 import threading

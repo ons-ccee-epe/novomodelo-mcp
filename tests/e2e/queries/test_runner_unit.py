@@ -5,13 +5,13 @@ Este módulo testa:
 - _parse_args() conversão de argumentos
 - _extract_agent_response() extração de resposta
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
 
 import pytest
 
-from tests.e2e.queries.models import ToolCall
 from tests.e2e.queries.runner import QueryRunner
 
 
@@ -26,9 +26,9 @@ class TestParseToolCalls:
 
     def test_parse_assistant_tool_use_format(self, runner: QueryRunner):
         """Parseia formato AssistantToolUse completo."""
-        log = '''
+        log = """
         Validating tool uses tool_uses=[AssistantToolUse { tool_use_id: "toolu_bdrk_123abc", name: "deck_list", input: {"case_dir": "/path/to/case"} }]
-        '''
+        """  # noqa: E501 - amostra bruta de log, a quebra alteraria o formato testado
         tool_calls = runner._parse_tool_calls(log)
 
         assert len(tool_calls) == 1
@@ -38,11 +38,11 @@ class TestParseToolCalls:
 
     def test_parse_multiple_tool_calls(self, runner: QueryRunner):
         """Parseia múltiplas tool calls no mesmo log."""
-        log = '''
+        log = """
         Validating tool uses tool_uses=[AssistantToolUse { tool_use_id: "toolu_1", name: "deck_list", input: {} }]
         Some other log line
         Validating tool uses tool_uses=[AssistantToolUse { tool_use_id: "toolu_2", name: "docs_search", input: {"query": "test"} }]
-        '''
+        """  # noqa: E501 - amostra bruta de log, a quebra alteraria o formato testado
         tool_calls = runner._parse_tool_calls(log)
 
         assert len(tool_calls) == 2
@@ -51,9 +51,9 @@ class TestParseToolCalls:
 
     def test_parse_tool_call_simple_format(self, runner: QueryRunner):
         """Parseia formato Tool call: simples."""
-        log = '''
+        log = """
         Tool call: bridge_check_newave({"path": "/case"})
-        '''
+        """
         tool_calls = runner._parse_tool_calls(log)
 
         assert len(tool_calls) == 1
@@ -62,9 +62,9 @@ class TestParseToolCalls:
 
     def test_parse_invoking_tool_format(self, runner: QueryRunner):
         """Parseia formato Invoking tool."""
-        log = '''
+        log = """
         Invoking tool deck_read_parquet
-        '''
+        """
         tool_calls = runner._parse_tool_calls(log)
 
         assert len(tool_calls) == 1
@@ -73,9 +73,9 @@ class TestParseToolCalls:
 
     def test_parse_calling_mcp_tool_format(self, runner: QueryRunner):
         """Parseia formato Calling MCP tool."""
-        log = '''
+        log = """
         Calling MCP tool: schema_list
-        '''
+        """
         tool_calls = runner._parse_tool_calls(log)
 
         assert len(tool_calls) == 1
@@ -94,19 +94,19 @@ class TestParseToolCalls:
 
     def test_avoid_duplicate_tool_ids(self, runner: QueryRunner):
         """Evita duplicatas com mesmo tool_use_id."""
-        log = '''
+        log = """
         Validating tool uses tool_uses=[AssistantToolUse { tool_use_id: "toolu_same", name: "deck_list", input: {} }]
         Validating tool uses tool_uses=[AssistantToolUse { tool_use_id: "toolu_same", name: "deck_list", input: {} }]
-        '''
+        """  # noqa: E501 - amostra bruta de log, a quebra alteraria o formato testado
         tool_calls = runner._parse_tool_calls(log)
 
         assert len(tool_calls) == 1
 
     def test_parse_json_format_fallback(self, runner: QueryRunner):
         """Parseia formato JSON como fallback."""
-        log = '''
+        log = """
         {"tool_name": "results_query", "some": "data"}
-        '''
+        """
         tool_calls = runner._parse_tool_calls(log)
 
         assert len(tool_calls) == 1

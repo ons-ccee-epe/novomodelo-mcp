@@ -7,8 +7,8 @@ interface Props {
 
 export function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="cobre-metric-row">
-      <span className="cobre-muted">{label}</span>
+    <div className="nm-metric-row">
+      <span className="nm-muted">{label}</span>
       <span>{value}</span>
     </div>
   );
@@ -40,7 +40,7 @@ export function SandboxRow({ sandbox }: { sandbox?: LoadSandbox }) {
 function ConfigCard({ run }: Props) {
   const c = run.config;
   return (
-    <div className="cobre-metrics-card">
+    <div className="nm-metrics-card">
       <h4>Configuração</h4>
       <Row label="Sessões simultâneas" value={String(c.concurrency)} />
       <Row label="Duração pedida" value={`${c.duration_seconds} s`} />
@@ -60,9 +60,9 @@ function ConfigCard({ run }: Props) {
 function StartupCard({ run }: Props) {
   const s = run.startup;
   return (
-    <div className="cobre-metrics-card">
+    <div className="nm-metrics-card">
       <h4>Subida dos servidores</h4>
-      <div className="cobre-muted cobre-load-note">
+      <div className="nm-muted nm-load-note">
         Medida à parte: não entra na latência das chamadas.
       </div>
       <Row label="Sessões abertas" value={`${s.started}/${s.clients}`} />
@@ -88,7 +88,7 @@ export function ResourcesCard({
 }) {
   const measured = r.available && (r.samples?.length ?? 0) > 0;
   return (
-    <div className="cobre-metrics-card">
+    <div className="nm-metrics-card">
       <h4>{title}</h4>
       {measured ? (
         <>
@@ -98,7 +98,7 @@ export function ResourcesCard({
           <Row label="Processos de pico" value={String(r.peak_processes ?? "—")} />
         </>
       ) : (
-        <div className="cobre-muted cobre-load-note">
+        <div className="nm-muted nm-load-note">
           CPU e RSS não medidos{r.reason ? ` (${r.reason})` : ""}.
         </div>
       )}
@@ -112,20 +112,20 @@ export function LoadDetails({ run }: Props) {
   return (
     <>
       {run.interrupted && (
-        <div className="cobre-banner" data-kind="warning">
+        <div className="nm-banner" data-kind="warning">
           Carga interrompida antes do fim: o resultado é parcial.
         </div>
       )}
       {run.abandoned_calls > 0 && (
-        <div className="cobre-banner" data-kind="warning">
+        <div className="nm-banner" data-kind="warning">
           {run.abandoned_calls} chamada(s) sem resposta foram abandonadas ao fim da janela e não
           entram nas métricas.
         </div>
       )}
-      <details className="cobre-section cobre-load-details" aria-label="Detalhes da carga">
+      <details className="nm-section nm-load-details" aria-label="Detalhes da carga">
         <summary>Detalhes</summary>
-        <div className="cobre-load-details-body">
-          <div className="cobre-metrics-grid">
+        <div className="nm-load-details-body">
+          <div className="nm-metrics-grid">
             <ConfigCard run={run} />
             <StartupCard run={run} />
             <ResourcesCard resources={run.resources} />
@@ -133,8 +133,8 @@ export function LoadDetails({ run }: Props) {
 
           {run.errors.length > 0 && (
             <>
-              <h3 className="cobre-load-subtitle">Erros e timeouts</h3>
-              <table className="cobre-table" aria-label="Erros agrupados">
+              <h3 className="nm-load-subtitle">Erros e timeouts</h3>
+              <table className="nm-table" aria-label="Erros agrupados">
                 <thead>
                   <tr>
                     <th>Tool</th>
@@ -160,11 +160,11 @@ export function LoadDetails({ run }: Props) {
           )}
 
           {excluded.length > 0 && (
-            <details className="cobre-load-excluded">
-              <summary className="cobre-summary-toggle">
+            <details className="nm-load-excluded">
+              <summary className="nm-summary-toggle">
                 Chamadas fora do mix ({excluded.length})
               </summary>
-              <ul className="cobre-tool-call-list">
+              <ul className="nm-tool-call-list">
                 {excluded.map((item) => (
                   <li key={item.id}>
                     <code>{item.id}</code> — {item.reason}

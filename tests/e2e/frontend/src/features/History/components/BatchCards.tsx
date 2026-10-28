@@ -40,25 +40,25 @@ export function BatchOverview({ batch, reference }: Props) {
   const rate = passRate(batch);
   const delta = formatDelta(reference ? deltaPp(batch, reference.batch) : null);
   const version =
-    batch.cobre_mcp_version && batch.cobre_mcp_version !== "unknown"
-      ? `v${batch.cobre_mcp_version}`
+    batch.mcp_version && batch.mcp_version !== "unknown"
+      ? `v${batch.mcp_version}`
       : "—";
 
   return (
-    <section className="cobre-panel cobre-batch-overview" aria-label="Resumo da bateria">
-      <div className="cobre-batch-overview-rate" data-stat aria-label="Aprovação">
-        <span className="cobre-rate" data-band={rateBand(rate)}>
+    <section className="nm-panel nm-batch-overview" aria-label="Resumo da bateria">
+      <div className="nm-batch-overview-rate" data-stat aria-label="Aprovação">
+        <span className="nm-rate" data-band={rateBand(rate)}>
           {rate === null ? "—" : `${decimal(rate)}%`}
         </span>
-        <span className="cobre-card-label">Aprovação</span>
+        <span className="nm-card-label">Aprovação</span>
       </div>
-      <dl className="cobre-stats">
+      <dl className="nm-stats">
         <Stat label="Perguntas" value={`${batch.passed}/${batch.total_tests} aprovadas`} />
         <Stat
           label="Δ vs referência"
           title={reference ? `vs ${reference.kind} ${reference.batch.batch_id}` : undefined}
           value={
-            <span className="cobre-delta" data-trend={delta.trend}>
+            <span className="nm-delta" data-trend={delta.trend}>
               {delta.text}
             </span>
           }
@@ -87,10 +87,10 @@ export function BatchStats({ batch }: { batch: BatchResult }) {
   const m = batch.metrics;
   const latencies = batch.test_results.map((r) => r.latency_ms);
   return (
-    <div className="cobre-batch-panels">
-      <section className="cobre-panel" aria-label="Resultado">
-        <h3 className="cobre-panel-title">Resultado</h3>
-        <dl className="cobre-stats">
+    <div className="nm-batch-panels">
+      <section className="nm-panel" aria-label="Resultado">
+        <h3 className="nm-panel-title">Resultado</h3>
+        <dl className="nm-stats">
           <Stat label="Aprovadas" value={batch.passed} />
           <Stat label="Parciais" value={batch.partial} />
           <Stat label="Falhas" value={batch.failed} />
@@ -98,9 +98,9 @@ export function BatchStats({ batch }: { batch: BatchResult }) {
           <Stat label="Puladas" value={batch.skipped} />
         </dl>
       </section>
-      <section className="cobre-panel" aria-label="Tempos">
-        <h3 className="cobre-panel-title">Tempos</h3>
-        <dl className="cobre-stats">
+      <section className="nm-panel" aria-label="Tempos">
+        <h3 className="nm-panel-title">Tempos</h3>
+        <dl className="nm-stats">
           <Stat label="Latência média" value={ms(m?.avg_latency_ms)} />
           <Stat label="Latência p95" value={ms(m?.p95_latency_ms)} />
           <Stat label="Mínima" value={ms(latencies.length ? Math.min(...latencies) : undefined)} />

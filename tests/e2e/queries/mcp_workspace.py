@@ -7,6 +7,7 @@ instalação varia por máquina; só a raiz é trocada. O kiro-cli, rodando com
 cwd=<workspace>, prefere <workspace>/.kiro/settings/mcp.json à config global; o
 claude recebe o mesmo servidor via --mcp-config.
 """
+
 from __future__ import annotations
 
 import json

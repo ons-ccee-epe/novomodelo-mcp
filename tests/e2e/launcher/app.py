@@ -34,6 +34,7 @@ Seguranca de dev:
   - Um run por vez (de agente ou de carga, na mesma trava); timeout por query limitado.
   - Serving de /data confinado as raizes results/ e metrics/ (anti path traversal).
 """
+
 from __future__ import annotations
 
 import mimetypes
@@ -140,9 +141,7 @@ class LoadRunRequest(BaseModel):
     duration_seconds: float = Field(ge=MIN_DURATION_S, le=MAX_DURATION_S, allow_inf_nan=False)
     iterations: int | None = Field(default=None, ge=1, le=MAX_ITERATIONS)
     tools: list[str] | None = Field(default=None, min_length=1, max_length=len(ALLOWED_TOOLS))
-    timeout_seconds: float | None = Field(
-        default=None, gt=0, le=MAX_TIMEOUT_S, allow_inf_nan=False
-    )
+    timeout_seconds: float | None = Field(default=None, gt=0, le=MAX_TIMEOUT_S, allow_inf_nan=False)
     provider: Literal["kiro-cli", "claude"] | None = None
     case_id: str | None = Field(default=None, max_length=200, pattern=_CASE_ID_PATTERN)
     group: str | None = Field(default=None, max_length=40, pattern=_GROUP_PATTERN)
@@ -204,7 +203,9 @@ class LoadRunRequest(BaseModel):
             duration_s=self.duration_seconds,
             iterations=self.iterations,
             tools=tuple(self.tools) if self.tools is not None else None,
-            timeout_s=self.timeout_seconds if self.timeout_seconds is not None else DEFAULT_TIMEOUT_S,
+            timeout_s=self.timeout_seconds
+            if self.timeout_seconds is not None
+            else DEFAULT_TIMEOUT_S,
         )
 
 
@@ -265,7 +266,7 @@ def _capacity_profile(
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="<repositório anterior> E2E Launcher (dev)",
+        title="novomodelo-mcp E2E Launcher (dev)",
         description=(
             "Launcher de desenvolvimento que dispara os testes das tools MCP "
             "num provedor de IA (kiro-cli/claude). Nao e backend de producao."
@@ -321,9 +322,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {"conjunto": conjunto, "batch_id": body.batch_id}
 
-    @app.delete(
-        "/api/baselines/{conjunto:path}", dependencies=[Depends(_require_launcher_header)]
-    )
+    @app.delete("/api/baselines/{conjunto:path}", dependencies=[Depends(_require_launcher_header)])
     def delete_baseline(conjunto: str) -> dict[str, Any]:
         removed = ResultStore(_RESULTS_DIR, _METRICS_DIR).clear_baseline(conjunto)
         return {"conjunto": conjunto, "removed": removed}
@@ -537,11 +536,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="bucket desconhecido")
         if not root.exists():
             return {"files": []}
-        files = [
-            p.name
-            for p in root.iterdir()
-            if p.is_file() and p.suffix in (".json", ".jsonl")
-        ]
+        files = [p.name for p in root.iterdir() if p.is_file() and p.suffix in (".json", ".jsonl")]
         return {"files": files}
 
     return app

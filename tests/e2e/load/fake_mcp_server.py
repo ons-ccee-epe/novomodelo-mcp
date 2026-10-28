@@ -5,6 +5,7 @@ o processo para de responder depois de N chamadas, o que simula uma sessão
 travada. Uso: ``python fake_mcp_server.py [--marker=<id>]`` (o marcador só
 identifica o processo na linha de comando).
 """
+
 from __future__ import annotations
 
 import os

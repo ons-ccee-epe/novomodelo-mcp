@@ -342,23 +342,23 @@ export function LoadForm({
 
   return (
     <form
-      className="cobre-load-form"
+      className="nm-load-form"
       aria-label="Parâmetros da carga"
       onSubmit={(e) => {
         e.preventDefault();
         if (parsed.body) onStart(parsed.body);
       }}
     >
-      <section className="cobre-panel">
-        <h2 className="cobre-panel-title">Configurar carga</h2>
-        <div className="cobre-form-grid">
-          <div className="cobre-field">
-            <label htmlFor="load-mode" className="cobre-field-label">
+      <section className="nm-panel">
+        <h2 className="nm-panel-title">Configurar carga</h2>
+        <div className="nm-form-grid">
+          <div className="nm-field">
+            <label htmlFor="load-mode" className="nm-field-label">
               Modo
             </label>
             <select
               id="load-mode"
-              className="cobre-select"
+              className="nm-select"
               value={mode}
               onChange={(e) => setMode(e.target.value as LoadMode)}
               disabled={disabled}
@@ -378,13 +378,13 @@ export function LoadForm({
               disabled={disabled}
             />
           )}
-          <div className="cobre-field">
-            <label htmlFor="load-concurrency" className="cobre-field-label">
+          <div className="nm-field">
+            <label htmlFor="load-concurrency" className="nm-field-label">
               Sessões simultâneas
             </label>
             <input
               id="load-concurrency"
-              className="cobre-input"
+              className="nm-input"
               type="number"
               inputMode="numeric"
               min={activeLimits.min_concurrency}
@@ -394,13 +394,13 @@ export function LoadForm({
               disabled={disabled}
             />
           </div>
-          <div className="cobre-field">
-            <label htmlFor="load-duration" className="cobre-field-label">
+          <div className="nm-field">
+            <label htmlFor="load-duration" className="nm-field-label">
               Duração (s)
             </label>
             <input
               id="load-duration"
-              className="cobre-input"
+              className="nm-input"
               type="number"
               min={activeLimits.min_duration_seconds}
               max={activeLimits.max_duration_seconds}
@@ -409,13 +409,13 @@ export function LoadForm({
               disabled={disabled}
             />
           </div>
-          <div className="cobre-field">
-            <label htmlFor="load-iterations" className="cobre-field-label">
+          <div className="nm-field">
+            <label htmlFor="load-iterations" className="nm-field-label">
               Iterações por sessão (opcional)
             </label>
             <input
               id="load-iterations"
-              className="cobre-input"
+              className="nm-input"
               type="number"
               min={1}
               max={activeLimits.max_iterations}
@@ -425,13 +425,13 @@ export function LoadForm({
               disabled={disabled}
             />
           </div>
-          <div className="cobre-field">
-            <label htmlFor="load-timeout" className="cobre-field-label">
+          <div className="nm-field">
+            <label htmlFor="load-timeout" className="nm-field-label">
               {isAgent ? "Timeout por caso (s, opcional)" : "Timeout por chamada (s)"}
             </label>
             <input
               id="load-timeout"
-              className="cobre-input"
+              className="nm-input"
               type="number"
               min={0}
               max={activeLimits.max_timeout_seconds}
@@ -442,22 +442,22 @@ export function LoadForm({
             />
           </div>
         </div>
-        <p className="cobre-muted cobre-mode-hint">{MODE_HINT[mode]}</p>
+        <p className="nm-muted nm-mode-hint">{MODE_HINT[mode]}</p>
         {!agent && agentError && (
-          <div className="cobre-muted cobre-load-note">Modo agente indisponível: {agentError}</div>
+          <div className="nm-muted nm-load-note">Modo agente indisponível: {agentError}</div>
         )}
 
         {onRequestCapacity && <LoadCapacityHint capacity={shownCapacity} error={capacityError} />}
       </section>
       {parsed.warnings.map((message) => (
-        <div key={message} className="cobre-banner" data-kind="warning">
+        <div key={message} className="nm-banner" data-kind="warning">
           {message}
         </div>
       ))}
 
       {isAgent && agent && (
         <>
-          <div className="cobre-banner" data-kind="warning">
+          <div className="nm-banner" data-kind="warning">
             {tokenWarning(providerLabel, parseInteger(concurrency), parseInteger(iterations))}
           </div>
           <AgentCasePicker
@@ -487,17 +487,17 @@ export function LoadForm({
       )}
 
       {parsed.errors.length > 0 && (
-        <ul className="cobre-form-errors" role="alert">
+        <ul className="nm-form-errors" role="alert">
           {parsed.errors.map((message) => (
             <li key={message}>{message}</li>
           ))}
         </ul>
       )}
 
-      <div className="cobre-form-actions">
+      <div className="nm-form-actions">
         <button
           type="submit"
-          className="cobre-btn cobre-btn-primary"
+          className="nm-btn nm-btn-primary"
           disabled={disabled || parsed.body === null}
           title={
             isAgent

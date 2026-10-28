@@ -28,6 +28,7 @@ O agente espera a subida do servidor MCP tanto quanto o modo tools espera
 claude estoura, o agente fica sem as tools do MCP e a carga mediria isso, não o
 servidor.
 """
+
 from __future__ import annotations
 
 import json

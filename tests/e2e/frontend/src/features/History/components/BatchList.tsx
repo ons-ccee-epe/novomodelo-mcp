@@ -56,7 +56,7 @@ export function BatchList({ batches, baselines, selectedId, collapsed, onToggleC
   const collapseButton = (
     <button
       type="button"
-      className="cobre-collapse-btn"
+      className="nm-collapse-btn"
       aria-label={collapsed ? "Mostrar a lista de baterias" : "Recolher a lista de baterias"}
       aria-expanded={!collapsed}
       onClick={onToggleCollapsed}
@@ -66,15 +66,15 @@ export function BatchList({ batches, baselines, selectedId, collapsed, onToggleC
   );
 
   if (collapsed) {
-    return <div className="cobre-batch-list-head">{collapseButton}</div>;
+    return <div className="nm-batch-list-head">{collapseButton}</div>;
   }
 
   return (
-    <div className="cobre-batch-list">
-      <div className="cobre-batch-list-head">
+    <div className="nm-batch-list">
+      <div className="nm-batch-list-head">
         <h2>Execuções</h2>
         <select
-          className="cobre-select"
+          className="nm-select"
           aria-label="Filtrar por conjunto"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
@@ -100,12 +100,12 @@ export function BatchList({ batches, baselines, selectedId, collapsed, onToggleC
             </optgroup>
           )}
         </select>
-        <span className="cobre-muted">
+        <span className="nm-muted">
           {visible.length}/{batches.length}
         </span>
         {collapseButton}
       </div>
-      <ul className="cobre-batch-items">
+      <ul className="nm-batch-items">
         {visible.map((b) => (
           <BatchCard
             key={b.batch_id}

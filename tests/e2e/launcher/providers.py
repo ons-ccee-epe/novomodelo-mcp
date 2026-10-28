@@ -9,6 +9,7 @@ que de fato esta instalado. O QueryRunner existente ja fala kiro-cli; para o
 claude, montamos o comando equivalente e reaproveitamos o mesmo parsing de
 tool-calls do log (o QueryRunner le stdout+stderr combinados).
 """
+
 from __future__ import annotations
 
 import json

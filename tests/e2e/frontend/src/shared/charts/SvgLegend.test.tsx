@@ -7,10 +7,10 @@ describe("SvgLegend", () => {
   it("desenha rótulos e cores como elementos do próprio SVG", () => {
     const { container } = render(
       <svg>
-        <SvgLegend items={[{ label: "Tool", color: "var(--cobre-text-muted)" }]} />
+        <SvgLegend items={[{ label: "Tool", color: "var(--nm-text-muted)" }]} />
       </svg>,
     );
     expect(container.querySelector("svg text")?.textContent).toBe("Tool");
-    expect(container.querySelector("svg rect")?.getAttribute("fill")).toBe("var(--cobre-text-muted)");
+    expect(container.querySelector("svg rect")?.getAttribute("fill")).toBe("var(--nm-text-muted)");
   });
 });

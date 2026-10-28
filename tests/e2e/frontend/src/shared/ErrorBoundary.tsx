@@ -28,11 +28,11 @@ export class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state;
     if (!error) return this.props.children;
     return (
-      <div className="cobre-shell">
-        <div className="cobre-banner" data-kind="critical">
+      <div className="nm-shell">
+        <div className="nm-banner" data-kind="critical">
           <strong>O dashboard falhou ao renderizar.</strong>
-          <pre className="cobre-error-message">{error.message}</pre>
-          <div className="cobre-banner-note">
+          <pre className="nm-error-message">{error.message}</pre>
+          <div className="nm-banner-note">
             Veja o console do navegador (F12) para o stack completo.
           </div>
         </div>

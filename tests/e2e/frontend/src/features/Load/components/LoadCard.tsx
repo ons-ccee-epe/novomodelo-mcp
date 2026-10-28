@@ -45,33 +45,33 @@ export function LoadCard({ entry, selected }: Props) {
 
   return (
     <li
-      className="cobre-batch-card cobre-load-card"
+      className="nm-batch-card nm-load-card"
       data-load-id={entry.load_id}
       aria-current={selected ? "true" : undefined}
     >
-      <span className="cobre-load-card-main">
-        <Link className="cobre-batch-link" to={historyLoadPath(entry.load_id)}>
+      <span className="nm-load-card-main">
+        <Link className="nm-batch-link" to={historyLoadPath(entry.load_id)}>
           {fmtLoadId(entry.load_id)}
         </Link>
-        <span className="cobre-batch-tags">
-          <span className="cobre-pill" data-tone={agent ? "agent" : "tools"}>
+        <span className="nm-batch-tags">
+          <span className="nm-pill" data-tone={agent ? "agent" : "tools"}>
             {agent ? `Agente${provider ? ` · ${provider}` : ""}` : "Tools"}
           </span>
           {entry.interrupted && (
-            <span className="cobre-pill" data-tone="partial">
+            <span className="nm-pill" data-tone="partial">
               Parcial
             </span>
           )}
         </span>
-        <span className="cobre-batch-counts">
+        <span className="nm-batch-counts">
           {concurrency} sessões · {duration} s · {main.detail}
         </span>
       </span>
-      <span className="cobre-load-card-metric">
-        <span className="cobre-rate" data-band={main.band}>
+      <span className="nm-load-card-metric">
+        <span className="nm-rate" data-band={main.band}>
           {main.value}
         </span>
-        <span className="cobre-muted">{main.caption}</span>
+        <span className="nm-muted">{main.caption}</span>
       </span>
     </li>
   );

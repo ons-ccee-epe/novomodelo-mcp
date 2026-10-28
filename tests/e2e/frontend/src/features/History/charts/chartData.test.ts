@@ -92,19 +92,19 @@ describe("chartData", () => {
     ]);
   });
 
-  it("statusColor mapeia cada status para o token --cobre-*", () => {
-    expect(statusColor("pass")).toBe("var(--cobre-pass)");
-    expect(statusColor("fail")).toBe("var(--cobre-fail)");
-    expect(statusColor("partial")).toBe("var(--cobre-partial)");
-    expect(statusColor("timeout")).toBe("var(--cobre-timeout)");
-    expect(statusColor("skip")).toBe("var(--cobre-skip)");
+  it("statusColor mapeia cada status para o token --nm-*", () => {
+    expect(statusColor("pass")).toBe("var(--nm-pass)");
+    expect(statusColor("fail")).toBe("var(--nm-fail)");
+    expect(statusColor("partial")).toBe("var(--nm-partial)");
+    expect(statusColor("timeout")).toBe("var(--nm-timeout)");
+    expect(statusColor("skip")).toBe("var(--nm-skip)");
   });
 
   it("latencyLegend lista só os status presentes mais o tempo na tool", () => {
     expect(latencyLegend(fixture())).toEqual([
-      { label: "Aprovada", color: "var(--cobre-pass)" },
-      { label: "Falhou", color: "var(--cobre-fail)" },
-      { label: "Tempo na tool", color: "var(--cobre-text-muted)" },
+      { label: "Aprovada", color: "var(--nm-pass)" },
+      { label: "Falhou", color: "var(--nm-fail)" },
+      { label: "Tempo na tool", color: "var(--nm-text-muted)" },
     ]);
   });
 });

@@ -18,7 +18,7 @@ export function Functional() {
   const online = launcher.available && !launcher.checking && !launcher.error;
 
   return (
-    <div className="cobre-shell">
+    <div className="nm-shell">
       <TestLauncher
         launcher={launcher}
         onScopeChange={onScopeChange}

@@ -8,6 +8,7 @@ Este módulo testa:
 - QueryValidator._check_correct_tool()
 - QueryValidator._check_did_not_use()
 """
+
 from __future__ import annotations
 
 import pytest
@@ -17,7 +18,6 @@ from tests.e2e.queries.models import (
     QueryResult,
     QueryTestCase,
     ToolCall,
-    ValidationSpec,
 )
 from tests.e2e.queries.validator import (
     MCP_TOOLS,

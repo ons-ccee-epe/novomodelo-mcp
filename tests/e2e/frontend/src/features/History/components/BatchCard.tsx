@@ -25,28 +25,28 @@ export function BatchCard({ batch, reference, selected, isBaseline }: Props) {
 
   return (
     <li
-      className="cobre-batch-card"
+      className="nm-batch-card"
       data-batch-id={batch.batch_id}
       aria-current={selected ? "true" : undefined}
     >
-      <Link className="cobre-batch-link" to={historyBatchPath(batch.batch_id)}>
+      <Link className="nm-batch-link" to={historyBatchPath(batch.batch_id)}>
         {formatDate(batch.timestamp)}
       </Link>
-      <span className="cobre-batch-tags">
+      <span className="nm-batch-tags">
         <ConjuntoTag batch={batch} />
         {isBaseline && (
-          <span className="cobre-pill" data-tone="baseline">
+          <span className="nm-pill" data-tone="baseline">
             Baseline
           </span>
         )}
       </span>
-      <span className="cobre-batch-counts">
+      <span className="nm-batch-counts">
         {batch.passed}/{batch.total_tests} · {formatDuration(batchDurationMs(batch))}
       </span>
-      <span className="cobre-rate" data-band={rateBand(rate)}>
+      <span className="nm-rate" data-band={rateBand(rate)}>
         {rate === null ? "—" : `${Math.round(rate)}%`}
       </span>
-      <span className="cobre-delta-box" data-trend={delta.trend} title={deltaTitle}>
+      <span className="nm-delta-box" data-trend={delta.trend} title={deltaTitle}>
         {delta.text}
       </span>
     </li>

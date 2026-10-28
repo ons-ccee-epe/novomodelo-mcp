@@ -7,6 +7,7 @@ com CPU e memória). No Windows o processo entra num Job Object com
 e fecha junto com o launcher. Em POSIX o processo é líder de sessão e o grupo
 inteiro recebe SIGKILL.
 """
+
 from __future__ import annotations
 
 import os
@@ -38,10 +39,17 @@ def _create_kill_on_close_job():  # pragma: no cover - só no Windows
         ]
 
     class IoCounters(ctypes.Structure):
-        _fields_ = [(name, ctypes.c_uint64) for name in (
-            "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
-            "ReadTransferCount", "WriteTransferCount", "OtherTransferCount",
-        )]
+        _fields_ = [
+            (name, ctypes.c_uint64)
+            for name in (
+                "ReadOperationCount",
+                "WriteOperationCount",
+                "OtherOperationCount",
+                "ReadTransferCount",
+                "WriteTransferCount",
+                "OtherTransferCount",
+            )
+        ]
 
     class ExtendedLimits(ctypes.Structure):
         _fields_ = [
@@ -57,7 +65,10 @@ def _create_kill_on_close_job():  # pragma: no cover - só no Windows
     kernel32.CreateJobObjectW.restype = wintypes.HANDLE
     kernel32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
     kernel32.SetInformationJobObject.argtypes = [
-        wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+        wintypes.HANDLE,
+        ctypes.c_int,
+        wintypes.LPVOID,
+        wintypes.DWORD,
     ]
     kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
     kernel32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]

@@ -3,6 +3,7 @@
 Um teste de conversão ou validação sem o deck de entrada só mede a ausência do
 arquivo, não o agente; o caso é pulado (status "skip") em vez de rodar.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

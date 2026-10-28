@@ -1,4 +1,5 @@
 """Testes da seleção de casos do modo agent: grupos, filtros e o que fica fora da carga."""
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -107,7 +108,11 @@ class TestSelection:
     def test_no_filter_selects_every_case_and_reports_the_excluded(self) -> None:
         result = select_cases(ALL, CaseSelection())
         assert [c.id for c in result.cases] == [
-            "docs-list-all", "schema-list-all", "deck-edit-json", "bridge-check", "case-vs-docs",
+            "docs-list-all",
+            "schema-list-all",
+            "deck-edit-json",
+            "bridge-check",
+            "case-vs-docs",
         ]
         assert {e.id for e in result.excluded} == {"server-info-get", "run-start", "general"}
 
@@ -121,9 +126,9 @@ class TestSelection:
         assert [e.id for e in result.excluded] == ["server-info-get"]
 
     def test_single_case(self) -> None:
-        assert [c.id for c in select_cases(ALL, CaseSelection(case_id="schema-list-all")).cases] == [
-            "schema-list-all"
-        ]
+        assert [
+            c.id for c in select_cases(ALL, CaseSelection(case_id="schema-list-all")).cases
+        ] == ["schema-list-all"]
 
     def test_excluded_single_case_comes_back_empty_with_the_reason(self) -> None:
         result = select_cases(ALL, CaseSelection(case_id="run-start"))
@@ -206,7 +211,7 @@ class TestSandboxPlan:
     def test_the_copy_holds_the_case_folders_cited_in_prompts_and_sources(
         self, tmp_path: Path
     ) -> None:
-        deck = tmp_path / "newave" / "cobre-caso-reduzido"
+        deck = tmp_path / "newave" / "novomodelo-caso-reduzido"
         (deck / "output").mkdir(parents=True)
         (deck / "config.json").write_text("{}", encoding="utf-8")
         (tmp_path / "decomp" / "outro").mkdir(parents=True)
@@ -220,5 +225,5 @@ class TestSandboxPlan:
         missing = replace(missing, query=f"Liste {tmp_path / 'nonexistent'}")
         plan = plan_for_cases(tmp_path, [dashboard, missing, DOCS])
         assert plan.enabled
-        assert plan.subtrees == ("newave/cobre-caso-reduzido",)
+        assert plan.subtrees == ("newave/novomodelo-caso-reduzido",)
         assert plan.copy_bytes == 2

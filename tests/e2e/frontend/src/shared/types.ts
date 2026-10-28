@@ -65,7 +65,7 @@ export interface GroupMetrics {
 export interface BatchResult {
   batch_id: string;
   timestamp: string;
-  cobre_mcp_version: string;
+  mcp_version: string;
   git_commit_sha: string;
   environment: string;
   total_tests: number;

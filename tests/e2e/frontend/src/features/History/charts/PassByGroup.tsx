@@ -16,7 +16,7 @@ export function PassByGroup({ batch }: { batch: BatchResult }) {
         <XAxis stroke={AXIS_LINE} dataKey="group" tick={AXIS_TICK} />
         <YAxis stroke={AXIS_LINE} domain={[0, MAX_PERCENT]} unit="%" tick={AXIS_TICK} width={44} />
         <Tooltip {...TOOLTIP} formatter={(v) => `${decimal(Number(v))}%`} />
-        <Bar dataKey="pct" name="Aprovação" fill="var(--cobre-pass)" />
+        <Bar dataKey="pct" name="Aprovação" fill="var(--nm-pass)" />
       </BarChart>
     </ResponsiveContainer>
   );

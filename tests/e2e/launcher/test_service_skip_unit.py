@@ -1,4 +1,5 @@
 """Caso sem a fonte declarada em ``requires`` é pulado sem disparar o agente."""
+
 from __future__ import annotations
 
 import time

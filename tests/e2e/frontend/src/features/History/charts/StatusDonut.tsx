@@ -20,7 +20,7 @@ export function StatusDonut({ batch }: { batch: BatchResult }) {
           nameKey="label"
           innerRadius={45}
           outerRadius={75}
-          stroke="var(--cobre-surface)"
+          stroke="var(--nm-surface)"
           strokeWidth={2}
           label={(p: { name?: string; value?: number }) =>
             `${p.name}: ${p.value}`

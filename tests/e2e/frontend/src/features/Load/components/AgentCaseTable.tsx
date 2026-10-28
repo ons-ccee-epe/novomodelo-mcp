@@ -10,10 +10,10 @@ export function AgentCaseTable({ perCase }: Props) {
   const rows = Object.entries(perCase).sort(
     ([idA, a], [idB, b]) => a.group.localeCompare(b.group) || idA.localeCompare(idB),
   );
-  if (rows.length === 0) return <div className="cobre-no-data">Nenhuma execução registrada</div>;
+  if (rows.length === 0) return <div className="nm-no-data">Nenhuma execução registrada</div>;
 
   return (
-    <table className="cobre-table cobre-load-table" aria-label="Métricas por caso">
+    <table className="nm-table nm-load-table" aria-label="Métricas por caso">
       <thead>
         <tr>
           <th>Caso</th>

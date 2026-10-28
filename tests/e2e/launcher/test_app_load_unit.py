@@ -1,4 +1,5 @@
 """Testes das rotas de carga do launcher: segurança, limites, trava única e serving de results/load."""
+
 from __future__ import annotations
 
 import json
@@ -10,15 +11,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
-
-from fastapi.testclient import TestClient  # noqa: E402 - depois do importorskip
-
-from tests.e2e.launcher import app as app_mod  # noqa: E402
-from tests.e2e.launcher.load_service import LoadRunService  # noqa: E402
-from tests.e2e.launcher.run_gate import RunGate  # noqa: E402
+from tests.e2e.launcher import app as app_mod
+from tests.e2e.launcher.load_service import LoadRunService
+from tests.e2e.launcher.run_gate import RunGate
 
 LOCAL = "http://127.0.0.1:5175"
 HEADER = {"X-Launcher": "1"}
@@ -30,9 +27,12 @@ _EXITS = "import json; print(json.dumps({'event': 'saved', 'load_id': '20261024_
 
 def _build_client(script: str, gate: RunGate | None = None) -> tuple[TestClient, RunGate]:
     gate = gate or RunGate()
-    factory = partial(LoadRunService, command_builder=lambda _config: [sys.executable, "-c", script])
-    with patch.object(app_mod, "RunGate", return_value=gate), patch.object(
-        app_mod, "LoadRunService", factory
+    factory = partial(
+        LoadRunService, command_builder=lambda _config: [sys.executable, "-c", script]
+    )
+    with (
+        patch.object(app_mod, "RunGate", return_value=gate),
+        patch.object(app_mod, "LoadRunService", factory),
     ):
         return TestClient(app_mod.create_app(), base_url=LOCAL), gate
 
@@ -61,7 +61,9 @@ class TestSecurity:
         assert rebinding.get("/api/load-tools").status_code == 400
         assert rebinding.get("/api/load-runs").status_code == 400
 
-    @pytest.mark.parametrize("extra", [{"command": "calc.exe"}, {"server_command": "x"}, {"warmup": False}])
+    @pytest.mark.parametrize(
+        "extra", [{"command": "calc.exe"}, {"server_command": "x"}, {"warmup": False}]
+    )
     def test_unknown_body_fields_are_refused(self, client: TestClient, extra: dict) -> None:
         resp = client.post("/api/load-runs", json={**VALID, **extra}, headers=HEADER)
         assert resp.status_code == 422
@@ -107,7 +109,9 @@ class TestValidation:
             )
             assert resp.status_code == 422
 
-    def test_bounds_are_inclusive_and_the_config_reaches_the_service(self, client: TestClient) -> None:
+    def test_bounds_are_inclusive_and_the_config_reaches_the_service(
+        self, client: TestClient
+    ) -> None:
         body = {
             "concurrency": 32,
             "duration_seconds": 1800,
@@ -141,7 +145,9 @@ class TestLifecycleRoutes:
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
 
-        assert _wait_until(lambda: client.get(f"/api/load-runs/{run_id}").json()["status"] == "done")
+        assert _wait_until(
+            lambda: client.get(f"/api/load-runs/{run_id}").json()["status"] == "done"
+        )
         view = client.get(f"/api/load-runs/{run_id}").json()
         assert view["load_id"] == "20261024_100000_abc1234"
         assert [r["run_id"] for r in client.get("/api/load-runs").json()["runs"]] == [run_id]
@@ -153,7 +159,9 @@ class TestLifecycleRoutes:
     def test_cancel_stops_the_run_and_frees_the_slot(self) -> None:
         client, gate = _build_client(_SLEEPS)
         run_id = client.post("/api/load-runs", json=VALID, headers=HEADER).json()["run_id"]
-        assert _wait_until(lambda: client.get(f"/api/load-runs/{run_id}").json()["status"] == "running")
+        assert _wait_until(
+            lambda: client.get(f"/api/load-runs/{run_id}").json()["status"] == "running"
+        )
 
         resp = client.post(f"/api/load-runs/{run_id}/cancel", headers=HEADER)
 
@@ -201,14 +209,32 @@ class TestLoadTools:
         data = client.get("/api/load-tools").json()
         rows = {row["tool"]: row for row in data["tools"]}
         assert {"deck_list", "docs_search", "results_query"} <= set(rows)
-        keys = {"tool", "group", "calls", "available", "reason", "writes", "heavy", "default", "barred"}
+        keys = {
+            "tool",
+            "group",
+            "calls",
+            "available",
+            "reason",
+            "writes",
+            "heavy",
+            "default",
+            "barred",
+        }
         assert all(keys <= set(r) for r in data["tools"])
         assert rows["deck_list"]["default"] is True and rows["deck_list"]["writes"] is False
-        assert rows["deck_edit_json"]["writes"] is True and rows["deck_edit_json"]["default"] is False
+        assert (
+            rows["deck_edit_json"]["writes"] is True and rows["deck_edit_json"]["default"] is False
+        )
         assert rows["bridge_check_newave"]["heavy"] is True
         assert rows["run_plan"]["heavy"] is True and rows["run_plan"]["barred"] is False
-        for barred in ("run_start", "run_status", "run_logs", "run_cancel", "server_info",
-                       "instalar_novomodelo"):
+        for barred in (
+            "run_start",
+            "run_status",
+            "run_logs",
+            "run_cancel",
+            "server_info",
+            "instalar_novomodelo",
+        ):
             assert rows[barred]["barred"] is True and rows[barred]["available"] is False
             assert rows[barred]["reason"]
         assert data["limits"]["max_concurrency"] == 32
@@ -216,13 +242,23 @@ class TestLoadTools:
         assert data["limits"]["min_concurrency"] == 1
 
     def test_writing_and_heavy_tools_can_be_requested_by_name(self, client: TestClient) -> None:
-        body = {"concurrency": 2, "duration_seconds": 10,
-                "tools": ["deck_edit_json", "bridge_check_newave", "run_plan"]}
-        with patch.object(LoadRunService, "start_run", return_value=SimpleNamespace(
-            to_dict=lambda: {"run_id": "r1", "status": "pending"})) as start:
+        body = {
+            "concurrency": 2,
+            "duration_seconds": 10,
+            "tools": ["deck_edit_json", "bridge_check_newave", "run_plan"],
+        }
+        with patch.object(
+            LoadRunService,
+            "start_run",
+            return_value=SimpleNamespace(to_dict=lambda: {"run_id": "r1", "status": "pending"}),
+        ) as start:
             resp = client.post("/api/load-runs", json=body, headers=HEADER)
         assert resp.status_code == 200
-        assert start.call_args.args[0].tools == ("deck_edit_json", "bridge_check_newave", "run_plan")
+        assert start.call_args.args[0].tools == (
+            "deck_edit_json",
+            "bridge_check_newave",
+            "run_plan",
+        )
 
 
 class TestServingResultsLoad:
@@ -231,7 +267,9 @@ class TestServingResultsLoad:
         results = tmp_path / "results"
         (results / "load").mkdir(parents=True)
         (results / "load" / "index.json").write_text('{"runs": []}', encoding="utf-8")
-        (results / "load" / "20261024_100000_abc1234.json").write_text('{"load_id": "x"}', encoding="utf-8")
+        (results / "load" / "20261024_100000_abc1234.json").write_text(
+            '{"load_id": "x"}', encoding="utf-8"
+        )
         (tmp_path / "segredo.json").write_text('{"segredo": true}', encoding="utf-8")
         (tmp_path / "results2").mkdir()
         (tmp_path / "results2" / "segredo.json").write_text("{}", encoding="utf-8")
@@ -240,7 +278,9 @@ class TestServingResultsLoad:
 
     def test_load_index_and_runs_are_served(self, client: TestClient, results: Path) -> None:
         assert client.get("/data/results/load/index.json").json() == {"runs": []}
-        assert client.get("/data/results/load/20261024_100000_abc1234.json").json() == {"load_id": "x"}
+        assert client.get("/data/results/load/20261024_100000_abc1234.json").json() == {
+            "load_id": "x"
+        }
 
     @pytest.mark.parametrize(
         "path",

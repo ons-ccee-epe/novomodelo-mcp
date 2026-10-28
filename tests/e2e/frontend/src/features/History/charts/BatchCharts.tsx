@@ -11,7 +11,7 @@ export function BatchCharts({ batch }: { batch: BatchResult }) {
   const file = (slug: string) => `${batch.batch_id}-${slug}.png`;
   return (
     <section
-      className="cobre-section cobre-charts cobre-charts-pairs"
+      className="nm-section nm-charts nm-charts-pairs"
       aria-label="Gráficos do resumo"
     >
       <ChartCard title="Status" fileName={file("status")}>

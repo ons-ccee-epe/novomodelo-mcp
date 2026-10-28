@@ -37,13 +37,13 @@ function useLatestBatch(): LatestBatch | null {
   return latest;
 }
 
-/** Publica a altura real do cabeçalho em --cobre-header-h (o painel lateral do histórico gruda abaixo dele). */
+/** Publica a altura real do cabeçalho em --nm-header-h (o painel lateral do histórico gruda abaixo dele). */
 function useHeaderHeight(ref: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const publish = () =>
-      document.documentElement.style.setProperty("--cobre-header-h", `${el.offsetHeight}px`);
+      document.documentElement.style.setProperty("--nm-header-h", `${el.offsetHeight}px`);
     publish();
     const observer = new ResizeObserver(publish);
     observer.observe(el);
@@ -106,10 +106,10 @@ function SettingsMenu({ latest }: { latest: LatestBatch | null }) {
   const launcherText = online === null ? "verificando…" : online ? "online" : "offline";
 
   return (
-    <div className="cobre-settings" ref={rootRef}>
+    <div className="nm-settings" ref={rootRef}>
       <button
         type="button"
-        className="cobre-icon-btn"
+        className="nm-icon-btn"
         aria-label="Informações do ambiente"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -117,20 +117,20 @@ function SettingsMenu({ latest }: { latest: LatestBatch | null }) {
         <GearIcon />
       </button>
       {open && (
-        <dl className="cobre-settings-panel" aria-label="Ambiente">
-          <div className="cobre-settings-row">
+        <dl className="nm-settings-panel" aria-label="Ambiente">
+          <div className="nm-settings-row">
             <dt>Bateria</dt>
             <dd>{latest?.id ?? "—"}</dd>
           </div>
-          <div className="cobre-settings-row">
+          <div className="nm-settings-row">
             <dt>Versão do MCP</dt>
             <dd>{latest?.version ? `v${latest.version}` : "—"}</dd>
           </div>
-          <div className="cobre-settings-row">
+          <div className="nm-settings-row">
             <dt>Launcher</dt>
             <dd>{launcherText}</dd>
           </div>
-          <div className="cobre-settings-row">
+          <div className="nm-settings-row">
             <dt>Transporte</dt>
             <dd>stdio</dd>
           </div>
@@ -148,20 +148,20 @@ export function AppNav() {
   useHeaderHeight(headerRef);
   const dark = scheme === "dark";
   return (
-    <header className="cobre-header" ref={headerRef}>
-      <div className="cobre-header-inner">
-        <h1 className="cobre-header-title">Testes Automatizados · MCP NovoModelo</h1>
-        <nav className="cobre-nav" aria-label="Áreas do painel">
+    <header className="nm-header" ref={headerRef}>
+      <div className="nm-header-inner">
+        <h1 className="nm-header-title">Testes Automatizados · MCP NovoModelo</h1>
+        <nav className="nm-nav" aria-label="Áreas do painel">
           {LINKS.map((link) => (
-            <NavLink key={link.to} to={link.to} className="cobre-nav-link">
+            <NavLink key={link.to} to={link.to} className="nm-nav-link">
               {link.label}
             </NavLink>
           ))}
         </nav>
-        <div className="cobre-header-actions">
+        <div className="nm-header-actions">
           <button
             type="button"
-            className="cobre-icon-btn"
+            className="nm-icon-btn"
             aria-label={dark ? "Usar modo claro" : "Usar modo noturno"}
             title={dark ? "Modo claro" : "Modo noturno"}
             onClick={toggleScheme}

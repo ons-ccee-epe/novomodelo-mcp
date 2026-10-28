@@ -12,7 +12,7 @@ export function RunFinished({ run }: { run: RunState }) {
   return (
     <button
       type="button"
-      className="cobre-btn cobre-btn-primary cobre-btn-sm"
+      className="nm-btn nm-btn-primary nm-btn-sm"
       onClick={() => navigate(historyBatchPath(batchId))}
     >
       Ver resultados no Histórico

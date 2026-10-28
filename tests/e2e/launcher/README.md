@@ -43,10 +43,10 @@ seleção, usa o primeiro instalado (kiro-cli tem prioridade).
 Em dois terminais (ou use o script combinado abaixo):
 
 ```bash
-# 1) Launcher (uma vez: instalar deps num venv)
-cd <repositório anterior>
-pip install -r tests/e2e/launcher/requirements.txt
-python -m tests.e2e.launcher.serve          # 127.0.0.1:5175
+# 1) Launcher (as dependências vêm do grupo `e2e` do pyproject.toml)
+cd novomodelo-mcp
+uv sync --group e2e
+uv run --group e2e python -m tests.e2e.launcher.serve          # 127.0.0.1:5175
 
 # 2) Frontend
 cd tests/e2e/frontend

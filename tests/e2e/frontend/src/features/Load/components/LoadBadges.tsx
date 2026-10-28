@@ -12,7 +12,7 @@ export function LoadBadges({ writes = false, heavy = false }: Props) {
     <>
       {writes && (
         <span
-          className="cobre-load-badge"
+          className="nm-load-badge"
           data-kind="writes"
           title="Grava arquivos: cada sessão roda numa cópia das fixtures"
         >
@@ -21,7 +21,7 @@ export function LoadBadges({ writes = false, heavy = false }: Props) {
       )}
       {heavy && (
         <span
-          className="cobre-load-badge"
+          className="nm-load-badge"
           data-kind="heavy"
           title="Pesada: sobe o bridge ou a CLI do solver a cada chamada"
         >

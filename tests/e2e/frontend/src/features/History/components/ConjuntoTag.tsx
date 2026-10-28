@@ -5,7 +5,7 @@ export function ConjuntoTag({ batch }: { batch: BatchResult }) {
   const conjunto = conjuntoOf(batch);
   return (
     <span
-      className="cobre-tag"
+      className="nm-tag"
       title={conjuntoTitle(batch)}
       style={{ "--tag-color": conjuntoColor(conjunto) } as React.CSSProperties}
     >

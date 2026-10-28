@@ -34,10 +34,10 @@ function toSummary(c: CaseMeta): CaseSummary {
 
 function LauncherOffline() {
   return (
-    <div className="cobre-banner" data-kind="warning">
+    <div className="nm-banner" data-kind="warning">
       <strong>Launcher de testes offline.</strong> Para disparar testes pela UI,
       suba o launcher de dev em outro terminal:
-      <pre className="cobre-code">
+      <pre className="nm-code">
         pip install -r tests/e2e/launcher/requirements.txt{"\n"}
         python -m tests.e2e.launcher.serve
       </pre>
@@ -95,7 +95,7 @@ export function TestLauncher({
 
   if (launcher.checking) {
     return (
-      <div className="cobre-launcher cobre-muted" data-state="checking">
+      <div className="nm-launcher nm-muted" data-state="checking">
         Verificando o launcher de testes…
       </div>
     );
@@ -107,8 +107,8 @@ export function TestLauncher({
   const runningCaseId = busy ? (run?.current ?? null) : null;
 
   return (
-    <section className="cobre-launcher" aria-label="Disparar testes">
-      <div className="cobre-launcher-toolbar">
+    <section className="nm-launcher" aria-label="Disparar testes">
+      <div className="nm-launcher-toolbar">
         <LauncherControls
           providers={launcher.providers}
           selectedProvider={launcher.selectedProvider}
@@ -119,7 +119,7 @@ export function TestLauncher({
           onRunAll={launcher.runAll}
         />
         {noProvider && (
-          <div className="cobre-banner" data-kind="critical">
+          <div className="nm-banner" data-kind="critical">
             Nenhum provedor de IA instalado (kiro-cli ou claude não estão no
             PATH).
           </div>
@@ -137,13 +137,13 @@ export function TestLauncher({
         {preview}
         {progress}
         {error && (
-          <div className="cobre-banner" data-kind="critical">
+          <div className="nm-banner" data-kind="critical">
             {error}
           </div>
         )}
       </div>
 
-      <div className="cobre-launcher-split">
+      <div className="nm-launcher-split">
         <CaseList
           cases={visibleCases}
           selectedGroup={selectedGroup}
@@ -152,7 +152,7 @@ export function TestLauncher({
           resultById={resultById}
           onSelectCase={setSelectedCaseId}
         />
-        <div className="cobre-case-detail" aria-label="Detalhe do teste">
+        <div className="nm-case-detail" aria-label="Detalhe do teste">
           {selectedCase ? (
             <CaseDetail
               caseMeta={toSummary(selectedCase)}
@@ -162,7 +162,7 @@ export function TestLauncher({
               onRun={() => launcher.runCase(selectedCase.id)}
             />
           ) : (
-            <div className="cobre-no-data">
+            <div className="nm-no-data">
               Selecione um teste à esquerda para ver os detalhes e o resultado.
             </div>
           )}
