@@ -3,6 +3,91 @@ title: novomodelo-bridge changelog
 description: What changed in each novomodelo-bridge release, from 0.18.0 on.
 ---
 
+## 0.19.1
+
+Released 2026-10-26.
+
+Pairs the bridge with the **novomodelo 0.19.1** release and pins
+`novomodelo-python` to it; convert again a DECOMP case whose boundary FCF an
+earlier bridge imported.
+
+### Added
+
+- **`export dessem` exports water travel time** in the `mapcut`/`cortdeco`
+  files; a case with water travel time used to be refused.
+- **`compare newave` and `compare decomp` compare both models at their
+  operating points.** The Productivity tab splits each plant's productivity
+  gap into a part from the production functions and a part from where each
+  model operates, with each model's fit inputs. NEWAVE's operating points
+  need the `nwlistop.dat` plant list set to `999`.
+- **Both `compare` reports net the penalties out of the lower bounds**, in a
+  table under the Overview convergence chart.
+- **`convert decomp` accepts decks with a multi-month trunk or with monthly
+  stages only.**
+- **`convert decomp` converts water travel time** (`VI`). The boundary cost
+  then differs from DECOMP's by the value of the water in transit, and a note
+  lists the plants.
+- **New warnings in `convert`:**
+  - plants whose turbined-flow limit lacks part of its `hidr.dat` data
+    (`turbine-limit-data-missing`);
+  - FPHA plants whose spill the source model keeps out of the tailrace, which
+    Novomodelo cannot do yet (`fpha-spill-outside-tailrace`);
+  - negative incremental inflows in a DECOMP deck.
+
+### Changed
+
+- **The FPHA is fitted as the source model fits it.** Results change for
+  most FPHA plants, and the cases need the paired novomodelo release.
+  - `convert newave` takes the reference volume from `volumes-referencia.csv`,
+    fits turbined flow over NEWAVE's range and spillage up to twice the
+    station's largest monthly mean inflow, and reads the levels of daily and
+    run-of-river plants at the volume they are held at.
+  - `convert decomp` fits over DECOMP's volume window and `FP` records,
+    DECOMP's turbined range and twice the largest `mlt.dat` mean inflow, and
+    gives a stage with a zero turbined limit zero productivity.
+- **Turbined-flow and generation caps follow the source model.** `convert
+  decomp` caps turbined flow stage by stage at DECOMP's own limit. `convert
+  newave` caps generation at the plant's available power on every stage.
+- **The bridge requires idecomp 1.17.1, pandas 3.1 and polars 2.1 or newer**,
+  the releases it is tested with.
+- **`convert decomp` lets `centralizado` renewable parks be curtailed**, from
+  their `PEE-CONFIG-PER` state, as the cheapest way to absorb a surplus;
+  results change for decks with such parks.
+
+### Fixed
+
+- **`convert decomp` couples the boundary cuts plant by plant, as DECOMP
+  does.** Notes and warnings list the plants that borrow another plant's
+  coefficients and what cannot be represented.
+- **`convert decomp` reads values written without a decimal point as DECOMP
+  does** (a `TG` cost `299` is 2.99).
+- **`convert decomp` converts two conflicting flow restrictions on one
+  plant** as soft constraints, as DECOMP does, with a warning, instead of
+  failing.
+- **Itaipu in `convert decomp`:** an `MP` or `FD` row without a frequency
+  applies to both halves.
+- **`convert decomp` reads a `dadgnl` with a single `GL` register.**
+- **`convert newave` scores `level1` cut selection over the last two
+  iterations**, as `lml1` did; 0.19.0 scored the whole run, which kept about
+  three times as many cuts active and slowed training.
+- **`compare decomp` puts DECOMP's cost breakdown at present value**, and
+  adds its deficit, contracts and unitemized penalties.
+- **`compare decomp` counts the ANDE load in Net Load and shows the system
+  ENA in MW.**
+- **`compare decomp` renders the report when DECOMP's lower bound
+  overflowed.**
+- **The convergence chart compares the source model's best upper bound with
+  Novomodelo's best**, and `compare newave` also compares the per-iteration
+  upper bounds.
+- **`convert decomp` keeps the renewable parks of a `renovaveis` file
+  that uses the `PEE-GER-PER-PAT` card**; they used to be dropped with no
+  warning.
+- **`convert decomp` converts more LIBs electrical restrictions**: those
+  with `peq_` terms or with the `ger_usit` of a `dadgnl` GNL plant (its `GL`
+  commanded generation), those declared only by
+  `RESTRICAO-ELETRICA-INEQUACAO-PERIODO-PATAMAR` rows, and numbers such as
+  `1E+31`.
+
 ## 0.19.0
 
 Released 2026-10-20.
