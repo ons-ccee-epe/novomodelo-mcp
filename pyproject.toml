@@ -102,7 +102,3 @@ explicit-preview-rules = true
 [tool.ruff.lint.pycodestyle]
 # O formatador quebra em 100; o E501 pega só o que ele não consegue quebrar.
 max-line-length = 110
-
-[tool.ruff.lint.per-file-ignores]
-# Gera HTML: as linhas longas são do modelo da página.
-"scripts/gerar_guia.py" = ["E501"]
