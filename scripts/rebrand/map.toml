@@ -4,8 +4,6 @@
 #   uv run python <clone-novomodelo>/scripts/rebrand/rebrand.py paths  --root . --map scripts/rebrand/map.toml
 #   uv run python <clone-novomodelo>/scripts/rebrand/rebrand.py tokens --root . --map scripts/rebrand/map.toml
 #   uv run python <clone-novomodelo>/scripts/rebrand/rebrand.py check  --root . --map scripts/rebrand/map.toml
-#
-# Para o próximo nome (<nome futuro>): um mapa novo com `from = "novomodelo"`.
 
 [name]
 from = "cobre"

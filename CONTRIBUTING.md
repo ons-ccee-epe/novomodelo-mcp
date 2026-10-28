@@ -143,7 +143,7 @@ A docstring de cada módulo diz o que ele faz.
 
 ## Renomear o produto
 
-O nome do produto já mudou uma vez e vai mudar de novo (<nome futuro>). O rename é feito pela
+O rename do produto é feito pela
 ferramenta do novomodelo (o `rebrand.py` do repositório dele), guiada por
 `scripts/rebrand/map.toml`:
 

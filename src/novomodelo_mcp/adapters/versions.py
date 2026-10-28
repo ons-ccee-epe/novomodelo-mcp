@@ -32,6 +32,7 @@ BRIDGE_LATEST = "https://api.github.com/repos/ons-ccee-epe/novomodelo-bridge/rel
 BRIDGE_PAGE = "https://pypi.org/project/novomodelo-bridge/"
 MCP_PYPI = "https://pypi.org/pypi/novomodelo-mcp/json"
 MCP_PAGE = "https://pypi.org/project/novomodelo-mcp/"
+MCP_RELEASES = "https://github.com/ons-ccee-epe/novomodelo-mcp/releases"
 UPDATE_BUDGET_S = 3.0
 UPDATE_TTL_S = 6 * 3600
 NOTES_MAX_LINES = 6
@@ -449,7 +450,7 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
         }
     mcp = _newer(current, got["mcp"], lambda d: d["info"]["version"], MCP_PAGE, mcp_install_command)
     if mcp["status"] == "nova":
-        mcp["notas"] = f"{CLI_RELEASES}/tag/v{mcp['mais_recente']}"
+        mcp["notas"] = f"{MCP_RELEASES}/tag/v{mcp['mais_recente']}"
     if cli["status"] == "nova":
         newest = cli["mais_recente"]
         note = _release_note("novomodelo", newest, current)
