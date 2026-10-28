@@ -3,7 +3,7 @@ paths:
   - "src/**/*.py"
 ---
 
-# <repositório anterior> Facade Rules
+# novomodelo-mcp Facade Rules
 
 How every module under `src/novomodelo_mcp/` must behave. These are contracts, not
 style preferences: a plausible-looking deviation turns a safe, local relay

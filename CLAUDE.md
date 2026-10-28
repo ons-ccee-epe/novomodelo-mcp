@@ -1,10 +1,11 @@
-# <repositório anterior> — Agent Guidelines
+# novomodelo-mcp — Agent Guidelines
 
-<repositório anterior> is a local MCP (Model Context Protocol) server that wraps the
+novomodelo-mcp is a local MCP (Model Context Protocol) server that wraps the
 existing `novomodelo-bridge` and `novomodelo` CLIs. Each tool envelopes one CLI subcommand
 (with `--json`) or an official `novomodelo-python` binding and relays the result.
 `README.md` is the source of truth for what the server does and how it is laid
-out; this file adds only what an agent working in this checkout needs beyond it.
+out; `CONTRIBUTING.md` covers setup, tests, gates, pairing and releasing. This
+file adds only what an agent working in this checkout needs beyond them.
 
 ## Read first
 
@@ -17,12 +18,15 @@ out; this file adds only what an agent working in this checkout needs beyond it.
 ## Quick commands
 
 ```bash
-uv sync                             # install, dev group included (use --system-certs behind a corporate CA)
-uv run novomodelo-mcp                     # start the server on stdio
-python3 tests/smoke.py               # stdlib smoke tests (offline, no deps)
-python3 tests/smoke_deck.py && python3 tests/smoke_results.py && python3 tests/smoke_paths.py
-uv run pytest                        # full suite (after uv sync)
-uv run ruff check . && uv run ruff format --check .   # as CI runs it
+uv sync                                       # install, dev group included (--system-certs behind a corporate CA)
+uv run novomodelo-mcp                         # start the server on stdio
+uv run pytest -q                              # offline suite; real-binary and network tests skip
+uv run ruff check . && uv run ruff format --check .   # whole tree, as CI and the pre-commit hook run it
+python3 scripts/ci/check_no_plan_leaks.py     # hard gates, also run by CI
+python3 scripts/ci/check_comment_refs.py
+python3 scripts/ci/check_doc_paths.py
+python3 scripts/gen/sync-kiro-steering.py     # regenerate .kiro/steering/ after editing this file or .claude/rules/
+ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
 ```
 
 No `PYTHONPATH` is needed. If `import novomodelo_mcp` fails inside the venv, check
@@ -38,8 +42,8 @@ read and are the authoritative statements; do not restate them here:
 - `.claude/rules/comments.md` (`**/*.py`) — comment and docstring discipline.
 - `.claude/rules/doc-integrity.md` (`*.md`) — prose docs: no hand-frozen counts
   or versions, every cited path resolves, sober voice.
-- `.claude/rules/testing.md` (`tests/`) — the smoke/pytest tiers, offline
-  discipline, the fake CLI, and the no-network contract.
+- `.claude/rules/testing.md` (`tests/`) — the offline and opt-in tiers, the
+  fake CLI, and the no-network contract.
 - `.claude/rules/mcp-facade.md` (`src/`) — the thin-facade contract, the error
   envelope, the workspace path guard, the single network exit, and tool-shaping
   limits.
@@ -76,8 +80,11 @@ These are non-negotiable. Fix them before any commit.
   pairs — or the asymmetry is recorded.
 - **No secrets or credentials** committed; no `.env` files.
 - **No plan-structure vocabulary** (`epic`, `ticket`, `sprint`, plan ids) in
-  `src/`, `tests/` prose, `README.md`, or `docs/`. Commit messages may reference
-  plans.
+  `src/`, `tests/` prose, `README.md`, `CONTRIBUTING.md`, or `CHANGELOG.md`.
+  Plans live in the gitignored `plans/`. Commit messages may reference them.
+- **No rot-prone references** in shipped prose: no `file.py:NNN`, no
+  `MEMORY.md`, no machine-local (`~/git/...`) or gitignored paths, no paths into
+  another repository's tree. Reference symbols, named tests, or stable anchors.
 - **Comments are default-off.** A comment ships only if it survives the Deletion
   Test (`.claude/rules/comments.md`); never delete or weaken a load-bearing
   security or envelope contract.
