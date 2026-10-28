@@ -150,6 +150,10 @@ def ensure_in_workspace(*paths: str | None, settings: Settings) -> dict | None:
     for p in paths:
         if p is None:
             continue
+        # O `except ValueError` abaixo não basta: desde o 3.13, o `resolve()` do Windows
+        # devolve o caminho com NUL em vez de levantar, e ele passaria pelo guard.
+        if "\0" in p:
+            return error(22, f"caminho invalido: {p!r}", "caractere NUL no caminho")
         try:
             rp = Path(p).expanduser().resolve()
         except (OSError, ValueError) as exc:

@@ -2,6 +2,7 @@
 única saída de rede do MCP é a checagem de versões."""
 
 import dataclasses
+from pathlib import Path
 
 import pytest
 
@@ -31,6 +32,14 @@ def test_letra_de_unidade_nao_e_url(caminho):
 
 
 def test_nul_no_caminho_vira_envelope(tmp_path):
+    settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
+    err = ensure_in_workspace(str(tmp_path / "a\0b"), settings=settings)
+    assert err and err["exit_code"] == 22
+
+
+def test_nul_no_caminho_vira_envelope_quando_resolve_nao_levanta(tmp_path, monkeypatch):
+    # O `resolve()` do Windows no Python 3.13+ devolve o caminho com NUL sem levantar.
+    monkeypatch.setattr(Path, "resolve", lambda self, strict=False: self)
     settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
     err = ensure_in_workspace(str(tmp_path / "a\0b"), settings=settings)
     assert err and err["exit_code"] == 22

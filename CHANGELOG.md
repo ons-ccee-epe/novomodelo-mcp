@@ -18,3 +18,5 @@ só do MCP vira `X.Y.Z.postN`.
 
 - No macOS Intel, o MCP instala o cryptography 48, a última versão com wheel para esse
   alvo, em vez de compilar o 50 na instalação.
+- No Windows com Python 3.13 ou 3.14, a guarda de pasta recusa um caminho com caractere
+  NUL, como nos outros alvos, em vez de deixá-lo passar.
