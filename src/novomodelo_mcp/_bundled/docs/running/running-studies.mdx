@@ -179,7 +179,7 @@ Model provenance
   Opening tree:    estimated
 Training   starting... (max 128 iterations)
 Training   1/128 iter  LB: 5.06021e6  UB: 1.71260e7  gap: 238.44361%  fwd: 1ms / bwd: 1ms  [00:00:00 < 00:00:00]
-Training   128/128 iter  LB: 1.55955e7  UB: 5.79592e5  gap: -96.28360%  fwd: 2ms / bwd: 3ms  [00:00:00]
+Training   128/128 iter  LB: 1.55955e7  UB: 5.79592e5  gap: -96.28360%  fwd: 2ms / bwd: 2ms  [00:00:00]
 Training complete in 0.6s (128 iterations, iteration_limit)
   Lower bound:  1.55955e7 $/stage
   Upper bound:  5.79592e5 +/- 0.00000e0 $/stage
@@ -187,9 +187,9 @@ Training complete in 0.6s (128 iterations, iteration_limit)
   Policy rows:  384 active / 384 generated
   LP solves:    5632 (5632 first-try, 0 retried, 0 failed)
   Avg iter:     5ms
-  Time split:   Forward  194ms (29%)   solve 194ms · wait 0ms (0% of phase)
-                Backward 204ms (31%)   solve 204ms · wait 0ms (0% of phase)
-                Serial   270ms (40%)   bound 71ms · selection 0ms · other 199ms
+  Time split:   Forward  201ms (29%)   solve 201ms · wait 0ms (0% of phase)
+                Backward 215ms (31%)   solve 215ms · wait 0ms (0% of phase)
+                Serial   267ms (39%)   bound 75ms · selection 0ms · other 192ms
 Writing training outputs...
 Output written to my_study/output/ (0.0s)
 Simulation starting... (100 scenarios across 1 ranks × 1 threads)
@@ -200,8 +200,8 @@ Simulation complete in 0.3s (100 scenarios)
   Expected cost: 9.67939e6 +/- 4.64452e6 (std: 2.36965e7)
   LP solves:    400 (400 first-try, 0 retried, 0 failed)
   Avg/scenario: 0.003s
-  Time split:   Solver 272ms (82%)
-                Other  59ms (18%)
+  Time split:   Solver 272ms (88%)
+                Other  38ms (12%)
 Writing simulation outputs...
 Output written to my_study/output/ (0.0s)
 ```
@@ -323,13 +323,13 @@ only the `Threads` line and each phase's completion line. The times are from one
 ```text
 $ novomodelo run my_study --threads 1
   Threads:   1 rayon thread
-Training complete in 12.2s (128 iterations, iteration_limit)
-Simulation complete in 11.2s (1000 scenarios)
+Training complete in 12.5s (128 iterations, iteration_limit)
+Simulation complete in 11.6s (1000 scenarios)
 
 $ novomodelo run my_study --threads 4
   Threads:   4 rayon threads
-Training complete in 3.7s (128 iterations, iteration_limit)
-Simulation complete in 3.1s (1000 scenarios)
+Training complete in 3.8s (128 iterations, iteration_limit)
+Simulation complete in 3.5s (1000 scenarios)
 ```
 
 `--threads` sets the worker threads of each process (each MPI rank). It takes an
