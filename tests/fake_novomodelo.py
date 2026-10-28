@@ -88,11 +88,17 @@ if subargv[:1] == ["init"]:
 if subargv[:1] == ["run"]:
     out = Path(subargv[subargv.index("--output") + 1])
     print("fake run: start", flush=True)
-    canal = {"stdout": sys.stdout, "stderr": sys.stderr}.get(os.environ.get("FAKE_NOVOMODELO_RELATORIO"))
+    canal = {"stdout": sys.stdout, "stderr": sys.stderr}.get(
+        os.environ.get("FAKE_NOVOMODELO_RELATORIO")
+    )
     if canal:
-        for linha, destino in (("relatorio: banner", canal), ("aviso: limite baixo", sys.stderr),
-                               ("relatorio: iteracao 1", canal), ("relatorio: iteracao 2", canal),
-                               ("relatorio: resumo", canal)):
+        for linha, destino in (
+            ("relatorio: banner", canal),
+            ("aviso: limite baixo", sys.stderr),
+            ("relatorio: iteracao 1", canal),
+            ("relatorio: iteracao 2", canal),
+            ("relatorio: resumo", canal),
+        ):
             print(linha, file=destino, flush=True)
             time.sleep(0.2)
     time.sleep(float(os.environ.get("FAKE_NOVOMODELO_SLEEP", "0")))
@@ -101,7 +107,9 @@ if subargv[:1] == ["run"]:
         (out / "training").mkdir(parents=True, exist_ok=True)
         (out / "training" / "_SUCCESS").write_text("", encoding="utf-8")
         if os.environ.get("FAKE_NOVOMODELO_META"):
-            (out / "training" / "metadata.json").write_text(os.environ["FAKE_NOVOMODELO_META"], encoding="utf-8")
+            (out / "training" / "metadata.json").write_text(
+                os.environ["FAKE_NOVOMODELO_META"], encoding="utf-8"
+            )
         print("fake run: done", flush=True)
     else:
         print("fake run: solver falhou", file=sys.stderr, flush=True)

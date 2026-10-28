@@ -1,10 +1,11 @@
 """Nomes dos programas externos que o MCP chama, declarados num lugar só.
 
-Mesmo espírito do `SOFTWARE_NAME` do solver (`novomodelo-io/src/output/software.rs`):
+Mesmo espírito da constante `SOFTWARE_NAME` do `novomodelo-io`, no solver:
 evita repetir a mesma string em vários módulos. Não é mecanismo de rename — o
 rename do produto é feito pela ferramenta `rebrand.py` + `map.toml`, que
 reescreve este arquivo junto com o resto do repositório.
 """
+
 from __future__ import annotations
 
 #: Nome do servidor MCP (o cliente prefixa as tools com ele: `mcp__<nome>__<tool>`).
@@ -23,5 +24,3 @@ BRIDGE_DIST = "novomodelo-bridge"
 ENV_PREFIX = "NOVOMODELO_MCP_"
 #: Distribuição do próprio MCP (metadados: versão e pin da biblioteca).
 MCP_DIST = "novomodelo-mcp"
-#: Base do link do release do MCP, completada com `v<versão>` no aviso de versão nova.
-MCP_RELEASE_TAG_URL = "https://github.com/<organização interna>/novomodelo-mcp/releases/tag/"

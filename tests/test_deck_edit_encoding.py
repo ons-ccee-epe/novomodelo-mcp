@@ -4,6 +4,7 @@ O padrão do Windows é cp1252: sem `encoding` explícito, um deck acentuado ser
 lido e regravado na codificação local, corrompendo o arquivo do usuário. O teste
 roda a edição num processo filho com uma locale que não é UTF-8.
 """
+
 import json
 import os
 import subprocess
@@ -36,8 +37,13 @@ sys.stdout.buffer.write(json.dumps(out, ensure_ascii=True).encode("ascii"))
 
 
 def _locale_nao_utf8() -> str | None:
-    available = subprocess.run(["locale", "-a"], capture_output=True, encoding="utf-8",
-                               errors="replace").stdout.split() if os.name != "nt" else []
+    available = (
+        subprocess.run(
+            ["locale", "-a"], capture_output=True, encoding="utf-8", errors="replace"
+        ).stdout.split()
+        if os.name != "nt"
+        else []
+    )
     for name in ("pt_BR.ISO8859-1", "en_US.ISO8859-1", "pt_BR.iso88591", "en_US.iso88591"):
         if name in available:
             return name
@@ -50,17 +56,27 @@ def _edit_numa_locale_nao_utf8(path: Path, changes: list[dict], tmp_path: Path) 
     if name := _locale_nao_utf8():
         env.update(LC_ALL=name, LANG=name)
     proc = subprocess.run(
-        [sys.executable, "-c", _DRIVER, str(path), str(tmp_path / "novomodelo-inexistente"),
-         json.dumps(changes)],
-        capture_output=True, env=env, timeout=60)
+        [
+            sys.executable,
+            "-c",
+            _DRIVER,
+            str(path),
+            str(tmp_path / "novomodelo-inexistente"),
+            json.dumps(changes),
+        ],
+        capture_output=True,
+        env=env,
+        timeout=60,
+    )
     assert proc.returncode == 0, proc.stderr.decode("utf-8", errors="replace")
     return json.loads(proc.stdout.decode("ascii"))
 
 
 def _deck(tmp_path: Path) -> Path:
     deck = tmp_path / "notas.json"
-    deck.write_bytes(json.dumps({"nome": NOME, "limite": 50}, ensure_ascii=False,
-                                indent=2).encode("utf-8"))
+    deck.write_bytes(
+        json.dumps({"nome": NOME, "limite": 50}, ensure_ascii=False, indent=2).encode("utf-8")
+    )
     return deck
 
 
@@ -70,7 +86,8 @@ def test_deck_acentuado_continua_utf8_depois_da_edicao(tmp_path):
     assert out["status"] == "ok" and out["written"] is True
     assert json.loads(deck.read_bytes().decode("utf-8")) == {"nome": NOME, "limite": 99}
     assert (tmp_path / "notas.json.bak").read_bytes().decode("utf-8") == json.dumps(
-        {"nome": NOME, "limite": 50}, ensure_ascii=False, indent=2)
+        {"nome": NOME, "limite": 50}, ensure_ascii=False, indent=2
+    )
 
 
 def test_valor_acentuado_novo_e_gravado_em_utf8_e_o_antigo_volta_legivel(tmp_path):
@@ -81,9 +98,9 @@ def test_valor_acentuado_novo_e_gravado_em_utf8_e_o_antigo_volta_legivel(tmp_pat
     assert json.loads(deck.read_bytes().decode("utf-8"))["nome"] == NOVO
 
 
-
 def _edit_in_process(deck: Path) -> dict:
     from novomodelo_mcp.adapters.deck_io import edit_json
+
     return edit_json(str(deck), [{"path": "limite", "value": 99}])
 
 
@@ -114,6 +131,7 @@ def test_deck_lf_continua_lf(tmp_path):
 
 def test_restore_backup_devolve_os_bytes_originais(tmp_path):
     from novomodelo_mcp.adapters.deck_io import restore_backup
+
     deck = tmp_path / "notas.json"
     original = _deck_bytes("\r\n")
     deck.write_bytes(original)

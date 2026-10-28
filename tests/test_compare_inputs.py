@@ -1,4 +1,5 @@
 """Compare: `fmt` é vocabulário fechado no schema da tool; fora dele, recusa sem chamar o bridge."""
+
 import importlib
 from typing import get_args
 

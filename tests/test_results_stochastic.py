@@ -1,4 +1,5 @@
 """`results_stochastic`: PAR(p) e árvore de aberturas, repassados da biblioteca com filtro e teto."""
+
 import dataclasses
 import sys
 import types
@@ -6,7 +7,6 @@ import types
 import pytest
 
 from novomodelo_mcp.adapters import budget
-
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
 
@@ -21,13 +21,21 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
 class _Stochastic:
     def __init__(self, n_hydros=3, n_stages=4, lags=2):
-        self._par = np.array([[h, s, lag, 0.1 * lag] for h in range(n_hydros)
-                              for s in range(n_stages) for lag in range(1, lags + 1)], dtype=float)
+        self._par = np.array(
+            [
+                [h, s, lag, 0.1 * lag]
+                for h in range(n_hydros)
+                for s in range(n_stages)
+                for lag in range(1, lags + 1)
+            ],
+            dtype=float,
+        )
         self._stages = n_stages
 
     def par_coefficients(self):
@@ -67,7 +75,8 @@ def test_par_filtrado_por_usina_e_estagio(tool):
     assert env["status"] == "ok"
     assert env["par"]["linhas"] == [
         {"hydro_id": 1, "stage_id": 2, "lag": 1, "coefficient": 0.1},
-        {"hydro_id": 1, "stage_id": 2, "lag": 2, "coefficient": 0.2}]
+        {"hydro_id": 1, "stage_id": 2, "lag": 2, "coefficient": 0.2},
+    ]
     assert env["par"]["total"] == 2 and env["par"]["truncado"] is False
 
 

@@ -28,6 +28,7 @@ Fontes dos pontos:
   2. `training/metadata.json` no workspace com o mesmo hostname NORMALIZADO.
 Sem pontos: `calibration_probe` é o gancho (1dtoy, 1 iteração) — não implementado.
 """
+
 from __future__ import annotations
 
 import copy
@@ -50,19 +51,36 @@ DIM_KEYS = ("num_stages", "num_hydros", "num_thermals", "num_buses", "num_lines"
 
 #: Partes do config.json que NÃO entram na assinatura: as que o plano varia ou
 #: que não mudam o LP (saídas, sementes, simulação).
-_SIG_EXCLUDE = (("$schema",), ("exports",), ("simulation",),
-                ("training", "selection"), ("training", "stopping_rules"),
-                ("training", "stopping_mode"), ("training", "scenario_source"),
-                ("training", "tree_seed"))
+_SIG_EXCLUDE = (
+    ("$schema",),
+    ("exports",),
+    ("simulation",),
+    ("training", "selection"),
+    ("training", "stopping_rules"),
+    ("training", "stopping_mode"),
+    ("training", "scenario_source"),
+    ("training", "tree_seed"),
+)
 
 LEVELS = {3: "mesma_modelagem", 2: "mesmas_dimensoes", 1: "outro_caso"}
 
 #: Pastas que nunca contêm runs do Novomodelo (poda da busca).
-_SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".ruff_cache",
-              ".pytest_cache", "scenarios", "system", "simulation", "policy"}
+_SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "node_modules",
+    "__pycache__",
+    ".ruff_cache",
+    ".pytest_cache",
+    "scenarios",
+    "system",
+    "simulation",
+    "policy",
+}
 
 
 # ── assinatura do caso ────────────────────────────────────────────────────────
+
 
 def config_signature(config: dict[str, Any] | None) -> str | None:
     if not isinstance(config, dict):
@@ -85,6 +103,7 @@ def dims_of(d: dict[str, Any] | None) -> dict[str, Any]:
 
 # ── pontos medidos ────────────────────────────────────────────────────────────
 
+
 def _phase(meta: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(meta, dict):
         return None
@@ -95,16 +114,25 @@ def _phase(meta: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
     solver_s = stats.get("solve_seconds")
     if solver_s is None:
-        solver_s = (stats.get("forward_solve_seconds") or 0.0) + \
-            (stats.get("backward_solve_seconds") or 0.0)
-    return {"solves": total, "duration_s": duration,
-            "wall_per_solve": duration / total,
-            "s_per_solve": (solver_s / total) if solver_s else None}
+        solver_s = (stats.get("forward_solve_seconds") or 0.0) + (
+            stats.get("backward_solve_seconds") or 0.0
+        )
+    return {
+        "solves": total,
+        "duration_s": duration,
+        "wall_per_solve": duration / total,
+        "s_per_solve": (solver_s / total) if solver_s else None,
+    }
 
 
-def point_from_run(train_meta: dict[str, Any], sim_meta: dict[str, Any] | None = None, *,
-                   source: str | None = None, config: dict[str, Any] | None = None,
-                   config_sig: str | None = None) -> dict[str, Any] | None:
+def point_from_run(
+    train_meta: dict[str, Any],
+    sim_meta: dict[str, Any] | None = None,
+    *,
+    source: str | None = None,
+    config: dict[str, Any] | None = None,
+    config_sig: str | None = None,
+) -> dict[str, Any] | None:
     """Um ponto (threads -> wall/solve de treino e simulação). None se não servir."""
     train = _phase(train_meta)
     if train is None:
@@ -117,9 +145,7 @@ def point_from_run(train_meta: dict[str, Any], sim_meta: dict[str, Any] | None =
         "threads": dist.get("threads_per_rank") or stats.get("parallelism") or 1,
         "ranks": dist.get("world_size") or 1,
         "completed_at": train_meta.get("completed_at"),
-        # runs ≤ 0.17 gravaram `cobre_version`: é dado já escrito em disco
-        "software_version": train_meta.get("software_version")
-        or train_meta.get("cobre_version"),
+        "software_version": train_meta.get("software_version"),
         "dims": dims_of(train_meta.get("problem_dimensions")),
         "config_sig": config_sig or config_signature(config),
         "train": train,
@@ -143,8 +169,7 @@ def load_run(meta_path: Path, *, config_sig: str | None = None) -> dict[str, Any
     out = meta_path.parent.parent
     sim = _load_json(out / "simulation" / "metadata.json")
     config = None if config_sig else _load_json(out.parent / "config.json")
-    return point_from_run(train, sim, source=str(meta_path), config=config,
-                          config_sig=config_sig)
+    return point_from_run(train, sim, source=str(meta_path), config=config, config_sig=config_sig)
 
 
 def _iter_metadata(root: Path, max_depth: int):
@@ -158,12 +183,12 @@ def _iter_metadata(root: Path, max_depth: int):
         if len(here.parts) - root_depth >= max_depth:
             dirnames[:] = []
             continue
-        dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS
-                             and not d.startswith("."))
+        dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS and not d.startswith("."))
 
 
-def find_reference_runs(search_roots: list[str], hostname: str, *,
-                        max_depth: int = 6) -> list[dict[str, Any]]:
+def find_reference_runs(
+    search_roots: list[str], hostname: str, *, max_depth: int = 6
+) -> list[dict[str, Any]]:
     """Pontos de runs anteriores no MESMO hostname (normalizado), sem duplicatas."""
     seen: set[str] = set()
     found: list[dict[str, Any]] = []
@@ -184,6 +209,7 @@ def find_reference_runs(search_roots: list[str], hostname: str, *,
 
 # ── registro de calibração (por machine_id) ───────────────────────────────────
 
+
 def load_calibrations(path: Path, machine_id: str | None = None) -> list[dict[str, Any]]:
     data = _load_json(path)
     if not isinstance(data, dict) or data.get("version") != REGISTRY_VERSION:
@@ -197,12 +223,16 @@ def load_calibrations(path: Path, machine_id: str | None = None) -> list[dict[st
 def record_calibration(path: Path, machine_id: str, point: dict[str, Any]) -> None:
     """Grava/atualiza (por `source`) o ponto de um run desta máquina."""
     with file_lock(path.with_name(path.name + ".lock")):
-        entries = [e for e in load_calibrations(path)
-                   if e.get("source") != point.get("source")]
+        entries = [e for e in load_calibrations(path) if e.get("source") != point.get("source")]
         entries.append({**point, "machine_id": machine_id, "origin": "run_start"})
-        atomic_write_text(path, json.dumps(
-            {"version": REGISTRY_VERSION, "entries": entries[-MAX_CALIBRATIONS:]},
-            indent=1, ensure_ascii=False))
+        atomic_write_text(
+            path,
+            json.dumps(
+                {"version": REGISTRY_VERSION, "entries": entries[-MAX_CALIBRATIONS:]},
+                indent=1,
+                ensure_ascii=False,
+            ),
+        )
 
 
 def calibration_probe(*_args, **_kwargs) -> dict[str, Any] | None:
@@ -217,15 +247,24 @@ def calibration_probe(*_args, **_kwargs) -> dict[str, Any] | None:
 
 # ── seleção da referência ─────────────────────────────────────────────────────
 
-def match_level(point: dict[str, Any], case_dims: dict[str, Any], case_sig: str | None,
-                case_dir: str | None = None) -> int:
+
+def match_level(
+    point: dict[str, Any],
+    case_dims: dict[str, Any],
+    case_sig: str | None,
+    case_dir: str | None = None,
+) -> int:
     if dims_of(point.get("dims")) != dims_of(case_dims):
         return 1
     psig = point.get("config_sig")
     if case_sig and psig == case_sig:
         return 3
-    if psig is None and case_dir and point.get("source") and \
-            Path(point["source"]).is_relative_to(Path(case_dir).resolve()):
+    if (
+        psig is None
+        and case_dir
+        and point.get("source")
+        and Path(point["source"]).is_relative_to(Path(case_dir).resolve())
+    ):
         return 3  # run do próprio caso sem assinatura conhecida
     return 2
 
@@ -251,13 +290,19 @@ def size_ratio(point: dict[str, Any], case_dims: dict[str, Any]) -> float:
 
 
 def _is_own(point: dict[str, Any], case_dir: str | None) -> bool:
-    return bool(case_dir and point.get("source")) and \
-        Path(point["source"]).is_relative_to(Path(case_dir).resolve())
+    return bool(case_dir and point.get("source")) and Path(point["source"]).is_relative_to(
+        Path(case_dir).resolve()
+    )
 
 
-def select_reference(points: list[dict[str, Any]], case_dims: dict[str, Any],
-                     case_sig: str | None, case_dir: str | None = None, *,
-                     version: str | None = None) -> dict[str, Any] | None:
+def select_reference(
+    points: list[dict[str, Any]],
+    case_dims: dict[str, Any],
+    case_sig: str | None,
+    case_dir: str | None = None,
+    *,
+    version: str | None = None,
+) -> dict[str, Any] | None:
     """Melhor nível disponível; dentro dele, UM ponto por nº de threads
     (próprio caso > mais recente). Devolve também os candidatos p/ a faixa.
 
@@ -268,8 +313,11 @@ def select_reference(points: list[dict[str, Any]], case_dims: dict[str, Any],
         return None
     mismatch = False
     if version:
-        same = [p for p in points if normalize_version(p.get("software_version"))
-                == normalize_version(version)]
+        same = [
+            p
+            for p in points
+            if normalize_version(p.get("software_version")) == normalize_version(version)
+        ]
         mismatch = not same
         points = same or points
     scored = [(match_level(p, case_dims, case_sig, case_dir), p) for p in points]
@@ -284,23 +332,29 @@ def select_reference(points: list[dict[str, Any]], case_dims: dict[str, Any],
     for p in sorted(pool, key=lambda p: (_is_own(p, case_dir), p.get("completed_at") or "")):
         by_threads[int(p["threads"])] = p  # o último (melhor) vence
     chosen = [by_threads[t] for t in sorted(by_threads)]
-    ref = {"level": level, "level_name": LEVELS[level], "points": chosen,
-           "size_ratio": round(max(size_ratio(p, case_dims) for p in chosen), 2),
-           "candidates": [p for s, p in scored if s >= 2] or [p for _, p in scored]}
+    ref = {
+        "level": level,
+        "level_name": LEVELS[level],
+        "points": chosen,
+        "size_ratio": round(max(size_ratio(p, case_dims) for p in chosen), 2),
+        "candidates": [p for s, p in scored if s >= 2] or [p for _, p in scored],
+    }
     if mismatch:
         ref["version_mismatch"] = True
-        ref["versions_used"] = sorted({normalize_version(p.get("software_version"))
-                                       or "desconhecida" for p in chosen})
+        ref["versions_used"] = sorted(
+            {normalize_version(p.get("software_version")) or "desconhecida" for p in chosen}
+        )
     return ref
 
 
 # ── estimativa ────────────────────────────────────────────────────────────────
 
-def wall_per_solve(points: list[dict[str, Any]], phase: str, threads: int
-                   ) -> tuple[float, str] | None:
+
+def wall_per_solve(
+    points: list[dict[str, Any]], phase: str, threads: int
+) -> tuple[float, str] | None:
     """wall/solve no nº de threads alvo, sem extrapolar ganho. (valor, método)."""
-    pts = sorted((int(p["threads"]), p[phase]["wall_per_solve"])
-                 for p in points if p.get(phase))
+    pts = sorted((int(p["threads"]), p[phase]["wall_per_solve"]) for p in points if p.get(phase))
     if not pts:
         return None
     t = max(1, int(threads))
@@ -309,20 +363,20 @@ def wall_per_solve(points: list[dict[str, Any]], phase: str, threads: int
             return w, f"medido a {tp} threads"
     lo, hi = pts[0], pts[-1]
     if t < lo[0]:
-        return lo[1] * lo[0] / t, (f"reescalado de {lo[0]} p/ {t} threads "
-                                   "(linear, menos threads)")
+        return lo[1] * lo[0] / t, (f"reescalado de {lo[0]} p/ {t} threads (linear, menos threads)")
     if t > hi[0]:
-        return hi[1], (f"medido a {hi[0]} threads, SEM ganho assumido p/ {t} "
-                       "(acima do maior ponto medido)")
+        return hi[1], (
+            f"medido a {hi[0]} threads, SEM ganho assumido p/ {t} (acima do maior ponto medido)"
+        )
     for (t0, w0), (t1, w1) in zip(pts, pts[1:], strict=False):
         if t0 < t < t1:
-            return w0 + (w1 - w0) * (t - t0) / (t1 - t0), \
-                f"interpolado entre {t0} e {t1} threads"
+            return w0 + (w1 - w0) * (t - t0) / (t1 - t0), f"interpolado entre {t0} e {t1} threads"
     return hi[1], "medido"  # inalcançável
 
 
-def estimate(points: list[dict[str, Any]], threads: int, train_solves: int,
-             sim_solves: int) -> dict[str, Any] | None:
+def estimate(
+    points: list[dict[str, Any]], threads: int, train_solves: int, sim_solves: int
+) -> dict[str, Any] | None:
     tr = wall_per_solve(points, "train", threads)
     if tr is None:
         return None
@@ -332,14 +386,21 @@ def estimate(points: list[dict[str, Any]], threads: int, train_solves: int,
         sim = tr
         notes.append("simulação sem medição: usando o wall/solve do treino")
     t_tr, t_sim = tr[0] * train_solves, sim[0] * sim_solves
-    return {"training_solves": train_solves, "simulation_solves": sim_solves,
-            "training_wall_per_solve": round(tr[0], 5), "training_method": tr[1],
-            "simulation_wall_per_solve": round(sim[0], 5), "simulation_method": sim[1],
-            "training_seconds": round(t_tr, 1), "simulation_seconds": round(t_sim, 1),
-            "total_seconds": round(t_tr + t_sim, 1), "notes": notes,
-            # valor sem arredondar, só para contas internas do plano (sai antes da resposta):
-            # o arredondado vira 0.0 em casos minúsculos e quebrava divisões.
-            "_exact_training_seconds": t_tr}
+    return {
+        "training_solves": train_solves,
+        "simulation_solves": sim_solves,
+        "training_wall_per_solve": round(tr[0], 5),
+        "training_method": tr[1],
+        "simulation_wall_per_solve": round(sim[0], 5),
+        "simulation_method": sim[1],
+        "training_seconds": round(t_tr, 1),
+        "simulation_seconds": round(t_sim, 1),
+        "total_seconds": round(t_tr + t_sim, 1),
+        "notes": notes,
+        # valor sem arredondar, só para contas internas do plano (sai antes da resposta):
+        # o arredondado vira 0.0 em casos minúsculos e quebrava divisões.
+        "_exact_training_seconds": t_tr,
+    }
 
 
 def training_solves(iters: int, forward_passes: int, openings: list[int]) -> int:

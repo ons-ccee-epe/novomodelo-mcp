@@ -3,14 +3,19 @@
 Sem `NOVOMODELO_MCP_SCHEMAS_DIR` e sem o executável, a cascata cai nos schemas
 embutidos; a edição que viola o schema de `config.json` precisa ser recusada.
 """
+
 import dataclasses
 import json
 
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.deck import register_deck
 
-CONFIG = {"training": {"selection": {"method": "sampled", "forward_passes": 4},
-                       "stopping_rules": [{"type": "iteration_limit", "limit": 50}]}}
+CONFIG = {
+    "training": {
+        "selection": {"method": "sampled", "forward_passes": 4},
+        "stopping_rules": [{"type": "iteration_limit", "limit": 50}],
+    }
+}
 
 
 class _CaptureMCP:
@@ -21,14 +26,16 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
 def _deck_edit_json(tmp_path, monkeypatch):
     for var in ("SCHEMAS_DIR", "WORKSPACE", "SOLVER_BIN"):
         monkeypatch.delenv(f"NOVOMODELO_MCP_{var}", raising=False)
-    settings = dataclasses.replace(load_settings(),
-                                   solver_bin=str(tmp_path / "novomodelo-inexistente"))
+    settings = dataclasses.replace(
+        load_settings(), solver_bin=str(tmp_path / "novomodelo-inexistente")
+    )
     mcp = _CaptureMCP()
     register_deck(mcp, settings)
     return mcp.tools["deck_edit_json"]
@@ -55,5 +62,7 @@ def test_valor_valido_grava_com_backup(tmp_path, monkeypatch):
     cfg = _write_config(tmp_path)
     out = edit(str(cfg), [{"path": "training.selection.forward_passes", "value": 8}])
     assert out["status"] == "ok" and out["written"] is True
-    assert json.loads(cfg.read_text(encoding="utf-8"))["training"]["selection"]["forward_passes"] == 8
+    assert (
+        json.loads(cfg.read_text(encoding="utf-8"))["training"]["selection"]["forward_passes"] == 8
+    )
     assert (tmp_path / "config.json.bak").exists()

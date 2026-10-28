@@ -1,14 +1,20 @@
 """Caminho nunca é URL: o guard recusa esquema remoto, com ou sem workspace, porque a
 única saída de rede do MCP é a checagem de versões."""
+
 import dataclasses
+from pathlib import Path
 
 import pytest
 
 from novomodelo_mcp.adapters.paths import ensure_in_workspace
 from novomodelo_mcp.config import load_settings
 
-URLS = ["http://127.0.0.1:9/exfil?dado=x", "https://exemplo.org/a.parquet", "s3://bucket/k.parquet",
-        "hf://datasets/x/y.parquet"]
+URLS = [
+    "http://127.0.0.1:9/exfil?dado=x",
+    "https://exemplo.org/a.parquet",
+    "s3://bucket/k.parquet",
+    "hf://datasets/x/y.parquet",
+]
 
 
 @pytest.mark.parametrize("workspace", [None, "ws"])
@@ -26,6 +32,14 @@ def test_letra_de_unidade_nao_e_url(caminho):
 
 
 def test_nul_no_caminho_vira_envelope(tmp_path):
+    settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
+    err = ensure_in_workspace(str(tmp_path / "a\0b"), settings=settings)
+    assert err and err["exit_code"] == 22
+
+
+def test_nul_no_caminho_vira_envelope_quando_resolve_nao_levanta(tmp_path, monkeypatch):
+    # O `resolve()` do Windows no Python 3.13+ devolve o caminho com NUL sem levantar.
+    monkeypatch.setattr(Path, "resolve", lambda self, strict=False: self)
     settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
     err = ensure_in_workspace(str(tmp_path / "a\0b"), settings=settings)
     assert err and err["exit_code"] == 22
@@ -58,6 +72,7 @@ def test_deck_read_parquet_com_url_nao_sai_para_a_rede(tmp_path, monkeypatch):
             def deco(fn):
                 self.tools[fn.__name__] = fn
                 return fn
+
             return deco
 
     monkeypatch.chdir(tmp_path)

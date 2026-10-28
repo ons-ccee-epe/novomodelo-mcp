@@ -1,58 +1,77 @@
-#!/usr/bin/env python3
-"""Smoke test de init / plano / apply / run assíncrono (stdlib puro, offline).
+"""init / plano / apply / run assíncrono, offline.
 
 Usa o `novomodelo` falso (tests/fake_novomodelo.py, via lançador portável em _fakes.py) e
 uma máquina MOCKADA (machine_id, hostname, cores, RAM) com metadata/config
 sintéticos -> veredito determinístico em qualquer SO. Cada teste usa um state
 dir temporário (NOVOMODELO_MCP_STATE_DIR) — nunca o do usuário.
-A execução REAL do solver só roda com NOVOMODELO_MCP_REAL_SOLVER=1 (fora do CI).
-Roda com: python3 tests/smoke_run.py
 """
+
 import contextlib
 import json
 import os
 import socket
-import sys
 import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "tests"))
+import pytest
+from _fakes import fake_bin
 
-from _fakes import fake_bin                              # noqa: E402
-from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state  # noqa: E402
-from novomodelo_mcp.config import load_settings              # noqa: E402
-from novomodelo_mcp.tools.run import make_plan, register_run  # noqa: E402
+from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state
+from novomodelo_mcp.config import load_settings
+from novomodelo_mcp.tools.run import make_plan, register_run
 
 FAKE = fake_bin("fake_novomodelo.py")
 HOST = "host-sintetico"
 MID = "0123456789abcdef"
-GIB = 1024 ** 3
-MOCK_MACHINE = {"machine_id": MID, "hostname": HOST, "cpu_count": 8,
-                "ram_bytes": 16 * GIB, "ram_gib": 16.0, "platform": "Test"}
+GIB = 1024**3
+MOCK_MACHINE = {
+    "machine_id": MID,
+    "hostname": HOST,
+    "cpu_count": 8,
+    "ram_bytes": 16 * GIB,
+    "ram_gib": 16.0,
+    "platform": "Test",
+}
 
 # Fixture sintética com ordens de grandeza de um run real de porte médio
 # (8 CPUs/16 GiB, 4 threads): 72 estágios × 159 hidros, fwd=4, iters=6,
 # 8 aberturas -> 15408 solves, ~243 s de treino. Valida o modelo de custo.
 REF_META = {
-    "hostname": HOST, "duration_seconds": 242.633, "completed_at": "2026-10-01T00:00:00Z",
+    "hostname": HOST,
+    "duration_seconds": 242.633,
+    "completed_at": "2026-10-01T00:00:00Z",
     "configuration": {"max_iterations": 6, "forward_passes": 4},
     "problem_dimensions": {"num_stages": 72, "num_hydros": 159, "num_buses": 1},
-    "solve_stats": {"total_lp_solves": 15408, "forward_solve_seconds": 158.5009550469995,
-                    "backward_solve_seconds": 553.9910048730003, "parallelism": 4},
+    "solve_stats": {
+        "total_lp_solves": 15408,
+        "forward_solve_seconds": 158.5009550469995,
+        "backward_solve_seconds": 553.9910048730003,
+        "parallelism": 4,
+    },
     "distribution": {"backend": "local", "world_size": 1, "threads_per_rank": 4},
 }
-SIM_META = {"duration_seconds": 148.623,
-            "solve_stats": {"total_lp_solves": 7200, "solve_seconds": 582.49, "parallelism": 4}}
+SIM_META = {
+    "duration_seconds": 148.623,
+    "solve_stats": {"total_lp_solves": 7200, "solve_seconds": 582.49, "parallelism": 4},
+}
 # Mesmo caso a 7 threads numa CPU híbrida 4P+4E: MAIS LENTO que a 4 threads.
-REF_META_7 = {**REF_META, "duration_seconds": 255.905, "completed_at": "2026-10-02T00:00:00Z",
-              "solve_stats": {**REF_META["solve_stats"], "forward_solve_seconds": 180.0,
-                              "backward_solve_seconds": 573.8, "parallelism": 7},
-              "distribution": {"backend": "local", "world_size": 1, "threads_per_rank": 7}}
-SIM_META_7 = {"duration_seconds": 164.962,
-              "solve_stats": {"total_lp_solves": 7200, "solve_seconds": 1114.9, "parallelism": 7}}
+REF_META_7 = {
+    **REF_META,
+    "duration_seconds": 255.905,
+    "completed_at": "2026-10-02T00:00:00Z",
+    "solve_stats": {
+        **REF_META["solve_stats"],
+        "forward_solve_seconds": 180.0,
+        "backward_solve_seconds": 573.8,
+        "parallelism": 7,
+    },
+    "distribution": {"backend": "local", "world_size": 1, "threads_per_rank": 7},
+}
+SIM_META_7 = {
+    "duration_seconds": 164.962,
+    "solve_stats": {"total_lp_solves": 7200, "solve_seconds": 1114.9, "parallelism": 7},
+}
 
 
 class _StubMCP:
@@ -65,6 +84,7 @@ class _StubMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -82,8 +102,10 @@ def _env(**kv):
 @contextlib.contextmanager
 def _sandbox(**kv):
     """Workspace + state dir temporários (nunca toca o estado real do usuário)."""
-    with tempfile.TemporaryDirectory() as d, \
-            _env(NOVOMODELO_MCP_WORKSPACE=d, NOVOMODELO_MCP_STATE_DIR=str(Path(d) / "state"), **kv):
+    with (
+        tempfile.TemporaryDirectory() as d,
+        _env(NOVOMODELO_MCP_WORKSPACE=d, NOVOMODELO_MCP_STATE_DIR=str(Path(d) / "state"), **kv),
+    ):
         os.environ.pop("NOVOMODELO_MCP_ALLOW_FORCE", None)
         try:
             yield Path(d)
@@ -100,28 +122,56 @@ def _tools():
     return mcp.tools
 
 
-def _make_case(root: Path, *, fwd=4, iters=6, n_stages=72, openings=8, hydros=159,
-               sim=100, meta_host=HOST, modeling="penalty") -> Path:
+def _make_case(
+    root: Path,
+    *,
+    fwd=4,
+    iters=6,
+    n_stages=72,
+    openings=8,
+    hydros=159,
+    sim=100,
+    meta_host=HOST,
+    modeling="penalty",
+) -> Path:
     case = root / "caso"
     (case / "system").mkdir(parents=True)
-    (case / "config.json").write_text(json.dumps({
-        "training": {"selection": {"method": "sampled", "forward_passes": fwd},
-                     "stopping_rules": [{"type": "iteration_limit", "limit": iters}]},
-        "simulation": {"enabled": True, "selection": {"method": "sampled",
-                                                      "num_scenarios": sim}},
-        "modeling": {"inflow_non_negativity": {"method": modeling}},
-    }), encoding="utf-8")
-    (case / "stages.json").write_text(json.dumps({"stages": [
-        {"id": i, "num_openings": openings} for i in range(n_stages)]}), encoding="utf-8")
-    (case / "system" / "hydros.json").write_text(json.dumps(
-        {"hydros": [{"id": i} for i in range(hydros)]}), encoding="utf-8")
-    (case / "system" / "buses.json").write_text(json.dumps({"buses": [{"id": 0}]}), encoding="utf-8")
+    (case / "config.json").write_text(
+        json.dumps(
+            {
+                "training": {
+                    "selection": {"method": "sampled", "forward_passes": fwd},
+                    "stopping_rules": [{"type": "iteration_limit", "limit": iters}],
+                },
+                "simulation": {
+                    "enabled": True,
+                    "selection": {"method": "sampled", "num_scenarios": sim},
+                },
+                "modeling": {"inflow_non_negativity": {"method": modeling}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (case / "stages.json").write_text(
+        json.dumps({"stages": [{"id": i, "num_openings": openings} for i in range(n_stages)]}),
+        encoding="utf-8",
+    )
+    (case / "system" / "hydros.json").write_text(
+        json.dumps({"hydros": [{"id": i} for i in range(hydros)]}), encoding="utf-8"
+    )
+    (case / "system" / "buses.json").write_text(
+        json.dumps({"buses": [{"id": 0}]}), encoding="utf-8"
+    )
     if meta_host:
         tr = case / "output" / "training"
         tr.mkdir(parents=True)
-        (tr / "metadata.json").write_text(json.dumps({**REF_META, "hostname": meta_host}), encoding="utf-8")
+        (tr / "metadata.json").write_text(
+            json.dumps({**REF_META, "hostname": meta_host}), encoding="utf-8"
+        )
         (case / "output" / "simulation").mkdir()
-        (case / "output" / "simulation" / "metadata.json").write_text(json.dumps(SIM_META), encoding="utf-8")
+        (case / "output" / "simulation" / "metadata.json").write_text(
+            json.dumps(SIM_META), encoding="utf-8"
+        )
     return case
 
 
@@ -136,6 +186,7 @@ def _wait(tools, job_id, timeout=15.0):
 
 
 # ── máquina ───────────────────────────────────────────────────────────────────
+
 
 def test_machine_meminfo_and_mock():
     assert machine.parse_meminfo("MemTotal:       16384000 kB\nMemFree: 1 kB") == 16384000 * 1024
@@ -153,7 +204,7 @@ def test_machine_cgroup_parsers_and_hostname():
     assert machine.parse_cpu_max("max 100000") is None
     assert machine.parse_mem_limit("max") is None
     assert machine.parse_mem_limit("8589934592\n") == 8 * GIB
-    assert machine.parse_mem_limit(str(2 ** 63 - 4096)) is None  # cgroup v1 "ilimitado"
+    assert machine.parse_mem_limit(str(2**63 - 4096)) is None  # cgroup v1 "ilimitado"
     assert machine.normalize_hostname(" Host-A.local ") == "host-a"
 
 
@@ -164,6 +215,7 @@ def test_state_dir_is_persistent_not_tmp():
 
 
 # ── custo ─────────────────────────────────────────────────────────────────────
+
 
 def test_machine_hybrid_parsers():
     assert machine.parse_cpu_list("0-7,16-23") == 16 and machine.parse_cpu_list("3") == 1
@@ -178,6 +230,7 @@ def test_machine_hybrid_parsers():
         rec[30:32] = (1).to_bytes(2, "little")
         rec[32:40] = mask.to_bytes(8, "little")
         return bytes(rec)
+
     buf = core(1, 0b11) + core(1, 0b1100) + core(0, 0b10000) + core(0, 0b100000)
     cores = machine.parse_win_cores(buf)
     assert cores == [(1, 2), (1, 2), (0, 1), (0, 1)], cores
@@ -187,6 +240,7 @@ def test_machine_hybrid_parsers():
 
 
 # ── tempo de execução ─────────────────────────────────────────────────────────
+
 
 def test_runtime_model_matches_reference_point():
     p4 = runtime.point_from_run(REF_META, SIM_META, source="ref4")
@@ -217,19 +271,25 @@ def test_threads_choice_hybrid_and_measured():
     assert run_plan.choose_threads(hybrid, None, None)[0] == 4
     assert run_plan.choose_threads(MOCK_MACHINE, None, None)[0] == 7  # cores − 1
     t, basis = run_plan.choose_threads(MOCK_MACHINE, ref, None)
-    assert t == 4 and "medido" in basis, (t, basis)                  # dado medido vence
-    assert run_plan.choose_threads(MOCK_MACHINE, ref, 6)[0] == 6      # informado vence
+    assert t == 4 and "medido" in basis, (t, basis)  # dado medido vence
+    assert run_plan.choose_threads(MOCK_MACHINE, ref, 6)[0] == 6  # informado vence
 
 
 def test_find_reference_same_host_only():
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
-        for name, host, total in (("a", HOST, 15408), ("b", "outra-maquina", 99999),
-                                  ("c", HOST, 0)):
+        for name, host, total in (
+            ("a", HOST, 15408),
+            ("b", "outra-maquina", 99999),
+            ("c", HOST, 0),
+        ):
             tr = root / name / "output" / "training"
             tr.mkdir(parents=True)
-            meta = {**REF_META, "hostname": host,
-                    "solve_stats": {**REF_META["solve_stats"], "total_lp_solves": total}}
+            meta = {
+                **REF_META,
+                "hostname": host,
+                "solve_stats": {**REF_META["solve_stats"], "total_lp_solves": total},
+            }
             (tr / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
         runs = runtime.find_reference_runs([d], HOST.upper() + ".local")  # normalizado
         assert len(runs) == 1 and f"{os.sep}a{os.sep}" in runs[0]["source"], runs
@@ -246,10 +306,13 @@ def test_reference_prefers_same_modeling_and_reports_range():
         trn = _make_case(d / "trn", modeling="truncation")
         # truncation: LP mais barato e run MAIS RECENTE (antes vencia o desempate)
         meta = {**REF_META, "duration_seconds": 186.6, "completed_at": "2026-12-31T00:00:00Z"}
-        (trn / "output" / "training" / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
+        (trn / "output" / "training" / "metadata.json").write_text(
+            json.dumps(meta), encoding="utf-8"
+        )
         case = _make_case(d / "alvo", modeling="penalty", meta_host=None)
-        plan = make_plan(str(case), load_settings(), machine={**MOCK_MACHINE,
-                                                              "performance_cpus": 4})
+        plan = make_plan(
+            str(case), load_settings(), machine={**MOCK_MACHINE, "performance_cpus": 4}
+        )
         assert plan["reference"]["level"] == "mesma_modelagem", plan["reference"]
         src = plan["reference"]["points"][0]["source"]
         assert f"{os.sep}pen{os.sep}" in src, src
@@ -259,6 +322,7 @@ def test_reference_prefers_same_modeling_and_reports_range():
 
 
 # ── plano ─────────────────────────────────────────────────────────────────────
+
 
 def test_plan_fits_with_reference():
     with _sandbox() as d:
@@ -323,13 +387,14 @@ def test_plan_nao_cabe_and_indeterminado():
 def test_plan_memory_gate():
     with _sandbox() as d:
         case = _make_case(d, fwd=200, iters=50)
-        tiny = {**MOCK_MACHINE, "ram_bytes": 64 * 1024 ** 2}  # 64 MiB
-        plan = make_plan(str(case), load_settings(), time_budget_s=10 ** 9, machine=tiny)
+        tiny = {**MOCK_MACHINE, "ram_bytes": 64 * 1024**2}  # 64 MiB
+        plan = make_plan(str(case), load_settings(), time_budget_s=10**9, machine=tiny)
         assert plan["memory"]["level"] == "nao_cabe", plan["memory"]
         assert plan["verdict"] == "nao_cabe", plan
 
 
 # ── tools: init / apply ───────────────────────────────────────────────────────
+
 
 def test_init_list_and_guard():
     with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE) as d:
@@ -355,6 +420,7 @@ def test_init_list_and_guard():
 
 def test_cli_paths_are_absolute_even_for_dash_prefixed_input():
     from novomodelo_mcp.tools.run import _cli_path
+
     cwd = os.getcwd()
     with tempfile.TemporaryDirectory() as d:
         os.chdir(d)
@@ -379,17 +445,23 @@ def test_run_apply_config_only():
         assert bad["status"] == "error" and bad["exit_code"] == 22, bad
         neg = t["run_apply"](str(case), {"forward_passes": -5})
         import importlib.util
+
         if importlib.util.find_spec("jsonschema"):
             assert neg["status"] == "error", neg
         else:
             assert "validação por schema pulada" in (neg.get("note") or ""), neg
         dry = t["run_apply"](str(case), {"simulation_scenarios": 5}, dry_run=True)
         assert dry["written"] is False, dry
-        assert json.loads((case / "config.json").read_text(encoding="utf-8"))["simulation"]["selection"][
-            "num_scenarios"] == 100
+        assert (
+            json.loads((case / "config.json").read_text(encoding="utf-8"))["simulation"][
+                "selection"
+            ]["num_scenarios"]
+            == 100
+        )
 
 
 # ── tools: run assíncrono ─────────────────────────────────────────────────────
+
 
 def test_run_async_lifecycle():
     with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_SLEEP="0.3") as d:
@@ -399,8 +471,14 @@ def test_run_async_lifecycle():
         r = t["run_start"](str(case), threads=2)
         assert r["status"] == "ok" and r["job_id"], r
         assert time.time() - t0 < 5, "start deveria voltar na hora"
-        assert r["cmd"][-6:] == ["--output", str((case / "output").resolve()), "--threads", "2",
-                                 "--comm-backend", "local"], r["cmd"]
+        assert r["cmd"][-6:] == [
+            "--output",
+            str((case / "output").resolve()),
+            "--threads",
+            "2",
+            "--comm-backend",
+            "local",
+        ], r["cmd"]
         busy = t["run_start"](str(case), threads=2)
         assert busy["status"] == "error" and busy["exit_code"] == 16, busy
         st = _wait(t, r["job_id"])
@@ -412,7 +490,7 @@ def test_run_async_lifecycle():
 
 
 def test_run_logs_mostra_os_dois_canais_em_ordem_sem_duplicar():
-    for canal in ("stderr", "stdout"):   # relatório da 0.18.0 e da 0.18.1
+    for canal in ("stderr", "stdout"):  # relatório da 0.18.0 e da 0.18.1
         with _sandbox(NOVOMODELO_MCP_SOLVER_BIN=FAKE, FAKE_NOVOMODELO_RELATORIO=canal) as d:
             case = _make_case(d, meta_host=None)
             t = _tools()
@@ -422,9 +500,13 @@ def test_run_logs_mostra_os_dois_canais_em_ordem_sem_duplicar():
             assert "stdout" not in logs and "stderr" not in logs, logs
             linhas = [x for x in logs["saida"].splitlines() if "relatorio" in x or "aviso" in x]
             marca = "[stderr] " if canal == "stderr" else ""
-            assert linhas == [f"{marca}relatorio: banner", "[stderr] aviso: limite baixo",
-                              f"{marca}relatorio: iteracao 1", f"{marca}relatorio: iteracao 2",
-                              f"{marca}relatorio: resumo"], (canal, logs)
+            assert linhas == [
+                f"{marca}relatorio: banner",
+                "[stderr] aviso: limite baixo",
+                f"{marca}relatorio: iteracao 1",
+                f"{marca}relatorio: iteracao 2",
+                f"{marca}relatorio: resumo",
+            ], (canal, logs)
 
 
 def test_run_async_failure_and_cancel():
@@ -492,8 +574,9 @@ def test_calibration_registry_by_machine_id():
         plan = make_plan(str(case2), load_settings(), machine=m)
         assert plan["reference"]["points"][0]["origin"] == "run_start", plan
         # outra máquina NÃO herda a calibração
-        plan = make_plan(str(case2), load_settings(),
-                         machine={**m, "machine_id": "ffffffffffffffff"})
+        plan = make_plan(
+            str(case2), load_settings(), machine={**m, "machine_id": "ffffffffffffffff"}
+        )
         assert plan["verdict"] == "indeterminado", plan
 
 
@@ -512,8 +595,12 @@ def test_job_lost_when_runner_dies():
         settings = load_settings()
         d = jobs.jobs_root(settings) / "20200101-000000-abcdef"
         d.mkdir()
-        (d / "job.json").write_text(json.dumps({"job_id": d.name, "cmd": ["x"], "pid": 1,
-                                                "started_at": time.time() - 3600}), encoding="utf-8")
+        (d / "job.json").write_text(
+            json.dumps(
+                {"job_id": d.name, "cmd": ["x"], "pid": 1, "started_at": time.time() - 3600}
+            ),
+            encoding="utf-8",
+        )
         (d / "heartbeat").touch()
         old = time.time() - 3600
         os.utime(d / "heartbeat", (old, old))
@@ -521,36 +608,17 @@ def test_job_lost_when_runner_dies():
         assert jobs.prune_jobs(settings, keep_days=0) == [d.name]
 
 
-def test_real_solver_gated():
-    """Execução REAL (novomodelo init 1dtoy + 1 iteração). Só com NOVOMODELO_MCP_REAL_SOLVER=1."""
-    if os.environ.get("NOVOMODELO_MCP_REAL_SOLVER") != "1":
-        print("    (pulado: defina NOVOMODELO_MCP_REAL_SOLVER=1 para rodar o solver real)")
-        return
+@pytest.mark.executaveis_reais
+def test_real_solver():
+    """Execução real: novomodelo init 1dtoy + 1 iteração."""
     with _sandbox() as d:
         t = _tools()
         case = str(d / "toy")
         assert t["case_init"](directory=case, template="1dtoy")["status"] == "ok"
-        assert t["run_apply"](case, {"iteration_limit": 1,
-                                           "simulation_scenarios": 1})["status"] == "ok"
+        assert (
+            t["run_apply"](case, {"iteration_limit": 1, "simulation_scenarios": 1})["status"]
+            == "ok"
+        )
         r = t["run_start"](case, threads=1, override=True)
         st = _wait(t, r["job_id"], timeout=300)
         assert st["state"] == "succeeded", (st, t["run_logs"](r["job_id"]))
-
-
-def main():
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
-    failed = 0
-    for t in tests:
-        try:
-            t()
-            print(f"  PASS {t.__name__}")
-        except AssertionError as e:
-            failed += 1
-            print(f"  FAIL {t.__name__}: {e}")
-    print(f"\n{len(tests) - failed}/{len(tests)} passaram")
-    sys.exit(1 if failed else 0)
-
-
-if __name__ == "__main__":
-    main()

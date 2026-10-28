@@ -9,6 +9,7 @@ Diretório (primeiro que valer):
 Nunca usa o diretório temporário do sistema: ele é limpo pelo SO e o estado dos
 runs precisa sobreviver a restarts. Stdlib pura.
 """
+
 from __future__ import annotations
 
 import os

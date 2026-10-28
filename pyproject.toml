@@ -18,6 +18,8 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
@@ -32,7 +34,19 @@ dependencies = [
     "novomodelo-bridge==0.19.0",
     "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
     "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
+    # O cryptography (via mcp -> pyjwt[crypto]) publica wheel para macOS Intel só até a
+    # 48.x; sem o limite, quem instala nesse alvo compila o sdist (Rust e OpenSSL). A
+    # faixa complementar obriga o uv.lock a resolver as duas versões: com uma só, ele
+    # fixa a 48 em todo alvo, e a CI deixa de testar a versão que os outros alvos recebem.
+    "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "cryptography>=49; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
+
+[project.urls]
+Homepage = "https://docs.modelossetoreletrico.org.br/"
+Repository = "https://github.com/ons-ccee-epe/novomodelo-mcp"
+Documentation = "https://docs.modelossetoreletrico.org.br/"
+"Bug Tracker" = "https://github.com/ons-ccee-epe/novomodelo-mcp/issues"
 
 [project.scripts]
 novomodelo-mcp = "novomodelo_mcp.server:main"
@@ -53,21 +67,38 @@ artifacts = [
     "src/novomodelo_mcp/_bundled/**/*.sqlite",
 ]
 
+[tool.hatch.build.targets.sdist]
+# Fora do sdist: regras de agente, caches e os checkouts que a release faz na raiz
+# (_docs, _novomodelo, _bridge). O hatchling inclui o .gitignore de qualquer jeito.
+exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md"]
+
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6", "hypothesis>=6"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
-python_files = ["test_*.py", "smoke_*.py"]
+python_files = ["test_*.py"]
+addopts = ["--strict-markers"]
+markers = [
+    "executaveis_reais: precisa do novomodelo e do novomodelo-bridge instalados (--executaveis-reais)",
+    "rede: acessa a rede, só os domínios oficiais (--com-rede)",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Regras de agente: os exemplos de código nos .md não são código do produto.
+extend-exclude = [".claude", ".kiro"]
 
 [tool.ruff.lint]
+# PGH proíbe supressão em branco: todo `# noqa` e `# type: ignore` nomeia o código.
 # PLW1514 (open/read_text/write_text sem `encoding`) só existe em preview; o
 # `explicit-preview-rules` liga essa e nenhuma outra regra de preview.
-select = ["F", "B", "UP", "PLW1514"]
+select = ["E", "F", "I", "B", "UP", "PGH", "PLW1514"]
 preview = true
 explicit-preview-rules = true
+
+[tool.ruff.lint.pycodestyle]
+# O formatador quebra em 100; o E501 pega só o que ele não consegue quebrar.
+max-line-length = 110

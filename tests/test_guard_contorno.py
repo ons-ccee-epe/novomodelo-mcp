@@ -1,4 +1,5 @@
 """Toda tool que recebe caminho diz ao agente para não contornar a pasta de trabalho."""
+
 import inspect
 
 from novomodelo_mcp.adapters.paths import AVISO_NA_TOOL, NAO_CONTORNE, PATH_PARAMS
@@ -15,12 +16,20 @@ def test_instructions_proibem_o_contorno():
 
 def test_toda_tool_com_parametro_de_caminho_traz_o_aviso():
     tools = _tools()
-    com_caminho = {n for n, t in tools.items()
-                   if set(inspect.signature(t.fn).parameters) & PATH_PARAMS}
-    assert {"deck_read_json", "bridge_convert_newave", "bridge_convert_decomp",
-            "bridge_compare_newave", "bridge_compare_decomp", "run_start"} <= com_caminho
-    sem_aviso = sorted(n for n in com_caminho | {"deck_sql"}
-                       if AVISO_NA_TOOL not in tools[n].description)
+    com_caminho = {
+        n for n, t in tools.items() if set(inspect.signature(t.fn).parameters) & PATH_PARAMS
+    }
+    assert {
+        "deck_read_json",
+        "bridge_convert_newave",
+        "bridge_convert_decomp",
+        "bridge_compare_newave",
+        "bridge_compare_decomp",
+        "run_start",
+    } <= com_caminho
+    sem_aviso = sorted(
+        n for n in com_caminho | {"deck_sql"} if AVISO_NA_TOOL not in tools[n].description
+    )
     assert sem_aviso == []
 
 
@@ -32,6 +41,7 @@ def test_tool_sem_caminho_nao_leva_o_aviso():
 
 def test_incluir_pastas_sempre_pede_aprovacao():
     from novomodelo_mcp import client_config as C
+
     tool = _tools()["incluir_pastas"]
     assert tool.annotations.readOnlyHint is False
     assert "incluir_pastas" not in C.read_only_tools()

@@ -1,5 +1,6 @@
 """Cancelar um run derruba a árvore inteira do comando, não só o filho direto: um solver
 lançado por script deixaria o neto gravando no `output/` depois do `cancelled`."""
+
 import os
 import subprocess
 import sys
@@ -10,7 +11,9 @@ import pytest
 
 from novomodelo_mcp.adapters import _job_runner
 
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="árvore POSIX; o Windows usa taskkill /T")
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="árvore POSIX; o Windows usa taskkill /T"
+)
 
 
 def _vivo(pid: int) -> bool:
@@ -25,8 +28,11 @@ def _vivo(pid: int) -> bool:
 def test_cancel_derruba_o_neto(tmp_path):
     neto = tmp_path / "neto.pid"
     cmd = ["sh", "-c", f"sleep 300 & echo $! > '{neto}'; wait"]
-    runner = subprocess.Popen([sys.executable, _job_runner.__file__, str(tmp_path), *cmd],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    runner = subprocess.Popen(
+        [sys.executable, _job_runner.__file__, str(tmp_path), *cmd],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     prazo = time.time() + 10
     while not (neto.exists() and neto.read_text().strip()) and time.time() < prazo:
         time.sleep(0.05)

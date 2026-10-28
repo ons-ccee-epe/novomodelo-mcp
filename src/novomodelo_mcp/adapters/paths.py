@@ -12,13 +12,13 @@ entrada como não confiável.
   como liberação.
 - A recusa diz ao agente para não contornar e para pedir ao usuário a inclusão.
 """
-from __future__ import annotations
 
-import re
+from __future__ import annotations
 
 import inspect
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,15 +30,29 @@ NAO_CONTORNE = (
     "Caminho fora da pasta de trabalho: não leia esse caminho por outras ferramentas "
     "(leitura de arquivo, terminal, outro MCP). Pergunte ao usuário se pode incluir a "
     "pasta (`pasta_sugerida` da recusa); com o sim, chame `incluir_pastas` com todas as "
-    "pastas de uma vez e tente de novo. Não peça ao usuário para rodar comandos.")
+    "pastas de uma vez e tente de novo. Não peça ao usuário para rodar comandos."
+)
 
 AVISO_NA_TOOL = (
     "Caminho fora da pasta de trabalho é recusado: não contorne com outras ferramentas; "
-    "pergunte ao usuário e inclua a pasta com `incluir_pastas`.")
+    "pergunte ao usuário e inclua a pasta com `incluir_pastas`."
+)
 
 #: Parâmetros de tool que recebem caminho e passam pelo guard.
-PATH_PARAMS = frozenset({"path", "case_dir", "src", "dst", "output_dir", "out_dir", "output",
-                         "directory", "newave_dir", "decomp_dir"})
+PATH_PARAMS = frozenset(
+    {
+        "path",
+        "case_dir",
+        "src",
+        "dst",
+        "output_dir",
+        "out_dir",
+        "output",
+        "directory",
+        "newave_dir",
+        "decomp_dir",
+    }
+)
 
 #: Tools guardadas cujo caminho vem dentro de outro parâmetro (o SQL do `deck_sql`).
 GUARDED_WITHOUT_PATH_PARAM = frozenset({"deck_sql"})
@@ -107,8 +121,11 @@ def suggested_folder(resolved: Path) -> Path:
 
 def refuse_outside(text: str, resolved: Path, roots: list[Path]) -> dict[str, Any]:
     """Envelope 13 de caminho fora das raízes, com a instrução de não contornar."""
-    env = error(13, f"caminho fora do workspace permitido: {text}",
-                pasta_sugerida=str(suggested_folder(resolved)))
+    env = error(
+        13,
+        f"caminho fora do workspace permitido: {text}",
+        pasta_sugerida=str(suggested_folder(resolved)),
+    )
     env["diagnostics"] += [NAO_CONTORNE, f"raizes: {[str(r) for r in roots]}"]
     return env
 
@@ -133,6 +150,10 @@ def ensure_in_workspace(*paths: str | None, settings: Settings) -> dict | None:
     for p in paths:
         if p is None:
             continue
+        # O `except ValueError` abaixo não basta: desde o 3.13, o `resolve()` do Windows
+        # devolve o caminho com NUL em vez de levantar, e ele passaria pelo guard.
+        if "\0" in p:
+            return error(22, f"caminho invalido: {p!r}", "caractere NUL no caminho")
         try:
             rp = Path(p).expanduser().resolve()
         except (OSError, ValueError) as exc:
@@ -166,8 +187,12 @@ def include_folders(pastas: list[str], settings: Settings) -> dict[str, Any]:
     if not pastas:
         return error(22, "informe ao menos uma pasta em `pastas`")
     if not configured_roots(settings):
-        return {"status": "ok", "incluidas": [], "aviso": "sem pasta de trabalho definida "
-                "(NOVOMODELO_MCP_WORKSPACE): todas as pastas já são aceitas; nada foi gravado"}
+        return {
+            "status": "ok",
+            "incluidas": [],
+            "aviso": "sem pasta de trabalho definida "
+            "(NOVOMODELO_MCP_WORKSPACE): todas as pastas já são aceitas; nada foi gravado",
+        }
     roots = allowed_roots(settings)
     incluidas, ja, recusadas = [], [], []
     for texto in pastas:
@@ -178,7 +203,7 @@ def include_folders(pastas: list[str], settings: Settings) -> dict[str, Any]:
             continue
         if any(_within(folder, r) for r in roots):
             ja.append(str(folder))
-        elif (motivo := forbidden_reason(folder, settings)):
+        elif motivo := forbidden_reason(folder, settings):
             recusadas.append({"pasta": texto, "motivo": motivo})
         elif str(folder) not in incluidas:
             incluidas.append(str(folder))
@@ -192,8 +217,13 @@ def include_folders(pastas: list[str], settings: Settings) -> dict[str, Any]:
     raizes = [str(r) for r in allowed_roots(settings)]
     if not incluidas and not ja:
         return error(22, "nenhuma pasta foi incluída", recusadas=recusadas, raizes=raizes)
-    return {"status": "ok", "incluidas": incluidas, "ja_incluidas": ja,
-            "recusadas": recusadas, "raizes": raizes}
+    return {
+        "status": "ok",
+        "incluidas": incluidas,
+        "ja_incluidas": ja,
+        "recusadas": recusadas,
+        "raizes": raizes,
+    }
 
 
 def is_guarded_tool(fn: Any) -> bool:

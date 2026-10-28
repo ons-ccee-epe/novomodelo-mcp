@@ -11,5 +11,5 @@ from .names import MCP_DIST
 
 try:
     __version__ = metadata.version(MCP_DIST)
-except metadata.PackageNotFoundError:  # fonte sem instalar (smoke com Python puro)
+except metadata.PackageNotFoundError:  # fonte sem instalar (python -m com o src/ no PYTHONPATH)
     __version__ = "0+desconhecida"

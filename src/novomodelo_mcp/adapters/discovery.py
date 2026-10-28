@@ -1,4 +1,5 @@
 """Descoberta de binários e versões. Nenhuma lógica de domínio."""
+
 from __future__ import annotations
 
 import importlib.metadata as metadata
@@ -9,6 +10,7 @@ from pathlib import Path
 
 from ..config import Settings
 from ..names import BRIDGE_CLI, SOLVER_CLI
+from .subproc import NO_WINDOW
 
 
 def bridge_origin(settings: Settings) -> tuple[str | None, str | None]:
@@ -47,8 +49,11 @@ def find_novomodelo(settings: Settings) -> str | None:
     `~/.cargo/bin` é o destino padrão do instalador oficial: sem ele, o executável
     recém-instalado só seria achado depois de reiniciar o cliente com o PATH novo.
     """
-    return (settings.solver_bin or shutil.which(SOLVER_CLI)
-            or shutil.which(SOLVER_CLI, path=str(Path.home() / ".cargo" / "bin")))
+    return (
+        settings.solver_bin
+        or shutil.which(SOLVER_CLI)
+        or shutil.which(SOLVER_CLI, path=str(Path.home() / ".cargo" / "bin"))
+    )
 
 
 def tool_version(binpath: str | None) -> str | None:
@@ -61,9 +66,15 @@ def tool_version(binpath: str | None) -> str | None:
         return None
     for args in (["--version"], ["version"]):
         try:
-            proc = subprocess.run(
-                [binpath, *args], capture_output=True, encoding="utf-8", errors="replace",
+            # argv em lista e sem shell; o binário vem da configuração ou do PATH, nunca do agente.
+            proc = subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+                [binpath, *args],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=15,
+                **NO_WINDOW,
             )
         except (OSError, subprocess.SubprocessError):
             return None

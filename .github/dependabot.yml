@@ -1,7 +1,3 @@
-# TEMPORÁRIO: existe só enquanto o MCP vive fora do repo do novomodelo e
-# consome a novomodelo-python do PyPI. Na migração para o monorepo, apagar a
-# entrada "uv" (a versão passa a subir junto com o release do novomodelo).
-#
 # Dependabot: abre PRs para a develop quando sai versão nova.
 # Atenção: o GitHub só lê este arquivo na branch padrão do repositório.
 version: 2
@@ -11,7 +7,8 @@ updates:
   # junto no uv.lock: por isso a python fica sem pin e fora desta lista (o
   # Dependabot atualiza uma dependência por vez, e um bump isolado de uma das
   # duas não resolve). As demais dependências seguem o uv.lock até um bump
-  # deliberado. Ao aceitar, subir também o `ref` do job rename-guard no CI.
+  # deliberado. O PR do bridge é o aviso para o commit de pareamento
+  # (CONTRIBUTING.md, "Parear com uma versão do novomodelo").
   - package-ecosystem: "uv"
     directory: "/"
     target-branch: "develop"

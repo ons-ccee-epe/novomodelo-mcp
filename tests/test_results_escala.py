@@ -1,5 +1,6 @@
 """`results_query` em escala: quando o recorte não cabe na resposta, ela diz como
 seguir pelo `deck_sql` (que já lê todas as partições), em vez de só truncar."""
+
 import dataclasses
 
 import pytest
@@ -20,6 +21,7 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -29,8 +31,14 @@ def query(tmp_path, monkeypatch):
     for cen in range(3):
         part = out / "simulation" / "hydros" / f"scenario_id={cen}"
         part.mkdir(parents=True)
-        pl.DataFrame({"scenario_id": [cen] * 40, "stage_id": list(range(40)), "hydro_id": [1] * 40,
-                      "storage_final_hm3": [float(i) for i in range(40)]}).write_parquet(part / "d.parquet")
+        pl.DataFrame(
+            {
+                "scenario_id": [cen] * 40,
+                "stage_id": list(range(40)),
+                "hydro_id": [1] * 40,
+                "storage_final_hm3": [float(i) for i in range(40)],
+            }
+        ).write_parquet(part / "d.parquet")
     mcp = _CaptureMCP()
     monkeypatch.setattr(budget, "row_limit", lambda settings: 50)
     settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
@@ -56,7 +64,9 @@ def test_so_a_resposta_truncada_traz_proximo_passo(query):
     results_query, out, _ = query
     r = results_query(str(out), "hydros", scenario=0, limit=5)
     assert r["truncated"] is True and "proximo_passo" in r
-    r = results_query(str(out), "hydros", group_by=["hydro_id"], agg="max", columns=["storage_final_hm3"])
+    r = results_query(
+        str(out), "hydros", group_by=["hydro_id"], agg="max", columns=["storage_final_hm3"]
+    )
     assert r["truncated"] is False and "proximo_passo" not in r and "limite_aplicado" not in r
 
 
@@ -68,15 +78,18 @@ def test_descricao_e_instrucoes_apontam_o_deck_sql_para_varredura(query):
 
 def test_proximo_passo_com_apostrofo_no_caminho_e_sql_valido(tmp_path, monkeypatch):
     from novomodelo_mcp.adapters.sql import run_readonly_sql
+
     out = tmp_path / "Copa d'Água" / "output"
     part = out / "simulation" / "hydros" / "scenario_id=0"
     part.mkdir(parents=True)
-    pl.DataFrame({"scenario_id": [0] * 60, "stage_id": list(range(60))}).write_parquet(part / "d.parquet")
+    pl.DataFrame({"scenario_id": [0] * 60, "stage_id": list(range(60))}).write_parquet(
+        part / "d.parquet"
+    )
     mcp = _CaptureMCP()
     monkeypatch.setattr(budget, "row_limit", lambda settings: 50)
     settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
     register_results(mcp, settings)
     passo = mcp.tools["results_query"](str(out), "hydros")["proximo_passo"]
-    trecho = passo[passo.index("read_parquet("):passo.index(")") + 1]
+    trecho = passo[passo.index("read_parquet(") : passo.index(")") + 1]
     r = run_readonly_sql(f"SELECT count(*) n FROM {trecho}", settings=settings)
     assert r["status"] == "ok" and r["rows"] == [{"n": 60}]

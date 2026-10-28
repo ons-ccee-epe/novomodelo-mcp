@@ -4,6 +4,7 @@ O manifesto `tests/surface.toml` classifica cada subcomando, opção e função 
 Com os programas reais instalados, o `--help` deles é comparado ao manifesto; sem
 eles, esses testes pulam e só os testes do próprio detector (com ajuda fixa) rodam.
 """
+
 import importlib
 import os
 import re
@@ -22,7 +23,10 @@ from novomodelo_mcp.server import build_server
 MANIFEST = tomllib.loads(Path(__file__).with_name("surface.toml").read_text(encoding="utf-8"))
 SRC = Path(novomodelo_mcp.__file__).resolve().parent
 PROGRAMS = ("novomodelo", "bridge")
-ADAPTER = {"novomodelo": SRC / "adapters" / "novomodelo.py", "bridge": SRC / "adapters" / "bridge.py"}
+ADAPTER = {
+    "novomodelo": SRC / "adapters" / "novomodelo.py",
+    "bridge": SRC / "adapters" / "bridge.py",
+}
 _META_KEYS = {"raiz", "ignorados"}
 
 # clap indenta a opção em até 6 espaços (a descrição vem mais funda); o Typer abre a
@@ -65,10 +69,14 @@ def parse_commands(help_text: str) -> set[str]:
 
 def option_gaps(found: set[str], entry: dict, label: str) -> list[str]:
     known = set(entry.get("expostas", [])) | set(entry.get("ignoradas", {}))
-    return ([f"opção nova em `{label}`: `{o}` — exponha na tool ou marque como "
-             f"ignorada em `tests/surface.toml`" for o in sorted(found - known)]
-            + [f"opção sumiu de `{label}`: `{o}` — tire de `tests/surface.toml`"
-               for o in sorted(known - found)])
+    return [
+        f"opção nova em `{label}`: `{o}` — exponha na tool ou marque como "
+        f"ignorada em `tests/surface.toml`"
+        for o in sorted(found - known)
+    ] + [
+        f"opção sumiu de `{label}`: `{o}` — tire de `tests/surface.toml`"
+        for o in sorted(known - found)
+    ]
 
 
 def _binary(program: str) -> str | None:
@@ -77,10 +85,21 @@ def _binary(program: str) -> str | None:
 
 
 def _help(binary: str, words: list[str]) -> str:
-    env = {**os.environ, "NO_COLOR": "1", "COLUMNS": "200", "TERM": "dumb",
-           "PYTHONIOENCODING": "utf-8"}
-    proc = subprocess.run([binary, *words, "--help"], capture_output=True, encoding="utf-8",
-                          errors="replace", timeout=60, env=env)
+    env = {
+        **os.environ,
+        "NO_COLOR": "1",
+        "COLUMNS": "200",
+        "TERM": "dumb",
+        "PYTHONIOENCODING": "utf-8",
+    }
+    proc = subprocess.run(
+        [binary, *words, "--help"],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        env=env,
+    )
     return proc.stdout + proc.stderr
 
 
@@ -91,12 +110,14 @@ def _subcommands(program: str) -> list[str]:
 def _require(program: str) -> str:
     binary = _binary(program)
     if binary is None:
-        pytest.skip(f"{'novomodelo' if program == 'novomodelo' else 'novomodelo-bridge'} "
-                    "não instalado")
+        pytest.skip(
+            f"{'novomodelo' if program == 'novomodelo' else 'novomodelo-bridge'} não instalado"
+        )
     return binary
 
 
 # ── com os programas reais ────────────────────────────────────────────────────
+
 
 @pytest.mark.parametrize("program", PROGRAMS)
 def test_todo_subcomando_esta_no_manifesto(program):
@@ -119,8 +140,9 @@ def test_todo_subcomando_esta_no_manifesto(program):
         assert not extra, f"opção de grupo em `{program} {group}`: {sorted(extra)}"
 
 
-@pytest.mark.parametrize("program,sub", [(p, s) for p in PROGRAMS
-                                         for s in ["raiz", *_subcommands(p)]])
+@pytest.mark.parametrize(
+    "program,sub", [(p, s) for p in PROGRAMS for s in ["raiz", *_subcommands(p)]]
+)
 def test_toda_opcao_esta_no_manifesto(program, sub):
     binary = _require(program)
     words = [] if sub == "raiz" else sub.split()
@@ -136,16 +158,21 @@ def _library_names(novomodelo) -> set[str]:
         if not isinstance(obj, types.ModuleType):
             names.add(top)
             continue
-        names |= {f"{top}.{n}" for n in dir(obj) if not n.startswith("_")
-                  and not isinstance(getattr(obj, n), types.ModuleType)}
+        names |= {
+            f"{top}.{n}"
+            for n in dir(obj)
+            if not n.startswith("_") and not isinstance(getattr(obj, n), types.ModuleType)
+        }
     return names
 
 
 def library_gaps(novomodelo) -> list[str]:
     found, known = _library_names(novomodelo), set(MANIFEST["biblioteca"])
-    return ([f"função pública nova na biblioteca: `{n}` — dê uma tool ou marque "
-             f"nao_exposto/pendente em `tests/surface.toml`" for n in sorted(found - known)]
-            + [f"sumiu da biblioteca: `{n}`" for n in sorted(known - found)])
+    return [
+        f"função pública nova na biblioteca: `{n}` — dê uma tool ou marque "
+        f"nao_exposto/pendente em `tests/surface.toml`"
+        for n in sorted(found - known)
+    ] + [f"sumiu da biblioteca: `{n}`" for n in sorted(known - found)]
 
 
 def _library():
@@ -174,28 +201,33 @@ def test_itens_pendentes():
 
 # ── sem os programas: manifesto × código das tools ────────────────────────────
 
+
 def _tool_modules() -> dict[str, Path]:
-    return {t.name: Path(importlib.import_module(t.fn.__module__).__file__)
-            for t in build_server()._tool_manager.list_tools()}
+    return {
+        t.name: Path(importlib.import_module(t.fn.__module__).__file__)
+        for t in build_server()._tool_manager.list_tools()
+    }
 
 
 def test_toda_tool_do_manifesto_existe():
     tools = set(_tool_modules())
-    named = {e["tool"] for p in PROGRAMS for s in _subcommands(p)
-             for e in [MANIFEST[p][s]]} | {v["tool"] for v in MANIFEST["biblioteca"].values()
-                                           if "tool" in v}
+    named = {e["tool"] for p in PROGRAMS for s in _subcommands(p) for e in [MANIFEST[p][s]]} | {
+        v["tool"] for v in MANIFEST["biblioteca"].values() if "tool" in v
+    }
     assert sorted(named - tools) == []
 
 
-@pytest.mark.parametrize("program,sub", [(p, s) for p in PROGRAMS
-                                         for s in ["raiz", *_subcommands(p)]])
+@pytest.mark.parametrize(
+    "program,sub", [(p, s) for p in PROGRAMS for s in ["raiz", *_subcommands(p)]]
+)
 def test_opcao_exposta_aparece_no_codigo(program, sub):
     entry = MANIFEST[program][sub]
     if sub == "raiz":
         source = "".join(f.read_text(encoding="utf-8") for f in (SRC / "adapters").glob("*.py"))
     else:
-        source = (_tool_modules()[entry["tool"]].read_text(encoding="utf-8")
-                  + ADAPTER[program].read_text(encoding="utf-8"))
+        source = _tool_modules()[entry["tool"]].read_text(encoding="utf-8") + ADAPTER[
+            program
+        ].read_text(encoding="utf-8")
     missing = [o for o in entry["expostas"] if f'"{o}"' not in source]
     assert not missing, f"`{program} {sub}`: exposta no manifesto mas ausente do código: {missing}"
 

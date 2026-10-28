@@ -3,7 +3,7 @@ paths:
   - "**/*.py"
 ---
 
-# <repositório anterior> Comment & Docstring Rules
+# novomodelo-mcp Comment & Docstring Rules
 
 Governs every `#` comment and docstring in any `.py` file in this repo. The
 Deletion Test and the Four Voices match the wider Novomodelo ecosystem's comment

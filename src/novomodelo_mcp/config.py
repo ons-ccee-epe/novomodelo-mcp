@@ -2,6 +2,7 @@
 
 Todas as variáveis usam o prefixo `names.ENV_PREFIX` (`NOVOMODELO_MCP_`).
 """
+
 from __future__ import annotations
 
 import os
@@ -14,21 +15,24 @@ from .names import ENV_PREFIX
 class Settings:
     """Ajustes resolvidos uma vez no startup, todos vindos do ambiente."""
 
-    bridge_bin: str | None          # NOVOMODELO_MCP_BRIDGE_BIN (senão: procura no PATH)
-    solver_bin: str | None          # NOVOMODELO_MCP_SOLVER_BIN (senão: procura no PATH)
-    schemas_dir: str | None         # NOVOMODELO_MCP_SCHEMAS_DIR (dir com *.schema.json)
-    docs_dir: str | None            # NOVOMODELO_MCP_DOCS_DIR (pasta de páginas .md/.mdx)
-    workspace: str | None           # NOVOMODELO_MCP_WORKSPACE (raiz(es) permitidas; os.pathsep)
-    allow_force: bool               # NOVOMODELO_MCP_ALLOW_FORCE (habilita edições force=True)
-    log_calls: bool                 # NOVOMODELO_MCP_LOG (loga chamadas no stderr)
-    default_timeout: float          # NOVOMODELO_MCP_TIMEOUT (segundos)
-    max_diagnostics: int            # NOVOMODELO_MCP_MAX_DIAGNOSTICS
-    max_summary_chars: int          # NOVOMODELO_MCP_MAX_SUMMARY_CHARS
-    max_read_bytes: int             # NOVOMODELO_MCP_MAX_READ_BYTES (teto do que é carregado inteiro: JSON, describe e edit de parquet)
-    max_response_kb: int            # NOVOMODELO_MCP_MAX_RESPONSE_KB (teto de tamanho de uma resposta com linhas)
-    state_dir: str | None = None    # NOVOMODELO_MCP_STATE_DIR (jobs + calibração; padrão por SO)
-    max_jobs: int = 1               # NOVOMODELO_MCP_MAX_JOBS (runs simultâneos permitidos)
-    max_policy_bytes: int = 1024 ** 3   # NOVOMODELO_MCP_MAX_POLICY_BYTES (teto do results_policy)
+    bridge_bin: str | None  # NOVOMODELO_MCP_BRIDGE_BIN (senão: procura no PATH)
+    solver_bin: str | None  # NOVOMODELO_MCP_SOLVER_BIN (senão: procura no PATH)
+    schemas_dir: str | None  # NOVOMODELO_MCP_SCHEMAS_DIR (dir com *.schema.json)
+    docs_dir: str | None  # NOVOMODELO_MCP_DOCS_DIR (pasta de páginas .md/.mdx)
+    workspace: str | None  # NOVOMODELO_MCP_WORKSPACE (raiz(es) permitidas; os.pathsep)
+    allow_force: bool  # NOVOMODELO_MCP_ALLOW_FORCE (habilita edições force=True)
+    log_calls: bool  # NOVOMODELO_MCP_LOG (loga chamadas no stderr)
+    default_timeout: float  # NOVOMODELO_MCP_TIMEOUT (segundos)
+    max_diagnostics: int  # NOVOMODELO_MCP_MAX_DIAGNOSTICS
+    max_summary_chars: int  # NOVOMODELO_MCP_MAX_SUMMARY_CHARS
+    # NOVOMODELO_MCP_MAX_READ_BYTES: teto do que é carregado inteiro (JSON, describe e edit de parquet)
+    max_read_bytes: int
+    max_response_kb: (
+        int  # NOVOMODELO_MCP_MAX_RESPONSE_KB (teto de tamanho de uma resposta com linhas)
+    )
+    state_dir: str | None = None  # NOVOMODELO_MCP_STATE_DIR (jobs + calibração; padrão por SO)
+    max_jobs: int = 1  # NOVOMODELO_MCP_MAX_JOBS (runs simultâneos permitidos)
+    max_policy_bytes: int = 1024**3  # NOVOMODELO_MCP_MAX_POLICY_BYTES (teto do results_policy)
 
 
 def env_name(suffix: str) -> str:
@@ -79,5 +83,5 @@ def load_settings() -> Settings:
         max_response_kb=max(1, _env_int("MAX_RESPONSE_KB", 50)),
         state_dir=_env_str("STATE_DIR"),
         max_jobs=_env_int("MAX_JOBS", 1),
-        max_policy_bytes=_env_int("MAX_POLICY_BYTES", 1024 ** 3),
+        max_policy_bytes=_env_int("MAX_POLICY_BYTES", 1024**3),
     )

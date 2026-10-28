@@ -1,5 +1,6 @@
 """Parquet grande ou pasta de resultados não é carregado inteiro na memória: o describe
 e o edit recusam sem ler e apontam o deck_sql (SUMMARIZE), que lê sob demanda."""
+
 import dataclasses
 
 import pytest
@@ -18,6 +19,7 @@ class _CaptureMCP:
         def deco(fn):
             self.tools[fn.__name__] = fn
             return fn
+
         return deco
 
 
@@ -39,6 +41,7 @@ def ws(tmp_path, monkeypatch):
 def _sem_leitura_inteira(monkeypatch):
     def proibido(*a, **k):
         raise AssertionError("leu o parquet inteiro na memória")
+
     monkeypatch.setattr(pl, "read_parquet", proibido)
 
 

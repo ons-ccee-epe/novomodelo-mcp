@@ -2,6 +2,7 @@
 
 Sobe o servidor deste checkout por stdio (sem `--server-info`, que usaria a rede).
 """
+
 import os
 import subprocess
 import sys
@@ -15,9 +16,14 @@ SERVIDOR = [sys.executable, "-m", "novomodelo_mcp"]
 
 
 def _rodar(versao):
-    return subprocess.run([sys.executable, str(SCRIPT), "--versao", versao, "--", *SERVIDOR],
-                          capture_output=True, encoding="utf-8", errors="replace", timeout=120,
-                          env={**os.environ, "PYTHONPATH": str(ROOT / "src")})
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "--versao", versao, "--", *SERVIDOR],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+    )
 
 
 def test_versao_certa_passa():

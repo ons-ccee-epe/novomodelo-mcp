@@ -3,6 +3,7 @@
 Também registra o resource `novomodelo://schema/{tipo}` como afordância para o agente
 consultar sem uma chamada de tool. Sem regra de negócio.
 """
+
 from __future__ import annotations
 
 import json
@@ -10,8 +11,8 @@ import json
 from ..adapters import reference as REF
 from ..config import Settings
 from ..names import URI_SCHEME
-from .shaping import cap_envelope
 from .annotations import READ_ONLY
+from .shaping import cap_envelope
 
 
 def register_reference(mcp, settings: Settings) -> None:
@@ -40,10 +41,11 @@ def register_reference(mcp, settings: Settings) -> None:
         Use sempre que a pergunta for sobre como o novomodelo modela, calcula ou
         configura algo: a definição dele pode diferir da literatura e do NEWAVE.
         Ex.: CVaR, PAR(p), FPHA, SDDP, cortes de Benders, FCF, afluência,
-        árvore de aberturas, valor da água, EARM. Busque em inglês: as docs estão em inglês, e os termos em português que estão
-        no glossário das docs são traduzidos (ex.: afluência → inflow). Devolve as `k`
-        seções mais relevantes (até 20): `pagina`, `secao` (âncora), `titulo`, `trecho`
-        e `score`. Abra a seção com `docs_read(page, secao)`.
+        árvore de aberturas, valor da água, EARM. Busque em inglês: as docs estão em
+        inglês, e os termos em português que estão no glossário das docs são traduzidos
+        (ex.: afluência → inflow). Devolve as `k` seções mais relevantes (até 20):
+        `pagina`, `secao` (âncora), `titulo`, `trecho` e `score`. Abra a seção com
+        `docs_read(page, secao)`.
         """
         return cap_envelope(REF.search_docs(settings, consulta, k), settings)
 
@@ -56,14 +58,18 @@ def register_reference(mcp, settings: Settings) -> None:
         Sem `page`: a lista de páginas, como o docs_list.
         """
         if not page:
-            return {**cap_envelope(REF.list_docs(settings, None), settings),
-                    "aviso": "faltou `page`: escolha uma das páginas abaixo e chame docs_read(page, secao)"}
-        return cap_envelope(REF.read_doc(settings, page, settings.max_summary_chars, secao),
-                            settings)
+            return {
+                **cap_envelope(REF.list_docs(settings, None), settings),
+                "aviso": "faltou `page`: escolha uma das páginas abaixo e chame docs_read(page, secao)",
+            }
+        return cap_envelope(
+            REF.read_doc(settings, page, settings.max_summary_chars, secao), settings
+        )
 
     # Afordância de resource (best-effort: não derruba o servidor se o cliente/SDK
     # não suportar templates de resource).
     try:
+
         @mcp.resource(f"{URI_SCHEME}://schema/{{tipo}}")
         def _schema_resource(tipo: str) -> str:  # pragma: no cover
             r = REF.read_schema(settings, tipo)

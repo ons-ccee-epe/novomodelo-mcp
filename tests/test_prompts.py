@@ -1,4 +1,5 @@
 """Prompt `metodologia` e descrição do `docs_search` que leva o agente às docs."""
+
 import anyio
 
 from novomodelo_mcp.server import build_server
@@ -19,8 +20,16 @@ def test_prompt_metodologia_listado_com_tema_opcional():
 
 def test_texto_do_prompt_ancorado_nas_docs():
     texto = _prompt_text(build_server(), {"tema": "CVaR"})
-    for trecho in ("CVaR", "docs_search", "em inglês", "glossário", "docs_read",
-                   "pagina#secao", "não complete de memória", "o código pode divergir"):
+    for trecho in (
+        "CVaR",
+        "docs_search",
+        "em inglês",
+        "glossário",
+        "docs_read",
+        "pagina#secao",
+        "não complete de memória",
+        "o código pode divergir",
+    ):
         assert trecho in texto, trecho
 
 
@@ -33,6 +42,16 @@ def test_descricao_do_docs_search_dispara_a_busca():
     tools = {t.name: t for t in build_server()._tool_manager.list_tools()}
     desc = tools["docs_search"].description
     assert "Use sempre que a pergunta for sobre como o novomodelo modela" in desc
-    for termo in ("CVaR", "PAR(p)", "FPHA", "SDDP", "Benders", "FCF", "afluência",
-                  "árvore de aberturas", "valor da água", "EARM"):
+    for termo in (
+        "CVaR",
+        "PAR(p)",
+        "FPHA",
+        "SDDP",
+        "Benders",
+        "FCF",
+        "afluência",
+        "árvore de aberturas",
+        "valor da água",
+        "EARM",
+    ):
         assert termo in desc, termo

@@ -6,6 +6,7 @@ compõe o modelo de TEMPO de execução (`runtime.py`) com a máquina (`machine.
 são reduções mecânicas de knobs para caber num orçamento de tempo — não são
 recomendação de modelagem.
 """
+
 from __future__ import annotations
 
 import json
@@ -88,8 +89,11 @@ def read_case_params(case_dir: str) -> dict[str, Any]:
         "simulation_scenarios": sim_sel.get("num_scenarios") if sim_enabled else 0,
         "num_stages": len(stages),
         "openings_per_stage": openings,
-        "openings": {"min": min(openings, default=0), "max": max(openings, default=0),
-                     "mean": round(sum(openings) / len(openings), 2) if openings else 0},
+        "openings": {
+            "min": min(openings, default=0),
+            "max": max(openings, default=0),
+            "mean": round(sum(openings) / len(openings), 2) if openings else 0,
+        },
         "max_order": (config.get("estimation") or {}).get("max_order", 6),
         "dimensions": dims,
         "config_sig": runtime.config_signature(config),
@@ -105,16 +109,27 @@ def _cap_openings(openings: list[int], cap: int) -> list[int]:
     return [min(o, cap) for o in openings]
 
 
-def _times(params: dict[str, Any], points: list[dict[str, Any]], threads: int,
-           fwd: int, iters: int, openings: list[int], sim: int | None = None) -> dict[str, Any]:
+def _times(
+    params: dict[str, Any],
+    points: list[dict[str, Any]],
+    threads: int,
+    fwd: int,
+    iters: int,
+    openings: list[int],
+    sim: int | None = None,
+) -> dict[str, Any]:
     scen = (params["simulation_scenarios"] or 0) if sim is None else sim
     return runtime.estimate(
-        points, threads, runtime.training_solves(iters, fwd, openings),
-        runtime.simulation_solves(scen, params["num_stages"]))
+        points,
+        threads,
+        runtime.training_solves(iters, fwd, openings),
+        runtime.simulation_solves(scen, params["num_stages"]),
+    )
 
 
-def choose_threads(machine: dict[str, Any], ref: dict[str, Any] | None,
-                   requested: int | None) -> tuple[int, str]:
+def choose_threads(
+    machine: dict[str, Any], ref: dict[str, Any] | None, requested: int | None
+) -> tuple[int, str]:
     """Threads-alvo e a justificativa. Informado > medido mais rápido > hardware."""
     if requested:
         return int(requested), "informado"
@@ -141,8 +156,7 @@ def _range(params, candidates, threads, fwd, iters, openings) -> dict[str, Any] 
     """
     groups: dict[str, dict[int, dict[str, Any]]] = {}
     for c in sorted(candidates, key=lambda c: c.get("completed_at") or ""):
-        groups.setdefault(c.get("config_sig") or f"?{c.get('source')}", {})[
-            int(c["threads"])] = c
+        groups.setdefault(c.get("config_sig") or f"?{c.get('source')}", {})[int(c["threads"])] = c
     ests = []
     for pts in groups.values():
         e = _times(params, list(pts.values()), threads, fwd, iters, openings)
@@ -151,23 +165,32 @@ def _range(params, candidates, threads, fwd, iters, openings) -> dict[str, Any] 
     if not ests:
         return None
     lo, hi = min(ests, key=lambda x: x[0]), max(ests, key=lambda x: x[0])
-    return {"min_seconds": lo[0], "max_seconds": hi[0], "n_groups": len(ests),
-            "min_source": lo[1].get("source"), "max_source": hi[1].get("source"),
-            "note": "estimativa por modelagem entre runs de mesmas dimensões; a "
-                    "dispersão mostra o quanto a escolha da referência pesa"}
+    return {
+        "min_seconds": lo[0],
+        "max_seconds": hi[0],
+        "n_groups": len(ests),
+        "min_source": lo[1].get("source"),
+        "max_source": hi[1].get("source"),
+        "note": "estimativa por modelagem entre runs de mesmas dimensões; a "
+        "dispersão mostra o quanto a escolha da referência pesa",
+    }
 
 
 def _point_summary(p: dict[str, Any]) -> dict[str, Any]:
-    return {"source": p.get("source"), "origin": p.get("origin", "workspace"),
-            "threads": p["threads"], "completed_at": p.get("completed_at"),
-            "training_wall_per_solve": round(p["train"]["wall_per_solve"], 5),
-            "training_s_per_solve": p["train"].get("s_per_solve"),
-            "simulation_wall_per_solve": round(p["sim"]["wall_per_solve"], 5)
-            if p.get("sim") else None}
+    return {
+        "source": p.get("source"),
+        "origin": p.get("origin", "workspace"),
+        "threads": p["threads"],
+        "completed_at": p.get("completed_at"),
+        "training_wall_per_solve": round(p["train"]["wall_per_solve"], 5),
+        "training_s_per_solve": p["train"].get("s_per_solve"),
+        "simulation_wall_per_solve": round(p["sim"]["wall_per_solve"], 5) if p.get("sim") else None,
+    }
 
 
-def estimate_memory(params: dict[str, Any], machine: dict[str, Any], threads: int,
-                    fwd: int, iters: int) -> dict[str, Any]:
+def estimate_memory(
+    params: dict[str, Any], machine: dict[str, Any], threads: int, fwd: int, iters: int
+) -> dict[str, Any]:
     """Gate FRACO: só o pool de cortes (cortes × coeficientes × cópias por thread).
 
     cortes ≈ fwd × iters × estágios; coeficientes ≈ hidros × (1 + max_order) + 1.
@@ -184,16 +207,24 @@ def estimate_memory(params: dict[str, Any], machine: dict[str, Any], threads: in
         level = "nao_cabe"
     elif frac is not None and frac >= MEM_WARN_FRACTION:
         level = "alerta"
-    return {"model": "cortes × (hidros×(1+max_order)+1) × 8 B × (threads+1)",
-            "cuts": cuts, "state_dim": n_state, "cut_pool_bytes": pool,
-            "cut_pool_gib": round(pool / 1024 ** 3, 3),
-            "ram_fraction": round(frac, 4) if frac is not None else None,
-            "level": level}
+    return {
+        "model": "cortes × (hidros×(1+max_order)+1) × 8 B × (threads+1)",
+        "cuts": cuts,
+        "state_dim": n_state,
+        "cut_pool_bytes": pool,
+        "cut_pool_gib": round(pool / 1024**3, 3),
+        "ram_fraction": round(frac, 4) if frac is not None else None,
+        "level": level,
+    }
 
 
-def build_plan(params: dict[str, Any], machine: dict[str, Any],
-               ref: dict[str, Any] | None, time_budget_s: float,
-               threads: int | None = None) -> dict[str, Any]:
+def build_plan(
+    params: dict[str, Any],
+    machine: dict[str, Any],
+    ref: dict[str, Any] | None,
+    time_budget_s: float,
+    threads: int | None = None,
+) -> dict[str, Any]:
     """Veredito determinístico a partir de (parâmetros, máquina, referência selecionada).
 
     `ref` é o resultado de `runtime.select_reference` (ou None sem pontos medidos).
@@ -205,45 +236,64 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
     target, basis = choose_threads(machine, ref, threads)
     perf = machine.get("performance_cpus")
     if perf and target > perf:
-        warnings.append(f"{target} threads > {perf} núcleos de performance: as threads "
-                        "extras rodam em núcleos de eficiência e tendem a ATRASAR o run")
+        warnings.append(
+            f"{target} threads > {perf} núcleos de performance: as threads "
+            "extras rodam em núcleos de eficiência e tendem a ATRASAR o run"
+        )
 
-    current = {"forward_passes": fwd, "iteration_limit": iters,
-               "openings": params["openings"],
-               "simulation_scenarios": params["simulation_scenarios"],
-               "threads": None}
+    current = {
+        "forward_passes": fwd,
+        "iteration_limit": iters,
+        "openings": params["openings"],
+        "simulation_scenarios": params["simulation_scenarios"],
+        "threads": None,
+    }
     plan: dict[str, Any] = {
-        "status": "ok", "machine": machine, "time_budget_s": time_budget_s,
-        "params_current": current, "warnings": warnings,
-        "dimensions": params["dimensions"], "target_threads": target,
+        "status": "ok",
+        "machine": machine,
+        "time_budget_s": time_budget_s,
+        "params_current": current,
+        "warnings": warnings,
+        "dimensions": params["dimensions"],
+        "target_threads": target,
         "threads_basis": basis,
     }
 
     if params.get("selection_method") not in (None, "sampled") or not fwd:
         plan.update(verdict="indeterminado", reference=None)
-        warnings.append(f"seleção '{params.get('selection_method')}' sem forward_passes — "
-                        "modelo de tempo só novomodelo 'sampled'")
+        warnings.append(
+            f"seleção '{params.get('selection_method')}' sem forward_passes — "
+            "modelo de tempo só novomodelo 'sampled'"
+        )
         return plan
     if not iters:
         plan.update(verdict="indeterminado", reference=None)
-        warnings.append("sem regra iteration_limit no config.json — duração ilimitada; "
-                        "defina iteration_limit (run_apply) para estimar")
+        warnings.append(
+            "sem regra iteration_limit no config.json — duração ilimitada; "
+            "defina iteration_limit (run_apply) para estimar"
+        )
         return plan
     if ref is None:
         plan.update(verdict="indeterminado", reference=None)
-        warnings.append("sem run anterior nesta máquina para medir o tempo por solve; "
-                        "probe de calibração (1dtoy, 1 iteração) ainda não implementado. "
-                        "Rode um caso uma vez nesta máquina (run_start) e replaneje.")
+        warnings.append(
+            "sem run anterior nesta máquina para medir o tempo por solve; "
+            "probe de calibração (1dtoy, 1 iteração) ainda não implementado. "
+            "Rode um caso uma vez nesta máquina (run_start) e replaneje."
+        )
         return plan
 
     points = ref["points"]
     if ref["level"] == 2:
-        warnings.append("nenhum run com a MESMA modelagem; referência tem só as mesmas "
-                        "dimensões — o tempo por solve pode diferir (ver `time.range`)")
+        warnings.append(
+            "nenhum run com a MESMA modelagem; referência tem só as mesmas "
+            "dimensões — o tempo por solve pode diferir (ver `time.range`)"
+        )
     elif ref["level"] == 1:
-        warnings.append("nenhum run com as mesmas dimensões; referência é OUTRO caso — "
-                        f"estimativa grosseira (o de tamanho mais parecido: "
-                        f"{ref.get('size_ratio', '?')}× de diferença no tamanho do LP)")
+        warnings.append(
+            "nenhum run com as mesmas dimensões; referência é OUTRO caso — "
+            f"estimativa grosseira (o de tamanho mais parecido: "
+            f"{ref.get('size_ratio', '?')}× de diferença no tamanho do LP)"
+        )
 
     now = _times(params, points, target, fwd, iters, openings)
     sim0 = params["simulation_scenarios"] or 0
@@ -252,8 +302,11 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
     reduced: list[str] = []
 
     # 0) simulação: limitada a SIM_MAX_SHARE do orçamento (abaixo do piso, desligada)
-    if now["total_seconds"] > budget and sim0 and \
-            now["simulation_seconds"] > SIM_MAX_SHARE * budget:
+    if (
+        now["total_seconds"] > budget
+        and sim0
+        and now["simulation_seconds"] > SIM_MAX_SHARE * budget
+    ):
         per_scen = now["simulation_seconds"] / sim0
         s_sim = math.floor(SIM_MAX_SHARE * budget / per_scen)
         if s_sim < MIN_SIM_SCENARIOS:
@@ -271,8 +324,11 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
         # 1) forward_passes e iterações reduzidos de forma balanceada (√ratio cada)
         s_fwd = max(MIN_FORWARD_PASSES, min(fwd, math.floor(fwd * math.sqrt(ratio))))
         per_iter = t(s_fwd, 1, openings)["_exact_training_seconds"]
-        s_iters = (max(MIN_ITERATIONS, min(iters, math.floor(train_budget / per_iter)))
-                   if per_iter > 0 else iters)
+        s_iters = (
+            max(MIN_ITERATIONS, min(iters, math.floor(train_budget / per_iter)))
+            if per_iter > 0
+            else iters
+        )
         if s_fwd != fwd:
             reduced.append("forward_passes")
         if s_iters != iters:
@@ -289,16 +345,17 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
     sug = t(s_fwd, s_iters, s_open)
     mem = estimate_memory(params, machine, target, s_fwd, s_iters)
     fits_time = sug["total_seconds"] <= budget
-    too_different = ref["level"] == 1 and \
-        (ref.get("size_ratio") or 1) > runtime.MAX_SIZE_RATIO
+    too_different = ref["level"] == 1 and (ref.get("size_ratio") or 1) > runtime.MAX_SIZE_RATIO
     if too_different:
-        warnings.append(f"a referência mais parecida tem tamanho {ref['size_ratio']}× "
-                        f"diferente (> {runtime.MAX_SIZE_RATIO:.0f}×): o tempo não é "
-                        "estimável. Rode o caso uma vez com poucas iterações "
-                        "(run_apply iteration_limit=2) e replaneje.")
+        warnings.append(
+            f"a referência mais parecida tem tamanho {ref['size_ratio']}× "
+            f"diferente (> {runtime.MAX_SIZE_RATIO:.0f}×): o tempo não é "
+            "estimável. Rode o caso uma vez com poucas iterações "
+            "(run_apply iteration_limit=2) e replaneje."
+        )
     if mem["level"] == "nao_cabe":
         verdict = "nao_cabe"
-    elif too_different:            # tempo não estimável: não afirmar cabe nem não cabe
+    elif too_different:  # tempo não estimável: não afirmar cabe nem não cabe
         verdict = "indeterminado"
     elif not fits_time:
         verdict = "nao_cabe"
@@ -307,15 +364,21 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
     else:
         verdict = "cabe"
     if not fits_time and not too_different:
-        warnings.append(f"nem com os pisos (fwd={MIN_FORWARD_PASSES}, iters={MIN_ITERATIONS}, "
-                        f"aberturas={MIN_OPENINGS}, simulação ≤ {SIM_MAX_SHARE:.0%} do "
-                        "orçamento) cabe; aumente time_budget_s")
+        warnings.append(
+            f"nem com os pisos (fwd={MIN_FORWARD_PASSES}, iters={MIN_ITERATIONS}, "
+            f"aberturas={MIN_OPENINGS}, simulação ≤ {SIM_MAX_SHARE:.0%} do "
+            "orçamento) cabe; aumente time_budget_s"
+        )
     if mem["level"] != "ok":
-        warnings.append(f"memória: pool de cortes estimado em {mem['cut_pool_gib']} GiB "
-                        f"({mem['ram_fraction']:.0%} da RAM) — nível '{mem['level']}'")
+        warnings.append(
+            f"memória: pool de cortes estimado em {mem['cut_pool_gib']} GiB "
+            f"({mem['ram_fraction']:.0%} da RAM) — nível '{mem['level']}'"
+        )
     if "SEM ganho" in now["training_method"]:
-        warnings.append(f"{target} threads acima do maior nº medido: estimativa assume que "
-                        "mais threads NÃO aceleram (conservador)")
+        warnings.append(
+            f"{target} threads acima do maior nº medido: estimativa assume que "
+            "mais threads NÃO aceleram (conservador)"
+        )
     warnings.extend(now["notes"])
 
     apply_overrides = {}
@@ -328,47 +391,73 @@ def build_plan(params: dict[str, Any], machine: dict[str, Any],
             apply_overrides["simulation_scenarios"] = s_sim
         else:
             apply_overrides["simulation_enabled"] = False
-        warnings.append(f"simulação reduzida de {sim0} para {s_sim or 'nenhum'} cenário(s): "
-                        "estatísticas de operação menos representativas")
+        warnings.append(
+            f"simulação reduzida de {sim0} para {s_sim or 'nenhum'} cenário(s): "
+            "estatísticas de operação menos representativas"
+        )
     if reduced:
-        warnings.append("parâmetros diferentes dos de outros runs/variantes tornam os "
-                        "resultados NÃO comparáveis entre si — reduza todos igualmente")
+        warnings.append(
+            "parâmetros diferentes dos de outros runs/variantes tornam os "
+            "resultados NÃO comparáveis entre si — reduza todos igualmente"
+        )
     non_config = []
     if s_open != openings:
-        non_config.append({"file": "stages.json", "path": "stages[*].num_openings",
-                           "value": max(s_open),
-                           "note": "fora do run_apply (não é knob de config); "
-                                   "editar via deck_edit_json se desejado"})
+        non_config.append(
+            {
+                "file": "stages.json",
+                "path": "stages[*].num_openings",
+                "value": max(s_open),
+                "note": "fora do run_apply (não é knob de config); "
+                "editar via deck_edit_json se desejado",
+            }
+        )
 
-    calc = (f"treino {sug['training_wall_per_solve']:.4f} s/solve × {sug['training_solves']}"
-            f" + simulação {sug['simulation_wall_per_solve']:.4f} s/solve × "
-            f"{sug['simulation_solves']} ≈ {sug['total_seconds']:.0f} s a {target} threads")
-    plan.update({
-        "verdict": verdict,
-        "reference": {"level": ref["level_name"],
-                      "points": [_point_summary(p) for p in points]},
-        "time": {
-            "model": "tempo ≈ (duração ÷ solves, medido nesta máquina) × solves; "
-                     "solves_treino ≈ iters × fwd × Σ_estágios(1 + aberturas); "
-                     "solves_sim ≈ cenários × estágios",
-            "threads_rule": "nº de threads medido -> direto; entre dois medidos -> "
-                            "interpolado; abaixo -> reescala linear; acima -> sem ganho",
-            "target_threads": target,
-            "current": _public(now),
-            "suggested": _public(sug),
-            "range": _range(params, ref["candidates"], target, s_fwd, s_iters, s_open),
-            "calculation": calc,
-        },
-        "memory": mem,
-        "params_suggested": {"forward_passes": s_fwd, "iteration_limit": s_iters,
-                             "openings_max": max(s_open, default=0),
-                             "simulation_scenarios": s_sim,
-                             "threads": target},
-        "reduced": reduced,
-        "apply_overrides": apply_overrides,
-        "non_config_changes": non_config,
-        "alternatives": ([{"description": "parâmetros de treino atuais, simulação desligada",
-                           "apply_overrides": {"simulation_enabled": False},
-                           "total_seconds": now["training_seconds"]}] if sim0 else []),
-    })
+    calc = (
+        f"treino {sug['training_wall_per_solve']:.4f} s/solve × {sug['training_solves']}"
+        f" + simulação {sug['simulation_wall_per_solve']:.4f} s/solve × "
+        f"{sug['simulation_solves']} ≈ {sug['total_seconds']:.0f} s a {target} threads"
+    )
+    plan.update(
+        {
+            "verdict": verdict,
+            "reference": {
+                "level": ref["level_name"],
+                "points": [_point_summary(p) for p in points],
+            },
+            "time": {
+                "model": "tempo ≈ (duração ÷ solves, medido nesta máquina) × solves; "
+                "solves_treino ≈ iters × fwd × Σ_estágios(1 + aberturas); "
+                "solves_sim ≈ cenários × estágios",
+                "threads_rule": "nº de threads medido -> direto; entre dois medidos -> "
+                "interpolado; abaixo -> reescala linear; acima -> sem ganho",
+                "target_threads": target,
+                "current": _public(now),
+                "suggested": _public(sug),
+                "range": _range(params, ref["candidates"], target, s_fwd, s_iters, s_open),
+                "calculation": calc,
+            },
+            "memory": mem,
+            "params_suggested": {
+                "forward_passes": s_fwd,
+                "iteration_limit": s_iters,
+                "openings_max": max(s_open, default=0),
+                "simulation_scenarios": s_sim,
+                "threads": target,
+            },
+            "reduced": reduced,
+            "apply_overrides": apply_overrides,
+            "non_config_changes": non_config,
+            "alternatives": (
+                [
+                    {
+                        "description": "parâmetros de treino atuais, simulação desligada",
+                        "apply_overrides": {"simulation_enabled": False},
+                        "total_seconds": now["training_seconds"],
+                    }
+                ]
+                if sim0
+                else []
+            ),
+        }
+    )
     return plan

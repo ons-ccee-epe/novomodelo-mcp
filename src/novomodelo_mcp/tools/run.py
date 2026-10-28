@@ -4,25 +4,26 @@ Fachada: `case_init` e `run_start` envelopam a CLI do novomodelo; o plano só
 LÊ o caso e estima; `run_apply` só edita knobs de config.json via
 deck_io.edit_json (schema + backup + atômico). Zero regra de negócio.
 """
+
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
 from ..adapters import deck_io, jobs, runtime
-from ..adapters.results import numeric_diagnosis, read_metadata, termination_fields
-from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.envelope import as_error, error
 from ..adapters.machine import detect_machine
+from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.obs import log
 from ..adapters.paths import allowed_roots, ensure_in_workspace
 from ..adapters.reference import schemas_root
+from ..adapters.results import numeric_diagnosis, read_metadata, termination_fields
 from ..adapters.run_plan import CONFIG_KNOBS, build_plan, read_case_params
 from ..adapters.state import state_dir
 from ..config import Settings
-from .shaping import attach_artifact, cap_envelope
 from .annotations import DESTRUCTIVE, READ_ONLY, WRITES
+from .shaping import attach_artifact, cap_envelope
 
 
 def _calibration_file(settings: Settings) -> Path:
@@ -37,8 +38,7 @@ def harvest_calibrations(settings: Settings) -> int:
     """
     n = 0
     for j in jobs.list_jobs(settings):
-        if j["state"] != "succeeded" or j.get("calibration_recorded") \
-                or not j.get("machine_id"):
+        if j["state"] != "succeeded" or j.get("calibration_recorded") or not j.get("machine_id"):
             continue
         meta_path = Path(j.get("output") or "") / "training" / "metadata.json"
         point = runtime.load_run(meta_path, config_sig=j.get("config_sig"))
@@ -58,8 +58,14 @@ def _cli_path(path: str) -> str:
     return str(Path(path).resolve())
 
 
-def make_plan(case_dir: str, settings: Settings, *, time_budget_s: float = 900,
-              threads: int | None = None, machine: dict | None = None) -> dict:
+def make_plan(
+    case_dir: str,
+    settings: Settings,
+    *,
+    time_budget_s: float = 900,
+    threads: int | None = None,
+    machine: dict | None = None,
+) -> dict:
     """Compõe máquina + pontos medidos + parâmetros do caso num plano (sem gravar)."""
     try:
         params = read_case_params(case_dir)
@@ -72,19 +78,30 @@ def make_plan(case_dir: str, settings: Settings, *, time_budget_s: float = 900,
         roots.append(str(Path(case_dir).resolve().parent))
     points = runtime.load_calibrations(_calibration_file(settings), machine["machine_id"])
     known = {p.get("source") for p in points}
-    points += [p for p in runtime.find_reference_runs(roots, machine["hostname"])
-               if p.get("source") not in known]
+    points += [
+        p
+        for p in runtime.find_reference_runs(roots, machine["hostname"])
+        if p.get("source") not in known
+    ]
     installed = version_cli(settings=settings)
-    version = runtime.normalize_version(installed.get("version")) \
-        if installed.get("status") == "ok" else None
-    ref = runtime.select_reference(points, params["dimensions"], params["config_sig"],
-                                   case_dir, version=version) or runtime.calibration_probe()
+    version = (
+        runtime.normalize_version(installed.get("version"))
+        if installed.get("status") == "ok"
+        else None
+    )
+    ref = (
+        runtime.select_reference(
+            points, params["dimensions"], params["config_sig"], case_dir, version=version
+        )
+        or runtime.calibration_probe()
+    )
     plan = build_plan(params, machine, ref, time_budget_s, threads)
     if ref and ref.get("version_mismatch"):
         plan.setdefault("warnings", []).append(
             "estimativa baseada em runs de outra versão do novomodelo "
             f"({', '.join(ref['versions_used'])}); pode não refletir a versão "
-            f"instalada ({version})")
+            f"instalada ({version})"
+        )
     plan["case_dir"] = case_dir
     plan["reference_candidates"] = len(points)
     return plan
@@ -105,8 +122,7 @@ def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
     changes = []
     for knob, value in overrides.items():
         if knob not in CONFIG_KNOBS:
-            return error(22, f"knob não suportado: {knob}",
-                         f"permitidos: {sorted(CONFIG_KNOBS)}")
+            return error(22, f"knob não suportado: {knob}", f"permitidos: {sorted(CONFIG_KNOBS)}")
         if knob == "simulation_enabled":
             if not isinstance(value, bool):
                 return error(22, f"{knob} deve ser booleano")
@@ -116,14 +132,19 @@ def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
             return error(22, f"{knob} deve ser inteiro (recebido {value!r})")
         if knob == "iteration_limit":
             rules = list((config.get("training") or {}).get("stopping_rules") or [])
-            idx = next((i for i, r in enumerate(rules)
-                        if isinstance(r, dict) and r.get("type") == "iteration_limit"), None)
+            idx = next(
+                (
+                    i
+                    for i, r in enumerate(rules)
+                    if isinstance(r, dict) and r.get("type") == "iteration_limit"
+                ),
+                None,
+            )
             if idx is None:
                 rules.append({"type": "iteration_limit", "limit": value})
                 changes.append({"path": "training.stopping_rules", "value": rules})
             else:
-                changes.append({"path": f"training.stopping_rules[{idx}].limit",
-                                "value": value})
+                changes.append({"path": f"training.stopping_rules[{idx}].limit", "value": value})
         else:
             changes.append({"path": CONFIG_KNOBS[knob], "value": value})
     return changes
@@ -133,8 +154,12 @@ def register_run(mcp, settings: Settings) -> None:
     """Registra as tools de scaffold/execução no servidor `mcp`."""
 
     @mcp.tool(annotations=WRITES)
-    def case_init(directory: str | None = None, template: str | None = None,
-                   list: bool = False, force: bool = False) -> dict:  # noqa: A002
+    def case_init(
+        directory: str | None = None,
+        template: str | None = None,
+        list: bool = False,
+        force: bool = False,
+    ) -> dict:  # noqa: A002
         """Cria um caso a partir de um template embutido (`novomodelo init`).
 
         `list=True` lista os templates disponíveis (ex.: `1dtoy`) e sai.
@@ -154,11 +179,14 @@ def register_run(mcp, settings: Settings) -> None:
             return error(22, "informe `directory` e `template` (ou use list=True)")
         if not _TEMPLATE_NAME_RE.match(template):
             return error(22, f"nome de template inválido: {template!r}")
-        if (err := ensure_in_workspace(directory, settings=settings)):
+        if err := ensure_in_workspace(directory, settings=settings):
             return err
         if force and not settings.allow_force:
-            return error(13, "force=True desabilitado",
-                         "defina NOVOMODELO_MCP_ALLOW_FORCE=1 para sobrescrever arquivos")
+            return error(
+                13,
+                "force=True desabilitado",
+                "defina NOVOMODELO_MCP_ALLOW_FORCE=1 para sobrescrever arquivos",
+            )
         argv = ["init", "--template", template]
         if force:
             argv.append("--force")
@@ -169,8 +197,7 @@ def register_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def run_plan(case_dir: str, time_budget_s: float = 900,
-                       threads: int | None = None) -> dict:
+    def run_plan(case_dir: str, time_budget_s: float = 900, threads: int | None = None) -> dict:
         """Planeja um run LOCAL do caso: estima tempo e memória. NÃO executa, NÃO grava.
 
         Lê config.json (forward_passes, iteration_limit, simulação), stages.json
@@ -186,7 +213,7 @@ def register_run(mcp, settings: Settings) -> None:
         Veredito: cabe | cabe_com_ajustes | nao_cabe | indeterminado.
         Run local pequeno PODE NÃO CONVERGIR — serve p/ mecânica/comparação.
         """
-        if (err := ensure_in_workspace(case_dir, settings=settings)):
+        if err := ensure_in_workspace(case_dir, settings=settings):
             return err
         try:
             return make_plan(case_dir, settings, time_budget_s=time_budget_s, threads=threads)
@@ -202,7 +229,7 @@ def register_run(mcp, settings: Settings) -> None:
         `apply_overrides` devolvido pelo run_plan. Via deck_io.edit_json:
         valida contra o schema, backup `.bak` + escrita atômica. `dry_run` não grava.
         """
-        if (err := ensure_in_workspace(case_dir, settings=settings)):
+        if err := ensure_in_workspace(case_dir, settings=settings):
             return err
         if not overrides:
             return error(22, "`overrides` vazio")
@@ -215,13 +242,17 @@ def register_run(mcp, settings: Settings) -> None:
         if isinstance(changes, dict):
             return changes
         log(settings, "run_apply", path=path, changes=changes)
-        return deck_io.edit_json(path, changes, schemas_dir=schemas_root(settings),
-                                 dry_run=dry_run)
+        return deck_io.edit_json(path, changes, schemas_dir=schemas_root(settings), dry_run=dry_run)
 
     @mcp.tool(annotations=DESTRUCTIVE)
-    def run_start(case_dir: str, threads: int | None = None,
-                        output: str | None = None, time_budget_s: float = 900,
-                        override: bool = False, overwrite: bool = False) -> dict:
+    def run_start(
+        case_dir: str,
+        threads: int | None = None,
+        output: str | None = None,
+        time_budget_s: float = 900,
+        override: bool = False,
+        overwrite: bool = False,
+    ) -> dict:
         """Dispara `novomodelo run` em BACKGROUND e devolve `job_id` na hora.
 
         Comando: `novomodelo run <case> --output <output> --threads N --comm-backend
@@ -235,44 +266,81 @@ def register_run(mcp, settings: Settings) -> None:
         Acompanhe com run_status / run_logs; interrompa com run_cancel.
         """
         output = output or str(Path(case_dir) / "output")
-        if (err := ensure_in_workspace(case_dir, output, settings=settings)):
+        if err := ensure_in_workspace(case_dir, output, settings=settings):
             return err
         if not overwrite and _completed_run(Path(output)):
-            return error(17, f"já há uma rodada concluída em {output}",
-                         "rodar de novo nela apaga a rodada anterior: use output_sugerido, ou "
-                         "overwrite=True se a pessoa pediu para substituir",
-                         output_sugerido=str(_free_output(Path(output))))
+            return error(
+                17,
+                f"já há uma rodada concluída em {output}",
+                "rodar de novo nela apaga a rodada anterior: use output_sugerido, ou "
+                "overwrite=True se a pessoa pediu para substituir",
+                output_sugerido=str(_free_output(Path(output))),
+            )
         binpath = find_novomodelo(settings)
         if binpath is None:
-            return error(127, "novomodelo não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN).")
+            return error(
+                127, "novomodelo não encontrado no PATH (defina NOVOMODELO_MCP_SOLVER_BIN)."
+            )
         if threads is not None and threads < 1:
             return error(22, "threads deve ser >= 1")
         machine = detect_machine()
         try:
-            plan = make_plan(case_dir, settings, time_budget_s=time_budget_s,
-                             threads=threads, machine=machine)
+            plan = make_plan(
+                case_dir, settings, time_budget_s=time_budget_s, threads=threads, machine=machine
+            )
         except Exception as exc:  # noqa: BLE001
             return as_error(exc)
         if plan.get("status") != "ok":
             return plan
         if plan["verdict"] == "nao_cabe" and not override:
-            return {"status": "error", "exit_code": 28, "plan": plan,
-                    "diagnostics": ["plano diz 'nao_cabe' — run recusado",
-                                    "ajuste com run_apply ou passe override=True"]}
+            return {
+                "status": "error",
+                "exit_code": 28,
+                "plan": plan,
+                "diagnostics": [
+                    "plano diz 'nao_cabe' — run recusado",
+                    "ajuste com run_apply ou passe override=True",
+                ],
+            }
         n = threads or plan.get("target_threads") or 1
-        cmd = [binpath, "--color", "never", "run", _cli_path(case_dir), "--output", _cli_path(output),
-               "--threads", str(n), "--comm-backend", "local"]
+        cmd = [
+            binpath,
+            "--color",
+            "never",
+            "run",
+            _cli_path(case_dir),
+            "--output",
+            _cli_path(output),
+            "--threads",
+            str(n),
+            "--comm-backend",
+            "local",
+        ]
         jobs.prune_jobs(settings)
         try:
-            meta = jobs.start_job(settings, cmd, max_running=settings.max_jobs, info={
-                "case_dir": case_dir, "output": output, "threads": n,
-                "machine_id": machine["machine_id"], "plan_verdict": plan["verdict"],
-                "config_sig": read_case_params(case_dir)["config_sig"],
-                "estimated_seconds": ((plan.get("time") or {}).get("current") or {})
-                .get("total_seconds")})
+            meta = jobs.start_job(
+                settings,
+                cmd,
+                max_running=settings.max_jobs,
+                info={
+                    "case_dir": case_dir,
+                    "output": output,
+                    "threads": n,
+                    "machine_id": machine["machine_id"],
+                    "plan_verdict": plan["verdict"],
+                    "config_sig": read_case_params(case_dir)["config_sig"],
+                    "estimated_seconds": ((plan.get("time") or {}).get("current") or {}).get(
+                        "total_seconds"
+                    ),
+                },
+            )
         except RuntimeError as busy:
-            return error(16, f"limite de runs simultâneos atingido (NOVOMODELO_MCP_MAX_JOBS="
-                         f"{settings.max_jobs})", f"em andamento: {busy}")
+            return error(
+                16,
+                f"limite de runs simultâneos atingido (NOVOMODELO_MCP_MAX_JOBS="
+                f"{settings.max_jobs})",
+                f"em andamento: {busy}",
+            )
         except (OSError, TimeoutError) as exc:
             return as_error(exc)
         log(settings, "run_start", job_id=meta["job_id"], cmd=cmd)
@@ -294,8 +362,9 @@ def register_run(mcp, settings: Settings) -> None:
         if st is None:
             return error(2, f"job inexistente: {job_id}")
         out = Path(st.get("output") or "")
-        st["milestones"] = {phase: (out / phase / "_SUCCESS").exists()
-                            for phase in ("training", "simulation")}
+        st["milestones"] = {
+            phase: (out / phase / "_SUCCESS").exists() for phase in ("training", "simulation")
+        }
         if (out / "training" / "metadata.json").is_file():
             try:
                 meta = read_metadata(str(out))
@@ -320,8 +389,9 @@ def register_run(mcp, settings: Settings) -> None:
         resumos) sai no stderr até a 0.18.0 e no stdout a partir da 0.18.1; avisos e
         erros saem no stderr. Jobs de antes dessa junção trazem `stdout` e `stderr`.
         """
-        logs = jobs.job_logs(settings, job_id, lines=max(1, lines),
-                             max_chars=settings.max_summary_chars)
+        logs = jobs.job_logs(
+            settings, job_id, lines=max(1, lines), max_chars=settings.max_summary_chars
+        )
         if logs is None:
             return error(2, f"job inexistente: {job_id}")
         return {"status": "ok", "job_id": job_id, **logs}

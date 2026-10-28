@@ -7,7 +7,7 @@ fileMatchPattern: '{*.md,docs/**/*.md,.claude/rules/*.md}'
      Source of truth: .claude/rules/doc-integrity.md
      Regenerate: python scripts/gen/sync-kiro-steering.py -->
 
-# <repositório anterior> Prose Documentation Integrity Rules
+# novomodelo-mcp Prose Documentation Integrity Rules
 
 Governs every Markdown file that serves as a user-facing or agent-facing
 artifact: `CLAUDE.md`, `README.md`, `docs/**`, and `.claude/rules/*`. The

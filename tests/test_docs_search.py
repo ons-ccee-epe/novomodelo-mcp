@@ -1,4 +1,5 @@
 """`docs_search`: busca por palavra (FTS5) nas seções, com os termos do glossário traduzidos."""
+
 import dataclasses
 import json
 
@@ -67,9 +68,13 @@ def test_acha_a_secao_certa_no_top_3(settings):
 
 
 def test_acento_e_caixa_nao_importam(settings):
-    assert _top(REF.search_docs(settings, "cvar", k=5)) == _top(REF.search_docs(settings, "CVAR", k=5))
-    assert any(t.startswith("math/inflow-nonnegativity")
-               for t in _top(REF.search_docs(settings, "Inflows", k=5))[:3])
+    assert _top(REF.search_docs(settings, "cvar", k=5)) == _top(
+        REF.search_docs(settings, "CVAR", k=5)
+    )
+    assert any(
+        t.startswith("math/inflow-nonnegativity")
+        for t in _top(REF.search_docs(settings, "Inflows", k=5))[:3]
+    )
 
 
 def test_termo_do_glossario_e_traduzido(settings):
@@ -78,8 +83,10 @@ def test_termo_do_glossario_e_traduzido(settings):
     assert any(t.startswith("math/inflow-nonnegativity") for t in _top(env)[:3])
 
 
-@pytest.mark.parametrize("consulta", ['"CVaR', "CVaR*", "-inflow", "NEAR(a b)", "a AND OR NOT",
-                                      "inflow:x", "(", "^", "''"])
+@pytest.mark.parametrize(
+    "consulta",
+    ['"CVaR', "CVaR*", "-inflow", "NEAR(a b)", "a AND OR NOT", "inflow:x", "(", "^", "''"],
+)
 def test_caracteres_do_fts5_nao_quebram(settings, consulta):
     env = REF.search_docs(settings, consulta, k=5)
     assert env["status"] == "ok" or env.get("exit_code") == 22, env

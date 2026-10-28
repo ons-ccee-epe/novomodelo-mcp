@@ -2,15 +2,16 @@
 
 Cada função envelopa exatamente um subcomando `novomodelo`. Zero regra de negócio.
 """
+
 from __future__ import annotations
 
 from ..adapters import installer
-from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.envelope import as_error
+from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
-from .shaping import attach_artifact, cap_envelope
 from .annotations import DESTRUCTIVE_NET, READ_ONLY, WRITES
+from .shaping import attach_artifact, cap_envelope
 
 
 def register_novomodelo_meta(mcp, settings: Settings) -> None:
@@ -57,7 +58,7 @@ def register_novomodelo_meta(mcp, settings: Settings) -> None:
         conteúdo dos arquivos.
         """
         # Fail-closed antes de qualquer FS: caminho fora das raízes vira envelope 13.
-        if (err := ensure_in_workspace(output_dir, settings=settings)):
+        if err := ensure_in_workspace(output_dir, settings=settings):
             return err
         try:
             argv = ["schema", "export"]

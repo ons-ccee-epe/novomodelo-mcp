@@ -6,6 +6,7 @@ Fontes:
   para desenvolvimento das docs, e o `server_info` avisa quando ela está em uso.
 Leitura confinada à raiz; conteúdo com teto. Sem regra de negócio.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,6 +21,7 @@ from pathlib import Path
 from ..config import Settings
 from .discovery import find_novomodelo
 from .envelope import error
+from .subproc import NO_WINDOW
 
 _SCHEMA_EXPORT_CACHE: dict[str, str] = {}
 _SUFFIX = ".schema.json"
@@ -62,9 +64,18 @@ def _export_schemas(settings: Settings) -> str | None:
     out = Path(tempfile.gettempdir()) / "novomodelo_mcp_schemas"
     out.mkdir(parents=True, exist_ok=True)
     try:
-        proc = subprocess.run(
-            [novomodelo, "--color", "never", "schema", "export", "--output-dir", str(out)],
-            capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+        # argv fixa, sem shell: nada vem do agente.
+        proc = (
+            subprocess.run(  # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+                [novomodelo, "--color", "never", "schema", "export", "--output-dir", str(out)],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
+                **NO_WINDOW,
+            )
+        )
     except (OSError, subprocess.SubprocessError):
         return None
     if proc.returncode != 0:
@@ -79,11 +90,7 @@ def schemas_root(settings: Settings) -> str | None:
     ``NOVOMODELO_MCP_SCHEMAS_DIR`` -> ``novomodelo schema export`` -> schemas EMBUTIDOS
     (``_bundled/schemas``). O embutido garante o caminho feliz offline.
     """
-    return (
-        settings.schemas_dir
-        or _export_schemas(settings)
-        or _bundled_dir("schemas")
-    )
+    return settings.schemas_dir or _export_schemas(settings) or _bundled_dir("schemas")
 
 
 def list_schema_types(settings: Settings) -> list[str]:
@@ -98,15 +105,23 @@ def read_schema(settings: Settings, tipo: str) -> dict:
         return {"status": "error", "diagnostics": [f"tipo invalido: {tipo!r}"]}
     root = schemas_root(settings)
     if not root:
-        return {"status": "error",
-                "diagnostics": ["schemas indisponiveis; defina NOVOMODELO_MCP_SCHEMAS_DIR ou NOVOMODELO_MCP_SOLVER_BIN"]}
+        return {
+            "status": "error",
+            "diagnostics": [
+                "schemas indisponiveis; defina NOVOMODELO_MCP_SCHEMAS_DIR ou NOVOMODELO_MCP_SOLVER_BIN"
+            ],
+        }
     f = (Path(root) / f"{tipo}{_SUFFIX}").resolve()
     if not _within(f, Path(root).resolve()):
         return {"status": "error", "diagnostics": [f"tipo invalido: {tipo!r}"]}
     if not f.exists():
-        return {"status": "error",
-                "diagnostics": [f"schema inexistente: {tipo}",
-                                f"disponiveis: {list_schema_types(settings)}"]}
+        return {
+            "status": "error",
+            "diagnostics": [
+                f"schema inexistente: {tipo}",
+                f"disponiveis: {list_schema_types(settings)}",
+            ],
+        }
     return {"status": "ok", "tipo": tipo, "schema": json.loads(f.read_text(encoding="utf-8"))}
 
 
@@ -119,6 +134,7 @@ def _within(path: Path, root: Path) -> bool:
 
 
 # ---------------------------------------------------------------- docs
+
 
 def _dev_docs_dir(settings: Settings) -> str | None:
     docs_dir = getattr(settings, "docs_dir", None)
@@ -139,17 +155,24 @@ def docs_origin(settings: Settings) -> dict:
     if dev := _dev_docs_dir(settings):
         return {"origem": "pasta_de_desenvolvimento", "caminho": dev}
     manifest = bundled_manifest() or {}
-    return {"origem": "embutidas", "versao": manifest.get("docs_versao"),
-            "commit": manifest.get("docs_commit")}
+    return {
+        "origem": "embutidas",
+        "versao": manifest.get("docs_versao"),
+        "commit": manifest.get("docs_commit"),
+    }
 
 
 def _docs_unavailable(settings: Settings) -> dict:
     if settings.docs_dir:
-        return error(2, "docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR aponta para caminho "
-                        f"inexistente ou que nao e diretorio ({settings.docs_dir}), e o pacote "
-                        "nao tem as docs embutidas")
-    return error(2, "docs indisponiveis: o pacote do MCP nao tem as docs embutidas; "
-                    "reinstale o MCP")
+        return error(
+            2,
+            "docs indisponiveis: NOVOMODELO_MCP_DOCS_DIR aponta para caminho "
+            f"inexistente ou que nao e diretorio ({settings.docs_dir}), e o pacote "
+            "nao tem as docs embutidas",
+        )
+    return error(
+        2, "docs indisponiveis: o pacote do MCP nao tem as docs embutidas; reinstale o MCP"
+    )
 
 
 def list_docs(settings: Settings, section: str | None = None) -> dict:
@@ -163,12 +186,16 @@ def list_docs(settings: Settings, section: str | None = None) -> dict:
             continue
         fields = frontmatter_fields(path.read_text(encoding="utf-8", errors="replace"))
         items.append({"pagina": rel, "titulo": fields["title"], "descricao": fields["description"]})
-    return {"status": "ok", "docs_dir": str(base), "count": len(items),
-            "pages": [i["pagina"] for i in items], "itens": items}
+    return {
+        "status": "ok",
+        "docs_dir": str(base),
+        "count": len(items),
+        "pages": [i["pagina"] for i in items],
+        "itens": items,
+    }
 
 
-def read_doc(settings: Settings, page: str, max_chars: int,
-             section: str | None = None) -> dict:
+def read_doc(settings: Settings, page: str, max_chars: int, section: str | None = None) -> dict:
     root = docs_root(settings)
     if root is None:
         return _docs_unavailable(settings)
@@ -186,13 +213,24 @@ def read_doc(settings: Settings, page: str, max_chars: int,
     if section:
         found = find_section(text, section)
         if found is None:
-            return {**error(2, f"seção inexistente em {page}: {section!r}",
-                            "use uma das `secoes` (âncora ou título)"),
-                    "secoes": section_list(text)[:200]}
+            return {
+                **error(
+                    2,
+                    f"seção inexistente em {page}: {section!r}",
+                    "use uma das `secoes` (âncora ou título)",
+                ),
+                "secoes": section_list(text)[:200],
+            }
         text, extra = found["texto"], {"secao": found["ancora"], "titulo": found["titulo"]}
     truncated = len(text) > max_chars
-    return {"status": "ok", "page": page, **extra, "path": str(tr), "truncated": truncated,
-            "content": text[:max_chars] + ("\n... [truncado]" if truncated else "")}
+    return {
+        "status": "ok",
+        "page": page,
+        **extra,
+        "path": str(tr),
+        "truncated": truncated,
+        "content": text[:max_chars] + ("\n... [truncado]" if truncated else ""),
+    }
 
 
 # ------------------------------------------------- preparação das docs (dono único)
@@ -203,7 +241,8 @@ MANIFEST_FILE = "manifest.json"
 INDEX_FILE = "docs_index.sqlite"
 
 _IMPORT_IMPL = re.compile(
-    r"""^import\s*\{\s*Content\s+as\s+(\w+)\s*\}\s*from\s*['"]([^'"]*_impl/[^'"]+)['"];?\s*$""")
+    r"""^import\s*\{\s*Content\s+as\s+(\w+)\s*\}\s*from\s*['"]([^'"]*_impl/[^'"]+)['"];?\s*$"""
+)
 _IMPORT_MDX = re.compile(r"""^import\s.+\sfrom\s+['"][^'"]+['"];?\s*$""")
 _FENCE = re.compile(r"^\s*(```|~~~)")
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
@@ -273,11 +312,17 @@ def resolve_mdx(path: Path) -> str:
     """
     front, body = split_frontmatter(path.read_text(encoding="utf-8"))
     blocks = _blocks(body)
-    components = {m.group(1): (path.parent / m.group(2)).resolve()
-                  for code, chunk in blocks if not code
-                  for line in chunk.split("\n") if (m := _IMPORT_IMPL.match(line))}
-    impls = {name: split_frontmatter(target.read_text(encoding="utf-8"))[1].strip()
-             for name, target in components.items()}
+    components = {
+        m.group(1): (path.parent / m.group(2)).resolve()
+        for code, chunk in blocks
+        if not code
+        for line in chunk.split("\n")
+        if (m := _IMPORT_IMPL.match(line))
+    }
+    impls = {
+        name: split_frontmatter(target.read_text(encoding="utf-8"))[1].strip()
+        for name, target in components.items()
+    }
     parts = []
     for code, chunk in blocks:
         if code:
@@ -296,8 +341,12 @@ def iter_doc_pages(docs_dir: Path) -> list[tuple[str, Path]]:
     pages = []
     for p in sorted(docs_dir.rglob("*")):
         rel = p.relative_to(docs_dir)
-        if p.is_file() and p.suffix in (".md", ".mdx") and "_impl" not in rel.parts \
-                and rel.parts[0] != "pt-br":
+        if (
+            p.is_file()
+            and p.suffix in (".md", ".mdx")
+            and "_impl" not in rel.parts
+            and rel.parts[0] != "pt-br"
+        ):
             pages.append((rel.with_suffix("").as_posix(), p))
     return pages
 
@@ -323,8 +372,9 @@ def _headings(lines: list[str]) -> list[tuple[int, int, str, str]]:
         anchor = slugify(m.group(2))
         n = seen.get(anchor, 0)
         seen[anchor] = n + 1
-        found.append((i, len(m.group(1)), m.group(2).strip(),
-                      anchor if n == 0 else f"{anchor}-{n}"))
+        found.append(
+            (i, len(m.group(1)), m.group(2).strip(), anchor if n == 0 else f"{anchor}-{n}")
+        )
     return found
 
 
@@ -343,8 +393,9 @@ def split_sections(page: str, text: str) -> list[dict[str, str]]:
     for (start, sec_title, anchor), stop in zip(bounds, ends, strict=True):
         body_text = "\n".join(lines[start:stop]).strip()
         if body_text:
-            sections.append({"pagina": page, "titulo": sec_title, "ancora": anchor,
-                             "texto": body_text})
+            sections.append(
+                {"pagina": page, "titulo": sec_title, "ancora": anchor, "texto": body_text}
+            )
     return sections
 
 
@@ -357,7 +408,7 @@ def find_section(text: str, wanted: str) -> dict | None:
     key = normalize_text(wanted.strip())
     for pos, (i, level, title, anchor) in enumerate(heads):
         if anchor == wanted.strip() or normalize_text(title.replace("`", "")) == key:
-            stop = next((j for j, lv, *_ in heads[pos + 1:] if lv <= level), len(lines))
+            stop = next((j for j, lv, *_ in heads[pos + 1 :] if lv <= level), len(lines))
             return {"titulo": title, "ancora": anchor, "texto": "\n".join(lines[i:stop]).strip()}
     return None
 
@@ -392,11 +443,21 @@ def glossary_pairs(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
+CHANGELOG_PREFIX = "changelog/"
+
+
 def build_docs_index(docs_dir: Path, db_path: str | Path) -> sqlite3.Connection:
-    """Índice FTS5 das seções (+ títulos das páginas e glossário) em `db_path`."""
+    """Índice FTS5 das seções (+ títulos das páginas e glossário) em `db_path`.
+
+    Os changelogs ficam numa tabela à parte: o texto denso deles não muda a ordem da
+    busca de metodologia, e só entram quando a consulta é sobre versões.
+    """
     con = sqlite3.connect(str(db_path))
     con.executescript("""
         CREATE VIRTUAL TABLE secoes USING fts5(
+            pagina, titulo, ancora UNINDEXED, texto,
+            tokenize = 'porter unicode61 remove_diacritics 2');
+        CREATE VIRTUAL TABLE changelog USING fts5(
             pagina, titulo, ancora UNINDEXED, texto,
             tokenize = 'porter unicode61 remove_diacritics 2');
         CREATE TABLE paginas (pagina TEXT PRIMARY KEY, titulo TEXT, descricao TEXT);
@@ -405,15 +466,23 @@ def build_docs_index(docs_dir: Path, db_path: str | Path) -> sqlite3.Connection:
     for page, path in iter_doc_pages(Path(docs_dir)):
         text = resolve_mdx(path)
         fields = frontmatter_fields(text)
-        con.execute("INSERT INTO paginas VALUES (?, ?, ?)",
-                    (page, fields["title"], fields["description"]))
-        con.executemany("INSERT INTO secoes VALUES (?, ?, ?, ?)",
-                        [(s["pagina"], s["titulo"], s["ancora"], s["texto"])
-                         for s in split_sections(page, text)])
+        con.execute(
+            "INSERT INTO paginas VALUES (?, ?, ?)", (page, fields["title"], fields["description"])
+        )
+        table = "changelog" if page.startswith(CHANGELOG_PREFIX) else "secoes"
+        con.executemany(
+            f"INSERT INTO {table} VALUES (?, ?, ?, ?)",
+            [
+                (s["pagina"], s["titulo"], s["ancora"], s["texto"])
+                for s in split_sections(page, text)
+            ],
+        )
     glossary = Path(docs_dir) / "reference" / "glossary.md"
     if glossary.is_file():
-        con.executemany("INSERT INTO glossario VALUES (?, ?)",
-                        glossary_pairs(glossary.read_text(encoding="utf-8")))
+        con.executemany(
+            "INSERT INTO glossario VALUES (?, ?)",
+            glossary_pairs(glossary.read_text(encoding="utf-8")),
+        )
     con.commit()
     return con
 
@@ -432,11 +501,16 @@ def bundled_manifest() -> dict | None:
 # ---------------------------------------------------------------- busca
 
 _SEARCH_MAX_K = 20
+_VERSION_INTENT = re.compile(
+    r"\d+\.\d+|\b(changelog|release|releases|version|versions|versao|"
+    r"versoes|mudou|mudancas|novidades|breaking)\b"
+)
 _SNIPPET_CHARS = 300
 #: Palavras de consulta em português que não ajudam a achar nada nas docs (em inglês).
 _PT_STOPWORDS = frozenset(
     "o a os as que e é de do da dos das em no na um uma como qual quais por para com se "
-    "ao à sobre isso este esta".split())
+    "ao à sobre isso este esta".split()
+)
 _MEMORY_INDEX: dict[str, sqlite3.Connection] = {}
 
 
@@ -450,8 +524,7 @@ def _index_connection(settings: Settings) -> sqlite3.Connection | None:
     index = Path(root).parent / INDEX_FILE if root else None
     if index is None or not index.is_file():
         return None
-    return sqlite3.connect(f"{index.resolve().as_uri()}?mode=ro", uri=True,
-                           check_same_thread=False)
+    return sqlite3.connect(f"{index.resolve().as_uri()}?mode=ro", uri=True, check_same_thread=False)
 
 
 def _glossary_terms(con: sqlite3.Connection, normalized: str) -> list[str]:
@@ -460,6 +533,21 @@ def _glossary_terms(con: sqlite3.Connection, normalized: str) -> list[str]:
         if re.search(rf"(?<!\w){re.escape(pt)}(?!\w)", normalized) and en not in found:
             found.append(en)
     return found
+
+
+#: Uma consulta por tabela, escrita por inteiro: o SQLite não parametriza nome de tabela.
+_SEARCH_SQL = {
+    "secoes": (
+        "SELECT pagina, titulo, ancora, snippet(secoes, 3, '', '', '…', 48), "
+        "bm25(secoes, 0.0, 5.0, 0.0, 1.0) AS r FROM secoes WHERE secoes MATCH ? "
+        "ORDER BY r LIMIT ?"
+    ),
+    "changelog": (
+        "SELECT pagina, titulo, ancora, snippet(changelog, 3, '', '', '…', 48), "
+        "bm25(changelog, 0.0, 5.0, 0.0, 1.0) AS r FROM changelog WHERE changelog MATCH ? "
+        "ORDER BY r LIMIT ?"
+    ),
+}
 
 
 def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
@@ -477,18 +565,35 @@ def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
     words += [w for term in glossary for w in re.findall(r"\w+", normalize_text(term))]
     terms = list(dict.fromkeys(words))
     if not terms:
-        return error(22, "consulta vazia: informe termos da documentação (de preferência em inglês)")
+        return error(
+            22, "consulta vazia: informe termos da documentação (de preferência em inglês)"
+        )
     match = " OR ".join(f'"{t}"' for t in terms)
     limit = max(1, min(int(k), _SEARCH_MAX_K))
     try:
-        rows = con.execute(
-            "SELECT pagina, titulo, ancora, snippet(secoes, 3, '', '', '…', 48), "
-            "bm25(secoes, 0.0, 5.0, 0.0, 1.0) AS r FROM secoes WHERE secoes MATCH ? "
-            "ORDER BY r LIMIT ?", (match, limit)).fetchall()
+        rows = []
+        if (
+            _VERSION_INTENT.search(normalized)
+            and con.execute("SELECT 1 FROM sqlite_master WHERE name = 'changelog'").fetchone()
+        ):
+            # Os escores das duas tabelas não se comparam: o changelog vem na frente,
+            # com até metade das vagas, quando a consulta é sobre versões.
+            rows = con.execute(_SEARCH_SQL["changelog"], (match, (limit + 1) // 2)).fetchall()
+        rows += con.execute(_SEARCH_SQL["secoes"], (match, limit - len(rows))).fetchall()
     except sqlite3.Error as exc:
         return error(2, "falha na busca do índice de docs", str(exc))
-    return {"status": "ok", "consulta_usada": match, "termos_do_glossario": glossary,
-            "resultados": [{"pagina": p, "secao": a, "titulo": t,
-                            "trecho": (snip or "")[:_SNIPPET_CHARS], "score": round(-r, 3)}
-                           for p, t, a, snip, r in rows]}
-
+    return {
+        "status": "ok",
+        "consulta_usada": match,
+        "termos_do_glossario": glossary,
+        "resultados": [
+            {
+                "pagina": p,
+                "secao": a,
+                "titulo": t,
+                "trecho": (snip or "")[:_SNIPPET_CHARS],
+                "score": round(-r, 3),
+            }
+            for p, t, a, snip, r in rows
+        ],
+    }

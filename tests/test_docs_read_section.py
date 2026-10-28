@@ -1,4 +1,5 @@
 """`docs_read(page, secao)`: só a seção (por âncora ou título); `docs_list` com título e descrição."""
+
 import dataclasses
 
 import pytest
@@ -40,7 +41,9 @@ Second section with the same title.
 def settings(tmp_path):
     (tmp_path / "math").mkdir()
     (tmp_path / "math" / "hydro.md").write_text(PAGINA, encoding="utf-8")
-    (tmp_path / "math" / "outra.md").write_text("---\ntitle: Outra\ndescription: Desc.\n---\n\n## A\n\nx\n", encoding="utf-8")
+    (tmp_path / "math" / "outra.md").write_text(
+        "---\ntitle: Outra\ndescription: Desc.\n---\n\n## A\n\nx\n", encoding="utf-8"
+    )
     return dataclasses.replace(load_settings(), docs_dir=str(tmp_path), max_summary_chars=20000)
 
 
@@ -58,8 +61,10 @@ def test_secao_por_titulo_ignora_caixa_e_acento(settings):
 
 
 def test_comentario_em_bloco_de_codigo_nao_e_titulo(settings):
-    ancoras = [s["ancora"] for s in REF.read_doc(settings, "math/hydro", 20000,
-                                                 section="nao-existe")["secoes"]]
+    ancoras = [
+        s["ancora"]
+        for s in REF.read_doc(settings, "math/hydro", 20000, section="nao-existe")["secoes"]
+    ]
     assert not any("comentario" in a for a in ancoras)
 
 
@@ -86,9 +91,13 @@ def test_docs_list_traz_titulo_e_descricao(settings):
     env = REF.list_docs(settings)
     assert env["pages"] == ["math/hydro", "math/outra"]
     assert env["itens"] == [
-        {"pagina": "math/hydro", "titulo": "Hydro Production Models",
-         "descricao": "How generation depends on head."},
-        {"pagina": "math/outra", "titulo": "Outra", "descricao": "Desc."}]
+        {
+            "pagina": "math/hydro",
+            "titulo": "Hydro Production Models",
+            "descricao": "How generation depends on head.",
+        },
+        {"pagina": "math/outra", "titulo": "Outra", "descricao": "Desc."},
+    ]
 
 
 def test_docs_list_embutido_tem_titulo_em_todas_as_paginas(monkeypatch):
