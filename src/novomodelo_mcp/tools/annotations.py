@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from mcp.types import ToolAnnotations
 
-
 #: Só lê: não altera nenhum arquivo do usuário. Pode gravar cache ou estado
 #: interno do próprio MCP (ex.: calibração em state_dir, schemas em /tmp).
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)

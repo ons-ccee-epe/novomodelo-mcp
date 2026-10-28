@@ -11,16 +11,15 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from ..adapters import budget
-from ..adapters import deck_io
+from ..adapters import budget, deck_io
 from ..adapters import reference as REF
-from ..adapters.novomodelo import validate_deck_binding
 from ..adapters.envelope import error
+from ..adapters.novomodelo import validate_deck_binding
 from ..adapters.obs import log
 from ..adapters.paths import allowed_roots, ensure_in_workspace
 from ..config import Settings
-from .shaping import fit_to_budget, cap_envelope
 from .annotations import DESTRUCTIVE, READ_ONLY
+from .shaping import cap_envelope, fit_to_budget
 
 
 def register_deck(mcp, settings: Settings) -> None:

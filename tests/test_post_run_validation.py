@@ -5,7 +5,6 @@ com ``run_bridge`` substituido por um espiao (nao depende de duckdb/polars).
 """
 
 import pytest
-
 from mcp.server.fastmcp import FastMCP
 
 from novomodelo_mcp.config import load_settings

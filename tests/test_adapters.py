@@ -2,11 +2,11 @@
 
 import os
 
+from _fakes import fake_bin
+
 from novomodelo_mcp.adapters.bridge import run_bridge
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.shaping import cap_envelope
-
-from _fakes import fake_bin
 
 FAKE = fake_bin("fake_novomodelo_bridge.py")
 
@@ -82,6 +82,7 @@ def test_variavel_vence_o_bridge_do_pacote(tmp_path, monkeypatch):
 
 def test_sem_pacote_cai_no_path(tmp_path, monkeypatch):
     import sysconfig
+
     from novomodelo_mcp.adapters.discovery import bridge_origin
 
     empty = tmp_path / "vazio"
@@ -107,6 +108,7 @@ def test_sem_pacote_cai_no_path(tmp_path, monkeypatch):
 
 def test_server_info_mostra_a_origem_do_bridge(tmp_path, monkeypatch):
     import urllib.error
+
     from novomodelo_mcp.adapters import versions
     from novomodelo_mcp.server import build_server
 

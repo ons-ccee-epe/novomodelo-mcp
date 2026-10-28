@@ -15,9 +15,8 @@ import time
 from pathlib import Path
 
 import pytest
-
-
 from _fakes import fake_bin
+
 from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.run import make_plan, register_run

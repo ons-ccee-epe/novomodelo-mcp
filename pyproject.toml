@@ -18,6 +18,8 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
@@ -32,6 +34,12 @@ dependencies = [
     "novomodelo-bridge==0.19.0",
     "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
     "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
+    # O cryptography (via mcp -> pyjwt[crypto]) publica wheel para macOS Intel só até a
+    # 48.x; sem o limite, quem instala nesse alvo compila o sdist (Rust e OpenSSL). A
+    # faixa complementar obriga o uv.lock a resolver as duas versões: com uma só, ele
+    # fixa a 48 em todo alvo, e a CI deixa de testar a versão que os outros alvos recebem.
+    "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "cryptography>=49; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [project.urls]
@@ -84,8 +92,17 @@ target-version = "py312"
 extend-exclude = [".claude", ".kiro"]
 
 [tool.ruff.lint]
+# PGH proíbe supressão em branco: todo `# noqa` e `# type: ignore` nomeia o código.
 # PLW1514 (open/read_text/write_text sem `encoding`) só existe em preview; o
 # `explicit-preview-rules` liga essa e nenhuma outra regra de preview.
-select = ["F", "B", "UP", "PLW1514"]
+select = ["E", "F", "I", "B", "UP", "PGH", "PLW1514"]
 preview = true
 explicit-preview-rules = true
+
+[tool.ruff.lint.pycodestyle]
+# O formatador quebra em 100; o E501 pega só o que ele não consegue quebrar.
+max-line-length = 110
+
+[tool.ruff.lint.per-file-ignores]
+# Gera HTML: as linhas longas são do modelo da página.
+"scripts/gerar_guia.py" = ["E501"]

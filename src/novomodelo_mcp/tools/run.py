@@ -11,19 +11,19 @@ import re
 from pathlib import Path
 
 from ..adapters import deck_io, jobs, runtime
-from ..adapters.results import numeric_diagnosis, read_metadata, termination_fields
-from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.envelope import as_error, error
 from ..adapters.machine import detect_machine
+from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.obs import log
 from ..adapters.paths import allowed_roots, ensure_in_workspace
 from ..adapters.reference import schemas_root
+from ..adapters.results import numeric_diagnosis, read_metadata, termination_fields
 from ..adapters.run_plan import CONFIG_KNOBS, build_plan, read_case_params
 from ..adapters.state import state_dir
 from ..config import Settings
-from .shaping import attach_artifact, cap_envelope
 from .annotations import DESTRUCTIVE, READ_ONLY, WRITES
+from .shaping import attach_artifact, cap_envelope
 
 
 def _calibration_file(settings: Settings) -> Path:

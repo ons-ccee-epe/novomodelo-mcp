@@ -13,8 +13,9 @@ from typing import Any
 
 from ..config import Settings, load_settings
 from ..names import BINDING_DIST, SOLVER_CLI
-from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_novomodelo
+from .envelope import MAX_DETAIL_CHARS
+from .envelope import error as _error
 from .obs import log
 from .subproc import NO_WINDOW
 
@@ -231,7 +232,8 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
     if binpath is None:
         return _error(127, _NOT_FOUND)
     cmd = [binpath, "--color", "never", "version"]
-    # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout), nunca propagam ao stdio.
+    # never-raise: falhas de transporte viram Error_Envelope (127 ausente / -1 timeout),
+    # nunca propagam ao stdio.
     try:
         # argv fixa, sem shell: nada vem do agente.
         proc = subprocess.run(

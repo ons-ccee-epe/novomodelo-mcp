@@ -7,9 +7,8 @@ import types
 
 import pytest
 
-from novomodelo_mcp.adapters import budget
-
 import novomodelo_mcp.tools.pre_run as pre_run
+from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
 
 

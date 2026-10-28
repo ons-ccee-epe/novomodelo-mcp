@@ -7,33 +7,36 @@ fileMatchPattern: 'tests/**'
      Source of truth: .claude/rules/testing.md
      Regenerate: python scripts/gen/sync-kiro-steering.py -->
 
-# <repositório anterior> Testing Rules
+# novomodelo-mcp Testing Rules
 
-How <repositório anterior> is tested. The server is a thin, offline relay, so the tests exist
+How novomodelo-mcp is tested. The server is a thin, offline relay, so the tests exist
 to prove two things: the envelope/guard contracts hold, and nothing reaches the
 network or escapes the workspace. Auto-loads under `tests/`.
 
 ## Two tiers
 
-1. **Smoke (stdlib, offline, no deps).** The `tests/smoke*.py` scripts run under
-   plain `python3` with no third-party imports and no installed server. They are
-   the fast gate and must stay dependency-free — a smoke test that needs `pytest`
-   or a real `novomodelo`/`novomodelo-bridge` binary belongs in tier 2.
-2. **pytest suite.** `tests/test_*.py` run after `uv sync`. They cover adapters,
-   validation, imports, and bundled reference data.
+1. **Offline suite (default).** `uv run pytest` runs every `tests/test_*.py`
+   with the fake CLIs and no network. This is the gate every change passes, on
+   every Python version and platform the CI matrix covers.
+2. **Opt-in real-world tests.** Tests marked `executaveis_reais` (the real
+   `novomodelo`, `novomodelo-bridge` and `novomodelo-python`) or `rede` (the
+   official domains) are skipped unless their option is passed
+   (`--executaveis-reais`, `--com-rede`; `tests/conftest.py` owns the options).
+   With the option, a missing binary or network is a failure, not a skip. CI
+   runs them in its own job; a new real-world test carries the marker.
 
-Use the cheapest tier that catches the regression; add a smoke test for a
-transport/guard contract before reaching for the pytest suite.
+Use the cheapest tier that catches the regression: a transport or guard
+contract gets an offline test with the fake CLI first.
 
 ## Offline and sandbox discipline
 
-- **No network, ever.** No test makes an outbound request. The server is offline
-  by contract and the suite proves it.
+- **No network outside the `rede` marker.** No offline test makes an outbound
+  request; a test that needs one is marked `rede` and stays skipped by default.
 - **No real binaries required.** CLI-dependent behaviour is exercised through
   `tests/fake_novomodelo_bridge.py` (a stand-in CLI), not a real `novomodelo-bridge`
   install. A test must not fail merely because the real binary is absent.
-- **The path guard is tested on both sides.** `tests/smoke_paths.py` asserts that
-  an in-workspace path is accepted and an out-of-workspace path is refused — a
+- **The path guard is tested on both sides.** `tests/test_paths_guard.py` asserts
+  that an in-workspace path is accepted and an out-of-workspace path is refused — a
   guard test that only checks the happy path proves nothing about fail-closed
   behaviour.
 

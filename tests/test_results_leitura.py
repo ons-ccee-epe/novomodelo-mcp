@@ -4,7 +4,6 @@ import json
 import tempfile
 from pathlib import Path
 
-
 from novomodelo_mcp.adapters import results as R
 
 

@@ -10,11 +10,9 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from . import __version__
-
 from .adapters import versions
-from .adapters.envelope import as_error
-
 from .adapters.discovery import bridge_origin, bridge_version, find_novomodelo, tool_version
+from .adapters.envelope import as_error
 from .adapters.paths import (
     AVISO_NA_TOOL,
     NAO_CONTORNE,
@@ -26,18 +24,17 @@ from .adapters.reference import docs_origin
 from .adapters.state import state_dir
 from .config import load_settings
 from .names import SERVER_NAME
+from .tools.annotations import READ_ONLY_NET
+from .tools.deck import register_deck
 from .tools.novomodelo_meta import register_novomodelo_meta
 from .tools.pastas import register_pastas
-from .tools.deck import register_deck
 from .tools.post_run import register_post_run
-from .tools.prompts import register_prompts
 from .tools.pre_run import register_pre_run
+from .tools.prompts import register_prompts
 from .tools.reference import register_reference
 from .tools.results import register_results
 from .tools.run import register_run
-from .tools.annotations import READ_ONLY_NET
 from .tools.shaping import attach_version_warnings
-
 
 SERVER_INSTRUCTIONS = f"""\
 Servidor MCP do novomodelo: valida, converte (NEWAVE/DECOMP), roda, compara e lê os

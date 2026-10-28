@@ -407,7 +407,8 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
 
     Um novomodelo novo não garante o MCP da mesma versão, então nenhuma peça nova vem
     com comando próprio (instalar só uma peça desalinha as outras); a nota diz como
-    atualizar o MCP, que traz as peças juntas. Todo o trabalho cabe em `budget_s`; o que não responder a tempo vira aviso.
+    atualizar o MCP, que traz as peças juntas. Todo o trabalho cabe em `budget_s`; o que
+    não responder a tempo vira aviso.
     """
     if "resultado" in _UPDATE and time.monotonic() - _UPDATE["quando"] < UPDATE_TTL_S:
         return _UPDATE["resultado"]

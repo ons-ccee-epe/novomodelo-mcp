@@ -1,6 +1,6 @@
 """Nomes dos programas externos que o MCP chama, declarados num lugar só.
 
-Mesmo espírito do `SOFTWARE_NAME` do solver (`novomodelo-io/src/output/software.rs`):
+Mesmo espírito da constante `SOFTWARE_NAME` do `novomodelo-io`, no solver:
 evita repetir a mesma string em vários módulos. Não é mecanismo de rename — o
 rename do produto é feito pela ferramenta `rebrand.py` + `map.toml`, que
 reescreve este arquivo junto com o resto do repositório.

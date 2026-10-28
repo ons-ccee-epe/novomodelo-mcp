@@ -74,7 +74,8 @@ def fake_novomodelo_bin(tmp_path):
     return str(launcher)
 
 
-# Feature: schema-export-version-tools, Property 2: Destino de export é registrado como artefato, nunca como conteúdo
+# Feature: schema-export-version-tools, Property 2: Destino de export é registrado como
+# artefato, nunca como conteúdo
 # Validates: Requirements 1.7
 # deadline=None: cada exemplo gera um subprocesso da CLI falsa; a latência é do spawn
 # externo (lenta em `.cmd` no Windows), não do relé sob teste — o prazo mediria o processo.

@@ -10,8 +10,8 @@ from ..adapters import budget
 from ..adapters import results as R
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
-from .shaping import fit_to_budget, cap_envelope
 from .annotations import READ_ONLY
+from .shaping import cap_envelope, fit_to_budget
 
 
 def register_results(mcp, settings: Settings) -> None:
