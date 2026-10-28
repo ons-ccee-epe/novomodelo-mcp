@@ -97,12 +97,11 @@ A geração de HTML foi aposentada; os runners seguem gravando os JSON:
 - `tests/e2e/eval/run.py` → grava `reports/latest.json`, sem `latest.html`.
 - `tests/eval/pytest_bridge.py` → grava `reports/latest.json`, sem `latest.html`.
 
-Os geradores HTML antigos (`*/dashboard.py`, em JS vanilla, fora do padrão de
-frontend) foram removidos; este frontend é o único dashboard.
+Este frontend é o único dashboard.
 
 ## Estrutura
 
-Segue o layout do padrão de frontend:
+Layout:
 
 ```
 src/

@@ -2,8 +2,8 @@
 
 Este módulo testa:
 - save_batch() e load_batch() para persistência de baterias
-- _update_index() para manutenção do índice (Req 8.8, 8.9)
-- set_baseline() e get_baseline() para baseline (Req 10.5, 10.6)
+- _update_index() para manutenção do índice
+- set_baseline() e get_baseline() para baseline
 - list_batches() para listagem ordenada
 """
 
@@ -148,14 +148,14 @@ class TestSaveBatch:
     """Testes para save_batch()."""
 
     def test_save_batch_creates_file(self, store: ResultStore, sample_batch: BatchResult):
-        """save_batch cria arquivo JSON (Req 8.2)."""
+        """save_batch cria arquivo JSON."""
         batch_path = store.save_batch(sample_batch)
 
         assert batch_path.exists()
         assert batch_path.name == f"{sample_batch.batch_id}.json"
 
     def test_save_batch_json_content(self, store: ResultStore, sample_batch: BatchResult):
-        """save_batch salva conteúdo correto (Req 8.3, 8.4)."""
+        """save_batch salva conteúdo correto."""
         batch_path = store.save_batch(sample_batch)
 
         with open(batch_path, encoding="utf-8") as f:
@@ -169,7 +169,7 @@ class TestSaveBatch:
         assert len(data["test_results"]) == 2
 
     def test_save_batch_updates_index(self, store: ResultStore, sample_batch: BatchResult):
-        """save_batch atualiza index.json (Req 8.8)."""
+        """save_batch atualiza index.json."""
         store.save_batch(sample_batch)
 
         assert store.index_path.exists()
@@ -203,7 +203,7 @@ class TestUpdateIndex:
     """Testes para _update_index()."""
 
     def test_index_contains_required_fields(self, store: ResultStore, sample_batch: BatchResult):
-        """Index contém campos obrigatórios (Req 8.9)."""
+        """Index contém campos obrigatórios."""
         store.save_batch(sample_batch)
 
         with open(store.index_path, encoding="utf-8") as f:
@@ -238,7 +238,7 @@ class TestListBatches:
         assert batches == []
 
     def test_list_batches_sorted_by_timestamp(self, store: ResultStore, sample_batch: BatchResult):
-        """list_batches retorna ordenado por timestamp (Req 10.1)."""
+        """list_batches retorna ordenado por timestamp."""
         # Save first batch
         store.save_batch(sample_batch)
 
@@ -277,7 +277,7 @@ class TestListBatches:
 
 
 class TestSetBaseline:
-    """Testes para set_baseline() (Req 10.5, 10.6)."""
+    """Testes para set_baseline()."""
 
     def test_set_baseline_creates_file(self, store: ResultStore, sample_batch: BatchResult):
         """set_baseline cria baseline.json."""
@@ -287,7 +287,7 @@ class TestSetBaseline:
         assert store.baseline_path.exists()
 
     def test_set_baseline_content(self, store: ResultStore, sample_batch: BatchResult):
-        """set_baseline salva batch_id correto (Req 10.6)."""
+        """set_baseline salva batch_id correto."""
         store.save_batch(sample_batch)
         store.set_baseline(sample_batch.batch_id)
 
@@ -297,7 +297,7 @@ class TestSetBaseline:
         assert baseline_data == {"baselines": {"todos": sample_batch.batch_id}}
 
     def test_set_baseline_replaces_previous(self, store: ResultStore, sample_batch: BatchResult):
-        """set_baseline substitui baseline anterior (Req 10.5)."""
+        """set_baseline substitui baseline anterior."""
         store.save_batch(sample_batch)
         store.set_baseline(sample_batch.batch_id)
 
@@ -340,7 +340,7 @@ class TestSetBaseline:
 
 
 class TestGetBaseline:
-    """Testes para get_baseline() (Req 10.5, 10.6)."""
+    """Testes para get_baseline()."""
 
     def test_get_baseline_no_baseline_set(self, store: ResultStore):
         """get_baseline retorna None quando não há baseline."""

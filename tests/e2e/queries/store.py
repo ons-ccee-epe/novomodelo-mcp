@@ -4,9 +4,9 @@ Este módulo implementa o ResultStore que persiste resultados de baterias de tes
 em arquivos JSON e mantém o índice e histórico de métricas.
 
 Implements:
-- Req 8.1: Batch_Result com ID único no formato {timestamp}_{git_short_sha}
-- Req 8.2: Persistência em tests/e2e/results/{batch_id}.json
-- Req 8.3: Metadados obrigatórios no Batch_Result
+- Batch_Result com ID único no formato {timestamp}_{git_short_sha}
+- Persistência em tests/e2e/results/{batch_id}.json
+- Metadados obrigatórios no Batch_Result
 """
 
 from __future__ import annotations
@@ -34,7 +34,6 @@ __all__ = [
 ]
 
 
-# Mapeamento de tools MCP para seus grupos (Req 9.3)
 TOOL_GROUPS: dict[str, str] = {
     # Bridge tools
     "bridge_check_newave": "bridge",
@@ -117,10 +116,10 @@ class ResultStore:
     """Persiste resultados de baterias e métricas.
 
     O ResultStore é responsável por:
-    - Gerar batch_id no formato {timestamp}_{git_sha} (Req 8.1)
-    - Salvar Batch_Result em JSON (Req 8.2)
-    - Manter índice de todas as baterias (Req 8.8)
-    - Manter histórico de métricas em JSONL (Req 9.4)
+    - Gerar batch_id no formato {timestamp}_{git_sha}
+    - Salvar Batch_Result em JSON
+    - Manter índice de todas as baterias
+    - Manter histórico de métricas em JSONL
 
     Attributes:
         results_dir: Diretório para arquivos de resultados JSON.
@@ -164,8 +163,8 @@ class ResultStore:
         """Salva resultado de bateria e atualiza índice.
 
         Implements:
-        - Req 8.2: Persistir em tests/e2e/results/{batch_id}.json
-        - Req 8.8: Atualizar índice em tests/e2e/results/index.json
+        - Persistir em tests/e2e/results/{batch_id}.json
+        - Atualizar índice em tests/e2e/results/index.json
 
         Args:
             batch: Resultado completo da bateria.
@@ -214,7 +213,7 @@ class ResultStore:
     def list_batches(self) -> list[dict[str, Any]]:
         """Lista todas as baterias do índice.
 
-        Implements Req 10.1: Lista de todas as baterias executadas, ordenadas
+        Lista de todas as baterias executadas, ordenadas
         por data (mais recente primeiro).
 
         Returns:
@@ -334,7 +333,7 @@ class ResultStore:
     def _generate_batch_id(self) -> str:
         """Gera batch_id no formato {timestamp}_{git_sha}.
 
-        Implements Req 8.1: ID único no formato {timestamp}_{git_short_sha}.
+        ID único no formato {timestamp}_{git_short_sha}.
 
         Returns:
             String no formato "20241215_143052_abc1234".
@@ -384,7 +383,7 @@ class ResultStore:
     def _update_index(self, batch: BatchResult) -> None:
         """Atualiza índice com nova bateria.
 
-        Implements Req 8.8 and 8.9: Atualizar índice com metadados da bateria.
+        Atualizar índice com metadados da bateria.
 
         Args:
             batch: Bateria a adicionar ao índice.
@@ -396,7 +395,6 @@ class ResultStore:
         else:
             index = {"batches": []}
 
-        # Add batch summary to index (Req 8.9)
         batch_summary = {
             "batch_id": batch.batch_id,
             "timestamp": batch.timestamp,
@@ -579,9 +577,9 @@ class ResultStore:
         """Adiciona métricas ao histórico JSONL.
 
         Implements:
-        - Req 9.4: Persistir em tests/e2e/metrics/history.jsonl
-        - Req 9.5: Record contém batch_id, timestamp, métricas, metrics_by_tag/group
-        - Req 9.7: Detectar alertas quando métrica piora >10% vs anterior
+        - Persistir em tests/e2e/metrics/history.jsonl
+        - Record contém batch_id, timestamp, métricas, metrics_by_tag/group
+        - Detectar alertas quando métrica piora >10% vs anterior
 
         Args:
             batch: Resultado completo da bateria com métricas calculadas.
@@ -595,7 +593,6 @@ class ResultStore:
         previous = self._get_previous_batch_metrics()
         alerts = self._detect_alerts(batch, previous)
 
-        # Build metrics record (Req 9.5)
         record = {
             "batch_id": batch.batch_id,
             "timestamp": batch.timestamp,
@@ -612,7 +609,6 @@ class ResultStore:
             "alerts": alerts,
         }
 
-        # Append to JSONL file (Req 9.4)
         with open(self.history_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -623,7 +619,7 @@ class ResultStore:
     ) -> dict[str, bool]:
         """Detecta alertas comparando com bateria anterior.
 
-        Implements Req 9.7: WHEN uma métrica piora mais de 10% em relação
+        WHEN uma métrica piora mais de 10% em relação
         à bateria imediatamente anterior, marcar alert: true para essa métrica.
 
         Alert logic:
@@ -708,7 +704,7 @@ class ResultStore:
     def calculate_trends(self, current: BatchMetrics) -> dict[str, str]:
         """Calcula tendências comparando com últimas 5 baterias.
 
-        Implements Req 9.6: Calcular trend_mcp_used, trend_correct_tool,
+        Calcular trend_mcp_used, trend_correct_tool,
         trend_correct_result, trend_latency como 'improving', 'stable', 'degrading'.
 
         Trend logic:
@@ -795,9 +791,9 @@ class ResultStore:
         Gera batch_id, timestamp, e calcula todas as métricas agregadas.
 
         Implements:
-        - Req 8.1: ID único no formato {timestamp}_{git_short_sha}
-        - Req 8.3: Metadados obrigatórios no Batch_Result
-        - Req 9.1, 9.2, 9.3: Cálculo de métricas agregadas
+        - ID único no formato {timestamp}_{git_short_sha}
+        - Metadados obrigatórios no Batch_Result
+        - Cálculo de métricas agregadas
 
         Args:
             test_results: Lista de resultados de testes individuais.
@@ -846,7 +842,7 @@ class ResultStore:
     def _calculate_metrics(self, results: list[TestResult]) -> BatchMetrics:
         """Calcula métricas agregadas de uma bateria.
 
-        Implements Req 9.1: pct_mcp_used, pct_correct_tool, pct_correct_result,
+        pct_mcp_used, pct_correct_tool, pct_correct_result,
         avg_latency_ms, p95_latency_ms.
 
         Args:
@@ -897,7 +893,7 @@ class ResultStore:
     def _calculate_metrics_by_tag(self, results: list[TestResult]) -> dict[str, TagMetrics]:
         """Calcula métricas agregadas por tag.
 
-        Implements Req 9.2: Para cada tag, totais de passed, failed,
+        Para cada tag, totais de passed, failed,
         mcp_used, correct_tool.
 
         Args:
@@ -936,7 +932,7 @@ class ResultStore:
     def _calculate_metrics_by_group(self, results: list[TestResult]) -> dict[str, GroupMetrics]:
         """Calcula métricas por grupo de tools.
 
-        Implements Req 9.3: Métricas por grupo (bridge_*, deck_*, docs_*,
+        Métricas por grupo (bridge_*, deck_*, docs_*,
         results_*, schema_*, run_*, case_*, meta_*, other).
 
         Uses TOOL_GROUPS to map expected_tool to group. Tests without

@@ -113,14 +113,14 @@ class QueryRunner:
                 usa QUERY_TIMEOUT_S; sem ele, cada caso usa o próprio ``timeout_s``
                 (cases.yaml) e DEFAULT_TIMEOUT_S só quando o caso não tem um.
             api_key: Chave de API opcional para autenticação.
-                Se não fornecida, assume autenticação via kiro-cli login (Req 19.4).
+                Se não fornecida, assume autenticação via kiro-cli login.
             response_log_dir: Diretório para arquivos de log de respostas MCP.
                 Se None, usa diretório temporário.
             workspace_dir: Raiz do path guard do MCP e cwd do agente
                 (ver ``mcp_workspace``). Se None, vale a config global do usuário.
 
         Raises:
-            RuntimeError: Se Kiro CLI não está instalado (Req 19.5), ou se
+            RuntimeError: Se Kiro CLI não está instalado, ou se
                 workspace_dir é dado e o servidor novomodelo não está configurado.
         """
         if timeout_seconds is None and os.environ.get("QUERY_TIMEOUT_S"):
@@ -151,10 +151,10 @@ class QueryRunner:
         """Executa uma query via Kiro CLI.
 
         Implements:
-        - Req 2.1: Invocar kiro-cli chat --no-interactive --trust-all-tools -vvv
-        - Req 2.2: Capturar stdout e stderr do Kiro CLI para parsing
-        - Req 2.3: Garantir Session_Isolation iniciando sessão limpa
-        - Req 2.5: Coletar tempo total de execução em milissegundos
+        - Invocar kiro-cli chat --no-interactive --trust-all-tools -vvv
+        - Capturar stdout e stderr do Kiro CLI para parsing
+        - Garantir Session_Isolation iniciando sessão limpa
+        - Coletar tempo total de execução em milissegundos
         - NEW: Capturar envelopes MCP via NOVOMODELO_MCP_RESPONSE_LOG
 
         Args:
@@ -168,7 +168,6 @@ class QueryRunner:
         # Record log file size before test to read only new entries after
         log_size_before = log_file.stat().st_size if log_file.exists() else 0
 
-        # Build command (Req 2.1)
         cmd = self._build_command(test_case.query)
 
         # Prepare environment with MCP response logging enabled
@@ -176,7 +175,7 @@ class QueryRunner:
         env["NOVOMODELO_MCP_RESPONSE_LOG"] = str(log_file)
         env.update(self._agent_env())
 
-        # Execute with subprocess and measure time (Req 2.2, 2.3, 2.5)
+        # Execute with subprocess and measure time
         start_time = time.perf_counter()
         timeout = self.timeout_for(test_case)
         status, stdout, stderr = self._run_process(cmd, env, timeout)
@@ -236,7 +235,7 @@ class QueryRunner:
     ) -> tuple[str, str, str]:
         """Roda o agente e devolve (status, stdout, stderr).
 
-        status: "completed", "timeout" (Req 2.6: saída parcial retida) ou
+        status: "completed", "timeout" (saída parcial retida) ou
         "cancelled" (``cancel()`` chamado durante ou antes da execução).
         """
         with self._process_lock:
@@ -390,7 +389,7 @@ class QueryRunner:
             query: Query em linguagem natural a ser executada.
 
         Returns:
-            Lista de argumentos para subprocess (Req 2.1).
+            Lista de argumentos para subprocess.
         """
         return [
             "kiro-cli",
@@ -404,10 +403,10 @@ class QueryRunner:
     def _parse_tool_calls(self, log_content: str) -> list[ToolCall]:
         """Extrai tool calls do log verbose.
 
-        Implements Req 2.4: Extrair Tool_Calls do log verbose parseando padrões
+        Extrair Tool_Calls do log verbose parseando padrões
         "Validating tool uses".
 
-        Implements Req 3.6: Registrar todas as Tool_Calls para diagnóstico,
+        Registrar todas as Tool_Calls para diagnóstico,
         mesmo as não esperadas.
 
         Parseia múltiplos formatos de log:
@@ -706,8 +705,8 @@ class QueryRunner:
         """Classifica uma tool como "mcp", "native", ou "unknown".
 
         Implements:
-        - Req 3.3: Identificar MCP_Tools pela lista conhecida de 37 tools
-        - Req 3.4: Identificar Native_Tools e classificar desconhecidas como native
+        - Identificar MCP_Tools pela lista conhecida de 37 tools
+        - Identificar Native_Tools e classificar desconhecidas como native
 
         Args:
             tool_name: Nome da tool a classificar.
@@ -723,7 +722,7 @@ class QueryRunner:
         """Valida que Kiro CLI está instalado.
 
         Implements:
-        - Req 19.5: THE Query_Runner SHALL validar que Kiro CLI está instalado
+        - THE Query_Runner SHALL validar que Kiro CLI está instalado
                     antes de executar testes
 
         Raises:

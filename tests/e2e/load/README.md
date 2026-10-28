@@ -133,7 +133,7 @@ latências longas e dos timeouts dos casos `bridge-*` na esteira.
 - **Aquecimento:** cada cliente chama uma vez cada tool do mix antes da carga; essas
   chamadas ficam fora das métricas (a primeira chamada de uma tool carrega bibliotecas).
 - **CPU e RSS** dos processos do servidor, se o `psutil` estiver instalado
-  (`pip install psutil`). Sem ele o relatório diz `available: false` e a carga segue.
+  (opcional: `uv pip install psutil`). Sem ele o relatório diz `available: false` e a carga segue.
 
 ### Timeout e clientes recriados
 

@@ -58,7 +58,7 @@ class ProviderInfo:
     path: str | None
 
 
-# Ordem = prioridade de deteccao automatica (kiro primeiro, por ordem de detecção).
+# Ordem = prioridade de deteccao automatica.
 _CANDIDATES: list[tuple[Provider, str, str]] = [
     ("kiro-cli", "Kiro CLI", "kiro-cli"),
     ("claude", "Claude Code", "claude"),

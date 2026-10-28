@@ -242,7 +242,7 @@ def classify_tool(tool_name: str) -> str:
         return "mcp"
     if tool_name in NATIVE_TOOLS:
         return "native"
-    return "unknown"  # Tratada como native por segurança (Req 3.4)
+    return "unknown"  # Tratada como native por segurança
 
 
 # =============================================================================
@@ -322,14 +322,12 @@ class QueryValidator:
         mcp_check_passed = False
         tool_check_passed = False
 
-        # 1. Check uses_mcp (Req 3.1, 3.2, 3.3, 3.4)
         check_mcp = self._check_uses_mcp(result.tool_calls, expected.uses_mcp)
         checks.append(check_mcp)
         mcp_check_passed = check_mcp.passed
         if not check_mcp.passed:
             all_passed = False
 
-        # 2. Check tool/tools (Req 4.1, 4.2, 4.3, 4.4, 4.5)
         if expected.tool is not None or expected.tools is not None:
             check_tool = self._check_correct_tool(
                 result.tool_calls,
@@ -341,7 +339,6 @@ class QueryValidator:
             if not check_tool.passed:
                 all_passed = False
 
-        # 3. Check did_not_use (Req 3.5)
         if expected.did_not_use is not None:
             check_forbidden = self._check_did_not_use(
                 result.tool_calls,
@@ -358,21 +355,18 @@ class QueryValidator:
         if result.envelope and "result" in result.envelope:
             mcp_result = result.envelope.get("result")
 
-        # 4. Check status (Req 5.1)
         if expected.status is not None:
             check_status = self._check_status(mcp_result, expected.status)
             checks.append(check_status)
             if not check_status.passed:
                 all_passed = False
 
-        # 5. Check content (Req 5.2-5.8)
         if expected.content is not None:
             check_content = self._check_content(mcp_result, expected.content)
             checks.append(check_content)
             if not check_content.passed:
                 all_passed = False
 
-        # 6. Check validation (Req 6.1-6.4)
         if expected.validation is not None:
             check_validation = self._check_validation(
                 result.agent_response,
@@ -382,7 +376,6 @@ class QueryValidator:
             if not check_validation.passed:
                 all_passed = False
 
-        # 7. Check error_contains (Req 7.3)
         if expected.error_contains is not None:
             check_error = self._check_error_contains(
                 mcp_result,
@@ -431,10 +424,10 @@ class QueryValidator:
         """Verifica se MCP foi usado quando deveria.
 
         Implements:
-        - Req 3.1: WHEN expected.uses_mcp é true, verificar que pelo menos uma MCP_Tool foi chamada
-        - Req 3.2: WHEN expected.uses_mcp é true, falhar se apenas Native_Tools foram usadas
-        - Req 3.3: Identificar MCP_Tools pela lista conhecida de 37 tools
-        - Req 3.4: Identificar Native_Tools e classificar desconhecidas como Native por padrão
+        - WHEN expected.uses_mcp é true, verificar que pelo menos uma MCP_Tool foi chamada
+        - WHEN expected.uses_mcp é true, falhar se apenas Native_Tools foram usadas
+        - Identificar MCP_Tools pela lista conhecida de 37 tools
+        - Identificar Native_Tools e classificar desconhecidas como Native por padrão
 
         Args:
             tool_calls: Lista de tool calls registradas
@@ -486,11 +479,11 @@ class QueryValidator:
         """Verifica se a tool correta foi chamada.
 
         Implements:
-        - Req 4.1: WHEN expected.tool é definido, verificar que essa tool foi chamada
-        - Req 4.2: WHEN expected.tools é lista, aceitar se qualquer uma foi chamada
-        - Req 4.3: Reportar qual tool foi chamada em vez da esperada
-        - Req 4.4: Suportar validação por order-independent set membership
-        - Req 4.5: Falhar com mensagem explicativa se nenhuma tool foi chamada
+        - WHEN expected.tool é definido, verificar que essa tool foi chamada
+        - WHEN expected.tools é lista, aceitar se qualquer uma foi chamada
+        - Reportar qual tool foi chamada em vez da esperada
+        - Suportar validação por order-independent set membership
+        - Falhar com mensagem explicativa se nenhuma tool foi chamada
 
         Args:
             tool_calls: Lista de tool calls registradas
@@ -519,7 +512,7 @@ class QueryValidator:
                 message="Nenhuma tool esperada definida",
             )
 
-        # Check if any expected tool was called (Req 4.4: order-independent set membership)
+        # Check if any expected tool was called (order-independent set membership)
         matches = called_names & expected_set
         passed = len(matches) > 0
 
@@ -527,8 +520,8 @@ class QueryValidator:
             actual: Any = list(matches)
             message = f"Tool correta chamada: {', '.join(sorted(matches))}"
         else:
-            # Req 4.3: Reportar qual tool foi chamada em vez da esperada
-            # Req 4.5: Falhar com mensagem explicativa se nenhuma tool foi chamada
+            # Reportar qual tool foi chamada em vez da esperada
+            # Falhar com mensagem explicativa se nenhuma tool foi chamada
             if called_names:
                 actual = list(called_names)
                 usadas = ", ".join(sorted(called_names))
@@ -553,7 +546,7 @@ class QueryValidator:
         """Verifica que tools proibidas não foram usadas.
 
         Implements:
-        - Req 3.5: WHEN expected.did_not_use é definido, falhar se qualquer tool listada foi chamada
+        - WHEN expected.did_not_use é definido, falhar se qualquer tool listada foi chamada
 
         Args:
             tool_calls: Lista de tool calls registradas
@@ -590,7 +583,7 @@ class QueryValidator:
         """Verifica status do resultado MCP.
 
         Implements:
-        - Req 5.1: WHEN expected.status é definido, verificar o status do Envelope
+        - WHEN expected.status é definido, verificar o status do Envelope
 
         Args:
             mcp_result: Resultado da tool MCP (pode ser None)
@@ -635,9 +628,9 @@ class QueryValidator:
         """Verifica campos do resultado MCP usando matchers.
 
         Implements:
-        - Req 5.2: Validar campos aninhados usando notação de caminho
-        - Req 5.3-5.7: Suportar matchers especiais
-        - Req 5.8: Falhar com caminho do campo faltante
+        - Validar campos aninhados usando notação de caminho
+        - Suportar matchers especiais
+        - Falhar com caminho do campo faltante
 
         Args:
             mcp_result: Resultado da tool MCP (pode ser None)
@@ -697,10 +690,10 @@ class QueryValidator:
         """Verifica citações e keywords na resposta.
 
         Implements:
-        - Req 6.1: WHEN cites_section_pattern é definido, verificar citação com regex
-        - Req 6.2: WHEN response_contains é definido, verificar keywords
-        - Req 6.3: Extrair citações no formato página#seção
-        - Req 6.4: Aceitar citações em qualquer formato página#seção
+        - WHEN cites_section_pattern é definido, verificar citação com regex
+        - WHEN response_contains é definido, verificar keywords
+        - Extrair citações no formato página#seção
+        - Aceitar citações em qualquer formato página#seção
 
         Args:
             agent_response: Resposta final do agente
@@ -711,13 +704,11 @@ class QueryValidator:
         """
         failures: list[str] = []
 
-        # Check citation pattern (Req 6.1, 6.3, 6.4)
         if validation_spec.cites_section_pattern is not None:
             pattern = validation_spec.cites_section_pattern
             if not re.search(pattern, agent_response):
                 failures.append(f"citação não encontrada (padrão: {pattern})")
 
-        # Check keywords (Req 6.2)
         if validation_spec.response_contains is not None:
             for keyword in validation_spec.response_contains:
                 if keyword.lower() not in agent_response.lower():
@@ -754,7 +745,7 @@ class QueryValidator:
         """Verifica substring na mensagem de erro.
 
         Implements:
-        - Req 7.3: WHEN expected.error_contains é definido, verificar substring na mensagem
+        - WHEN expected.error_contains é definido, verificar substring na mensagem
 
         Args:
             mcp_result: Resultado da tool MCP (pode ser None)

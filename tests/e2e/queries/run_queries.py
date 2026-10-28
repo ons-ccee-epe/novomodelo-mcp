@@ -4,17 +4,17 @@ Este módulo implementa a interface de linha de comando para executar testes E2E
 via query no Kiro CLI.
 
 Implements:
-- Req 16.1: Executável via `python -m tests.e2e.queries.run_queries`
-- Req 16.2: Flag `--tags` para filtrar testes por tags
-- Req 16.3: Flag `--case` para executar um teste específico por ID
-- Req 16.4: Flag `--parallel N` para execução paralela
-- Req 16.5: Durante execução, exibir progresso no terminal
-- Req 16.6: Após execução, exibir sumário com total passed/failed/skipped
-- Req 16.7: Exit code 1 se qualquer teste falha
-- Req 16.8: Flag `--report` para gerar dashboard
-- Req 16.9: Flag `--set-baseline` para marcar bateria como baseline
-- Req 16.10: Flag `--compare BATCH_ID` para comparar com bateria específica
-- Req 19.1-19.4: Configuração via variáveis de ambiente
+- Executável via `python -m tests.e2e.queries.run_queries`
+- Flag `--tags` para filtrar testes por tags
+- Flag `--case` para executar um teste específico por ID
+- Flag `--parallel N` para execução paralela
+- Durante execução, exibir progresso no terminal
+- Após execução, exibir sumário com total passed/failed/skipped
+- Exit code 1 se qualquer teste falha
+- Flag `--report` para gerar dashboard
+- Flag `--set-baseline` para marcar bateria como baseline
+- Flag `--compare BATCH_ID` para comparar com bateria específica
+- Configuração via variáveis de ambiente
 
 Usage:
     python -m tests.e2e.queries.run_queries
@@ -97,7 +97,7 @@ def _build_test_result(
     mcp_used = any(classify_tool(tc.name) == "mcp" for tc in result.tool_calls)
 
     # Determinar se tool correta foi chamada
-    # Use set membership como o validator faz (Req 4.4: order-independent)
+    # Use set membership como o validator faz (order-independent)
     called_names = {tc.name for tc in result.tool_calls}
     correct_tool = False
     if case.expected.tool:
@@ -228,7 +228,7 @@ def main() -> int:
     base_dir = Path(__file__).parent.parent
     cases_path = Path(__file__).parent / "cases.yaml"
 
-    # Fixtures: configurável via QUERY_FIXTURES_DIR (Req 19.2)
+    # Fixtures: configurável via QUERY_FIXTURES_DIR
     default_fixtures_dir = base_dir / "fixtures"
     fixtures_dir = _get_env_path("QUERY_FIXTURES_DIR", default_fixtures_dir)
 
@@ -236,7 +236,7 @@ def main() -> int:
     results_dir = base_dir / "results"
     metrics_dir = base_dir / "metrics"
 
-    # API key: via KIRO_API_KEY (Req 19.1, 19.4)
+    # API key: via KIRO_API_KEY
     api_key = os.environ.get("KIRO_API_KEY")
 
     # Carregar casos de teste
@@ -263,8 +263,6 @@ def main() -> int:
     store = ResultStore(results_dir, metrics_dir)
 
     # Executar testes
-    # Req 16.4: Flag `--parallel N` para execução paralela
-    # Req 16.5: Durante execução, exibir progresso no terminal
     test_results: list[TestResult] = []
     total_cases = len(cases)
 
@@ -285,7 +283,6 @@ def main() -> int:
             test_result = _build_test_result(case, result, validation)
             test_results.append(test_result)
 
-            # Exibir status com detalhes (Req 16.5)
             # Use ASCII-safe icons to avoid encoding issues on Windows cp1252
             if test_result.status == "pass":
                 status_icon = "[OK]"
@@ -341,7 +338,7 @@ def main() -> int:
                         completed_count += 1
                         current = completed_count
 
-                    # Thread-safe print (Req 16.5)
+                    # Thread-safe print
                     # Use ASCII-safe icons to avoid encoding issues on Windows cp1252
                     status_icon = "[OK]" if validation.valid else "[FAIL]"
                     with _print_lock:
@@ -392,12 +389,10 @@ def main() -> int:
     batch_path = store.save_batch(batch)
     store.append_metrics(batch)
 
-    # Set baseline se solicitado (Req 16.9)
     if args.set_baseline:
         conjunto = store.set_baseline(batch.batch_id)
         print(f"Bateria {batch.batch_id} definida como baseline de {conjunto}")
 
-    # Exibir sumário (Req 16.6)
     print()
     print("=" * 60)
     print(f"Batch: {batch.batch_id}")
@@ -416,7 +411,7 @@ def main() -> int:
 
     # Dados persistidos em JSON (results/*.json + metrics/history.jsonl).
     # O dashboard agora e o frontend Vite em tests/e2e/frontend, que consome
-    # esses JSON — nao geramos mais HTML por execucao (Req 16.8 reinterpretada).
+    # esses JSON — nao geramos mais HTML por execucao.
     if args.report:
         frontend_dir = base_dir / "frontend"
         print()
@@ -433,7 +428,6 @@ def main() -> int:
         if args.compare:
             print(f"Comparacao: selecione '{args.compare}' no seletor 'Comparar com'.")
 
-    # Exit code (Req 16.7)
     # Exit code: 0 se não houve falhas reais (partial conta como sucesso parcial)
     return 0 if batch.failed == 0 and batch.timeout == 0 else 1
 

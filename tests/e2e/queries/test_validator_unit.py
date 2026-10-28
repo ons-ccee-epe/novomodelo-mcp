@@ -194,7 +194,7 @@ class TestCheckUsesMcp:
         assert "MCP usado" in check.message
 
     def test_mcp_expected_but_native_used(self):
-        """MCP esperado mas Native usado -> falha (Req 3.1, 3.2)."""
+        """MCP esperado mas Native usado -> falha."""
         validator = QueryValidator()
         tool_calls = [ToolCall(name="read_file", args={})]
         check = validator._check_uses_mcp(tool_calls, expected=True)
@@ -203,7 +203,7 @@ class TestCheckUsesMcp:
         assert "read_file" in check.message
 
     def test_mcp_expected_but_no_tools(self):
-        """MCP esperado mas nenhuma tool chamada -> falha (Req 4.5)."""
+        """MCP esperado mas nenhuma tool chamada -> falha."""
         validator = QueryValidator()
         tool_calls = []
         check = validator._check_uses_mcp(tool_calls, expected=True)
@@ -222,7 +222,7 @@ class TestCheckCorrectTool:
     """Testes para _check_correct_tool()."""
 
     def test_single_tool_correct(self):
-        """Tool única esperada e chamada -> passa (Req 4.1)."""
+        """Tool única esperada e chamada -> passa."""
         validator = QueryValidator()
         tool_calls = [ToolCall(name="deck_list", args={})]
         check = validator._check_correct_tool(
@@ -234,7 +234,7 @@ class TestCheckCorrectTool:
         assert "Tool correta chamada" in check.message
 
     def test_single_tool_wrong(self):
-        """Tool única esperada mas outra chamada -> falha (Req 4.3)."""
+        """Tool única esperada mas outra chamada -> falha."""
         validator = QueryValidator()
         tool_calls = [ToolCall(name="deck_read_parquet", args={})]
         check = validator._check_correct_tool(
@@ -247,7 +247,7 @@ class TestCheckCorrectTool:
         assert "deck_read_parquet" in check.message
 
     def test_tools_list_any_correct(self):
-        """Lista de tools e uma foi chamada -> passa (Req 4.2)."""
+        """Lista de tools e uma foi chamada -> passa."""
         validator = QueryValidator()
         tool_calls = [ToolCall(name="docs_read", args={})]
         check = validator._check_correct_tool(
@@ -258,7 +258,7 @@ class TestCheckCorrectTool:
         assert check.passed
 
     def test_tools_list_none_called(self):
-        """Lista de tools mas nenhuma chamada -> falha (Req 4.2, 4.5)."""
+        """Lista de tools mas nenhuma chamada -> falha."""
         validator = QueryValidator()
         tool_calls = [ToolCall(name="read_file", args={})]
         check = validator._check_correct_tool(
@@ -270,7 +270,7 @@ class TestCheckCorrectTool:
         assert "não foi chamada" in check.message
 
     def test_no_tools_called(self):
-        """Nenhuma tool chamada -> falha com mensagem explicativa (Req 4.5)."""
+        """Nenhuma tool chamada -> falha com mensagem explicativa."""
         validator = QueryValidator()
         tool_calls = []
         check = validator._check_correct_tool(
@@ -282,7 +282,7 @@ class TestCheckCorrectTool:
         assert "Nenhuma tool foi chamada" in check.message
 
     def test_order_independent_matching(self):
-        """Validação order-independent (Req 4.4)."""
+        """Validação order-independent."""
         validator = QueryValidator()
         tool_calls = [
             ToolCall(name="read_file", args={}),
@@ -312,7 +312,7 @@ class TestCheckDidNotUse:
         assert "Nenhuma tool proibida" in check.message
 
     def test_forbidden_used(self):
-        """Tool proibida usada -> falha (Req 3.5)."""
+        """Tool proibida usada -> falha."""
         validator = QueryValidator()
         tool_calls = [
             ToolCall(name="deck_list", args={}),
