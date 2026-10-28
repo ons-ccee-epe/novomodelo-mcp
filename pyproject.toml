@@ -34,6 +34,12 @@ dependencies = [
     "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
 ]
 
+[project.urls]
+Homepage = "https://docs.modelossetoreletrico.org.br/"
+Repository = "https://github.com/ons-ccee-epe/novomodelo"
+Documentation = "https://docs.modelossetoreletrico.org.br/"
+"Bug Tracker" = "https://github.com/ons-ccee-epe/novomodelo/issues"
+
 [project.scripts]
 novomodelo-mcp = "novomodelo_mcp.server:main"
 
@@ -62,9 +68,14 @@ exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md"]
 dev = ["pytest>=8", "ruff>=0.6", "hypothesis>=6"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
-python_files = ["test_*.py", "smoke_*.py"]
+python_files = ["test_*.py"]
+addopts = ["--strict-markers"]
+markers = [
+    "executaveis_reais: precisa do novomodelo e do novomodelo-bridge instalados (--executaveis-reais)",
+    "rede: acessa a rede, só os domínios oficiais (--com-rede)",
+]
 
 [tool.ruff]
 line-length = 100

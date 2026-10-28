@@ -14,10 +14,7 @@ from pathlib import Path
 
 import anyio
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from _fakes import fake_bin  # noqa: E402
+from _fakes import fake_bin
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "novomodelo_mcp"
 CHAMADAS = {"run", "Popen", "check_output", "check_call", "call"}

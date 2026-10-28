@@ -1,7 +1,7 @@
 """Importa todos os submódulos do pacote — pega import quebrado em qualquer arquivo.
 
 É o gate que teria pego o bug recorrente `from .config` -> `..config` na hora,
-sem depender de rodar o smoke certo. Requer as deps instaladas (mcp etc.), o que
+sem depender de rodar o teste certo. Requer as deps instaladas (mcp etc.), o que
 o CI garante via `uv sync`.
 """
 
