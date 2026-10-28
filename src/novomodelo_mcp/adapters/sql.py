@@ -26,9 +26,9 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Settings
-from .envelope import error
 from . import budget
 from .budget import fit_to_budget
+from .envelope import error
 from .paths import allowed_roots, refuse_outside
 
 #: Comandos que apenas leem (DESCRIBE e SUMMARIZE: schema e estatísticas de uma consulta).

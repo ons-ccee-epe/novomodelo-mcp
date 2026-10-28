@@ -11,21 +11,22 @@ import types
 import pytest
 
 from novomodelo_mcp.adapters import budget
-
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
 
 
 def _policy(n_stages=3, n_cuts=8, dim=4):
-    cut = lambda i: {
-        "cut_id": i,
-        "slot_index": i,
-        "iteration": i // 2 + 1,  # noqa: E731
-        "forward_pass_index": 0,
-        "intercept": 10.0 * i,
-        "coefficients": [0.5] * dim,
-        "is_active": i % 2 == 0,
-    }
+    def cut(i):
+        return {
+            "cut_id": i,
+            "slot_index": i,
+            "iteration": i // 2 + 1,
+            "forward_pass_index": 0,
+            "intercept": 10.0 * i,
+            "coefficients": [0.5] * dim,
+            "is_active": i % 2 == 0,
+        }
+
     return {
         "metadata": {
             "format_version": 3,

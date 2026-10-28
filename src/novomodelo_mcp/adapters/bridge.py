@@ -19,8 +19,9 @@ from typing import Any
 
 from ..config import Settings, load_settings
 from ..names import BRIDGE_CLI
-from .envelope import MAX_DETAIL_CHARS, error as _error
 from .discovery import find_bridge
+from .envelope import MAX_DETAIL_CHARS
+from .envelope import error as _error
 from .obs import log
 from .subproc import NO_WINDOW
 

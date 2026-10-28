@@ -15,11 +15,10 @@ entrada como não confiável.
 
 from __future__ import annotations
 
-import re
-
 import inspect
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 

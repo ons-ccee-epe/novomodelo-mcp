@@ -70,7 +70,7 @@ def _write_launcher(tmp_path: Path) -> str:
 
 @pytest.fixture
 def fake_novomodelo_bin(tmp_path):
-    """Lançador do `novomodelo` falso a apontar em `NOVOMODELO_MCP_SOLVER_BIN` (ver `test_novomodelo_meta.py`)."""
+    """Lançador do `novomodelo` falso para `NOVOMODELO_MCP_SOLVER_BIN` (ver `test_novomodelo_meta.py`)."""
     return _write_launcher(tmp_path)
 
 

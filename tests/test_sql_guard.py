@@ -3,7 +3,6 @@
 import tempfile
 from pathlib import Path
 
-
 from novomodelo_mcp.adapters import sql as S
 
 WS = [Path("/work").resolve()]

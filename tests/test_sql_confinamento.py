@@ -111,7 +111,8 @@ def test_consulta_confinada_nao_importa_o_pandas(ws):
         "from novomodelo_mcp.config import load_settings\n"
         "from novomodelo_mcp.adapters.sql import run_readonly_sql\n"
         f"s = dataclasses.replace(load_settings(), workspace={str(dentro)!r})\n"
-        f"r = run_readonly_sql(\"SELECT sum(x) s FROM read_csv('{dentro.as_posix()}/**/*.csv')\", settings=s)\n"
+        f"q = \"SELECT sum(x) s FROM read_csv('{dentro.as_posix()}/**/*.csv')\"\n"
+        "r = run_readonly_sql(q, settings=s)\n"
         "print(json.dumps([r['status'], 'pandas' in sys.modules, 'numpy' in sys.modules]))\n"
     )
     out = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True, check=True)

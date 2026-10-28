@@ -12,9 +12,8 @@ from ..adapters.bridge import run_bridge
 from ..adapters.envelope import error
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
-from .shaping import attach_artifact, cap_envelope
 from .annotations import WRITES
-
+from .shaping import attach_artifact, cap_envelope
 
 #: Vocabulário do `--format` do bridge, publicado como `enum` no schema da tool.
 FormatoCompare = Literal["console", "html", "csv", "parquet", "json", "all"]

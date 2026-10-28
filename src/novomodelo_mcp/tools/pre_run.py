@@ -7,13 +7,13 @@ from __future__ import annotations
 
 from ..adapters import budget
 from ..adapters.bridge import run_bridge
-from ..adapters.novomodelo import case_summary_binding, validate_deck_binding, validate_deck_cli
 from ..adapters.discovery import find_novomodelo
 from ..adapters.envelope import error
+from ..adapters.novomodelo import case_summary_binding, validate_deck_binding, validate_deck_cli
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
-from .shaping import attach_artifact, cap_envelope, group_diagnostics
 from .annotations import READ_ONLY, WRITES
+from .shaping import attach_artifact, cap_envelope, group_diagnostics
 
 
 def _force_gate(force: bool, dry_run: bool, settings: Settings) -> dict | None:
@@ -55,8 +55,8 @@ def register_pre_run(mcp, settings: Settings) -> None:
 
         `validate=True` (recomendado) também valida o deck resultante numa
         tacada — é o portão de prontidão pré-rodada. `force` apaga e regrava `dst`
-        existente (exige NOVOMODELO_MCP_ALLOW_FORCE=1); `dry_run` não escreve nada. Devolve o envelope + o caminho
-        do deck em `artifacts.deck`.
+        existente (exige NOVOMODELO_MCP_ALLOW_FORCE=1); `dry_run` não escreve nada.
+        Devolve o envelope + o caminho do deck em `artifacts.deck`.
         """
         if err := ensure_in_workspace(src, dst, settings=settings):
             return err
@@ -153,8 +153,8 @@ def register_pre_run(mcp, settings: Settings) -> None:
         """Converte uma revisão DECOMP para deck Novomodelo, escrevendo em `dst`.
 
         Espelha `bridge_convert_newave`: `validate=True` valida o deck resultante,
-        `force` apaga e regrava `dst` (exige NOVOMODELO_MCP_ALLOW_FORCE=1), `dry_run` não escreve. Caminho do deck em
-        `artifacts.deck`. `importar_fcf=False` converte sem importar os cortes da
+        `force` apaga e regrava `dst` (exige NOVOMODELO_MCP_ALLOW_FORCE=1), `dry_run` não
+        escreve. Caminho do deck em `artifacts.deck`. `importar_fcf=False` converte sem importar os cortes da
         FCF declarados no deck (`--no-fcf`); só no DECOMP, o conversor NEWAVE não
         tem essa opção.
         """

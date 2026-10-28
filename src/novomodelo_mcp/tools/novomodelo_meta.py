@@ -6,12 +6,12 @@ Cada função envelopa exatamente um subcomando `novomodelo`. Zero regra de neg�
 from __future__ import annotations
 
 from ..adapters import installer
-from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.envelope import as_error
+from ..adapters.novomodelo import run_novomodelo, version_cli
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
-from .shaping import attach_artifact, cap_envelope
 from .annotations import DESTRUCTIVE_NET, READ_ONLY, WRITES
+from .shaping import attach_artifact, cap_envelope
 
 
 def register_novomodelo_meta(mcp, settings: Settings) -> None:

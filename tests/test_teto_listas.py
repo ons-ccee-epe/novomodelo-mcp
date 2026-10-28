@@ -56,6 +56,7 @@ def test_resposta_pequena_fica_igual():
 
 def test_as_tres_tools_passam_pelo_corte(monkeypatch):
     import inspect
+
     from novomodelo_mcp.tools import pre_run, results
 
     fontes = inspect.getsource(results.register_results) + inspect.getsource(

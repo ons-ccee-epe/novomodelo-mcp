@@ -7,7 +7,6 @@ import types
 import pytest
 
 from novomodelo_mcp.adapters import budget
-
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
 
