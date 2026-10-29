@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -123,6 +124,27 @@ def test_secoes_de_inconclusivos_pulados_sem_base_e_ausentes(tmp_path: Path) -> 
         assert item in texto
 
 
+def test_sem_baseline_nao_lista_ausentes(tmp_path: Path) -> None:
+    decisao = Decisao("go", (), (), (), (), ("tools/z/claude",))
+    texto = gerar(tmp_path, [reg("a", "passou")], decisao, base=None)
+    assert "sem baseline" in texto.lower()
+    assert "tools/z/claude" not in texto
+
+
+def test_tempo_medio_ignora_pulado_e_erro_infra(tmp_path: Path) -> None:
+    registros = [
+        reg("a", "passou", 1, duracao_s=10.0),
+        reg("a", "falhou", 2, duracao_s=20.0),
+        reg("a", "pulado", 3, duracao_s=0.0),
+        reg("a", "erro_infra", 4, duracao_s=900.0),
+        reg("b", "pulado", 1, config="sem", duracao_s=5.0),
+    ]
+    texto = gerar(tmp_path, registros)
+    secao = texto.split("## Tempo médio por execução")[1].split("##")[0]
+    assert "| 15.0 |" in secao
+    assert "| — |" in secao
+
+
 def test_sem_baseline_diz_sem_baseline(tmp_path: Path) -> None:
     decisao = Decisao("go", (), (), (), (), ())
     assert "sem baseline" in gerar(tmp_path, [reg("a", "passou")], decisao, base=None).lower()
@@ -157,7 +179,8 @@ def test_marcar_e_ler_ultimo_lancamento(tmp_path: Path) -> None:
     ultimo = ultimo_lancamento(tmp_path)
     assert ultimo is not None
     assert (ultimo["versao"], ultimo["rodada"], ultimo["config"]) == ("1.1.0", "r2", "com-mcp")
-    assert ultimo["marcado_em"].endswith("+00:00") or ultimo["marcado_em"].endswith("Z")
+    assert ultimo["marcado_em"].endswith("+00:00")
+    assert datetime.fromisoformat(ultimo["marcado_em"]).utcoffset() == timedelta(0)
     assert len(json.loads((tmp_path / "lancamentos.json").read_text(encoding="utf-8"))) == 2
 
 
@@ -167,7 +190,7 @@ def test_lancamentos_vazio_devolve_none(tmp_path: Path) -> None:
     assert ultimo_lancamento(tmp_path) is None
 
 
-@pytest.mark.parametrize("conteudo", ["{nao e json", '{"a": 1}'])
+@pytest.mark.parametrize("conteudo", ["{nao e json", '{"a": 1}', "[1]"])
 def test_lancamentos_corrompido_nao_e_sobrescrito(tmp_path: Path, conteudo: str) -> None:
     arquivo = tmp_path / "lancamentos.json"
     arquivo.write_text(conteudo, encoding="utf-8")

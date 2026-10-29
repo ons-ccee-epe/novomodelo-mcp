@@ -113,10 +113,11 @@ def _lado_a_lado(m: Manifesto, registros: Sequence[Registro]) -> list[str]:
 
 
 def _tempos(registros: Sequence[Registro]) -> list[str]:
-    linhas = [
-        [conjunto, agente, config, f"{sum(r.duracao_s for r in grupo) / len(grupo):.1f}"]
-        for (conjunto, agente, config), grupo in _grupos(registros).items()
-    ]
+    linhas = []
+    for (conjunto, agente, config), grupo in _grupos(registros).items():
+        contaveis = [r.duracao_s for r in grupo if r.estado in ("passou", "falhou")]
+        media = f"{sum(contaveis) / len(contaveis):.1f}" if contaveis else SEM_DADO
+        linhas.append([conjunto, agente, config, media])
     cabecalho = ["Conjunto", "Agente", "Config", "Tempo médio (s)"]
     return ["## Tempo médio por execução", "", *_tabela(cabecalho, linhas), ""]
 
