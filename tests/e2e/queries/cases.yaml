@@ -1,20 +1,25 @@
 # ============================================================================
-# novomodelo-mcp Query E2E Test Cases
+# novomodelo-mcp: casos por tool
 # ============================================================================
-# Este arquivo define os casos de teste E2E via query para o framework.
-# Cada caso envia uma query em linguagem natural ao Kiro CLI e valida:
-# - Se a tool MCP correta foi chamada
-# - Se o resultado está correto
-# - Se o agente não usou tools nativas (read_file, list_directory) quando
-#   deveria usar o MCP
+# Cada caso manda um pedido em linguagem natural ao agente, pelo executor em
+# container (tests/e2e/conjuntos/tools/adaptador.py), e o validador confere:
+# - se a tool MCP esperada foi chamada;
+# - o envelope que a tool devolveu no stream do agente (status, content,
+#   error_contains, que procura em `diagnostics`);
+# - se o agente não usou tools nativas no lugar do MCP (did_not_use, com os
+#   nomes do Claude; os do Kiro são normalizados pelo validador).
 #
-# Variáveis suportadas:
-#   {FIXTURES} - Expande para o caminho absoluto do diretório de fixtures
-#                (newave/, decomp/, scratch/ — ver tests/e2e/README.md).
-#                O runner confina o MCP novomodelo a esse diretório
-#                (queries/mcp_workspace.py): caminhos fora dele são recusados.
+# Caso público: o marcador {caso:<nome lógico>} no pedido vira
+# /estudos/<nome lógico>, uma cópia do caso que o executor monta. Só os nomes
+# de tests.e2e.executor.casos.PUBLICOS são aceitos, um por caso. A pasta de
+# trabalho do MCP no container é /estudos.
 #
-# Total: ~60 casos cobrindo todas as 37 MCP_Tools
+# Tools que pedem aprovação (as que gravam, as destrutivas e as de rede) são
+# negadas no container, que roda com as permissões do `configurar`: o caso
+# delas confere só a chamada, porque o envelope não chega.
+#
+# O status do bridge (ok, warnings, will-not-convert) não é o do envelope de
+# erro do MCP: ele é conferido em content.status.
 # ============================================================================
 
 defaults:
@@ -29,14 +34,11 @@ defaults:
 cases:
 
 # ============================================================================
-# BRIDGE GROUP - bridge_check_*, bridge_convert_*, bridge_compare_*, bridge_dashboard
+# BRIDGE - bridge_check_*, bridge_convert_*, bridge_compare_*, bridge_dashboard
 # ============================================================================
 
-# --- bridge_check_newave (2 tests) ---
 - id: bridge-check-newave-valid
-  query: Valide o caso NEWAVE em {FIXTURES}/newave/newave-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/newave-caso-reduzido"
+  query: Valide o caso NEWAVE em {caso:bridge_newave_mini}
   expected:
     uses_mcp: true
     tool: bridge_check_newave
@@ -44,242 +46,182 @@ cases:
   tags: [bridge, newave, validation]
 
 - id: bridge-check-newave-invalid-path
-  query: Valide o caso NEWAVE em {FIXTURES}/nonexistent-newave-case
+  query: Valide o caso NEWAVE em /estudos/caso-newave-inexistente
   expected:
     uses_mcp: true
     tool: bridge_check_newave
-    status: error
-    error_contains: "not found"
+    content:
+      status: will-not-convert
+    error_contains: "source-file-missing"
   tags: [bridge, newave, validation, error]
 
-# --- bridge_check_decomp (2 tests) ---
 - id: bridge-check-decomp-valid
-  query: Valide o caso DECOMP em {FIXTURES}/decomp/decomp-mar-26-rv2-reduzido
-  requires:
-    - "{FIXTURES}/decomp/decomp-mar-26-rv2-reduzido"
+  query: Valide o caso DECOMP em {caso:bridge_decomp_mini}
   expected:
     uses_mcp: true
     tool: bridge_check_decomp
-    status: ok
+    content:
+      status: "__matches__:^(ok|warnings)$"
   tags: [bridge, decomp, validation]
 
 - id: bridge-check-decomp-invalid-path
-  query: Verifique a validade do deck DECOMP em {FIXTURES}/nonexistent-decomp-case
+  query: Verifique a validade do deck DECOMP em /estudos/caso-decomp-inexistente
   expected:
     uses_mcp: true
     tool: bridge_check_decomp
-    status: error
-    error_contains: "not found"
+    content:
+      status: will-not-convert
+    error_contains: "source-file-missing"
   tags: [bridge, decomp, validation, error]
 
-# --- bridge_convert_newave (1 test) ---
-- id: bridge-convert-newave-valid
-  query: Converta o caso NEWAVE em {FIXTURES}/newave/newave-caso-reduzido para formato novomodelo
-  requires:
-    - "{FIXTURES}/newave/newave-caso-reduzido"
+- id: bridge-convert-newave
+  query: Converta o caso NEWAVE em {caso:bridge_newave_mini} para um deck do novomodelo em /estudos/convertido-newave
   expected:
     uses_mcp: true
     tool: bridge_convert_newave
-    status: ok
   tags: [bridge, newave, conversion]
 
-# --- bridge_convert_decomp (1 test) ---
-- id: bridge-convert-decomp-valid
-  query: Converta o caso DECOMP em {FIXTURES}/decomp/decomp-mar-26-rv2-reduzido para formato NOVOMODELO
-  requires:
-    - "{FIXTURES}/decomp/decomp-mar-26-rv2-reduzido"
+- id: bridge-convert-decomp
+  query: Converta o caso DECOMP em {caso:bridge_decomp_mini} para um deck do novomodelo em /estudos/convertido-decomp
   expected:
     uses_mcp: true
     tool: bridge_convert_decomp
-    status: ok
   tags: [bridge, decomp, conversion]
 
-# --- bridge_compare_newave (2 tests) ---
-- id: bridge-compare-newave-valid
-  query: Compare os casos NEWAVE em {FIXTURES}/newave/newave-caso-reduzido e {FIXTURES}/newave/newave-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/newave-caso-reduzido"
+- id: bridge-compare-newave-saida
+  query: Compare os resultados do NEWAVE em {caso:bridge_newave_mini} com a saída da rodada do novomodelo na pasta output desse mesmo caso
   expected:
     uses_mcp: true
     tool: bridge_compare_newave
-    status: ok
   tags: [bridge, newave, comparison]
 
-- id: bridge-compare-newave-invalid
-  query: Compare o caso NEWAVE {FIXTURES}/newave/newave-caso-reduzido com o caso inexistente {FIXTURES}/nonexistent
-  requires:
-    - "{FIXTURES}/newave/newave-caso-reduzido"
-  expected:
-    uses_mcp: true
-    tool: bridge_compare_newave
-    status: error
-    error_contains: "not found"
-  tags: [bridge, newave, comparison, error]
-
-# --- bridge_compare_decomp (1 test) ---
-- id: bridge-compare-decomp-valid
-  query: Compare os casos DECOMP em {FIXTURES}/decomp/decomp-mar-26-rv2-reduzido e {FIXTURES}/decomp/decomp-mar-26-rv2-reduzido
-  requires:
-    - "{FIXTURES}/decomp/decomp-mar-26-rv2-reduzido"
+- id: bridge-compare-decomp-saida
+  query: Compare os resultados do DECOMP em {caso:bridge_decomp_mini} com a saída da rodada do novomodelo na pasta output desse mesmo caso
   expected:
     uses_mcp: true
     tool: bridge_compare_decomp
-    status: ok
   tags: [bridge, decomp, comparison]
 
-# --- bridge_dashboard (1 test) ---
 - id: bridge-dashboard-generate
-  query: Gere um dashboard de comparação do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+  query: Gere um dashboard HTML dos resultados do caso {caso:exemplo_1dtoy_rodado}
   expected:
     uses_mcp: true
     tool: bridge_dashboard
-    status: ok
   tags: [bridge, dashboard]
 
 # ============================================================================
-# DECK GROUP - deck_list, deck_read_*, deck_describe_*, deck_edit_*, deck_sql
+# DECK - deck_list, deck_read_*, deck_describe_*, deck_edit_*, deck_sql
 # ============================================================================
 
-# --- deck_list (2 tests) ---
-- id: deck-list-newave
-  query: Liste os arquivos do deck no caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+- id: deck-list-1dtoy
+  query: Liste os arquivos do deck no caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: deck_list
     status: ok
-    did_not_use: [read_file, list_directory]
+    content:
+      count: "__gt__:0"
+    did_not_use: [Read, Glob, LS]
   tags: [deck, list]
 
-- id: deck-list-decomp
-  query: Quais arquivos existem no deck do caso {FIXTURES}/decomp/novomodelo-mar-26-rv2-reduzido?
-  requires:
-    - "{FIXTURES}/decomp/novomodelo-mar-26-rv2-reduzido"
+- id: deck-list-rodado
+  query: Quais arquivos existem no deck do caso {caso:exemplo_1dtoy_rodado}?
   expected:
     uses_mcp: true
     tool: deck_list
     status: ok
-    did_not_use: [read_file, list_directory]
+    did_not_use: [Read, Glob, LS]
   tags: [deck, list]
 
-# --- deck_read_parquet (2 tests) ---
-- id: deck-read-parquet-stages
-  query: Leia o arquivo stages.parquet do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+- id: deck-read-parquet-inflow
+  query: Leia o arquivo scenarios/inflow_seasonal_stats.parquet do caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: deck_read_parquet
     status: ok
-    did_not_use: [read_file]
+    did_not_use: [Read]
   tags: [deck, read, parquet]
 
 - id: deck-read-parquet-invalid
-  query: Leia o arquivo inexistente.parquet do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Leia o arquivo inexistente.parquet do caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: deck_read_parquet
     status: error
-    error_contains: "not found"
+    error_contains: "falha ao ler Parquet"
   tags: [deck, read, parquet, error]
 
-# --- deck_describe_parquet (1 test) ---
 - id: deck-describe-parquet
-  query: Descreva o schema do arquivo system/buses.parquet no caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Descreva o schema e as estatísticas do arquivo scenarios/load_seasonal_stats.parquet no caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: deck_describe_parquet
     status: ok
-    did_not_use: [read_file]
+    did_not_use: [Read]
   tags: [deck, describe, parquet]
 
-# --- deck_edit_parquet (1 test) ---
 - id: deck-edit-parquet
-  query: No caso {FIXTURES}/newave/novomodelo-caso-reduzido, altere um valor no arquivo parquet de stages
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: No arquivo scenarios/inflow_seasonal_stats.parquet do caso {caso:exemplo_1dtoy}, altere mean_m3s para 45 na linha com stage_id 0
   expected:
     uses_mcp: true
     tool: deck_edit_parquet
-    status: ok
   tags: [deck, edit, parquet]
 
-# --- deck_read_json (2 tests) ---
 - id: deck-read-json-config
-  query: Leia o arquivo config.json do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Leia o arquivo config.json do caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: deck_read_json
     status: ok
-    did_not_use: [read_file]
+    did_not_use: [Read]
   tags: [deck, read, json]
 
 - id: deck-read-json-penalties
-  query: Mostre o conteúdo de penalties.json do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Mostre o conteúdo de penalties.json do caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: deck_read_json
     status: ok
-    did_not_use: [read_file]
+    did_not_use: [Read]
   tags: [deck, read, json]
 
-# --- deck_edit_json (1 test) ---
 - id: deck-edit-json
-  query: No caso {FIXTURES}/newave/novomodelo-caso-reduzido, modifique um parâmetro no config.json
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: No caso {caso:exemplo_1dtoy}, altere o custo de vertimento (spillage_cost) das hidrelétricas em penalties.json para 0.02
   expected:
     uses_mcp: true
     tool: deck_edit_json
-    status: ok
   tags: [deck, edit, json]
 
-# --- deck_sql (2 tests) ---
 - id: deck-sql-query
-  query: Execute a query SQL "SELECT * FROM stages LIMIT 10" no caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Execute a consulta SQL "SELECT * FROM read_parquet('{caso:exemplo_1dtoy}/scenarios/inflow_seasonal_stats.parquet') LIMIT 10"
   expected:
     uses_mcp: true
     tool: deck_sql
     status: ok
-    did_not_use: [read_file]
+    did_not_use: [Read]
   tags: [deck, sql]
 
 - id: deck-sql-invalid
-  query: Execute a query SQL "SELECT * FROM tabela_inexistente" no caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Execute a consulta SQL "SELECT * FROM tabela_inexistente"
   expected:
     uses_mcp: true
     tool: deck_sql
     status: error
+    error_contains: "CatalogException"
   tags: [deck, sql, error]
 
 # ============================================================================
-# DOCS GROUP - docs_list, docs_search, docs_read
+# DOCS - docs_list, docs_search, docs_read
 # ============================================================================
 
-# --- docs_list (1 test) ---
 - id: docs-list-all
   query: Liste todas as páginas da documentação do novomodelo
   expected:
     uses_mcp: true
     tool: docs_list
+    status: ok
   tags: [docs, list]
 
-# --- docs_search (2 tests) ---
 - id: docs-search-sddp
   query: Busque na documentação do novomodelo informações sobre SDDP
   expected:
@@ -297,19 +239,8 @@ cases:
     tool: docs_search
     status: ok
     validation:
-      response_contains: ["convergence"]
+      response_contains: ["converg"]
   tags: [docs, search]
-
-# --- docs_read (3 tests) ---
-- id: docs-read-methodology
-  query: Leia a seção de metodologia da documentação do novomodelo
-  expected:
-    uses_mcp: true
-    tool: docs_read
-    status: ok
-    validation:
-      cites_section_pattern: "methodology#"
-  tags: [docs, read, methodology]
 
 - id: docs-read-with-citation
   query: Explique a função objetivo do novomodelo citando a documentação
@@ -318,29 +249,26 @@ cases:
     tool: docs_read
     status: ok
     validation:
-      cites_section_pattern: "[a-z-]+#[a-z-]+"
-      response_contains: ["objective", "function"]
+      cites_section_pattern: "[a-z-]+#[a-z0-9-]+"
+      response_contains: ["objetivo"]
   tags: [docs, read, citation]
 
 - id: docs-read-invalid-section
-  query: Leia a seção inexistente da documentação do novomodelo
+  query: Leia a seção "secao-inexistente" da página reference/cli-reference da documentação do novomodelo
   expected:
     uses_mcp: true
     tool: docs_read
     status: error
-    error_contains: "not found"
+    error_contains: "seção inexistente"
   tags: [docs, read, error]
 
 # ============================================================================
-# RESULTS GROUP - results_status, results_convergence, results_query,
-#                 results_list_entities, results_policy, results_stochastic
+# RESULTS - results_status, results_convergence, results_query,
+#           results_list_entities, results_policy, results_stochastic
 # ============================================================================
 
-# --- results_status (2 tests) ---
 - id: results-status-check
-  query: Qual o status da execução do caso {FIXTURES}/newave/novomodelo-caso-reduzido?
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+  query: Qual o status da execução do caso {caso:exemplo_1dtoy_rodado}?
   expected:
     uses_mcp: true
     tool: results_status
@@ -348,53 +276,42 @@ cases:
   tags: [results, status]
 
 - id: results-status-invalid-path
-  query: Verifique o status da execução em {FIXTURES}/nonexistent-case
+  query: Verifique o status da execução com saída em /estudos/caso-inexistente/output
   expected:
     uses_mcp: true
     tool: results_status
     status: error
-    error_contains: "not found"
+    error_contains: "training/metadata.json"
   tags: [results, status, error]
 
-# --- results_convergence (1 test) ---
 - id: results-convergence-check
-  query: A execução do caso {FIXTURES}/newave/novomodelo-caso-reduzido convergiu?
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+  query: A execução do caso {caso:exemplo_1dtoy_rodado} convergiu?
   expected:
     uses_mcp: true
     tool: results_convergence
     status: ok
   tags: [results, convergence]
 
-# --- results_query (2 tests) ---
 - id: results-query-cmo
-  query: Consulte o CMO dos resultados do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+  query: Consulte o CMO dos resultados do caso {caso:exemplo_1dtoy_rodado}
   expected:
     uses_mcp: true
     tool: results_query
     status: ok
-    did_not_use: [read_file]
+    did_not_use: [Read]
   tags: [results, query]
 
 - id: results-query-generation
-  query: Quais são os resultados de geração do caso {FIXTURES}/newave/novomodelo-caso-reduzido?
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+  query: Quais são os resultados de geração térmica do caso {caso:exemplo_1dtoy_rodado}?
   expected:
     uses_mcp: true
     tool: results_query
     status: ok
-    did_not_use: [read_file]
+    did_not_use: [Read]
   tags: [results, query]
 
-# --- results_list_entities (2 tests) ---
 - id: results-list-entities-plants
-  query: Liste as entidades (usinas) disponíveis nos resultados de {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+  query: Liste as entidades (usinas) disponíveis nos resultados de {caso:exemplo_1dtoy_rodado}
   expected:
     uses_mcp: true
     tool: results_list_entities
@@ -402,42 +319,34 @@ cases:
   tags: [results, entities]
 
 - id: results-list-entities-buses
-  query: Quais barramentos existem nos resultados do caso {FIXTURES}/newave/novomodelo-caso-reduzido?
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+  query: Quais barramentos existem nos resultados do caso {caso:exemplo_1dtoy_rodado}?
   expected:
     uses_mcp: true
     tool: results_list_entities
     status: ok
   tags: [results, entities]
 
-# --- results_policy (1 test) ---
 - id: results-policy-get
-  query: Obtenha a política ótima do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+  query: Obtenha a política ótima do caso {caso:exemplo_1dtoy_rodado}
   expected:
     uses_mcp: true
     tool: results_policy
     status: ok
   tags: [results, policy]
 
-# --- results_stochastic (1 test) ---
-- id: results-stochastic-get
-  query: Mostre os resultados estocásticos do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido/output"
+- id: results-stochastic-sem-export
+  query: Mostre os coeficientes do modelo estocástico PAR(p) ajustado na rodada do caso {caso:exemplo_1dtoy_rodado}
   expected:
     uses_mcp: true
     tool: results_stochastic
-    status: ok
-  tags: [results, stochastic]
+    status: error
+    error_contains: "exports.stochastic"
+  tags: [results, stochastic, error]
 
 # ============================================================================
-# SCHEMA GROUP - schema_list, schema_get, schema_export
+# SCHEMA - schema_list, schema_get, schema_export
 # ============================================================================
 
-# --- schema_list (1 test) ---
 - id: schema-list-all
   query: Liste todos os schemas disponíveis no novomodelo
   expected:
@@ -445,10 +354,9 @@ cases:
     tool: schema_list
     status: ok
     content:
-      schemas: "__nonempty__"
+      types: "__nonempty__"
   tags: [schema, list]
 
-# --- schema_get (2 tests) ---
 - id: schema-get-stages
   query: Mostre o schema do arquivo stages do novomodelo
   expected:
@@ -458,32 +366,27 @@ cases:
   tags: [schema, get]
 
 - id: schema-get-invalid
-  query: Obtenha o schema do tipo inexistente no novomodelo
+  query: Obtenha o JSON Schema do tipo "tipo_inexistente" no novomodelo
   expected:
     uses_mcp: true
     tool: schema_get
     status: error
-    error_contains: "not found"
+    error_contains: "schema inexistente"
   tags: [schema, get, error]
 
-# --- schema_export (1 test) ---
 - id: schema-export
-  query: Exporte os schemas do novomodelo para a pasta {FIXTURES}/scratch/schemas
+  query: Exporte os schemas do novomodelo para a pasta /estudos/scratch/schemas
   expected:
     uses_mcp: true
     tool: schema_export
-    status: ok
   tags: [schema, export]
 
 # ============================================================================
-# RUN GROUP - run_plan, run_apply, run_start, run_status, run_logs, run_cancel
+# RUN - run_plan, run_apply, run_start, run_status, run_logs, run_cancel
 # ============================================================================
 
-# --- run_plan (2 tests) ---
 - id: run-plan-create
-  query: Planeje a execução do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Planeje a execução do caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: run_plan
@@ -491,86 +394,59 @@ cases:
   tags: [run, plan]
 
 - id: run-plan-invalid-path
-  query: Crie um plano de execução para o caso inexistente {FIXTURES}/nonexistent
+  query: Crie um plano de execução para o caso inexistente /estudos/caso-inexistente
   expected:
     uses_mcp: true
     tool: run_plan
     status: error
-    error_contains: "not found"
+    error_contains: "não foi possível ler o caso"
   tags: [run, plan, error]
 
-# --- run_apply (1 test) ---
 - id: run-apply
-  query: Aplique o plano de execução para o caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: No caso {caso:exemplo_1dtoy}, aplique 2 forward passes e limite de 10 iterações para a execução
   expected:
     uses_mcp: true
     tool: run_apply
-    status: ok
   tags: [run, apply]
 
-# --- run_start (1 test) ---
 - id: run-start
-  query: Inicie a execução do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Inicie a execução do caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: run_start
-    status: ok
   tags: [run, start]
 
-# --- run_status (2 tests) ---
-- id: run-status-check
-  query: Qual o status da execução em andamento do caso {FIXTURES}/newave/novomodelo-caso-reduzido?
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
-  expected:
-    uses_mcp: true
-    tool: run_status
-    status: ok
-  tags: [run, status]
-
 - id: run-status-invalid
-  query: Verifique o status da execução do run inexistente 99999
+  query: Verifique o status do run com job_id 99999
   expected:
     uses_mcp: true
     tool: run_status
     status: error
+    error_contains: "job inexistente"
   tags: [run, status, error]
 
-# --- run_logs (1 test) ---
-- id: run-logs-get
-  query: Mostre os logs da execução do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+- id: run-logs-invalid
+  query: Mostre os logs do run com job_id 99999
   expected:
     uses_mcp: true
     tool: run_logs
-    status: ok
-  tags: [run, logs]
+    status: error
+    error_contains: "job inexistente"
+  tags: [run, logs, error]
 
-# --- run_cancel (1 test) ---
-- id: run-cancel
-  query: Cancele a execução em andamento do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+- id: run-cancel-invalid
+  query: Cancele o run com job_id 99999
   expected:
     uses_mcp: true
     tool: run_cancel
-    status: ok
   tags: [run, cancel]
 
 # ============================================================================
-# CASE GROUP - case_validate, case_summary, case_init
+# CASE - case_validate, case_summary, case_init
 # ============================================================================
 
-# --- case_validate (2 tests) ---
-- id: case-validate-newave
-  query: Valide a estrutura do caso novomodelo em {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+- id: case-validate-1dtoy
+  query: Valide a estrutura do caso novomodelo em {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: case_validate
@@ -578,39 +454,33 @@ cases:
   tags: [case, validate]
 
 - id: case-validate-invalid
-  query: Valide o caso novomodelo em {FIXTURES}/nonexistent-case
+  query: Valide o caso novomodelo em /estudos/caso-inexistente
   expected:
     uses_mcp: true
     tool: case_validate
     status: error
-    error_contains: "not found"
+    error_contains: "does not exist"
   tags: [case, validate, error]
 
-# --- case_summary (1 test) ---
 - id: case-summary-get
-  query: Gere um resumo do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Gere um resumo do caso {caso:exemplo_1dtoy}
   expected:
     uses_mcp: true
     tool: case_summary
     status: ok
   tags: [case, summary]
 
-# --- case_init (1 test) ---
 - id: case-init-create
-  query: Inicialize um novo caso novomodelo em {FIXTURES}/scratch/new-test-case
+  query: Inicialize um novo caso novomodelo em /estudos/scratch/novo-caso
   expected:
     uses_mcp: true
     tool: case_init
-    status: ok
   tags: [case, init]
 
 # ============================================================================
-# META GROUP - server_info, solver_version, instalar_novomodelo
+# META - server_info, solver_version, instalar_novomodelo, incluir_pastas
 # ============================================================================
 
-# --- server_info (1 test) ---
 - id: server-info-get
   query: Quais informações estão disponíveis sobre o servidor MCP do novomodelo?
   expected:
@@ -620,7 +490,6 @@ cases:
       versao_mcp: "__any__"
   tags: [meta, info]
 
-# --- solver_version (1 test) ---
 - id: solver-version-get
   query: Qual a versão do solver do novomodelo?
   expected:
@@ -629,52 +498,43 @@ cases:
     status: ok
   tags: [meta, version]
 
-# --- instalar_novomodelo (1 test) ---
 - id: instalar-novomodelo-check
-  query: Como faço para instalar o executável do novomodelo?
+  query: Mostre o plano de instalação do executável do novomodelo, sem instalar
   expected:
     uses_mcp: true
     tool: instalar_novomodelo
-    status: ok
   tags: [meta, install]
 
-# ============================================================================
-# CROSS-CUTTING TESTS - Additional coverage for edge cases
-# ============================================================================
-
-# --- Meta group error test ---
-- id: server-info-invalid
-  query: Obtenha informações do servidor MCP quando não está disponível
+- id: incluir-pastas-pedido
+  query: Inclua a pasta /tmp na pasta de trabalho do MCP do novomodelo; eu autorizo
   expected:
     uses_mcp: true
-    tool: server_info
-    status: error
-  tags: [meta, info, error]
+    tool: incluir_pastas
+  tags: [meta, workspace]
 
-# --- No MCP usage expected (1 test) ---
+# ============================================================================
+# TRANSVERSAIS
+# ============================================================================
+
 - id: general-question-no-mcp
   query: O que é Python?
   expected:
     uses_mcp: false
   tags: [general, no-mcp]
 
-# --- Additional did_not_use test ---
 - id: docs-search-no-web
   query: Busque informações sobre a metodologia do novomodelo na documentação oficial
   expected:
     uses_mcp: true
     tool: docs_search
     status: ok
-    did_not_use: [remote_web_search, web_fetch]
+    did_not_use: [WebSearch, WebFetch]
     validation:
       response_contains: ["novomodelo"]
   tags: [docs, search]
 
-# --- Disambiguation tests (2 tests) ---
 - id: bridge-vs-case-validate
-  query: Verifique se o caso novomodelo {FIXTURES}/newave/novomodelo-caso-reduzido está válido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Verifique se o caso novomodelo {caso:exemplo_1dtoy} está válido
   expected:
     uses_mcp: true
     tools: [case_validate, bridge_check_newave]
@@ -682,9 +542,7 @@ cases:
   tags: [disambiguation, validation]
 
 - id: deck-list-vs-results-list
-  query: Liste o conteúdo do caso {FIXTURES}/newave/novomodelo-caso-reduzido
-  requires:
-    - "{FIXTURES}/newave/novomodelo-caso-reduzido"
+  query: Liste o conteúdo do caso {caso:exemplo_1dtoy_rodado}
   expected:
     uses_mcp: true
     tools: [deck_list, results_list_entities]

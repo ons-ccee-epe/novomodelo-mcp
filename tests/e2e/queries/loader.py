@@ -4,11 +4,13 @@ Este módulo implementa o CasesLoader, responsável por:
 - Parsing de arquivos YAML com casos de teste
 - Validação do schema usando jsonschema
 - Expansão da variável {FIXTURES} para caminhos absolutos
+- Conferência do marcador ``{caso:<nome lógico>}``: só casos públicos, um por caso
 - Filtragem por tags e case_id
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,7 @@ import yaml
 from jsonschema import ValidationError as JsonSchemaValidationError
 from jsonschema import validate as json_validate
 
+from tests.e2e.executor.casos import PUBLICOS
 from tests.e2e.queries.models import (
     ExpectedResult,
     QueryTestCase,
@@ -23,7 +26,9 @@ from tests.e2e.queries.models import (
 )
 from tests.e2e.queries.store import TOOL_GROUPS
 
-__all__ = ["CasesLoader", "CasesLoaderError"]
+__all__ = ["MARCADOR_CASO", "CasesLoader", "CasesLoaderError"]
+
+MARCADOR_CASO = re.compile(r"\{caso:([^{}]*)\}")
 
 
 class CasesLoaderError(Exception):
@@ -125,15 +130,16 @@ class CasesLoader:
         },
     }
 
-    def __init__(self, cases_path: Path, fixtures_dir: Path) -> None:
+    def __init__(self, cases_path: Path, fixtures_dir: Path | None = None) -> None:
         """Inicializa o loader.
 
         Args:
             cases_path: Caminho para o arquivo cases.yaml
-            fixtures_dir: Diretório de fixtures (será resolvido para absoluto)
+            fixtures_dir: Diretório de fixtures (resolvido para absoluto); sem ele,
+                ``{FIXTURES}`` fica como está
         """
         self.cases_path = cases_path
-        self.fixtures_dir = fixtures_dir.resolve()
+        self.fixtures_dir = fixtures_dir.resolve() if fixtures_dir is not None else None
 
     def load(
         self,
@@ -157,6 +163,7 @@ class CasesLoader:
         self._validate_schema(raw_cases)
         self._validate_unique_ids(raw_cases)
         self._validate_tool_requirements(raw_cases)
+        self._validate_case_markers(raw_cases)
 
         # Converter para dataclasses
         cases = [self._to_test_case(raw) for raw in raw_cases]
@@ -285,6 +292,25 @@ class CasesLoader:
                         "'tool' ou 'tools' deve ser definido"
                     )
 
+    def _validate_case_markers(self, raw_cases: list[dict[str, Any]]) -> None:
+        """Valida que ``{caso:<nome>}`` cita só um caso, e que ele é público.
+
+        O executor monta um caso por execução, e um nome fora de ``PUBLICOS`` levaria
+        ao repositório o nome de um caso que não é público.
+
+        Raises:
+            CasesLoaderError: Se o nome não é de um caso público ou há dois casos
+        """
+        for case in raw_cases:
+            nomes = set(MARCADOR_CASO.findall(case["query"]))
+            desconhecidos = sorted(nomes - PUBLICOS)
+            if desconhecidos:
+                raise CasesLoaderError(
+                    f"Caso '{case['id']}': caso não público no pedido: {desconhecidos}"
+                )
+            if len(nomes) > 1:
+                raise CasesLoaderError(f"Caso '{case['id']}': mais de um caso no pedido")
+
     def _expand_fixtures(self, query: str) -> str:
         """Expande {FIXTURES} para caminho absoluto.
 
@@ -294,6 +320,8 @@ class CasesLoader:
         Returns:
             Query com {FIXTURES} substituído pelo caminho absoluto do fixtures_dir
         """
+        if self.fixtures_dir is None:
+            return query
         return query.replace("{FIXTURES}", str(self.fixtures_dir))
 
     def _to_test_case(self, raw: dict[str, Any]) -> QueryTestCase:

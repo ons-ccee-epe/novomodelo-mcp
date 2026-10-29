@@ -15,6 +15,7 @@ O fluxo de validação verifica:
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, ClassVar
 
@@ -31,7 +32,9 @@ __all__ = [
     "QueryValidator",
     "MCP_TOOLS",
     "NATIVE_TOOLS",
+    "NOMES_EQUIVALENTES",
     "classify_tool",
+    "normalizar_nomes",
     "get_nested",
     "values_match",
 ]
@@ -40,7 +43,7 @@ __all__ = [
 # Tool Classification Constants
 # =============================================================================
 
-# Tools do MCP novomodelo (37 tools)
+# Tools do MCP novomodelo; `test_toda_tool_da_develop_tem_caso` confere com o servidor.
 MCP_TOOLS: frozenset[str] = frozenset(
     {
         # Pre-run / bridge validation
@@ -89,12 +92,40 @@ MCP_TOOLS: frozenset[str] = frozenset(
         "server_info",
         "solver_version",
         "instalar_novomodelo",
+        # Workspace
+        "incluir_pastas",
     }
 )
 
-# Tools nativas do Kiro (conhecidas)
+# O leitor do stream do Kiro (`executor.eventos`) já entrega os nomes do Claude; os
+# nomes do Kiro ficam aqui para os casos e logs que ainda os usam.
+NOMES_EQUIVALENTES: dict[str, frozenset[str]] = {
+    "read_file": frozenset({"Read"}),
+    "fs_read": frozenset({"Read"}),
+    "list_directory": frozenset({"Glob", "LS", "Read"}),
+    "glob": frozenset({"Glob"}),
+    "grep_search": frozenset({"Grep"}),
+    "fs_write": frozenset({"Write", "Edit"}),
+    "fs_append": frozenset({"Write", "Edit"}),
+    "str_replace": frozenset({"Edit"}),
+    "execute_pwsh": frozenset({"Bash"}),
+    "execute_bash": frozenset({"Bash"}),
+    "web_fetch": frozenset({"WebFetch"}),
+    "remote_web_search": frozenset({"WebSearch"}),
+}
+
+# Tools nativas conhecidas: as do Kiro e as do Claude
 NATIVE_TOOLS: frozenset[str] = frozenset(
     {
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "LS",
+        "Bash",
+        "WebFetch",
+        "WebSearch",
         "read_file",
         "list_directory",
         "glob",
@@ -227,6 +258,11 @@ def values_match(expected: Any, actual: Any) -> bool:
 # =============================================================================
 
 
+def normalizar_nomes(nomes: list[str] | set[str]) -> set[str]:
+    """Os nomes do Claude equivalentes a `nomes`; um nome sem equivalente fica como está."""
+    return {n for nome in nomes for n in NOMES_EQUIVALENTES.get(nome, {nome})}
+
+
 def classify_tool(tool_name: str) -> str:
     """Classifica uma tool como "mcp", "native", ou "unknown".
 
@@ -235,7 +271,7 @@ def classify_tool(tool_name: str) -> str:
 
     Returns:
         "mcp" se é tool do novomodelo
-        "native" se é tool conhecida do Kiro
+        "native" se é tool nativa conhecida (Kiro ou Claude)
         "unknown" se não está em nenhuma lista (tratada como native por segurança)
     """
     if tool_name in MCP_TOOLS:
@@ -426,7 +462,7 @@ class QueryValidator:
         Implements:
         - WHEN expected.uses_mcp é true, verificar que pelo menos uma MCP_Tool foi chamada
         - WHEN expected.uses_mcp é true, falhar se apenas Native_Tools foram usadas
-        - Identificar MCP_Tools pela lista conhecida de 37 tools
+        - Identificar MCP_Tools pela lista `MCP_TOOLS`
         - Identificar Native_Tools e classificar desconhecidas como Native por padrão
 
         Args:
@@ -555,8 +591,8 @@ class QueryValidator:
         Returns:
             ValidationCheck com resultado da verificação
         """
-        called_names = {tc.name for tc in tool_calls}
-        violations = called_names & set(forbidden)
+        proibidas = normalizar_nomes(forbidden)
+        violations = {tc.name for tc in tool_calls if normalizar_nomes({tc.name}) & proibidas}
 
         passed = len(violations) == 0
 
@@ -742,10 +778,11 @@ class QueryValidator:
         mcp_result: dict[str, Any] | None,
         expected_substring: str,
     ) -> ValidationCheck:
-        """Verifica substring na mensagem de erro.
+        """Verifica substring, sem diferença de caixa, em `diagnostics` do envelope.
 
-        Implements:
-        - WHEN expected.error_contains é definido, verificar substring na mensagem
+        `diagnostics` é onde o envelope do produto põe as mensagens
+        (`novomodelo_mcp.adapters.envelope.error`); um item que não é texto, como os
+        do bridge, entra como JSON.
 
         Args:
             mcp_result: Resultado da tool MCP (pode ser None)
@@ -766,15 +803,20 @@ class QueryValidator:
                 ),
             )
 
-        # Look for error message in common locations
-        error_message = (
-            mcp_result.get("error")
-            or mcp_result.get("message")
-            or mcp_result.get("error_message")
-            or str(mcp_result.get("content", ""))
+        diagnostics = mcp_result.get("diagnostics")
+        if not isinstance(diagnostics, list):
+            return ValidationCheck(
+                name="error_contains",
+                passed=False,
+                expected=f"erro contendo: '{expected_substring}'",
+                actual="envelope sem diagnostics",
+                message=f"Envelope sem `diagnostics` para procurar '{expected_substring}'",
+            )
+        error_message = "\n".join(
+            d if isinstance(d, str) else json.dumps(d, ensure_ascii=False) for d in diagnostics
         )
 
-        passed = expected_substring in error_message
+        passed = expected_substring.casefold() in error_message.casefold()
 
         if passed:
             message = f"Erro contém substring esperada: '{expected_substring}'"
