@@ -165,8 +165,9 @@ def test_comando_do_kiro_usa_o_volume_da_config_e_nao_o_segredo_do_claude(tmp_pa
         }
     ]
     assert "--secret" not in cmd
-    assert cmd[-1] == "p" and "kiro-cli" in cmd[-4]
-    assert "--trust-tools=" in cmd[-4] and "autoApprove" in cmd[-2]
+    assert cmd[-1] == "p" and "kiro-cli" in cmd[-5]
+    assert "--trust-tools=" in cmd[-5] and "autoApprove" in cmd[-3]
+    assert cmd[-2] == ""
 
 
 def test_comando_monta_caso_somente_leitura_sem_reetiquetar(tmp_path):
@@ -217,6 +218,96 @@ def test_claude_so_com_o_mcp_do_configurar(tmp_path):
     assert "--strict-mcp-config" in cmd
     assert cmd[cmd.index("--mcp-config") + 1] == f"{HOME_AGENTE}/mcp-do-configurar.json"
     assert "--permission-mode" not in cmd
+
+
+PERMISSOES_AMPLAS = (
+    "--permission-mode",
+    "bypassPermissions",
+    "--dangerously-skip-permissions",
+    "--trust-all-tools",
+)
+
+
+def test_sem_liberar_o_claude_nao_recebe_allowed_tools(tmp_path):
+    cmd = _cmd(_exec(), _cfg(tmp_path), tmp_path)
+    assert "--allowedTools" not in cmd
+    assert not any(a in cmd for a in PERMISSOES_AMPLAS)
+
+
+@pytest.mark.parametrize("agente", ["claude", "kiro"])
+def test_liberar_entra_so_com_as_tools_do_mcp_pedidas(tmp_path, agente):
+    e = _exec(agente=agente, liberar=("run_start", "deck_edit_json", "run_start"))
+    cmd = _cmd(e, _cfg(tmp_path), tmp_path)
+    assert not any(a in cmd for a in PERMISSOES_AMPLAS)
+    assert not any(any(p in a for p in PERMISSOES_AMPLAS) for a in cmd)
+    if agente == "claude":
+        valor = cmd[cmd.index("--allowedTools") + 1]
+        assert valor == "mcp__novomodelo__run_start,mcp__novomodelo__deck_edit_json"
+        assert cmd.count("--allowedTools") == 1
+    else:
+        assert "--allowedTools" not in cmd
+        assert cmd[-2] == "run_start,deck_edit_json"
+        assert cmd[-1] == "p"
+
+
+def test_kiro_soma_as_liberadas_ao_auto_approve_do_configurar(tmp_path):
+    cmd = _cmd(_exec(agente="kiro", liberar=("run_start",)), _cfg(tmp_path), tmp_path)
+    mcp = tmp_path / "home" / ".kiro" / "settings" / "mcp.json"
+    mcp.parent.mkdir(parents=True)
+    mcp.write_text(
+        json.dumps({"mcpServers": {"novomodelo": {"autoApprove": ["deck_list"]}}}),
+        encoding="utf-8",
+    )
+    script = cmd[-3].replace("pathlib.Path.home()", "pathlib.Path(sys.argv[2])")
+    saida = subprocess.run(
+        [sys.executable, "-c", script, cmd[-2], str(tmp_path / "home")],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert saida.stdout.strip() == "@novomodelo/deck_list,@novomodelo/run_start"
+
+
+@pytest.mark.parametrize("agente", ["claude", "kiro"])
+@pytest.mark.parametrize(
+    ("nome", "motivo"),
+    [
+        ("Bash", "inválida"),
+        ("Write", "inválida"),
+        ("WebFetch", "inválida"),
+        ("*", "inválida"),
+        ("mcp__novomodelo__run_start", "não registrada"),
+        ("run_start,Bash", "inválida"),
+        ("run_start; rm", "inválida"),
+        ("tool_que_nao_existe", "não registrada"),
+        ("instalar_novomodelo", "nunca é liberada"),
+    ],
+)
+def test_liberar_recusa_o_que_nao_e_tool_do_mcp_liberavel(tmp_path, agente, nome, motivo):
+    with pytest.raises(ComandoRecusado, match=motivo):
+        _cmd(_exec(agente=agente, liberar=(nome,)), _cfg(tmp_path), tmp_path)
+
+
+def test_tool_recusada_em_liberar_vira_erro_infra_sem_container(tmp_path, monkeypatch):
+    chamado = []
+    monkeypatch.setattr(container, "rodar_container", lambda *a, **k: chamado.append(a))
+    pasta = tmp_path / "rodada"
+    pasta.mkdir()
+    registro = executar(
+        _exec(liberar=("Bash",)),
+        _cfg(tmp_path),
+        pasta,
+        lambda leitura: Avaliacao("passou", ""),
+    )
+    assert registro.estado == "erro_infra" and "inválida" in registro.motivo
+    assert not chamado
+
+
+def test_tools_do_servidor_marca_as_de_leitura():
+    tools = container.tools_do_servidor()
+    assert tools["deck_list"] is True
+    assert tools["run_start"] is False
+    assert tools["incluir_pastas"] is False
 
 
 @pytest.mark.parametrize("memoria", ["6g", "3g"])

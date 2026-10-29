@@ -12,8 +12,9 @@ import tempfile
 import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
+from functools import cache
 from pathlib import Path
 from typing import Literal
 
@@ -43,11 +44,15 @@ LIMITE = re.compile(
     re.IGNORECASE,
 )
 _CONFIAR_KIRO = (
-    "import json,pathlib;"
+    "import json,pathlib,sys;"
     "s=json.loads((pathlib.Path.home()/'.kiro'/'settings'/'mcp.json').read_text())"
     "['mcpServers']['novomodelo'];"
-    "print(','.join('@novomodelo/'+t for t in s.get('autoApprove',[])))"
+    "t=s.get('autoApprove',[])+[x for x in sys.argv[1].split(',') if x];"
+    "print(','.join('@novomodelo/'+n for n in t))"
 )
+PREFIXO_CLAUDE = "mcp__novomodelo__"
+_NOME_TOOL = re.compile(r"[a-z_]+")
+NUNCA_LIBERADAS = frozenset({"instalar_novomodelo"})
 _TEMPO_LEITOR_ERRO = 30
 _TEMPO_REMOCAO = 30
 _MEMORIA_VALIDA = re.compile(r"[0-9]+[bkmgBKMG]?")
@@ -84,6 +89,7 @@ class Execucao:
     imagem: str
     montar_em: str | None = None
     sem_output: bool = False
+    liberar: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,6 +98,46 @@ class Saida:
     stderr: str
     codigo: int
     estourou: bool
+
+
+@cache
+def tools_do_servidor() -> Mapping[str, bool]:
+    """As tools que o servidor deste checkout registra, com `True` para as só de leitura.
+
+    Lidas do servidor montado em memória, sem subir processo: as anotações são a fonte
+    única do que pede aprovação.
+    """
+    import anyio
+
+    from novomodelo_mcp.server import build_server
+
+    return {
+        t.name: bool(t.annotations and t.annotations.readOnlyHint)
+        for t in anyio.run(build_server().list_tools)
+    }
+
+
+def conferir_liberadas(nomes: tuple[str, ...]) -> tuple[str, ...]:
+    """Os nomes de `liberar`, se todos são tools do MCP que podem ser liberadas.
+
+    Só tools do servidor novomodelo entram: um nome nativo (Bash, Write, WebFetch)
+    ou um curinga liberaria o agente para fora do MCP.
+
+    Raises:
+        ComandoRecusado: nome fora do padrão, que o servidor não registra, ou
+            `instalar_novomodelo`, que baixa e executa o instalador.
+    """
+    if not nomes:
+        return ()
+    registradas = tools_do_servidor()
+    for nome in nomes:
+        if not _NOME_TOOL.fullmatch(nome):
+            raise ComandoRecusado(f"tool a liberar inválida: {nome!r}")
+        if nome in NUNCA_LIBERADAS:
+            raise ComandoRecusado(f"{nome} nunca é liberada: baixa e executa o instalador")
+        if nome not in registradas:
+            raise ComandoRecusado(f"tool a liberar não registrada no servidor: {nome}")
+    return tuple(dict.fromkeys(nomes))
 
 
 def nome_container(e: Execucao, rodada: str) -> str:
@@ -164,6 +210,7 @@ def _comando(
         raise ComandoRecusado(MOTIVO_MOTOR)
     if not _MEMORIA_VALIDA.fullmatch(cfg.memoria):
         raise ComandoRecusado(f"memória inválida: {cfg.memoria!r}")
+    liberadas = conferir_liberadas(e.liberar)
     cmd = [
         cfg.motor,
         "run",
@@ -199,16 +246,20 @@ def _comando(
             "--mcp-config",
             f"{HOME_AGENTE}/mcp-do-configurar.json",
         ]
+        if liberadas:
+            cmd += ["--allowedTools", ",".join(PREFIXO_CLAUDE + n for n in liberadas)]
     else:
         # O kiro-cli ignora o `autoApprove` do mcp.json: as mesmas tools entram por nome no
-        # --trust-tools, lidas do que o `configurar` gravou (paridade com o Claude).
+        # --trust-tools, lidas do que o `configurar` gravou, mais as de `liberar`
+        # (paridade com o Claude). Os nomes entram como argumento, nunca no script.
         cmd += [
             "sh",
             "-c",
             "exec kiro-cli chat --output-format stream-json --trust-workspace "
-            '--trust-tools="$(python3 -c "$1")" "$2"',
+            '--trust-tools="$(python3 -c "$1" "$2")" "$3"',
             "sh",
             _CONFIAR_KIRO,
+            ",".join(liberadas),
             e.pedido,
         ]
     return cmd
