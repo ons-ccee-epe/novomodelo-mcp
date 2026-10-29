@@ -1,0 +1,591 @@
+# ============================================================================
+# novomodelo-mcp: casos por tool
+# ============================================================================
+# Cada caso manda um pedido em linguagem natural ao agente, pelo executor em
+# container (e2e/novomodelo_mcp_e2e/conjuntos/tools/adaptador.py), e o validador confere:
+# - se a tool MCP esperada foi chamada;
+# - o envelope que a tool devolveu no stream do agente (status, content,
+#   error_contains, que procura em `diagnostics`);
+# - se o agente não usou tools nativas no lugar do MCP (did_not_use, com os
+#   nomes do Claude; os do Kiro são normalizados pelo validador).
+#
+# Caso público: o marcador {caso:<nome lógico>} no pedido vira
+# /estudos/<nome lógico>, uma cópia do caso que o executor monta. Só os nomes
+# de novomodelo_mcp_e2e.executor.casos.PUBLICOS são aceitos, um por caso. A pasta de
+# trabalho do MCP no container é /estudos.
+#
+# O container roda com as permissões do `configurar`; as tools esperadas de
+# cada caso que pedem aprovação (as que gravam e as destrutivas) entram em
+# `Execucao.liberar`, e o caso confere o envelope delas. instalar_novomodelo
+# nunca é liberada (baixa e executa o instalador): o caso dela confere só a
+# chamada.
+#
+# O status do bridge (ok, warnings, will-not-convert) não é o do envelope de
+# erro do MCP: ele é conferido em content.status.
+# ============================================================================
+
+defaults:
+  # Timeout (s) da sessão inteira do agente num caso. Precedência:
+  # timeout_s do caso > timeout_s_by_group (grupo da tool esperada) > timeout_s.
+  # O bridge leva 12-28 s só para subir a CLI, antes de ler o deck; o limite do
+  # grupo abrange uma chamada inteira do MCP (NOVOMODELO_MCP_TIMEOUT, 900 s).
+  timeout_s: 300
+  timeout_s_by_group:
+    bridge: 900
+
+cases:
+
+# ============================================================================
+# BRIDGE - bridge_check_*, bridge_convert_*, bridge_compare_*, bridge_dashboard
+# ============================================================================
+
+- id: bridge-check-newave-valid
+  query: Valide o caso NEWAVE em {caso:bridge_newave_mini}
+  expected:
+    uses_mcp: true
+    tool: bridge_check_newave
+    status: ok
+  tags: [bridge, newave, validation]
+
+- id: bridge-check-newave-invalid-path
+  query: Valide o caso NEWAVE em /estudos/caso-newave-inexistente
+  expected:
+    uses_mcp: true
+    tool: bridge_check_newave
+    content:
+      status: will-not-convert
+    error_contains: "source-file-missing"
+  tags: [bridge, newave, validation, error]
+
+- id: bridge-check-decomp-valid
+  query: Valide o caso DECOMP em {caso:bridge_decomp_mini}
+  expected:
+    uses_mcp: true
+    tool: bridge_check_decomp
+    content:
+      status: "__matches__:^(ok|warnings)$"
+  tags: [bridge, decomp, validation]
+
+- id: bridge-check-decomp-invalid-path
+  query: Verifique a validade do deck DECOMP em /estudos/caso-decomp-inexistente
+  expected:
+    uses_mcp: true
+    tool: bridge_check_decomp
+    content:
+      status: will-not-convert
+    error_contains: "source-file-missing"
+  tags: [bridge, decomp, validation, error]
+
+- id: bridge-convert-newave
+  query: Converta o caso NEWAVE em {caso:bridge_newave_mini} para um deck do novomodelo em /estudos/convertido-newave
+  expected:
+    uses_mcp: true
+    tool: bridge_convert_newave
+    status: ok
+    content:
+      artifacts.deck: "__any__"
+  tags: [bridge, newave, conversion]
+
+- id: bridge-convert-decomp
+  query: Converta o caso DECOMP em {caso:bridge_decomp_mini} para um deck do novomodelo em /estudos/convertido-decomp
+  expected:
+    uses_mcp: true
+    tool: bridge_convert_decomp
+    status: ok
+    content:
+      artifacts.deck: "__any__"
+  tags: [bridge, decomp, conversion]
+
+# Os decks mini não trazem os resultados do NEWAVE/DECOMP nem uma pasta output/: o
+# caso confere o erro do bridge com a assinatura atual (deck + saída da rodada).
+- id: bridge-compare-newave-sem-saida
+  query: Compare os resultados do NEWAVE em {caso:bridge_newave_mini} com a saída da rodada do novomodelo na pasta output desse mesmo caso
+  expected:
+    uses_mcp: true
+    tool: bridge_compare_newave
+    status: error
+    error_contains: "not found"
+  tags: [bridge, newave, comparison, error]
+
+- id: bridge-compare-decomp-sem-saida
+  query: Compare os resultados do DECOMP em {caso:bridge_decomp_mini} com a saída da rodada do novomodelo na pasta output desse mesmo caso
+  expected:
+    uses_mcp: true
+    tool: bridge_compare_decomp
+    status: error
+    error_contains: "not found"
+  tags: [bridge, decomp, comparison, error]
+
+- id: bridge-dashboard-generate
+  query: Gere um dashboard HTML dos resultados do caso {caso:exemplo_1dtoy_rodado}
+  expected:
+    uses_mcp: true
+    tool: bridge_dashboard
+    status: ok
+    content:
+      artifacts.dashboard: "__any__"
+  tags: [bridge, dashboard]
+
+# ============================================================================
+# DECK - deck_list, deck_read_*, deck_describe_*, deck_edit_*, deck_sql
+# ============================================================================
+
+- id: deck-list-1dtoy
+  query: Liste os arquivos do deck no caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: deck_list
+    status: ok
+    content:
+      count: "__gt__:0"
+    did_not_use: [Read, Glob, LS]
+  tags: [deck, list]
+
+- id: deck-list-rodado
+  query: Quais arquivos existem no deck do caso {caso:exemplo_1dtoy_rodado}?
+  expected:
+    uses_mcp: true
+    tool: deck_list
+    status: ok
+    did_not_use: [Read, Glob, LS]
+  tags: [deck, list]
+
+- id: deck-read-parquet-inflow
+  query: Leia o arquivo scenarios/inflow_seasonal_stats.parquet do caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: deck_read_parquet
+    status: ok
+    did_not_use: [Read]
+  tags: [deck, read, parquet]
+
+- id: deck-read-parquet-invalid
+  query: Leia o arquivo inexistente.parquet do caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: deck_read_parquet
+    status: error
+    error_contains: "falha ao ler Parquet"
+  tags: [deck, read, parquet, error]
+
+- id: deck-describe-parquet
+  query: Descreva o schema e as estatísticas do arquivo scenarios/load_seasonal_stats.parquet no caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: deck_describe_parquet
+    status: ok
+    did_not_use: [Read]
+  tags: [deck, describe, parquet]
+
+- id: deck-edit-parquet
+  query: No arquivo scenarios/inflow_seasonal_stats.parquet do caso {caso:exemplo_1dtoy}, altere mean_m3s para 45 na linha com stage_id 0
+  expected:
+    uses_mcp: true
+    tool: deck_edit_parquet
+    status: ok
+    content:
+      written: true
+      matched_rows: 1
+  tags: [deck, edit, parquet]
+
+- id: deck-read-json-config
+  query: Leia o arquivo config.json do caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: deck_read_json
+    status: ok
+    did_not_use: [Read]
+  tags: [deck, read, json]
+
+- id: deck-read-json-penalties
+  query: Mostre o conteúdo de penalties.json do caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: deck_read_json
+    status: ok
+    did_not_use: [Read]
+  tags: [deck, read, json]
+
+- id: deck-edit-json
+  query: No caso {caso:exemplo_1dtoy}, altere o custo de vertimento (spillage_cost) das hidrelétricas em penalties.json para 0.02
+  expected:
+    uses_mcp: true
+    tool: deck_edit_json
+    status: ok
+    content:
+      written: true
+  tags: [deck, edit, json]
+
+- id: deck-sql-query
+  query: Execute a consulta SQL "SELECT * FROM read_parquet('{caso:exemplo_1dtoy}/scenarios/inflow_seasonal_stats.parquet') LIMIT 10"
+  expected:
+    uses_mcp: true
+    tool: deck_sql
+    status: ok
+    did_not_use: [Read]
+  tags: [deck, sql]
+
+- id: deck-sql-invalid
+  query: Execute a consulta SQL "SELECT * FROM tabela_inexistente"
+  expected:
+    uses_mcp: true
+    tool: deck_sql
+    status: error
+    error_contains: "CatalogException"
+  tags: [deck, sql, error]
+
+# ============================================================================
+# DOCS - docs_list, docs_search, docs_read
+# ============================================================================
+
+- id: docs-list-all
+  query: Liste todas as páginas da documentação do novomodelo
+  expected:
+    uses_mcp: true
+    tool: docs_list
+    status: ok
+  tags: [docs, list]
+
+- id: docs-search-sddp
+  query: Busque na documentação do novomodelo informações sobre SDDP
+  expected:
+    uses_mcp: true
+    tool: docs_search
+    status: ok
+    validation:
+      response_contains: ["SDDP"]
+  tags: [docs, search]
+
+- id: docs-search-convergence
+  query: Pesquise sobre convergência na documentação do novomodelo
+  expected:
+    uses_mcp: true
+    tool: docs_search
+    status: ok
+    validation:
+      response_contains: ["converg"]
+  tags: [docs, search]
+
+- id: docs-read-with-citation
+  query: Explique a função objetivo do novomodelo citando a documentação
+  expected:
+    uses_mcp: true
+    tool: docs_read
+    status: ok
+    validation:
+      cites_section_pattern: "[a-z-]+#[a-z0-9-]+"
+      response_contains: ["objetivo"]
+  tags: [docs, read, citation]
+
+- id: docs-read-invalid-section
+  query: Leia a seção "secao-inexistente" da página reference/cli-reference da documentação do novomodelo
+  expected:
+    uses_mcp: true
+    tool: docs_read
+    status: error
+    error_contains: "seção inexistente"
+  tags: [docs, read, error]
+
+# ============================================================================
+# RESULTS - results_status, results_convergence, results_query,
+#           results_list_entities, results_policy, results_stochastic
+# ============================================================================
+
+- id: results-status-check
+  query: Qual o status da execução do caso {caso:exemplo_1dtoy_rodado}?
+  expected:
+    uses_mcp: true
+    tool: results_status
+    status: ok
+  tags: [results, status]
+
+- id: results-status-invalid-path
+  query: Verifique o status da execução com saída em /estudos/caso-inexistente/output
+  expected:
+    uses_mcp: true
+    tool: results_status
+    status: error
+    error_contains: "training/metadata.json"
+  tags: [results, status, error]
+
+- id: results-convergence-check
+  query: A execução do caso {caso:exemplo_1dtoy_rodado} convergiu?
+  expected:
+    uses_mcp: true
+    tool: results_convergence
+    status: ok
+  tags: [results, convergence]
+
+- id: results-query-cmo
+  query: Consulte o CMO dos resultados do caso {caso:exemplo_1dtoy_rodado}
+  expected:
+    uses_mcp: true
+    tool: results_query
+    status: ok
+    did_not_use: [Read]
+  tags: [results, query]
+
+- id: results-query-generation
+  query: Quais são os resultados de geração térmica do caso {caso:exemplo_1dtoy_rodado}?
+  expected:
+    uses_mcp: true
+    tool: results_query
+    status: ok
+    did_not_use: [Read]
+  tags: [results, query]
+
+- id: results-list-entities-plants
+  query: Liste as entidades (usinas) disponíveis nos resultados de {caso:exemplo_1dtoy_rodado}
+  expected:
+    uses_mcp: true
+    tool: results_list_entities
+    status: ok
+  tags: [results, entities]
+
+- id: results-list-entities-buses
+  query: Quais barramentos existem nos resultados do caso {caso:exemplo_1dtoy_rodado}?
+  expected:
+    uses_mcp: true
+    tool: results_list_entities
+    status: ok
+  tags: [results, entities]
+
+- id: results-policy-get
+  query: Obtenha a política ótima do caso {caso:exemplo_1dtoy_rodado}
+  expected:
+    uses_mcp: true
+    tool: results_policy
+    status: ok
+  tags: [results, policy]
+
+- id: results-stochastic-sem-export
+  query: Mostre os coeficientes do modelo estocástico PAR(p) ajustado na rodada do caso {caso:exemplo_1dtoy_rodado}
+  expected:
+    uses_mcp: true
+    tool: results_stochastic
+    status: error
+    error_contains: "exports.stochastic"
+  tags: [results, stochastic, error]
+
+# ============================================================================
+# SCHEMA - schema_list, schema_get, schema_export
+# ============================================================================
+
+- id: schema-list-all
+  query: Liste todos os schemas disponíveis no novomodelo
+  expected:
+    uses_mcp: true
+    tool: schema_list
+    status: ok
+    content:
+      types: "__nonempty__"
+  tags: [schema, list]
+
+- id: schema-get-stages
+  query: Mostre o schema do arquivo stages do novomodelo
+  expected:
+    uses_mcp: true
+    tool: schema_get
+    status: ok
+  tags: [schema, get]
+
+- id: schema-get-invalid
+  query: Obtenha o JSON Schema do tipo "tipo_inexistente" no novomodelo
+  expected:
+    uses_mcp: true
+    tool: schema_get
+    status: error
+    error_contains: "schema inexistente"
+  tags: [schema, get, error]
+
+- id: schema-export
+  query: Exporte os schemas do novomodelo para a pasta /estudos/scratch/schemas
+  expected:
+    uses_mcp: true
+    tool: schema_export
+    status: ok
+    content:
+      artifacts.schemas: "__any__"
+  tags: [schema, export]
+
+# ============================================================================
+# RUN - run_plan, run_apply, run_start, run_status, run_logs, run_cancel
+# ============================================================================
+
+- id: run-plan-create
+  query: Planeje a execução do caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: run_plan
+    status: ok
+  tags: [run, plan]
+
+- id: run-plan-invalid-path
+  query: Crie um plano de execução para o caso inexistente /estudos/caso-inexistente
+  expected:
+    uses_mcp: true
+    tool: run_plan
+    status: error
+    error_contains: "não foi possível ler o caso"
+  tags: [run, plan, error]
+
+- id: run-apply
+  query: No caso {caso:exemplo_1dtoy}, aplique 2 forward passes e limite de 10 iterações para a execução
+  expected:
+    uses_mcp: true
+    tool: run_apply
+    status: ok
+    content:
+      written: true
+  tags: [run, apply]
+
+- id: run-start
+  query: Inicie a execução do caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: run_start
+    status: ok
+    content:
+      job_id: "__nonempty__"
+  tags: [run, start]
+
+- id: run-status-invalid
+  query: Verifique o status do run com job_id 99999
+  expected:
+    uses_mcp: true
+    tool: run_status
+    status: error
+    error_contains: "job inexistente"
+  tags: [run, status, error]
+
+- id: run-logs-invalid
+  query: Mostre os logs do run com job_id 99999
+  expected:
+    uses_mcp: true
+    tool: run_logs
+    status: error
+    error_contains: "job inexistente"
+  tags: [run, logs, error]
+
+- id: run-cancel-invalid
+  query: Cancele o run com job_id 99999
+  expected:
+    uses_mcp: true
+    tool: run_cancel
+    status: error
+    error_contains: "job inexistente"
+  tags: [run, cancel]
+
+# ============================================================================
+# CASE - case_validate, case_summary, case_init
+# ============================================================================
+
+- id: case-validate-1dtoy
+  query: Valide a estrutura do caso novomodelo em {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: case_validate
+    status: ok
+  tags: [case, validate]
+
+- id: case-validate-invalid
+  query: Valide o caso novomodelo em /estudos/caso-inexistente
+  expected:
+    uses_mcp: true
+    tool: case_validate
+    status: error
+    error_contains: "does not exist"
+  tags: [case, validate, error]
+
+- id: case-summary-get
+  query: Gere um resumo do caso {caso:exemplo_1dtoy}
+  expected:
+    uses_mcp: true
+    tool: case_summary
+    status: ok
+  tags: [case, summary]
+
+- id: case-init-create
+  query: Inicialize um novo caso novomodelo em /estudos/scratch/novo-caso
+  expected:
+    uses_mcp: true
+    tool: case_init
+    status: ok
+    content:
+      artifacts.case_dir: "__any__"
+  tags: [case, init]
+
+# ============================================================================
+# META - server_info, solver_version, instalar_novomodelo, incluir_pastas
+# ============================================================================
+
+- id: server-info-get
+  query: Quais informações estão disponíveis sobre o servidor MCP do novomodelo?
+  expected:
+    uses_mcp: true
+    tool: server_info
+    content:
+      versao_mcp: "__any__"
+  tags: [meta, info]
+
+- id: solver-version-get
+  query: Qual a versão do solver do novomodelo?
+  expected:
+    uses_mcp: true
+    tool: solver_version
+    status: ok
+  tags: [meta, version]
+
+- id: instalar-novomodelo-check
+  query: Mostre o plano de instalação do executável do novomodelo, sem instalar
+  expected:
+    uses_mcp: true
+    tool: instalar_novomodelo
+  tags: [meta, install]
+
+- id: incluir-pastas-pedido
+  query: Inclua a pasta /tmp na pasta de trabalho do MCP do novomodelo; eu autorizo
+  expected:
+    uses_mcp: true
+    tool: incluir_pastas
+    status: ok
+    content:
+      incluidas: "__nonempty__"
+  tags: [meta, workspace]
+
+# ============================================================================
+# TRANSVERSAIS
+# ============================================================================
+
+- id: general-question-no-mcp
+  query: O que é Python?
+  expected:
+    uses_mcp: false
+  tags: [general, no-mcp]
+
+- id: docs-search-no-web
+  query: Busque informações sobre a metodologia do novomodelo na documentação oficial
+  expected:
+    uses_mcp: true
+    tool: docs_search
+    status: ok
+    did_not_use: [WebSearch, WebFetch]
+    validation:
+      response_contains: ["novomodelo"]
+  tags: [docs, search]
+
+- id: bridge-vs-case-validate
+  query: Verifique se o caso novomodelo {caso:exemplo_1dtoy} está válido
+  expected:
+    uses_mcp: true
+    tools: [case_validate, bridge_check_newave]
+    status: ok
+  tags: [disambiguation, validation]
+
+- id: deck-list-vs-results-list
+  query: Liste o conteúdo do caso {caso:exemplo_1dtoy_rodado}
+  expected:
+    uses_mcp: true
+    tools: [deck_list, results_list_entities]
+    status: ok
+  tags: [disambiguation, list]

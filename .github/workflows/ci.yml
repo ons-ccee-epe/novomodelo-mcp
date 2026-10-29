@@ -102,7 +102,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: tests/e2e/frontend
+        working-directory: e2e/frontend
     steps:
       - uses: actions/checkout@v7
         with:
@@ -154,8 +154,8 @@ jobs:
         run: uv run pytest -q
 
   e2e:
-    # A bateria de ponta a ponta (tests/e2e) tem o grupo de dependências próprio; o
-    # pytest padrão a ignora (addopts), então só este job a roda.
+    # A bateria de ponta a ponta (e2e/) é um membro próprio do workspace do uv, com as
+    # dependências dela; o pytest padrão só coleta tests/, então só este job a roda.
     strategy:
       fail-fast: false
       matrix:
@@ -175,10 +175,10 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: Sincronizar dependências
-        run: uv sync --group e2e --locked
+        run: uv sync --package novomodelo-mcp-e2e --locked
 
       - name: Testes (pytest e2e)
-        run: uv run --group e2e pytest tests/e2e -q -o addopts=--strict-markers
+        run: uv run --package novomodelo-mcp-e2e pytest e2e -q
 
   executaveis-reais:
     # Todas as tools contra o executável novomodelo, o novomodelo-bridge e o

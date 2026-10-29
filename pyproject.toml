@@ -74,20 +74,15 @@ exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md"]
 
 [dependency-groups]
 dev = ["pytest>=9.2.0", "ruff>=0.17.3", "hypothesis>=6.170.13"]
-e2e = [
-    "fastapi==0.159.1",
-    "httpx==0.28.1",
-    "jsonschema==4.26.0",
-    "platformdirs==4.14.0",
-    "pyyaml==6.0.3",
-    "uvicorn==0.54.0",
-]
+
+[tool.uv.workspace]
+members = ["e2e"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = ["--strict-markers", "--ignore=tests/e2e"]
+addopts = ["--strict-markers"]
 markers = [
     "executaveis_reais: precisa do novomodelo e do novomodelo-bridge instalados (--executaveis-reais)",
     "rede: acessa a rede, só os domínios oficiais (--com-rede)",
