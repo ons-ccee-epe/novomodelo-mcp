@@ -102,6 +102,7 @@ class Manifesto:
     commit_bateria: str
     wheels: dict[str, dict[str, str]] = field(default_factory=dict)
     imagens: dict[str, dict[str, str]] = field(default_factory=dict)
+    filtro: str | None = None
     schema_versao: int = SCHEMA_VERSAO
 
     def para_dict(self) -> dict[str, Any]:

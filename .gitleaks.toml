@@ -2,3 +2,9 @@ title = "novomodelo-mcp"
 
 [extend]
 useDefault = true
+
+[[rules]]
+id = "anthropic-token-claude"
+description = "Token da Anthropic (OAuth do Claude Code, chave de API ou de administração)"
+regex = '''sk-ant-(oat|api|admin)\d{2}-[A-Za-z0-9_-]{20,}'''
+keywords = ["sk-ant-"]

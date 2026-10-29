@@ -16,7 +16,8 @@
     "versoes",
     "commit_bateria",
     "wheels",
-    "imagens"
+    "imagens",
+    "filtro"
   ],
   "properties": {
     "schema_versao": {
@@ -135,6 +136,12 @@
           "type": "string"
         }
       }
+    },
+    "filtro": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   }
 }

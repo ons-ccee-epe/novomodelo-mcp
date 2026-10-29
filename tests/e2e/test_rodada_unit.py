@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import _thread
 import hashlib
 import json
+import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -17,6 +20,7 @@ from tests.e2e.executor import container
 from tests.e2e.executor.container import Execucao, Saida
 from tests.e2e.executor.eventos import Leitura
 from tests.e2e.executor.imagens import CHAVE_DO_AGENTE, ConfigMCP, ler_config_mcp, tag_imagem
+from tests.e2e.executor.mascara import MASCARA, mascarar
 from tests.e2e.resultado.armazenamento import gravar_registro, ler_manifesto, ler_registros
 from tests.e2e.resultado.modelos import Registro
 
@@ -56,9 +60,14 @@ class Falsos:
         self.agora = 0.0
         self.passo = 0.0
         self.log_com_token = False
+        self.det_chamadas = 0
+        self.antes_de_executar = None
+        self.encerrados: list[list[str]] = []
 
     def executar(self, e: Execucao, cfg: Config, pasta: Path, avaliar) -> Registro:
         self.execucoes.append(e)
+        if self.antes_de_executar is not None:
+            self.antes_de_executar(e)
         chave = rodada._rotulo(e)
         motivo = "ok"
         if self.limites.get(chave, 0) > 0:
@@ -94,6 +103,7 @@ class Falsos:
         return LEITURA if c.wheel is not None else ()
 
     def deterministica(self, pasta: Path, cfg: Config) -> list[Registro]:
+        self.det_chamadas += 1
         return [rodada._registro_deterministica(pasta.name, "test_x", self.det, self.det, 0.1)]
 
     def varrer(self, pasta: Path) -> rodada.Varredura:
@@ -123,7 +133,12 @@ class Falsos:
             commit=lambda: "abc1234",
             relogio=self.relogio,
             esperar=self.esperar,
+            encerrar_em_voo=self.encerrar_em_voo,
         )
+
+    def encerrar_em_voo(self, cfg: Config, prefixos) -> list[str]:
+        self.encerrados.append(list(prefixos))
+        return list(prefixos)
 
 
 def _rodar(f: Falsos, cfg: Config, configs, **kw) -> Path:
@@ -362,7 +377,8 @@ def test_registro_de_limite_que_sobrou_e_refeito(tmp_path):
     pasta = _rodar(f, cfg, configs)
     arquivo = rodada._pasta_da_execucao(pasta, f.execucoes[0]) / "registro.json"
     dados = json.loads(arquivo.read_text(encoding="utf-8"))
-    arquivo.write_text(json.dumps({**dados, "motivo": rodada.MOTIVO_LIMITE_JUIZ}), "utf-8")
+    limite = {**dados, "estado": "erro_infra", "motivo": rodada.MOTIVO_LIMITE_JUIZ}
+    arquivo.write_text(json.dumps(limite), "utf-8")
     f.execucoes.clear()
     _rodar(f, cfg, configs)
     assert len(f.execucoes) == 1
@@ -473,16 +489,17 @@ def test_execucao_leva_montar_em_e_sem_output_do_cenario(tmp_path):
 def test_registros_do_junit(tmp_path):
     junit = tmp_path / "j.xml"
     junit.write_text(
-        '<testsuites><testsuite><testcase name="test_a" time="0.5"/>'
-        '<testcase name="test_b[x y]" time="1"><failure message="quebrou"/></testcase>'
+        '<testsuites><testsuite><testcase classname="tests.m" name="test_a" time="0.5"/>'
+        '<testcase classname="tests.m" name="test_b[x y]" time="1">'
+        '<failure message="quebrou"/></testcase>'
         '<testcase name="test_c"><skipped message="precisa de --com-rede"/></testcase>'
         "</testsuite></testsuites>",
         encoding="utf-8",
     )
     registros = rodada.registros_do_junit(junit, "r1")
     assert [(r.caso, r.estado) for r in registros] == [
-        ("test_a", "passou"),
-        ("test_b-x-y", "falhou"),
+        ("tests.m.test_a", "passou"),
+        ("tests.m.test_b-x-y", "falhou"),
         ("test_c", "pulado"),
     ]
     assert {r.conjunto for r in registros} == {"deterministica"}
@@ -532,3 +549,261 @@ def test_leitura_mcp_le_da_imagem(tmp_path):
     assert rodada.ler_leitura_mcp(c, "claude", _cfg(tmp_path), rodar=rodar) == LEITURA
     assert "--network=none" in chamadas[0] and tag_imagem(c, "claude") in chamadas[0]
     assert rodada.ler_leitura_mcp(ler_config_mcp("sem"), "claude", _cfg(tmp_path)) == ()
+
+
+FORMATOS_TOKEN = ("oat", "api", "admin")
+
+
+def _token_falso(formato: str) -> str:
+    return "sk-ant-" + formato + "01-" + "FalsoDeTeste" + "0" * 16
+
+
+@pytest.mark.skipif(shutil.which("gitleaks") is None, reason="gitleaks fora do PATH")
+def test_gitleaks_real_reconhece_o_token_do_claude_em_cada_formato(tmp_path):
+    pasta = tmp_path / "rodada"
+    for formato in FORMATOS_TOKEN:
+        destino = pasta / "execucoes" / formato
+        destino.mkdir(parents=True)
+        (destino / "log.jsonl").write_text(
+            json.dumps({"texto": _token_falso(formato)}) + "\n", encoding="utf-8"
+        )
+    (pasta / "limpo.txt").write_text("nada aqui\n", encoding="utf-8")
+    varredura = rodada.varrer_segredos(pasta)
+    assert varredura.erro is None
+    assert varredura.arquivos == tuple(f"execucoes/{f}/log.jsonl" for f in sorted(FORMATOS_TOKEN))
+
+
+@pytest.mark.skipif(shutil.which("gitleaks") is None, reason="gitleaks fora do PATH")
+def test_gitleaks_real_pasta_limpa_nao_bloqueia(tmp_path):
+    (tmp_path / "registro.json").write_text('{"estado": "passou"}', encoding="utf-8")
+    assert rodada.varrer_segredos(tmp_path) == rodada.Varredura()
+
+
+def test_varredura_passa_a_config_do_repo_e_cwd_temporario(tmp_path, monkeypatch):
+    chamadas = []
+
+    def run(cmd, **kw):
+        chamadas.append((cmd, kw))
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+
+    monkeypatch.setattr(rodada.shutil, "which", lambda nome: "/bin/gitleaks-falso")
+    monkeypatch.setattr(rodada.subprocess, "run", run)
+    assert rodada.varrer_segredos(tmp_path) == rodada.Varredura()
+    [(cmd, kw)] = chamadas
+    assert cmd[cmd.index("--config") + 1] == str(rodada.CONFIG_GITLEAKS)
+    assert rodada.CONFIG_GITLEAKS.is_file()
+    assert Path(kw["cwd"]) != Path.cwd() and not Path(kw["cwd"]).is_relative_to(tmp_path)
+
+
+def test_config_do_gitleaks_ausente_bloqueia(tmp_path, monkeypatch):
+    monkeypatch.setattr(rodada.shutil, "which", lambda nome: "/bin/gitleaks-falso")
+    varredura = rodada.varrer_segredos(tmp_path, config=tmp_path / "nao-existe.toml")
+    assert varredura.erro and "config" in varredura.erro
+
+
+@pytest.mark.parametrize("formato", FORMATOS_TOKEN)
+def test_mascara_troca_o_token_de_cada_formato(formato):
+    saida = mascarar(f"eco {_token_falso(formato)} fim")
+    assert _token_falso(formato) not in saida and MASCARA in saida
+
+
+def test_retomada_com_outro_filtro_e_recusada(tmp_path):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    configs = [_wheel(tmp_path)]
+    pasta = _rodar(f, cfg, configs)
+    assert ler_manifesto(pasta).filtro == "i01*"
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        _rodar(f, cfg, configs, filtro="i02*")
+    assert erro.value.codigo == rodada.CODIGO_RECUSA
+    assert "filtro" in str(erro.value)
+
+
+def test_retomada_com_outro_commit_e_recusada(tmp_path):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    configs = [_wheel(tmp_path)]
+    _rodar(f, cfg, configs)
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "commit": lambda: "def5678"})
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        rodada.rodar("r1", configs, ["usuario"], ["claude"], 1, cfg, filtro="i01*", dep=dep)
+    assert erro.value.codigo == rodada.CODIGO_RECUSA
+    assert "commit" in str(erro.value)
+
+
+def test_espera_do_limite_nao_conta_no_orcamento_de_tempo(tmp_path):
+    f = Falsos(limites={"usuario/i01-comecar/claude/mcp-1.2.3/1": 2})
+    pasta = _rodar(
+        f,
+        _cfg(tmp_path),
+        [_wheel(tmp_path)],
+        esperar_limite_min=15,
+        orcamento=rodada.Orcamento(0, 20),
+    )
+    assert f.esperas == [900, 900]
+    assert [r.estado for r in _agentes(pasta)] == ["passou"]
+
+
+def test_execucao_apagada_por_limite_nao_conta_no_orcamento(tmp_path):
+    f = Falsos(limites={"usuario/i01-comecar/claude/mcp-1.2.3/1": 1})
+    pasta = _rodar(
+        f,
+        _cfg(tmp_path),
+        [_wheel(tmp_path)],
+        esperar_limite_min=1,
+        orcamento=rodada.Orcamento(1, 0),
+    )
+    assert len(f.execucoes) == 2
+    assert [r.estado for r in _agentes(pasta)] == ["passou"]
+
+
+def test_tres_limites_seguidos_na_mesma_execucao_saem_com_4(tmp_path):
+    f = Falsos(limites={"usuario/i01-comecar/claude/mcp-1.2.3/1": 99})
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        _rodar(f, _cfg(tmp_path), [_wheel(tmp_path)], esperar_limite_min=1)
+    assert erro.value.codigo == rodada.CODIGO_LIMITE
+    assert len(f.execucoes) == rodada.LIMITES_SEGUIDOS
+    assert len(f.esperas) == rodada.LIMITES_SEGUIDOS - 1
+    eventos = [json.loads(linha)["evento"] for linha in _log(erro.value.pasta)]
+    assert "limite_repetido" in eventos
+
+
+def test_limite_que_alterna_com_execucao_concluida_nao_atinge_o_teto(tmp_path):
+    rotulo = "usuario/i01-comecar/claude/mcp-1.2.3/{}"
+    f = Falsos(limites={rotulo.format(1): 2, rotulo.format(2): 2})
+    pasta = _rodar(f, _cfg(tmp_path), [_wheel(tmp_path)], repeticoes=2, esperar_limite_min=1)
+    assert [r.estado for r in _agentes(pasta)] == ["passou", "passou"]
+
+
+def test_registro_com_motivo_de_limite_mas_sem_erro_infra_e_resultado(tmp_path):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    configs = [_wheel(tmp_path)]
+    pasta = _rodar(f, cfg, configs)
+    arquivo = rodada._pasta_da_execucao(pasta, f.execucoes[0]) / "registro.json"
+    dados = json.loads(arquivo.read_text(encoding="utf-8"))
+    arquivo.write_text(json.dumps({**dados, "motivo": rodada.MOTIVO_LIMITE_AGENTE}), "utf-8")
+    f.execucoes.clear()
+    _rodar(f, cfg, configs)
+    assert f.execucoes == []
+
+
+def test_pasta_sem_registro_e_apagada_antes_de_refazer(tmp_path):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    configs = [_wheel(tmp_path)]
+    pasta = _rodar(f, cfg, configs)
+    destino = rodada._pasta_da_execucao(pasta, f.execucoes[0])
+    (destino / "registro.json").unlink()
+    (destino / "juiz.jsonl").write_text('{"tentativa": 1}\n', encoding="utf-8")
+    vistos = []
+    f.antes_de_executar = lambda e: vistos.append((destino / "juiz.jsonl").exists())
+    _rodar(f, cfg, configs)
+    assert vistos == [False]
+
+
+def test_ctrl_c_encerra_containers_em_voo_varre_e_retoma(tmp_path):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    configs = [_wheel(tmp_path)]
+    liberado = threading.Event()
+    sobra = cfg.resultados / "r1" / ".trabalho-sobra"
+
+    def interromper(e):
+        sobra.mkdir(parents=True, exist_ok=True)
+        _thread.interrupt_main()
+        assert liberado.wait(10)
+
+    def encerrar(cfg_, prefixos):
+        f.encerrados.append(list(prefixos))
+        liberado.set()
+        return list(prefixos)
+
+    f.antes_de_executar = interromper
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "encerrar_em_voo": encerrar})
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        rodada.rodar(
+            "r1",
+            configs,
+            ["usuario"],
+            ["claude"],
+            1,
+            cfg,
+            rodada.ORCAMENTO_PADRAO,
+            1,
+            filtro="i01*",
+            dep=dep,
+        )
+    assert erro.value.codigo == rodada.CODIGO_INTERROMPIDA
+    [prefixos] = f.encerrados
+    assert prefixos == [rodada.prefixo_do_container(f.execucoes[0], "r1")]
+    assert f.varridas == [erro.value.pasta]
+    assert _agentes(erro.value.pasta) == []
+    assert "interrompida" in [json.loads(linha)["evento"] for linha in _log(erro.value.pasta)]
+
+    f.antes_de_executar = None
+    f.execucoes.clear()
+    pasta = _rodar(f, cfg, configs)
+    assert not sobra.exists()
+    assert [r.estado for r in _agentes(pasta)] == ["passou"]
+
+
+def test_prefixo_do_container_e_o_nome_do_executor_sem_o_sufixo(tmp_path):
+    [p] = rodada.planejar([_wheel(tmp_path)], ["usuario"], ["claude"], 1, _cfg(tmp_path), "i01*")
+    nome = container.nome_container(p.execucao, "r1")
+    assert nome.startswith(rodada.prefixo_do_container(p.execucao, "r1") + "-")
+
+
+def test_leitura_mcp_da_nome_ao_container_e_o_encerra(tmp_path):
+    c = _wheel(tmp_path)
+    encerrados = []
+
+    def rodar(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, 1)
+
+    with pytest.raises(rodada.FalhaPreparo):
+        rodada.ler_leitura_mcp(
+            c, "claude", _cfg(tmp_path), rodar=rodar, encerrar=lambda m, n: encerrados.append(n)
+        )
+    [nome] = encerrados
+    assert nome.startswith("novomodelo-bateria-leitura-")
+
+
+@pytest.mark.parametrize("estado", ["erro_infra", "corrompido", "sem_marca"])
+def test_deterministica_refeita_na_retomada(tmp_path, estado):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    configs = [_wheel(tmp_path)]
+    pasta = _rodar(f, cfg, configs)
+    pasta_det = pasta / "execucoes" / "deterministica"
+    [arquivo] = pasta_det.glob("*/*/*/*/registro.json")
+    if estado == "erro_infra":
+        dados = json.loads(arquivo.read_text(encoding="utf-8"))
+        arquivo.write_text(json.dumps({**dados, "estado": "erro_infra"}), "utf-8")
+    elif estado == "corrompido":
+        arquivo.write_text("{quebrado", encoding="utf-8")
+    else:
+        (pasta_det / rodada.MARCA_DETERMINISTICA).unlink()
+    _rodar(f, cfg, configs)
+    assert f.det_chamadas == 2
+    assert [r.estado for r in ler_registros(pasta) if r.conjunto == "deterministica"] == ["passou"]
+
+
+def test_deterministica_com_falha_gravada_nao_roda_de_novo(tmp_path):
+    f = Falsos(det="falhou")
+    cfg = _cfg(tmp_path)
+    configs = [_wheel(tmp_path)]
+    for _ in range(2):
+        with pytest.raises(rodada.RodadaInterrompida) as erro:
+            _rodar(f, cfg, configs)
+        assert erro.value.codigo == rodada.CODIGO_DETERMINISTICA
+    assert f.det_chamadas == 1
+
+
+def test_ajuda_da_cli_documenta_os_codigos_de_saida(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["rodar", "--help"])
+    ajuda = " ".join(capsys.readouterr().out.split())
+    for codigo in (0, 1, 2, 3, 4, 5):
+        assert f"{codigo} " in ajuda
+    assert "pulado" in ajuda

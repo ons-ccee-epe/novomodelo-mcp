@@ -17,6 +17,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
@@ -30,7 +31,13 @@ from tests.e2e.conjuntos.usuario.cenario import Cenario, cenarios_da_rodada
 from tests.e2e.conjuntos.usuario.juiz import JUIZ_PADRAO, MOTIVO_LIMITE, Juiz, no_manifesto
 from tests.e2e.conjuntos.usuario.pontuar import avaliar_usuario
 from tests.e2e.executor.casos import CASOS_GRANDES, pasta_preparados, resolver
-from tests.e2e.executor.container import ENDURECIMENTO, Execucao, executar
+from tests.e2e.executor.container import (
+    ENDURECIMENTO,
+    Execucao,
+    encerrar_container,
+    executar,
+    nome_container,
+)
 from tests.e2e.executor.imagens import (
     CHAVE_DO_AGENTE,
     ConfigMCP,
@@ -61,6 +68,10 @@ TEMPO_LEITURA = 300
 TEMPO_GITLEAKS = 900
 ARQUIVO_LOG = "rodada.jsonl"
 ARQUIVO_BLOQUEIO = "BLOQUEADO-SEGREDO.txt"
+MARCA_DETERMINISTICA = "concluida"
+CONFIG_GITLEAKS = RAIZ / ".gitleaks.toml"
+LIMITES_SEGUIDOS = 3
+TEMPO_FIM_THREADS = 120
 ORIGEM_NAO_INFORMADA = "não informada"
 NAO_USADO = "não usado nesta rodada"
 MOTIVO_LIMITE_AGENTE = "limite de uso do agente atingido"
@@ -71,6 +82,18 @@ CODIGO_RECUSA = 2
 CODIGO_SEGREDO = 3
 CODIGO_LIMITE = 4
 CODIGO_ORCAMENTO = 5
+CODIGO_INTERROMPIDA = 130
+CODIGOS_DE_SAIDA = {
+    0: "rodada completa",
+    CODIGO_DETERMINISTICA: (
+        "determinística com falha, imagem não pronta ou execução sem registro gravado"
+    ),
+    CODIGO_RECUSA: "argumentos inválidos ou retomada recusada (outro plano, filtro ou commit)",
+    CODIGO_SEGREDO: "segredo na pasta da rodada, ou varredura do gitleaks que não rodou",
+    CODIGO_LIMITE: "limite de uso do agente ou do juiz (ou o mesmo limite 3 vezes seguidas)",
+    CODIGO_ORCAMENTO: "orçamento de execuções ou de minutos estourado",
+    CODIGO_INTERROMPIDA: "interrompida pelo Ctrl-C",
+}
 _FORA_DO_NOME = re.compile(r"[^A-Za-z0-9._-]+")
 _LEITURA = (
     "import json; from novomodelo_mcp.client_config import read_only_tools; "
@@ -138,7 +161,7 @@ def _registro_deterministica(
 
 
 def registros_do_junit(junit: Path, rodada: str) -> list[Registro]:
-    """Um registro por teste do JUnit XML do pytest: falha e erro viram `falhou`."""
+    """Um registro por teste do JUnit XML, por `classname.name`: falha e erro viram `falhou`."""
     registros = []
     for caso in ET.parse(junit).getroot().iter("testcase"):
         estado: Estado = "passou"
@@ -149,10 +172,9 @@ def registros_do_junit(junit: Path, rodada: str) -> list[Registro]:
                 break
             if filho.tag == "skipped":
                 estado, motivo = "pulado", filho.get("message") or "pulado"
+        nome = ".".join(n for n in (caso.get("classname"), caso.get("name")) if n)
         registros.append(
-            _registro_deterministica(
-                rodada, caso.get("name", ""), estado, motivo, float(caso.get("time") or 0)
-            )
+            _registro_deterministica(rodada, nome, estado, motivo, float(caso.get("time") or 0))
         )
     return registros
 
@@ -203,6 +225,7 @@ def ler_leitura_mcp(
     agente: str,
     cfg: Config,
     rodar: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    encerrar: Callable[[str, str], bool] = encerrar_container,
 ) -> tuple[str, ...]:
     """As tools de leitura do MCP instalado na imagem, que o cliente roda sem aprovação.
 
@@ -212,7 +235,8 @@ def ler_leitura_mcp(
     if c.wheel is None:
         return ()
     tag = tag_imagem(c, agente)
-    cmd = [cfg.motor, "run", "--rm", *ENDURECIMENTO, "--network=none", tag]
+    nome = f"novomodelo-bateria-leitura-{uuid.uuid4().hex[:8]}"
+    cmd = [cfg.motor, "run", "--rm", f"--name={nome}", *ENDURECIMENTO, "--network=none", tag]
     cmd += ["sh", "-c", _PYTHON_DO_MCP, "sh", _LEITURA]
     try:
         feito = rodar(cmd, capture_output=True, text=True, timeout=TEMPO_LEITURA, check=False)
@@ -220,22 +244,33 @@ def ler_leitura_mcp(
         nomes = json.loads(linhas[-1]) if linhas else None
     except (OSError, subprocess.SubprocessError, ValueError):
         nomes = None
+    finally:
+        encerrar(cfg.motor, nome)
     if not isinstance(nomes, list) or not all(isinstance(n, str) for n in nomes):
         raise FalhaPreparo(f"tools de leitura do MCP ilegíveis na imagem {tag}")
     return tuple(nomes)
 
 
-def varrer_segredos(pasta: Path) -> Varredura:
-    """Roda `gitleaks dir --redact` na pasta e devolve só os arquivos com achado."""
+def varrer_segredos(pasta: Path, config: Path = CONFIG_GITLEAKS) -> Varredura:
+    """Roda `gitleaks dir --redact` com a config do repo e devolve só os arquivos com achado.
+
+    A config é passada explícita e o `cwd` é uma pasta vazia: sem isso o gitleaks usa só as
+    regras padrão, que não reconhecem o token OAuth do Claude (`sk-ant-oat01-`).
+    """
     exe = shutil.which("gitleaks")
     if exe is None:
         return Varredura(erro="gitleaks fora do PATH: a pasta da rodada não foi varrida")
+    if not config.is_file():
+        return Varredura(erro="config do gitleaks ausente: a pasta da rodada não foi varrida")
     with tempfile.TemporaryDirectory(prefix="novomodelo-bateria-gitleaks-") as tmp:
         relatorio = Path(tmp) / "achados.json"
-        cmd = [exe, "dir", "--redact", "--no-banner", "--report-format", "json"]
-        cmd += ["--report-path", str(relatorio), "--exit-code", "1", str(pasta)]
+        cmd = [exe, "dir", "--redact", "--no-banner", "--config", str(config)]
+        cmd += ["--report-format", "json", "--report-path", str(relatorio), "--exit-code", "1"]
+        cmd.append(str(pasta.resolve()))
         try:
-            feito = subprocess.run(cmd, capture_output=True, timeout=TEMPO_GITLEAKS, check=False)
+            feito = subprocess.run(
+                cmd, cwd=tmp, capture_output=True, timeout=TEMPO_GITLEAKS, check=False
+            )
         except (OSError, subprocess.SubprocessError) as erro:
             return Varredura(erro=f"gitleaks falhou: {type(erro).__name__}")
         if feito.returncode not in (0, 1):
@@ -254,6 +289,39 @@ def varrer_segredos(pasta: Path) -> Varredura:
     if feito.returncode and not arquivos:
         arquivos.add("(arquivo não informado pelo gitleaks)")
     return Varredura(tuple(sorted(arquivos)))
+
+
+def encerrar_em_voo(cfg: Config, prefixos: Sequence[str]) -> list[str]:
+    """Remove os containers da bateria cujo nome começa por um dos prefixos; devolve os nomes."""
+    if not prefixos:
+        return []
+    try:
+        feito = subprocess.run(
+            [
+                cfg.motor,
+                "ps",
+                "-a",
+                "--format",
+                "{{.Names}}",
+                "--filter",
+                "name=novomodelo-bateria",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    nomes = [n for n in feito.stdout.split() if n.startswith(tuple(prefixos))]
+    for nome in nomes:
+        encerrar_container(cfg.motor, nome)
+    return nomes
+
+
+def prefixo_do_container(e: Execucao, rodada: str) -> str:
+    """O nome que o executor dá ao container de `e`, sem o sufixo aleatório."""
+    return nome_container(e, rodada).rsplit("-", 1)[0]
 
 
 def commit_da_bateria() -> str:
@@ -299,6 +367,7 @@ class Dependencias:
     commit: Callable[[], str] = commit_da_bateria
     relogio: Callable[[], float] = time.monotonic
     esperar: Callable[[float], None] = time.sleep
+    encerrar_em_voo: Callable[[Config, Sequence[str]], list[str]] = encerrar_em_voo
 
 
 def _config_do_juiz(configs: Sequence[ConfigMCP]) -> ConfigMCP:
@@ -422,7 +491,13 @@ def _wheels(configs: Sequence[ConfigMCP], origens: Mapping[str, str]) -> dict[st
     }
 
 
-def _mesma_rodada(a: Manifesto, b: Manifesto) -> bool:
+def _diferenca(gravado: Manifesto, novo: Manifesto) -> str | None:
+    """O que impede retomar `gravado` com o plano `novo`, ou `None` se é a mesma rodada."""
+    if gravado.filtro != novo.filtro:
+        return f"filtro {gravado.filtro!r} gravado, {novo.filtro!r} pedido"
+    if gravado.commit_bateria != novo.commit_bateria:
+        return f"bateria no commit {gravado.commit_bateria}, agora {novo.commit_bateria}"
+
     def chave(m: Manifesto) -> tuple:
         return (
             m.configs,
@@ -434,7 +509,9 @@ def _mesma_rodada(a: Manifesto, b: Manifesto) -> bool:
             {nome: w["sha256"] for nome, w in m.wheels.items()},
         )
 
-    return chave(a) == chave(b)
+    if chave(gravado) != chave(novo):
+        return "outro plano (configurações, conjuntos, agentes, repetições) ou outras versões"
+    return None
 
 
 class _Log:
@@ -464,14 +541,19 @@ def _pasta_da_execucao(pasta: Path, e: Execucao) -> Path:
     return caminho_execucao(pasta, marca)
 
 
+def _de_limite(estado: str | None, motivo: str | None) -> bool:
+    return estado == "erro_infra" and motivo in MOTIVOS_LIMITE
+
+
 def _feita(pasta: Path, e: Execucao) -> bool:
     """Já tem resultado; um registro de limite de uso (sobra de uma parada) não conta."""
     arquivo = _pasta_da_execucao(pasta, e) / NOME_REGISTRO
     try:
-        motivo = json.loads(arquivo.read_text(encoding="utf-8")).get("motivo")
+        dados = json.loads(arquivo.read_text(encoding="utf-8"))
+        estado, motivo = dados.get("estado"), dados.get("motivo")
     except (OSError, ValueError, AttributeError):
         return False
-    if motivo in MOTIVOS_LIMITE:
+    if _de_limite(estado, motivo):
         shutil.rmtree(arquivo.parent, ignore_errors=True)
         return False
     return True
@@ -481,14 +563,19 @@ def _feita(pasta: Path, e: Execucao) -> bool:
 class _Controle:
     t0: float
     iniciadas: int = 0
+    esperado_s: float = 0.0
     parada: str | None = None
+    limites_seguidos: dict[str, int] = field(default_factory=dict)
+    em_voo: dict[str, Execucao] = field(default_factory=dict)
     trava: threading.Lock = field(default_factory=threading.Lock)
 
 
 def _estourou(ctl: _Controle, orcamento: Orcamento, agora: float) -> bool:
+    """A espera do limite de uso não conta no tempo; a execução refeita conta uma vez só."""
     if orcamento.max_execucoes and ctl.iniciadas >= orcamento.max_execucoes:
         return True
-    return bool(orcamento.max_minutos and agora - ctl.t0 >= orcamento.max_minutos * 60)
+    decorrido = agora - ctl.t0 - ctl.esperado_s
+    return bool(orcamento.max_minutos and decorrido >= orcamento.max_minutos * 60)
 
 
 def rodar(
@@ -511,10 +598,8 @@ def rodar(
     """Cria ou retoma `<resultados>/<rodada>` e devolve a pasta da rodada completa.
 
     Raises:
-        RodadaInterrompida: `codigo` 1 (determinística falhou, imagem não ficou pronta
-            ou execução sem registro), 2 (retomada com outro plano ou nome inválido), 3 (achado de segredo ou
-            varredura que não rodou), 4 (limite de uso, sem `esperar_limite_min`) ou
-            5 (orçamento estourado); a pasta, quando existe, já tem o que foi feito.
+        RodadaInterrompida: com `codigo` de `CODIGOS_DE_SAIDA`; a pasta, quando existe,
+            já tem o que foi feito e foi varrida pelo gitleaks.
     """
     dep = dep or Dependencias()
     origens = origens or {}
@@ -551,15 +636,18 @@ def rodar(
         commit_bateria=dep.commit(),
         wheels=_wheels(configs, origens),
         imagens=imagens,
+        filtro=filtro,
     )
     pasta = cfg.resultados / rodada
     if (pasta / NOME_MANIFESTO).is_file():
-        if not _mesma_rodada(ler_manifesto(pasta), manifesto):
+        if diferenca := _diferenca(ler_manifesto(pasta), manifesto):
             raise RodadaInterrompida(
                 CODIGO_RECUSA,
-                f"a rodada {rodada} existe com outro plano ou outras versões; use outro --rodada",
+                f"a rodada {rodada} não pode ser retomada: {diferenca}; use outro --rodada",
                 pasta,
             )
+        for sobra in pasta.glob(".trabalho-*"):
+            shutil.rmtree(sobra, ignore_errors=True)
     else:
         pasta.mkdir(parents=True, exist_ok=True)
         gravar_manifesto(pasta, manifesto)
@@ -655,6 +743,14 @@ def _rodar_tudo(
             ctl,
             log,
         )
+        if ctl.parada == "interrompida":
+            return CODIGO_INTERROMPIDA, "rodada interrompida (Ctrl-C); retome com o mesmo --rodada"
+        if ctl.parada == "limite_repetido":
+            return (
+                CODIGO_LIMITE,
+                f"limite de uso {LIMITES_SEGUIDOS} vezes seguidas na mesma execução; "
+                "confira a conta antes de retomar",
+            )
         if ctl.parada == "orcamento":
             log("orcamento", iniciadas=ctl.iniciadas)
             return CODIGO_ORCAMENTO, "orçamento da rodada estourado"
@@ -668,18 +764,43 @@ def _rodar_tudo(
         espera += 1
         log("espera_limite", minutos=esperar_limite_min, espera=espera)
         print(f"limite de uso: esperando {esperar_limite_min} min (espera {espera})", flush=True)
+        antes = dep.relogio()
         dep.esperar(esperar_limite_min * 60)
+        ctl.esperado_s += dep.relogio() - antes
         ctl.parada = None
 
 
+def _estados_gravados(pasta: Path) -> list[str] | None:
+    """Os estados da determinística já concluída, ou `None` quando ela precisa rodar de novo.
+
+    Sem a marca de conclusão, com JSON ilegível ou com `erro_infra` (falha do ambiente, não
+    do produto), ela roda de novo; `falhou` é resultado e vale na retomada.
+    """
+    pasta_det = pasta / "execucoes" / "deterministica"
+    if not (pasta_det / MARCA_DETERMINISTICA).is_file():
+        return None
+    try:
+        estados = [
+            json.loads(a.read_text(encoding="utf-8"))["estado"]
+            for a in sorted(pasta_det.glob(f"*/*/*/*/{NOME_REGISTRO}"))
+        ]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if not estados or "erro_infra" in estados:
+        return None
+    return estados
+
+
 def _deterministica(pasta: Path, cfg: Config, dep: Dependencias, log: _Log) -> str | None:
-    existentes = sorted((pasta / "execucoes" / "deterministica").glob(f"*/*/*/*/{NOME_REGISTRO}"))
-    if existentes:
-        estados = [json.loads(a.read_text(encoding="utf-8"))["estado"] for a in existentes]
-    else:
+    estados = _estados_gravados(pasta)
+    if estados is None:
+        pasta_det = pasta / "execucoes" / "deterministica"
+        shutil.rmtree(pasta_det, ignore_errors=True)
         registros = dep.deterministica(pasta, cfg)
         for r in registros:
             gravar_registro(pasta, r)
+        pasta_det.mkdir(parents=True, exist_ok=True)
+        (pasta_det / MARCA_DETERMINISTICA).write_text("", encoding="utf-8")
         estados = [r.estado for r in registros]
     falhas = sum(e in ("falhou", "erro_infra") for e in estados)
     log("deterministica", testes=len(estados), falhas=falhas)
@@ -723,6 +844,35 @@ def _rodar_pendentes(
 ) -> None:
     filas = {a: deque(p for p in pendentes if p.execucao.agente == a) for a in agentes}
 
+    def interrompida() -> bool:
+        return ctl.parada == "interrompida"
+
+    def avaliar_ou_parar(p: Planejada) -> Callable[..., Avaliacao]:
+        avaliar = avaliar_de(p)
+
+        def guardado(leitura):
+            if interrompida():
+                raise RuntimeError("rodada interrompida antes da avaliação")
+            return avaliar(leitura)
+
+        return guardado
+
+    def limite(e: Execucao, motivo: str) -> None:
+        rotulo = _rotulo(e)
+        shutil.rmtree(_pasta_da_execucao(pasta, e), ignore_errors=True)
+        with ctl.trava:
+            ctl.iniciadas -= 1
+            seguidos = ctl.limites_seguidos.get(rotulo, 0) + 1
+            ctl.limites_seguidos[rotulo] = seguidos
+            if seguidos >= LIMITES_SEGUIDOS:
+                ctl.parada = "limite_repetido"
+            elif ctl.parada is None:
+                ctl.parada = "limite"
+        log("limite", execucao=rotulo, motivo=motivo, seguidos=seguidos)
+        if seguidos >= LIMITES_SEGUIDOS:
+            log("limite_repetido", execucao=rotulo, seguidos=seguidos)
+        print(f"limite     {rotulo}: {motivo}", flush=True)
+
     def trabalhador(fila: deque[Planejada]) -> None:
         while True:
             with ctl.trava:
@@ -733,15 +883,22 @@ def _rodar_pendentes(
                     return
                 p = fila.popleft()
                 ctl.iniciadas += 1
+                ctl.em_voo[_rotulo(p.execucao)] = p.execucao
             e = p.execucao
-            r = dep.executar(e, cfg, pasta, avaliar_de(p))
-            if r.motivo in MOTIVOS_LIMITE:
+            try:
                 shutil.rmtree(_pasta_da_execucao(pasta, e), ignore_errors=True)
+                r = dep.executar(e, cfg, pasta, avaliar_ou_parar(p))
+            finally:
                 with ctl.trava:
-                    ctl.parada = ctl.parada or "limite"
-                log("limite", execucao=_rotulo(e), motivo=r.motivo)
-                print(f"limite     {_rotulo(e)}: {r.motivo}", flush=True)
+                    ctl.em_voo.pop(_rotulo(e), None)
+            if interrompida():
+                shutil.rmtree(_pasta_da_execucao(pasta, e), ignore_errors=True)
+                return
+            if _de_limite(r.estado, r.motivo):
+                limite(e, r.motivo)
                 continue
+            with ctl.trava:
+                ctl.limites_seguidos.clear()
             print(f"{r.estado:<10} {_rotulo(e)} ({r.duracao_s:.0f} s)", flush=True)
 
     threads = [
@@ -751,5 +908,17 @@ def _rodar_pendentes(
     ]
     for t in threads:
         t.start()
-    for t in threads:
-        t.join()
+    try:
+        for t in threads:
+            while t.is_alive():
+                t.join(timeout=0.5)
+    except KeyboardInterrupt:
+        with ctl.trava:
+            ctl.parada = "interrompida"
+            em_voo = list(ctl.em_voo.values())
+        log("interrompida", em_voo=[_rotulo(e) for e in em_voo])
+        print("interrompida: encerrando os containers em voo", flush=True)
+        dep.encerrar_em_voo(cfg, [prefixo_do_container(e, pasta.name) for e in em_voo])
+        prazo = time.monotonic() + TEMPO_FIM_THREADS
+        for t in threads:
+            t.join(timeout=max(0.0, prazo - time.monotonic()))

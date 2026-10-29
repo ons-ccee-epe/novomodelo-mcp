@@ -95,10 +95,11 @@ def _parser() -> argparse.ArgumentParser:
         "rodar",
         help="determinística e conjuntos com agente; retomável",
         description=(
-            "Saída: 0 completa; 1 determinística com falha ou imagem não pronta; "
-            "2 argumentos ou retomada recusada; 3 segredo na pasta da rodada; "
-            "4 limite de uso; 5 orçamento estourado."
+            "Retomável pelo --rodada: uma execução com registro gravado não roda de novo, "
+            "e um caso pulado gravado não é reavaliado."
         ),
+        epilog="códigos de saída: "
+        + "; ".join(f"{c} {t}" for c, t in rodada.CODIGOS_DE_SAIDA.items()),
     )
     rod.add_argument("--rodada", metavar="ID", help="cria ou retoma esta rodada")
     rod.add_argument(
