@@ -32,10 +32,11 @@ class Decisao:
     inconclusivos: tuple[str, ...]
     pulados: tuple[str, ...]
     sem_base: tuple[str, ...]
+    ausentes: tuple[str, ...] = ()
 
 
 def _maioria(passou: int, falhou: int) -> bool:
-    return passou > (passou + falhou) / 2
+    return 2 * passou > passou + falhou
 
 
 def maioria_passou(estados: Sequence[Estado]) -> bool:
@@ -66,10 +67,16 @@ def _regra_do_grupo(
             "regressao_tool",
             lambda passou, falhou: base_passava and not _maioria(passou, falhou),
         )
-    return "regressao_maioria", lambda passou, falhou: base_passava and _maioria(falhou, passou)
+    if conjunto == "usuario":
+        return (
+            "regressao_maioria",
+            lambda passou, falhou: base_passava and _maioria(falhou, passou),
+        )
+    raise ValueError(f"conjunto desconhecido: {conjunto!r}")
 
 
 def decidir(alvo: Sequence[Registro], base: Sequence[Registro] | None) -> Decisao:
+    """Decide a rodada. Com `base=None` não há baseline: `sem_base` e `ausentes` ficam vazios."""
     grupos_base = _agrupar(base) if base is not None else {}
     bloqueios: list[Bloqueio] = []
     inconclusivos: list[str] = []
@@ -99,9 +106,18 @@ def decidir(alvo: Sequence[Registro], base: Sequence[Registro] | None) -> Decisa
         elif bloqueia(passou, falhou + infra):
             inconclusivos.append(identificador)
 
+    grupos_alvo = _agrupar(alvo)
+    ausentes = sorted(
+        "/".join(grupo)
+        for grupo, registros in grupos_base.items()
+        if grupo[0] in ("tools", "usuario")
+        and grupo not in grupos_alvo
+        and maioria_passou([r.estado for r in registros])
+    )
+
     if bloqueios:
         veredito: Veredito = "no-go"
-    elif inconclusivos:
+    elif inconclusivos or ausentes:
         veredito = "inconclusivo"
     else:
         veredito = "go"
@@ -111,4 +127,5 @@ def decidir(alvo: Sequence[Registro], base: Sequence[Registro] | None) -> Decisa
         inconclusivos=tuple(inconclusivos),
         pulados=tuple(pulados),
         sem_base=tuple(sem_base),
+        ausentes=tuple(ausentes),
     )

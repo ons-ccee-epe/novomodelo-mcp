@@ -204,3 +204,51 @@ def test_evidencia_ordenada_com_barra_normal():
     ev = decidir(alvo, base).bloqueios[0].evidencia
     assert ev == tuple(f"execucoes/usuario/c/ag/padrao/{i}" for i in (1, 2, 3))
     assert all("\\" not in e for e in ev)
+
+
+def test_caso_na_base_e_ausente_do_alvo_e_inconclusivo():
+    base = [reg("tools", "t", "passou"), reg("tools", "u", "passou")]
+    d = decidir([reg("tools", "t", "passou")], base)
+    assert d.veredito == "inconclusivo"
+    assert d.ausentes == ("tools/u/ag",)
+
+
+def test_ausente_sem_maioria_na_base_nao_conta():
+    base = [reg("tools", "t", "passou"), reg("tools", "u", "falhou")]
+    d = decidir([reg("tools", "t", "passou")], base)
+    assert d.veredito == "go"
+    assert d.ausentes == ()
+
+
+def test_no_go_tem_precedencia_sobre_ausente():
+    base = [reg("tools", "t", "passou"), reg("tools", "u", "passou")]
+    d = decidir([reg("tools", "t", "falhou")], base)
+    assert d.veredito == "no-go"
+    assert d.ausentes == ("tools/u/ag",)
+
+
+def test_conjunto_desconhecido_levanta():
+    estranho = reg("tools", "t", "passou")
+    estranho = Registro(**{**estranho.__dict__, "conjunto": "outro"})
+    with pytest.raises(ValueError, match="conjunto desconhecido"):
+        decidir([estranho], [estranho])
+
+
+def test_empate_com_erro_infra_em_tools_e_inconclusivo():
+    base = [reg("tools", "t", "passou")]
+    alvo = reps("tools", "t", ["passou", "falhou", "erro_infra"])
+    d = decidir(alvo, base)
+    assert d.veredito == "inconclusivo"
+    assert d.inconclusivos == ("tools/t/ag",)
+
+
+def test_wilson_um_de_um_e_zero_de_um_ficam_em_zero_um():
+    for acertos in (0, 1):
+        baixo, alto = wilson(acertos, 1)
+        assert 0.0 <= baixo <= alto <= 1.0
+
+
+def test_base_vazia_nao_none_manda_grupos_para_sem_base():
+    d = decidir([reg("tools", "t", "falhou")], [])
+    assert d.sem_base == ("tools/t/ag",)
+    assert d.veredito == "go"
