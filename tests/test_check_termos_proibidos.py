@@ -44,6 +44,7 @@ def _commit(repo: Path, arquivos: dict[str, str], mensagem: str = "chore: ajuste
 
 def _rodar(repo: Path, *args: str, interno: Path | None = None, toml: Path | None = None):
     env = {k: v for k, v in os.environ.items() if k != "NOVOMODELO_TERMOS_INTERNOS"}
+    env["PYTHONIOENCODING"] = "utf-8"
     if interno is not None:
         env["NOVOMODELO_TERMOS_INTERNOS"] = str(interno)
     comando = [sys.executable, str(SCRIPT), "--raiz", str(repo), *args]

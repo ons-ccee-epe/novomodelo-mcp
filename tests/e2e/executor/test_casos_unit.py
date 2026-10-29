@@ -376,3 +376,13 @@ def test_laco_de_links_e_recusado(tmp_path):
     (fonte / "b").symlink_to("a")
     with pytest.raises(FalhaPreparo, match="link simbólico"):
         casos._publicar(fonte, tmp_path / "saida")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="link simbólico exige privilégio")
+def test_link_quebrado_e_recusado(tmp_path):
+    fonte = tmp_path / "fonte"
+    fonte.mkdir()
+    (fonte / "link").symlink_to("nao-existe.txt")
+    with pytest.raises(FalhaPreparo, match="link simbólico"):
+        casos._publicar(fonte, tmp_path / "saida")
+    assert not (tmp_path / "saida").exists()

@@ -138,7 +138,8 @@ class TestRun:
         factory = FakeFactory(startup_delay_s={0: 0.3})
         outcome = _run(_runner(tmp_path, factory, concurrency=1, duration_s=0.2))
         initial = [s for s in outcome.startups if s["kind"] == "initial"]
-        assert initial[0]["ms"] >= 300
+        # O relógio do Windows tem resolução de ~15,6 ms: o sleep de 300 ms pode medir 297.
+        assert initial[0]["ms"] >= 250
         assert max(s.latency_ms for s in outcome.samples) < 100
 
     def test_a_failed_client_is_recorded_and_the_others_run(self, tmp_path: Path) -> None:

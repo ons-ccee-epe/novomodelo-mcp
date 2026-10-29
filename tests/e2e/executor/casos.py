@@ -144,7 +144,8 @@ def _recusar_links_para_fora(origem: Path) -> None:
     raiz = origem.resolve()
     for caminho in origem.rglob("*"):
         try:
-            fora = caminho.is_symlink() and not caminho.resolve().is_relative_to(raiz)
+            # strict: a partir do Python 3.13, o resolve() não estrito devolve um laço de links sem erro.
+            fora = caminho.is_symlink() and not caminho.resolve(strict=True).is_relative_to(raiz)
         except (OSError, RuntimeError):
             fora = True
         if fora:
