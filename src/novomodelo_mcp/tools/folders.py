@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..adapters import paths
 from ..adapters.envelope import as_error
 from ..adapters.obs import log
@@ -15,7 +17,7 @@ def register_folders(mcp, settings: Settings) -> None:
     # Nunca READ_ONLY: é a única tool que amplia o guard, e a aprovação do cliente a
     # cada chamada é a confirmação do usuário (o `configurar` só libera as de leitura).
     @mcp.tool(annotations=WRITES)
-    def include_folders(folders: list[str]) -> dict:
+    def include_folders(folders: list[str]) -> dict[str, Any]:
         """Inclui pastas de estudo na pasta de trabalho; vale na hora, sem reabrir o cliente.
 
         Use só depois de o usuário aceitar, com todas as pastas de uma vez (a

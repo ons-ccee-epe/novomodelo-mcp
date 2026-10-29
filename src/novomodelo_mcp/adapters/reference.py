@@ -17,6 +17,7 @@ import tempfile
 import unicodedata
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 from ..config import Settings
 from .discovery import find_novomodelo
@@ -100,7 +101,7 @@ def list_schema_types(settings: Settings) -> list[str]:
     return sorted(p.name[: -len(_SUFFIX)] for p in Path(root).glob(f"*{_SUFFIX}"))
 
 
-def read_schema(settings: Settings, tipo: str) -> dict:
+def read_schema(settings: Settings, tipo: str) -> dict[str, Any]:
     if not _SCHEMA_NAME.match(tipo or ""):
         return error(22, f"tipo invalido: {tipo!r}")
     root = schemas_root(settings)
@@ -144,7 +145,7 @@ def docs_root(settings: Settings) -> str | None:
     return _dev_docs_dir(settings) or _bundled_dir("docs")
 
 
-def docs_origin(settings: Settings) -> dict:
+def docs_origin(settings: Settings) -> dict[str, Any]:
     """De onde vêm as docs: `embutidas` (versão e commit) ou `pasta_de_desenvolvimento`."""
     if dev := _dev_docs_dir(settings):
         return {"origin": "pasta_de_desenvolvimento", "path": dev}
@@ -156,7 +157,7 @@ def docs_origin(settings: Settings) -> dict:
     }
 
 
-def _docs_unavailable(settings: Settings) -> dict:
+def _docs_unavailable(settings: Settings) -> dict[str, Any]:
     if settings.docs_dir:
         return error(
             2,
@@ -169,7 +170,7 @@ def _docs_unavailable(settings: Settings) -> dict:
     )
 
 
-def list_docs(settings: Settings, prefix: str | None = None) -> dict:
+def list_docs(settings: Settings, prefix: str | None = None) -> dict[str, Any]:
     root = docs_root(settings)
     if root is None:
         return _docs_unavailable(settings)
@@ -189,7 +190,9 @@ def list_docs(settings: Settings, prefix: str | None = None) -> dict:
     }
 
 
-def read_doc(settings: Settings, page: str, max_chars: int, section: str | None = None) -> dict:
+def read_doc(
+    settings: Settings, page: str, max_chars: int, section: str | None = None
+) -> dict[str, Any]:
     root = docs_root(settings)
     if root is None:
         return _docs_unavailable(settings)
@@ -391,7 +394,7 @@ def split_sections(page: str, text: str) -> list[dict[str, str]]:
     return sections
 
 
-def find_section(text: str, wanted: str) -> dict | None:
+def find_section(text: str, wanted: str) -> dict[str, Any] | None:
     """A seção cuja âncora (ou título, sem caixa nem acento) é `wanted`, com as subseções:
     do título até o próximo de mesmo nível ou acima. None se não houver."""
     _, body = split_frontmatter(text)
@@ -479,7 +482,7 @@ def build_docs_index(docs_dir: Path, db_path: str | Path) -> sqlite3.Connection:
     return con
 
 
-def bundled_manifest() -> dict | None:
+def bundled_manifest() -> dict[str, Any] | None:
     """O manifesto das docs embutidas, ou None se o pacote não o tiver."""
     root = _bundled_dir("docs")
     if root is None:
@@ -542,7 +545,7 @@ _SEARCH_SQL = {
 }
 
 
-def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
+def search_docs(settings: Settings, query: str, k: int = 5) -> dict[str, Any]:
     """Seções mais relevantes para `query` (BM25, título com peso maior).
 
     Os termos em português do glossário das docs ganham o equivalente em inglês; os

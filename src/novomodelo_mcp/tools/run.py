@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from ..adapters import deck_io, jobs, runtime
 from ..adapters.discovery import find_novomodelo
@@ -64,8 +65,8 @@ def make_plan(
     *,
     time_budget_s: float = 900,
     threads: int | None = None,
-    machine: dict | None = None,
-) -> dict:
+    machine: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Compõe máquina + pontos medidos + parâmetros do caso num plano (sem gravar)."""
     try:
         params = read_case_params(case_dir)
@@ -115,7 +116,9 @@ def _free_output(output: Path) -> Path:
     return candidate
 
 
-def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
+def _knob_changes(
+    config: dict[str, Any], overrides: dict[str, Any]
+) -> list[dict[str, Any]] | dict[str, Any]:
     changes = []
     for knob, value in overrides.items():
         if knob not in CONFIG_KNOBS:
@@ -156,7 +159,7 @@ def register_run(mcp, settings: Settings) -> None:
         template: str | None = None,
         list: bool = False,
         force: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Cria um caso a partir de um template embutido (`novomodelo init`).
 
         `list=True` lista os templates disponíveis (ex.: `1dtoy`) e sai.
@@ -194,7 +197,9 @@ def register_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def run_plan(case_dir: str, time_budget_s: float = 900, threads: int | None = None) -> dict:
+    def run_plan(
+        case_dir: str, time_budget_s: float = 900, threads: int | None = None
+    ) -> dict[str, Any]:
         """Planeja um run LOCAL do caso: estima tempo e memória. NÃO executa, NÃO grava.
 
         Lê config.json (forward_passes, iteration_limit, simulação), stages.json
@@ -218,7 +223,9 @@ def register_run(mcp, settings: Settings) -> None:
             return as_error(exc)
 
     @mcp.tool(annotations=DESTRUCTIVE)
-    def run_apply(case_dir: str, overrides: dict, dry_run: bool = False) -> dict:
+    def run_apply(
+        case_dir: str, overrides: dict[str, Any], dry_run: bool = False
+    ) -> dict[str, Any]:
         """Aplica knobs de execução no config.json do caso (só config; nada mais).
 
         `overrides`: {"forward_passes": 2, "iteration_limit": 3,
@@ -249,7 +256,7 @@ def register_run(mcp, settings: Settings) -> None:
         time_budget_s: float = 900,
         override: bool = False,
         overwrite: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Dispara `novomodelo run` em BACKGROUND e devolve `job_id` na hora.
 
         Comando: `novomodelo run <case> --output <output> --threads N --comm-backend
@@ -341,7 +348,7 @@ def register_run(mcp, settings: Settings) -> None:
         return {"status": "ok", **meta, "warnings": plan.get("warnings", [])}
 
     @mcp.tool(annotations=READ_ONLY)
-    def run_status(job_id: str) -> dict:
+    def run_status(job_id: str) -> dict[str, Any]:
         """Estado de um run: running | succeeded | failed | cancelled | lost.
 
         Inclui tempo decorrido, estimativa do plano e marcos de saída
@@ -378,7 +385,7 @@ def register_run(mcp, settings: Settings) -> None:
         return {"status": "ok", **st}
 
     @mcp.tool(annotations=READ_ONLY)
-    def run_logs(job_id: str, lines: int = 100) -> dict:
+    def run_logs(job_id: str, lines: int = 100) -> dict[str, Any]:
         """Últimas `lines` linhas da saída do run (com teto de caracteres).
 
         `log` junta o stdout e o stderr do novomodelo na ordem de chegada, com as
@@ -394,7 +401,7 @@ def register_run(mcp, settings: Settings) -> None:
         return {"status": "ok", "job_id": job_id, **logs}
 
     @mcp.tool(annotations=DESTRUCTIVE)
-    def run_cancel(job_id: str) -> dict:
+    def run_cancel(job_id: str) -> dict[str, Any]:
         """Interrompe um run em andamento (encerra a árvore de processos; força se não sair).
 
         Funciona igual em Windows, macOS e Linux. Pode levar alguns segundos.

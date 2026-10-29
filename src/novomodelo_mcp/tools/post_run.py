@@ -6,7 +6,7 @@ Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from ..adapters.bridge import run_bridge
 from ..adapters.envelope import error
@@ -19,7 +19,7 @@ from .shaping import attach_artifact, cap_envelope
 FormatoCompare = Literal["console", "html", "csv", "parquet", "json", "all"]
 
 
-def _tolerance_type_error(tolerance) -> dict | None:
+def _tolerance_type_error(tolerance) -> dict[str, Any] | None:
     if tolerance is None or (
         isinstance(tolerance, (int, float)) and not isinstance(tolerance, bool)
     ):
@@ -29,7 +29,7 @@ def _tolerance_type_error(tolerance) -> dict | None:
 
 def _compare(
     kind: str, src_dir: str, output_dir: str, tolerance, fmt, out_dir, settings: Settings
-) -> dict:
+) -> dict[str, Any]:
     argv = ["compare", kind, src_dir, output_dir]
     if tolerance is not None:
         argv += ["--tolerance", str(tolerance)]
@@ -54,7 +54,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         tolerance: float | None = None,
         fmt: FormatoCompare = "json",
         out_dir: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Compara resultados de uma rodada NEWAVE contra a saída Novomodelo convertida.
 
         `newave_dir`: pasta do caso NEWAVE (com os resultados dele).
@@ -79,7 +79,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         tolerance: float | None = None,
         fmt: FormatoCompare = "json",
         out_dir: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Compara uma rodada DECOMP contra a saída Novomodelo convertida.
 
         `decomp_dir`: pasta da revisão DECOMP (com os resultados dele).
@@ -95,7 +95,7 @@ def register_post_run(mcp, settings: Settings) -> None:
         return _compare("decomp", decomp_dir, output_dir, tolerance, fmt, out_dir, settings)
 
     @mcp.tool(annotations=WRITES)
-    def bridge_dashboard(case_dir: str, output: str | None = None) -> dict:
+    def bridge_dashboard(case_dir: str, output: str | None = None) -> dict[str, Any]:
         """Gera um dashboard HTML interativo a partir de resultados do Novomodelo.
 
         `case_dir`: pasta do CASO (a que contém `output/`), como no bridge.

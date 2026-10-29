@@ -6,6 +6,8 @@ resultado moldado ao teto de saída. Sem regra de negócio.
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..adapters import budget
 from ..adapters import results as R
 from ..adapters.paths import ensure_in_workspace
@@ -18,7 +20,7 @@ def register_results(mcp, settings: Settings) -> None:
     """Registra as tools de leitura de resultados no servidor `mcp`."""
 
     @mcp.tool(annotations=READ_ONLY)
-    def results_status(output_dir: str) -> dict:
+    def results_status(output_dir: str) -> dict[str, Any]:
         """Status, bounds e convergência de um run (o primeiro check pós-rodada).
 
         Lê `training/metadata.json` e, se houver, `simulation/metadata.json`.
@@ -57,7 +59,7 @@ def register_results(mcp, settings: Settings) -> None:
         return cap_envelope(out, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def results_convergence(output_dir: str, tail: int = 20) -> dict:
+    def results_convergence(output_dir: str, tail: int = 20) -> dict[str, Any]:
         """Trajetória de convergência: iteração final + últimas `tail` iterações.
 
         Lê `training/convergence.parquet` (bounds e gap por iteração).
@@ -76,7 +78,7 @@ def register_results(mcp, settings: Settings) -> None:
         hydro_id: int | None = None,
         stage: int | None = None,
         openings_stage: int | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Modelo estocástico ajustado no run: coeficientes do PAR(p) e árvore de aberturas.
 
         Lê pela biblioteca (`novomodelo.results.load_stochastic`) a pasta
@@ -107,7 +109,7 @@ def register_results(mcp, settings: Settings) -> None:
     @mcp.tool(annotations=READ_ONLY)
     def results_policy(
         output_dir: str, stage: int | None = None, policy_subdir: str = "policy"
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Resumo da política treinada (cortes de Benders) de um run, pela biblioteca.
 
         `metadata` (versão, data, estágios, iterações) e, por estágio, o número de
@@ -131,7 +133,7 @@ def register_results(mcp, settings: Settings) -> None:
         )
 
     @mcp.tool(annotations=READ_ONLY)
-    def results_list_entities(output_dir: str) -> dict:
+    def results_list_entities(output_dir: str) -> dict[str, Any]:
         """Lista as entidades de simulação disponíveis (hydros, costs, thermals, buses, ...)."""
         if err := ensure_in_workspace(output_dir, settings=settings) or R.folder_above_runs(
             output_dir
@@ -148,7 +150,7 @@ def register_results(mcp, settings: Settings) -> None:
         agg: str | None = None,
         scenario: int | None = None,
         limit: int | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Consulta a simulação particionada `simulation/<entity>/` (por scenario_id).
 
         `entity`: hydros | costs | thermals | buses | ... (ver results_list_entities).

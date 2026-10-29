@@ -7,6 +7,7 @@ consultar sem uma chamada de tool. Sem regra de negócio.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from ..adapters import reference as REF
 from ..config import Settings
@@ -19,17 +20,17 @@ def register_reference(mcp, settings: Settings) -> None:
     """Registra as tools de referência e o resource de schema no servidor `mcp`."""
 
     @mcp.tool(annotations=READ_ONLY)
-    def schema_list() -> dict:
+    def schema_list() -> dict[str, Any]:
         """Lista os tipos de arquivo de deck que têm JSON Schema oficial disponível."""
         return {"status": "ok", "types": REF.list_schema_types(settings)}
 
     @mcp.tool(annotations=READ_ONLY)
-    def schema_get(type: str) -> dict:
+    def schema_get(type: str) -> dict[str, Any]:
         """JSON Schema oficial de um tipo de arquivo do deck (ex.: hydros, config, penalties)."""
         return cap_envelope(REF.read_schema(settings, type), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def docs_list(prefix: str | None = None) -> dict:
+    def docs_list(prefix: str | None = None) -> dict[str, Any]:
         """Páginas das docs embutidas, com título e descrição.
 
         `prefix`: só as páginas cujo caminho começa por ele (ex.: 'reference').
@@ -37,7 +38,7 @@ def register_reference(mcp, settings: Settings) -> None:
         return cap_envelope(REF.list_docs(settings, prefix), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def docs_search(query: str, k: int = 5) -> dict:
+    def docs_search(query: str, k: int = 5) -> dict[str, Any]:
         """Busca nas docs embutidas do novomodelo (as da versão instalada) por palavra.
 
         Use sempre que a pergunta for sobre como o novomodelo modela, calcula ou
@@ -52,7 +53,7 @@ def register_reference(mcp, settings: Settings) -> None:
         return cap_envelope(REF.search_docs(settings, query, k), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def docs_read(page: str | None = None, section: str | None = None) -> dict:
+    def docs_read(page: str | None = None, section: str | None = None) -> dict[str, Any]:
         """Lê uma página das docs embutidas (ex.: 'reference/cli-reference').
 
         `section`: âncora (a `section` que o docs_search devolve) ou título; devolve só a

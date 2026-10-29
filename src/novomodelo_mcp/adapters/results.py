@@ -285,7 +285,7 @@ def stochastic_query(
         )
 
 
-def _policy_dir(output_dir: str, policy_subdir: str, settings: Settings) -> Path | dict:
+def _policy_dir(output_dir: str, policy_subdir: str, settings: Settings) -> Path | dict[str, Any]:
     if not _ENTITY_NAME.match(policy_subdir or ""):
         return error(
             13,

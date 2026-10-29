@@ -136,7 +136,7 @@ def refuse_outside(text: str, resolved: Path, roots: list[Path]) -> dict[str, An
 _URL = re.compile(r"^\s*[A-Za-z][A-Za-z0-9+.\-]+://")
 
 
-def ensure_in_workspace(*paths: str | None, settings: Settings) -> dict | None:
+def ensure_in_workspace(*paths: str | None, settings: Settings) -> dict[str, Any] | None:
     """None se todos os caminhos estão dentro da raiz (ou se não há raiz);
     senão, um envelope de erro. Chamada no topo de toda tool que recebe caminho.
     """

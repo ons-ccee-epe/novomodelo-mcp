@@ -128,7 +128,7 @@ def read_json(path: str) -> Any:
 
 def edit_json(
     path: str,
-    changes: list[dict],
+    changes: list[dict[str, Any]],
     *,
     schemas_dir: str | None = None,
     dry_run: bool = False,
@@ -273,7 +273,7 @@ def describe_parquet(path: str) -> dict[str, Any]:
 
 
 def edit_parquet(
-    path: str, where: dict, set_values: dict, *, dry_run: bool = False
+    path: str, where: dict[str, Any], set_values: dict[str, Any], *, dry_run: bool = False
 ) -> dict[str, Any]:
     """Edita células de um Parquet PRESERVANDO o schema.
 

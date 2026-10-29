@@ -6,6 +6,7 @@ import asyncio
 import functools
 import os
 import sys
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -103,6 +104,9 @@ class _WithVersionWarnings:
         return getattr(self._mcp, name)
 
     def tool(self, *args, **kwargs):
+        # Sem isto, o `-> dict[str, Any]` das tools faz o FastMCP mandar a resposta duas
+        # vezes (texto e `structuredContent`): o dobro do teto de tamanho por chamada.
+        kwargs.setdefault("structured_output", False)
         register = self._mcp.tool(*args, **kwargs)
 
         def deco(fn):
@@ -145,7 +149,7 @@ def build_server() -> FastMCP:
     register_folders(mcp, settings)  # inclusão de pastas de estudo no guard
 
     @mcp.tool(annotations=READ_ONLY_NET)
-    def server_info() -> dict:
+    def server_info() -> dict[str, Any]:
         """Diagnóstico do próprio MCP: binários, versões e se há versão nova.
 
         `versions`: executável, biblioteca, bridge e docs, com a versão esperada.

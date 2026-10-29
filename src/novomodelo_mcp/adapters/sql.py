@@ -159,7 +159,7 @@ def _looks_like_path(lit: str) -> bool:
     return low.endswith(_PATH_EXT)
 
 
-def guard_sql(query: str, roots: list[Path]) -> dict | None:
+def guard_sql(query: str, roots: list[Path]) -> dict[str, Any] | None:
     """None se a query e leitura segura e confinada; senao, um envelope de erro.
 
     Puro (sem DuckDB), para ser testavel isoladamente — e a parte critica.

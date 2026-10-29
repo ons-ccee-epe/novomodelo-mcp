@@ -5,6 +5,8 @@ Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..adapters import budget
 from ..adapters.bridge import run_bridge
 from ..adapters.discovery import find_novomodelo
@@ -16,7 +18,7 @@ from .annotations import READ_ONLY, WRITES
 from .shaping import attach_artifact, cap_envelope, group_diagnostics
 
 
-def _force_gate(force: bool, dry_run: bool, settings: Settings) -> dict | None:
+def _force_gate(force: bool, dry_run: bool, settings: Settings) -> dict[str, Any] | None:
     """O `--force` do bridge limpa o deck de destino antes de converter."""
     if force and not dry_run and not settings.allow_force:
         return error(
@@ -32,7 +34,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
     """Registra as tools de pré-rodada no servidor `mcp`."""
 
     @mcp.tool(annotations=READ_ONLY)
-    def bridge_check_newave(src: str) -> dict:
+    def bridge_check_newave(src: str) -> dict[str, Any]:
         """Pré-valida as ENTRADAS de um caso NEWAVE, sem converter (read-only).
 
         `src`: pasta do caso NEWAVE. Rode isto ANTES de converter para pegar
@@ -50,7 +52,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         validate: bool = True,
         force: bool = False,
         dry_run: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Converte um caso NEWAVE para deck Novomodelo, escrevendo em `dst`.
 
         `validate=True` (recomendado) também valida o deck resultante numa
@@ -75,7 +77,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def case_validate(case_dir: str, output_dir: str | None = None) -> dict:
+    def case_validate(case_dir: str, output_dir: str | None = None) -> dict[str, Any]:
         """Valida se um deck Novomodelo JÁ convertido está pronto para rodar (read-only).
 
         Envelopa `novomodelo validate <case_dir> --json` (pipeline de validação em 6
@@ -108,7 +110,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def case_summary(case_dir: str) -> dict:
+    def case_summary(case_dir: str) -> dict[str, Any]:
         """O caso como o novomodelo o lê e interpreta (`novomodelo.io.load_case`).
 
         Diferente do `deck_list` (os arquivos), mostra o caso já validado:
@@ -130,7 +132,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         )
 
     @mcp.tool(annotations=READ_ONLY)
-    def bridge_check_decomp(src: str) -> dict:
+    def bridge_check_decomp(src: str) -> dict[str, Any]:
         """Pré-valida as ENTRADAS de um caso DECOMP, sem converter (read-only).
 
         `src`: pasta da revisão DECOMP. Rode antes de converter. Devolve o
@@ -149,7 +151,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         force: bool = False,
         dry_run: bool = False,
         import_fcf: bool = True,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Converte uma revisão DECOMP para deck Novomodelo, escrevendo em `dst`.
 
         Espelha `bridge_convert_newave`: `validate=True` valida o deck resultante,
