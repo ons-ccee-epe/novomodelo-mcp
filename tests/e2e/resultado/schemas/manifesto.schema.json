@@ -14,7 +14,9 @@
     "repeticoes",
     "flags",
     "versoes",
-    "commit_bateria"
+    "commit_bateria",
+    "wheels",
+    "imagens"
   ],
   "properties": {
     "schema_versao": {
@@ -86,6 +88,9 @@
         },
         "juiz-temperatura": {
           "type": "string"
+        },
+        "juiz-imagem": {
+          "type": "string"
         }
       },
       "patternProperties": {
@@ -97,6 +102,39 @@
     },
     "commit_bateria": {
       "type": "string"
+    },
+    "wheels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arquivo",
+          "sha256",
+          "origem"
+        ],
+        "properties": {
+          "arquivo": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "origem": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "imagens": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
     }
   }
 }

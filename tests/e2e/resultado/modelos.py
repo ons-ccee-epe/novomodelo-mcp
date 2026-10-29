@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
 SCHEMA_VERSAO = 1
@@ -100,6 +100,8 @@ class Manifesto:
     flags: dict[str, bool]
     versoes: dict[str, str]
     commit_bateria: str
+    wheels: dict[str, dict[str, str]] = field(default_factory=dict)
+    imagens: dict[str, dict[str, str]] = field(default_factory=dict)
     schema_versao: int = SCHEMA_VERSAO
 
     def para_dict(self) -> dict[str, Any]:
