@@ -9,6 +9,13 @@ só do MCP vira `X.Y.Z.postN`.
 
 ## [Unreleased]
 
+### Changed
+
+- As versões mínimas das dependências passam a ser as que a CI testa: mcp 1.30.0,
+  polars 2.1.0, jsonschema 4.26.0, duckdb 2.0.0 e truststore 0.10.5. As mínimas
+  anteriores não instalavam um servidor funcional (o mcp antes da 1.11 nem importa com o
+  pydantic atual).
+
 ## [0.19.1] - 2026-10-28
 
 ### Changed
