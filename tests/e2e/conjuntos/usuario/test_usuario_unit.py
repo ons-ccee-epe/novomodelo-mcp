@@ -45,6 +45,9 @@ LEITURA = {"server_info", "case_validate", "deck_sql"}
 IMAGEM = "localhost/bateria:juiz-teste"
 
 
+FIX = Path(__file__).resolve().parents[2] / "executor" / "fixtures"
+
+
 def _cen(**k) -> Cenario:
     base = dict(id="x", persona="iniciante", pedido="p", tools_esperadas=("server_info",))
     return Cenario(**{**base, **k})
@@ -513,7 +516,6 @@ def test_nome_do_container_do_juiz_leva_a_rodada_e_a_execucao(tmp_path, juiz_fal
 
 
 def test_erros_de_envelope_do_kiro_atual_contam_pelo_rawoutput():
-    fixture = Path(__file__).resolve().parents[2] / "executor" / "fixtures"
-    linhas = (fixture / "kiro-stream-sintetico-2.jsonl").read_text("utf-8").splitlines()
+    linhas = (FIX / "kiro-stream-sintetico-2.jsonl").read_text("utf-8").splitlines()
     resultado = pontuar(_cen(), ler_kiro(linhas).eventos, agente="kiro")
     assert resultado.erros_envelope == 2

@@ -197,15 +197,18 @@ def _resultado_kiro(u: dict) -> tuple[str, bool]:
     O Kiro atual traz a lista de conteúdo do MCP em `rawOutput.items[].Json`; versões
     anteriores traziam `content[].content.text`, que segue valendo sem `rawOutput`.
     """
-    itens = (u.get("rawOutput") or {}).get("items")
-    jsons = [
-        i["Json"] for i in itens or [] if isinstance(i, dict) and isinstance(i.get("Json"), dict)
-    ]
+    bruto = u.get("rawOutput")
+    itens = bruto.get("items") if isinstance(bruto, dict) else None
+    jsons = (
+        [i["Json"] for i in itens if isinstance(i, dict) and isinstance(i.get("Json"), dict)]
+        if isinstance(itens, list)
+        else []
+    )
     if jsons:
         textos = [
             str(b.get("text", ""))
             for j in jsons
-            for b in j.get("content") or []
+            for b in (j["content"] if isinstance(j.get("content"), list) else [])
             if isinstance(b, dict) and b.get("type") == "text"
         ]
         return "\n".join(textos), any(j.get("isError") is True for j in jsons)
@@ -218,7 +221,10 @@ def _resultado_kiro(u: dict) -> tuple[str, bool]:
 
 
 def ler_kiro(linhas: Iterable[str]) -> Leitura:
-    """Eventos ACP do `kiro-cli chat --output-format stream-json`."""
+    """Eventos ACP do `kiro-cli chat --output-format stream-json`.
+
+    Vários blocos de texto de um mesmo resultado são unidos por `\\n`.
+    """
     eventos: list[Evento] = []
     por_id: dict[str, tuple[str, bool]] = {}
     invalidas, t = 0, 0.0

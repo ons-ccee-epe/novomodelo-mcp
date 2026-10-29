@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from tests.e2e.executor.eventos import ler_claude, ler_kiro
 
 FIX = Path(__file__).parent / "fixtures"
@@ -178,3 +180,39 @@ def test_kiro_negacao_vale_tambem_no_formato_de_rawoutput():
     linha = {"type": "sessionUpdate", "data": {"update": {**update, "rawOutput": saida}}}
     [evento] = ler_kiro(_wrap([linha])).eventos
     assert evento.tipo == "negacao"
+
+
+def _resultado_com(**campos):
+    update = {"sessionUpdate": "tool_call_update", "toolCallId": "x", "status": "completed"}
+    linha = {"type": "sessionUpdate", "data": {"update": {**update, **campos}}}
+    [evento] = ler_kiro(_wrap([linha])).eventos
+    return evento
+
+
+@pytest.mark.parametrize("bruto", ["texto", 7, ["a"], None, {}, {"items": []}, {"items": "x"}])
+def test_kiro_rawoutput_fora_do_formato_cai_na_forma_antiga(bruto):
+    antigo = [{"type": "content", "content": {"type": "text", "text": "antigo"}}]
+    evento = _resultado_com(rawOutput=bruto, content=antigo)
+    assert evento.dados["conteudo"] == "antigo" and not evento.erro
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        {},
+        {"Json": None},
+        {"Json": "x"},
+        {"Json": {"content": "x"}},
+        {"Json": {"content": None}},
+        "x",
+    ],
+)
+def test_kiro_item_de_rawoutput_malformado_nao_derruba_a_leitura(item):
+    evento = _resultado_com(rawOutput={"items": [item]})
+    assert evento.tipo == "resultado_tool" and evento.dados["conteudo"] == ""
+
+
+def test_kiro_dois_blocos_de_texto_sao_unidos_por_quebra_de_linha():
+    blocos = [{"type": "text", "text": "um"}, {"type": "text", "text": "dois"}]
+    evento = _resultado_com(rawOutput={"items": [{"Json": {"content": blocos}}]})
+    assert evento.dados["conteudo"] == "um\ndois"
