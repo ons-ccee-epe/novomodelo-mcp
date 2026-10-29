@@ -78,6 +78,7 @@ e2e = [
     "fastapi==0.159.1",
     "httpx==0.28.1",
     "jsonschema==4.26.0",
+    "platformdirs==4.14.0",
     "pyyaml==6.0.3",
     "uvicorn==0.54.0",
 ]
