@@ -1,14 +1,16 @@
 # Query E2E Test Framework
 
-Framework de testes E2E via query para validar que o Kiro/Claude usa o MCP do novomodelo corretamente, em vez de ler arquivos diretamente via `read_file` ou `list_directory`.
+Framework de testes E2E via query para validar que um agente (Kiro ou Claude) usa o MCP do novomodelo corretamente, em vez de ler arquivos diretamente via `read_file` ou `list_directory`.
 
 ## Visão Geral
 
-Este framework substitui os testes E2E antigos que chamavam tools diretamente, implementando um fluxo completo:
+O framework descreve o fluxo completo:
 
 ```
 Query em linguagem natural → Decisão do agente → Execução da tool MCP → Validação da resposta
 ```
+
+A execução do agente passa pelo executor em container: no host, `QueryRunner.execute` e o CLI `run_queries` recusam com a mensagem "a execução passa pelo executor em container". O que roda no host é o carregamento e a validação dos casos, os parsers de saída de agente e o armazenamento dos resultados.
 
 O objetivo principal é garantir que o agente escolhe a ferramenta MCP correta para cada tipo de consulta e retorna resultados corretos.
 
@@ -20,11 +22,11 @@ tests/e2e/
 │   ├── __init__.py            # Package exports
 │   ├── cases.yaml             # Definições de casos de teste (~60 casos)
 │   ├── loader.py              # CasesLoader - carrega e valida YAML
-│   ├── runner.py              # QueryRunner - executa queries via Kiro CLI
+│   ├── runner.py              # QueryRunner - parsers de saída de agente; execução só pelo executor em container
 │   ├── validator.py           # QueryValidator - valida resultados
 │   ├── store.py               # ResultStore - persistência de resultados
 │   ├── models.py              # Dataclasses (TestCase, TestResult, etc.)
-│   ├── run_queries.py         # CLI Entry Point
+│   ├── run_queries.py         # CLI (recusa a execução no host)
 │   ├── test_runner_unit.py    # Testes unitários do runner
 │   ├── test_store_unit.py     # Testes unitários do store
 │   ├── test_validator_unit.py # Testes unitários do validator
@@ -34,7 +36,7 @@ tests/e2e/
 │   ├── newave/
 │   └── decomp/
 │
-├── results/                    # Resultados de baterias (JSON)
+├── results/                    # Resultados de baterias (JSON); criada ao gravar a primeira bateria
 │   ├── index.json             # Índice de todas as baterias
 │   ├── baseline.json          # Baseline de cada conjunto ({"baselines": {conjunto: batch_id}})
 │   └── {batch_id}.json        # Resultado de cada bateria
@@ -47,90 +49,19 @@ O dashboard é o frontend React em `tests/e2e/frontend`, que lê `results/` e `m
 
 ## Comandos CLI
 
-### Execução Básica
+### Argumentos
 
-```bash
-# Executar todos os testes
-python -m tests.e2e.queries.run_queries
-
-# Executar testes com timeout customizado (em segundos)
-python -m tests.e2e.queries.run_queries --timeout 180
-```
-
-### Filtragem de Testes
-
-```bash
-# Filtrar por tags (OR logic - executa testes com qualquer uma das tags)
-python -m tests.e2e.queries.run_queries --tags bridge deck
-
-# Executar apenas testes de uma categoria específica
-python -m tests.e2e.queries.run_queries --tags newave
-
-# Executar um teste específico por ID
-python -m tests.e2e.queries.run_queries --case bridge-check-newave-valid
-```
-
-### Execução Paralela
-
-```bash
-# Executar N testes em paralelo
-python -m tests.e2e.queries.run_queries --parallel 4
-
-# Combinar com filtros
-python -m tests.e2e.queries.run_queries --tags bridge --parallel 2
-```
-
-### Dashboard e Relatórios
-
-```bash
-# Mostrar como abrir o dashboard (frontend) para a bateria executada
-python -m tests.e2e.queries.run_queries --report
-
-# Marcar a bateria como baseline do seu conjunto (todos, grupo:<nome> ou pergunta:<id>);
-# baselines de outros conjuntos são preservadas
-python -m tests.e2e.queries.run_queries --set-baseline
-
-# Comparar com uma bateria específica
-python -m tests.e2e.queries.run_queries --compare 20241215_143052_abc1234
-```
-
-### Exemplos Combinados
-
-```bash
-# Executar testes de bridge em paralelo e gerar relatório
-python -m tests.e2e.queries.run_queries --tags bridge --parallel 4 --report
-
-# Executar todos os testes e definir como baseline
-python -m tests.e2e.queries.run_queries --set-baseline --report
-
-# Executar com timeout extendido para testes lentos
-python -m tests.e2e.queries.run_queries --tags results --timeout 300 --parallel 2
-```
+O CLI `python -m tests.e2e.queries.run_queries` aceita `--tags`, `--case`, `--parallel`,
+`--timeout`, `--report`, `--set-baseline` e `--compare`. Fora do executor em container
+ele escreve "a execução passa pelo executor em container" no stderr e sai com código 1,
+sem gravar bateria.
 
 ## Variáveis de Ambiente
 
 | Variável | Descrição | Default |
 |----------|-----------|---------|
-| `KIRO_API_KEY` | API key para autenticação no Kiro CLI. Se não definida, assume autenticação via `kiro-cli login` | - |
 | `QUERY_TIMEOUT_S` | **Força** o mesmo timeout (s) em todos os casos, ignorando o `timeout_s` do `cases.yaml`. Use só para depurar | — (cada caso usa o seu) |
 | `QUERY_FIXTURES_DIR` | Caminho para o diretório de fixtures | `tests/e2e/fixtures` |
-
-### Exemplo de Uso
-
-```bash
-# Definir API key (o timeout vem do cases.yaml, por caso/grupo)
-export KIRO_API_KEY="sua-api-key-aqui"
-
-# Executar testes
-python -m tests.e2e.queries.run_queries
-```
-
-```powershell
-# PowerShell
-$env:KIRO_API_KEY = "sua-api-key-aqui"
-
-python -m tests.e2e.queries.run_queries
-```
 
 ## Formato de Caso de Teste
 
@@ -253,38 +184,6 @@ MCP Used: 98.3% | Correct Tool: 96.7%
 - `0` - Todos os testes passaram
 - `1` - Pelo menos um teste falhou
 
-## Integração com CI/CD
-
-```yaml
-# Exemplo de workflow GitHub Actions
-jobs:
-  e2e-queries:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: pip install -e .
-      
-      - name: Run Query E2E Tests
-        env:
-          KIRO_API_KEY: ${{ secrets.KIRO_API_KEY }}
-        run: |
-          python -m tests.e2e.queries.run_queries --parallel 4 --report
-      
-      - name: Upload Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-results
-          path: tests/e2e/results/
-```
-
 ## Desenvolvimento
 
 ### Executar Testes Unitários
@@ -302,4 +201,4 @@ pytest tests/e2e/queries/test_*.py --cov=tests.e2e.queries --cov-report=term-mis
 1. Edite `cases.yaml`
 2. Adicione o caso seguindo o formato YAML
 3. Use tags apropriadas para categorização
-4. Execute para validar: `python -m tests.e2e.queries.run_queries --case seu-novo-caso`
+4. Valide o carregamento: `pytest tests/e2e/queries -o addopts=--strict-markers`

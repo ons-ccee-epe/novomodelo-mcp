@@ -41,6 +41,9 @@ O frontend busca tudo sob `/data`:
 | `/data/results/load/index.json` | `tests/e2e/results/load/index.json` | lista de cargas (Testes de Carga)|
 | `/data/results/load/<id>.json`  | `tests/e2e/results/load/<id>.json`  | uma carga completa           |
 
+- As pastas `results/` e `results/load/` são criadas quando a primeira bateria ou carga
+  é gravada; sem elas, o Histórico de funcionais mostra o erro de carregamento do
+  índice e o de cargas, a lista vazia.
 - **Em dev**: o plugin `resultsDataPlugin` (em `vite.config.ts`) serve `/data`
   lendo direto do disco — nenhuma cópia, sempre o estado atual.
 - **No build**: `scripts/copy-data.mjs` (hook `postbuild`) copia os JSON para
@@ -56,15 +59,15 @@ botão de modo noturno (a escolha fica no `localStorage` do navegador) e a
 engrenagem com a última bateria, a versão do MCP, o estado do launcher e o
 transporte. A raiz e qualquer rota desconhecida levam a `/#/funcionais`.
 
-- **Testes Funcionais** (`/#/funcionais`): dispara baterias de perguntas por agente de
-  IA. Escolhe o provedor e o conjunto (esteira completa, um grupo de tools ou uma
-  pergunta), mostra o quadro de comando equivalente (o do terminal e o do agente,
-  vindos de `GET /api/command-preview`), o progresso ao vivo com **Parar**, o detalhe
-  completo de cada pergunta assim que ela termina e, ao fim, o atalho para a bateria
-  no Histórico. Precisa do launcher.
+- **Testes Funcionais** (`/#/funcionais`): escolhe o provedor e o conjunto (esteira
+  completa, um grupo de tools ou uma pergunta) e mostra o quadro de comando de
+  referência (o do terminal e o do agente, vindos de `GET /api/command-preview`). O
+  disparo de agente passa pelo executor em container: o launcher responde 409. A tela
+  traz o progresso ao vivo com **Parar**, o detalhe de cada pergunta e o atalho para a
+  bateria no Histórico para os runs que o launcher aceita. Precisa do launcher.
 - **Testes de Carga** (`/#/carga`): dispara o teste de carga do servidor MCP.
   Formulário (concorrência, com a capacidade da máquina para a seleção, incluindo o
-  disco das cópias; duração ou iterações, timeout; os casos, no modo agente) com o
+  disco das cópias; duração ou iterações, timeout; os casos, no modo agente, cujo disparo o launcher recusa com 409) com o
   mix de tools resumido numa linha e a lista completa em **Personalizar**, com selos
   para as que gravam numa cópia das fixtures por sessão e as pesadas. Abaixo, o
   progresso ao vivo com **Parar** e, ao fim, um resumo da carga gravada e o atalho
@@ -93,7 +96,7 @@ transporte. A raiz e qualquer rota desconhecida levam a `/#/funcionais`.
 
 Os runners gravam JSON, que o painel lê:
 
-- `tests/e2e/queries/run_queries.py --report` → imprime como abrir o frontend.
+- `tests/e2e/queries/run_queries.py` → fora do executor em container recusa a execução.
 - `tests/e2e/eval/run.py` → grava `reports/latest.json`, sem `latest.html`.
 
 Este frontend é o único dashboard.

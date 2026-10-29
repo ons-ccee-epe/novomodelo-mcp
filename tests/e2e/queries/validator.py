@@ -599,8 +599,8 @@ class QueryValidator:
                 expected=expected_status,
                 actual="nenhum envelope MCP",
                 message=(
-                    "Nenhum envelope MCP disponível para verificar status "
-                    "(ative NOVOMODELO_MCP_RESPONSE_LOG)"
+                    "Nenhum envelope MCP disponível para verificar status: "
+                    "o envelope não veio na execução"
                 ),
             )
 
@@ -646,8 +646,8 @@ class QueryValidator:
                 expected=expected_content,
                 actual="nenhum envelope MCP",
                 message=(
-                    "Nenhum envelope MCP disponível para verificar conteúdo "
-                    "(ative NOVOMODELO_MCP_RESPONSE_LOG)"
+                    "Nenhum envelope MCP disponível para verificar conteúdo: "
+                    "o envelope não veio na execução"
                 ),
             )
 
@@ -761,8 +761,8 @@ class QueryValidator:
                 expected=f"erro contendo: '{expected_substring}'",
                 actual="nenhum envelope MCP",
                 message=(
-                    "Nenhum envelope MCP disponível para verificar erro "
-                    "(ative NOVOMODELO_MCP_RESPONSE_LOG)"
+                    "Nenhum envelope MCP disponível para verificar erro: "
+                    "o envelope não veio na execução"
                 ),
             )
 

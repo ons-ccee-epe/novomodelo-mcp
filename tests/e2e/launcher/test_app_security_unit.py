@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.e2e.launcher import app as app_mod
-from tests.e2e.launcher.service import RunAlreadyActiveError
+from tests.e2e.launcher.service import ExecucaoNoHostDesligadaError, RunAlreadyActiveError
 
 LOCAL = "http://127.0.0.1:5175"
 HEADER = {"X-Launcher": "1"}
@@ -70,6 +70,10 @@ def test_launcher_nao_dispara_agente_no_host(client: TestClient, fake_provider) 
     assert resp.status_code == 409
     assert "executor em container" in resp.json()["detail"]
     popen.assert_not_called()
+
+
+def test_execucao_desligada_nao_e_run_ativo() -> None:
+    assert not issubclass(ExecucaoNoHostDesligadaError, RunAlreadyActiveError)
 
 
 def test_data_prefix_sibling_directory_is_not_served(client: TestClient, tmp_path) -> None:

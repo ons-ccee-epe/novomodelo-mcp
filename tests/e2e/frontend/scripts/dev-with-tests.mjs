@@ -1,22 +1,17 @@
 /**
  * Orquestrador: roda os testes E2E e SO ENTAO sobe o Vite.
  *
- * Motivacao: o dashboard consome os JSON gravados pelos testes
- * (tests/e2e/results/*). Subir o dev server sem uma bateria de resultados
- * deixa a tela em branco. Este script garante que ha fonte de dados antes
- * de abrir o server.
+ * O dashboard consome os JSON gravados pelas baterias (tests/e2e/results/*).
  *
  * Fluxo:
  *   1. Executa `python -m tests.e2e.queries.run_queries` na raiz do novomodelo-mcp.
- *   2. Verifica que results/index.json existe e tem >= 1 bateria.
- *   3. So entao faz spawn do Vite (vite).
- *
- * Se os testes NAO puderem rodar (ex.: CLIs novomodelo/novomodelo-bridge ausentes) mas
- * JA existir pelo menos uma bateria em results/, o server sobe mesmo assim,
- * com um aviso — nunca bloqueia a visualizacao de resultados que ja existem.
+ *      A execucao de agente so acontece pelo executor em container; fora dele o
+ *      comando recusa e o script segue.
+ *   2. Conta as baterias em results/index.json; sem nenhuma, avisa.
+ *   3. Faz spawn do Vite (vite), com ou sem baterias.
  *
  * Flags:
- *   --skip-tests   Nao roda os testes; apenas valida que ha baterias e sobe.
+ *   --skip-tests   Nao roda a suite; conta as baterias e sobe o painel.
  *   --            Tudo apos `--` e repassado ao run_queries
  *                 (ex.: npm run dev:tests -- --tags bridge --parallel 4).
  */
@@ -88,12 +83,8 @@ async function main() {
 
   const after = await countBatches();
   if (after === 0) {
-    log("ERRO: nenhuma bateria em tests/e2e/results/ — nao ha o que mostrar.");
-    log("Rode os testes com sucesso ao menos uma vez, ou verifique as CLIs novomodelo/novomodelo-bridge.");
-    process.exit(1);
-  }
-
-  if (!skipTests && after === before) {
+    log("aviso: nenhuma bateria em tests/e2e/results/; o painel abre sem baterias.");
+  } else if (!skipTests && after === before) {
     log(`aviso: nenhuma bateria nova foi gravada; abrindo com as ${after} existentes.`);
   } else {
     log(`${after} bateria(s) disponivel(is). Subindo o dashboard...`);

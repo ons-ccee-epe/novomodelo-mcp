@@ -6,7 +6,8 @@ Uso:
     python -m tests.e2e.load.run --mode agent --provider claude --group deck --concurrency 2 --duration 120
 
 Modos: ``tools`` (padrão) chama as tools direto, sem agente; ``agent`` roda os casos do
-``cases.yaml`` em N sessões de agente simultâneas (consome tokens do provedor).
+``cases.yaml`` em N sessões de agente simultâneas e só executa pelo executor em container:
+fora dele, o CLI recusa logo no início, sem subir sessões.
 
 Códigos de saída: 0 concluída, 1 falha (servidor não sobe, nenhum caso ou chamada
 disponível, disco insuficiente para a cópia das fixtures), 2 uso inválido, 3 interrompida
@@ -76,6 +77,7 @@ from tests.e2e.load.sandbox import (
 from tests.e2e.load.store import LoadStore, build_agent_record, build_record
 from tests.e2e.queries.mcp_workspace import WORKSPACE_ENV, workspace_roots
 from tests.e2e.queries.run_queries import _build_test_result
+from tests.e2e.queries.runner import EXECUCAO_SO_NO_EXECUTOR
 
 __all__ = ["build_parser", "format_agent_report", "format_report", "main", "stderr_tail"]
 
@@ -564,6 +566,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"erro: {message}", file=sys.stderr)
         return code
+
+    if args.mode == "agent":
+        return fail(EXECUCAO_SO_NO_EXECUTOR, EXIT_FAILED)
 
     misplaced = _misplaced(args)
     if misplaced:

@@ -45,8 +45,8 @@ _METRICS_DIR = _BASE_DIR / "metrics"
 _FINISHED: frozenset[str] = frozenset({"done", "error", "cancelled"})
 
 
-class ExecucaoNoHostDesligadaError(RunAlreadyActiveError):
-    """O disparo de agente no host está desligado; a rota responde 409 como num run ativo."""
+class ExecucaoNoHostDesligadaError(Exception):
+    """O disparo de agente no host está desligado: a execução passa pelo executor em container."""
 
 
 @dataclass

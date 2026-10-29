@@ -1,8 +1,8 @@
 """Persistência das cargas em ``results/load/``: um JSON por carga e um ``index.json``.
 
 O id segue o de ``queries.store.ResultStore``: ``{timestamp}_{git_short_sha}``. O
-subdiretório mantém o ``index.json`` das baterias de agente intacto. Cada registro
-traz ``mode`` (``tools`` ou ``agent``); um JSON gravado antes do modo agent não tem o
+subdiretório mantém o ``index.json`` das baterias intacto (criado na primeira gravação).
+Cada registro traz ``mode`` (``tools`` ou ``agent``); um JSON gravado antes do modo agent não tem o
 campo e é lido como ``tools``. O bloco ``sandbox`` (cópia das fixtures por sessão) também
 pode faltar nos JSONs antigos, que não tinham cópia.
 """

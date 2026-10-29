@@ -5,7 +5,7 @@ em arquivos JSON e mantém o índice e histórico de métricas.
 
 Implements:
 - Batch_Result com ID único no formato {timestamp}_{git_short_sha}
-- Persistência em tests/e2e/results/{batch_id}.json
+- Persistência em tests/e2e/results/{batch_id}.json (pasta criada ao gravar)
 - Metadados obrigatórios no Batch_Result
 """
 
@@ -163,7 +163,7 @@ class ResultStore:
         """Salva resultado de bateria e atualiza índice.
 
         Implements:
-        - Persistir em tests/e2e/results/{batch_id}.json
+        - Persistir em tests/e2e/results/{batch_id}.json, criando a pasta se faltar
         - Atualizar índice em tests/e2e/results/index.json
 
         Args:

@@ -13,11 +13,11 @@ Módulos:
     - client: cliente MCP stdio e classificação do resultado de cada chamada
     - engine: execução concorrente do modo tools (pré-voo, aquecimento, métricas)
     - agent_cases: casos do modo agent, seleção e exclusões
-    - agent_session: pasta, config e runner isolados de cada sessão de agente
+    - agent_session: pasta e config isolados de cada sessão de agente
     - agent_setup: pré-voo sem tokens e fábrica de sessões do modo agent
     - agent_engine: execução concorrente do modo agent
     - capacity: sessões simultâneas recomendadas para a máquina e a seleção
     - resources: CPU/RSS da árvore de processos (opcional, via psutil)
-    - store: persistência em results/load/
+    - store: persistência em results/load/ (criada na primeira gravação)
     - run: CLI (``python -m tests.e2e.load.run``)
 """

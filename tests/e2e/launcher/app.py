@@ -53,7 +53,11 @@ from tests.e2e.launcher.command_preview import command_preview
 from tests.e2e.launcher.load_service import LoadRunService
 from tests.e2e.launcher.providers import detect_providers, resolve_provider
 from tests.e2e.launcher.run_gate import RunGate
-from tests.e2e.launcher.service import RunAlreadyActiveError, RunService
+from tests.e2e.launcher.service import (
+    ExecucaoNoHostDesligadaError,
+    RunAlreadyActiveError,
+    RunService,
+)
 from tests.e2e.load.agent_cases import CaseSelection, describe_cases, load_cases, select_cases
 from tests.e2e.load.agent_engine import MAX_AGENT_CONCURRENCY, AgentLoadConfig
 from tests.e2e.load.capacity import cases_profile, estimate_capacity, tools_profile
@@ -375,7 +379,7 @@ def create_app() -> FastAPI:
                 case_id=req.case_id,
                 timeout_seconds=req.timeout_seconds,
             )
-        except RunAlreadyActiveError as exc:
+        except (ExecucaoNoHostDesligadaError, RunAlreadyActiveError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return state.to_dict()
 
@@ -485,7 +489,7 @@ def create_app() -> FastAPI:
             _check_agent_selection(req.selection())
         try:
             state = load_service.start_run(req.to_config(provider))
-        except RunAlreadyActiveError as exc:
+        except (ExecucaoNoHostDesligadaError, RunAlreadyActiveError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return state.to_dict()
 

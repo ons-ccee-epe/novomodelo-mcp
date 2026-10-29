@@ -1,18 +1,18 @@
 # Launcher de dev — disparar os testes das tools MCP pela UI
 
-Este launcher resolve o requisito: **o frontend dispara os testes num provedor
-de IA (kiro-cli ou claude), e mostra o resultado no relatório existente.**
+Este launcher é a ponte entre o frontend e as peças da bateria: lista casos e
+provedores, serve as baterias e as cargas gravadas, mantém as baselines e dispara
+testes de carga do modo `tools`. É um **FastAPI de dev** (Python 3.12) que roda só
+na máquina de quem desenvolve, em `127.0.0.1`; não é um backend de produção.
 
-Um navegador não executa `kiro-cli`/`claude` sozinho (sandbox). A ponte é um
-processo local que escuta HTTP e executa o CLI — aqui, um **FastAPI de dev**
-(Python 3.12, o executor server-side). Ele NÃO é um backend de
-produção: roda só na máquina do dev, em `127.0.0.1`.
+A execução de agente (`POST /api/runs` e `POST /api/load-runs` no modo `agent`) passa
+pelo executor em container: no launcher, esses disparos respondem `409` com
+"a execução passa pelo executor em container", e nenhum agente roda no host.
 
 ```
-frontend (SPA Vite)  --/api/*-->  launcher FastAPI  --subprocess-->  kiro-cli / claude
-      ^                                                                    |
-      |                                                                    v
-      +---------------- /data/* (ResultStore: results/*.json) <--- tool MCP novomodelo::*
+frontend (SPA Vite)  --/api/*-->  launcher FastAPI  --subprocess-->  motor de carga (modo tools)
+      ^
+      +---------------- /data/* (ResultStore: results/*.json, metrics/history.jsonl)
 ```
 
 ## O que ele reusa (não reimplementa nada)
@@ -21,22 +21,21 @@ O launcher é uma casca fina sobre `tests/e2e/queries/*`:
 
 | Peça do launcher | Reusa |
 |---|---|
-| `provider_runner.ProviderQueryRunner` | estende `queries.runner.QueryRunner` (só troca o comando/validação) |
-| `service.RunService` | `CasesLoader`, `QueryValidator`, `ResultStore`, `_build_test_result` |
-| disparo | mesma execução headless + parse de tool-calls do runner existente |
+| `provider_runner.ProviderQueryRunner` | estende `queries.runner.QueryRunner` com o parse da saída `stream-json` de cada provedor; não executa agente |
+| `service.RunService` | `CasesLoader`, `QueryValidator`, `ResultStore`, `_build_test_result`; `start_run` recusa o disparo |
 
-A bateria gravada é **idêntica** à do `run_queries.py`. O frontend consome os
-mesmos JSON de sempre.
+O frontend consome os JSON gravados em `results/` e `metrics/`.
 
 ## Provedores suportados
 
 Detectados no PATH (`GET /api/providers`):
 
-- **kiro-cli** — `chat --no-interactive --trust-all-tools -vvv "<prompt>"`
-- **claude** (Claude Code) — `--print --verbose --dangerously-skip-permissions "<prompt>"`
+- **kiro-cli**
+- **claude** (Claude Code)
 
 O seletor na UI escolhe; a escolha é validada contra o que está instalado. Sem
-seleção, usa o primeiro instalado (kiro-cli tem prioridade).
+seleção, usa o primeiro instalado (kiro-cli tem prioridade). O provedor é uma
+referência para o comando de exemplo e para o executor; o launcher não o invoca.
 
 ## Como rodar
 
@@ -63,12 +62,12 @@ npm run dev:launcher
 
 Abra `http://127.0.0.1:5174`. Na aba **Testes Funcionais**:
 
-- **Esteira completa** — roda todos os casos.
-- **Grupo** — roda um grupo de tools (bridge, deck, docs, …).
-- **Pergunta** — roda um caso isolado.
+- **Esteira completa**, **Grupo** (bridge, deck, docs, …) e **Pergunta** (um caso
+  isolado) escolhem o conjunto; o disparo responde 409 enquanto a execução de
+  agente passa só pelo executor em container.
 
-O quadro de comando mostra o que será executado. O progresso aparece ao vivo; ao
-terminar, a bateria fica disponível na aba **Histórico**.
+O quadro de comando mostra um comando de referência do conjunto escolhido; nada é
+executado. As baterias gravadas ficam na aba **Histórico**.
 
 ## Rotas (`/api`)
 
@@ -77,18 +76,18 @@ terminar, a bateria fica disponível na aba **Histórico**.
 | GET | `/api/health` | saúde do launcher |
 | GET | `/api/providers` | provedores detectados + default |
 | GET | `/api/cases` | biblioteca de prompts (casos) |
-| GET | `/api/command-preview?provider=&tags=&case_id=` | comando equivalente ao disparo: o do terminal (só kiro-cli) e o do agente, com o conjunto e o total de casos; nada é iniciado nem gravado |
+| GET | `/api/command-preview?provider=&tags=&case_id=` | comando de referência do conjunto: o do terminal (só kiro-cli) e o do agente, com o conjunto e o total de casos; nada é iniciado nem gravado |
 | GET | `/api/baselines` | baseline vigente de cada conjunto (`{"baselines": {conjunto: batch_id}}`) |
 | PUT | `/api/baselines/{conjunto}` | define a bateria (body: `batch_id`) como baseline do conjunto; 404 se a bateria não existe, 409 se é de outro conjunto |
 | DELETE | `/api/baselines/{conjunto}` | remove a baseline do conjunto |
-| POST | `/api/runs` | dispara (body: `provider?`, `tags?`, `case_id?`, `timeout_seconds?`); 409 se já houver um run ativo |
+| POST | `/api/runs` | aceita o body (`provider?`, `tags?`, `case_id?`, `timeout_seconds?`) e responde 409: a execução passa pelo executor em container |
 | GET | `/api/runs` | runs desta sessão |
 | GET | `/api/runs/{run_id}` | estado de um run (polling), com o `TestResult` completo de cada caso já terminado |
 | POST | `/api/runs/{run_id}/cancel` | para o run (interrompe o caso atual; não grava bateria) |
 | GET | `/api/load-tools` | tools do catálogo de carga, se há fonte para cada uma, se gravam (cópia por sessão), se são pesadas, se são do mix padrão, as barradas com o motivo, e os limites do modo tools |
 | GET | `/api/load-cases` | casos por agente, com `available`/`reason` (se podem entrar na carga), `writes`, `heavy` e os limites do modo agent |
 | GET | `/api/load-capacity?mode=tools\|agent&provider=...` | sessões simultâneas recomendadas para esta máquina e a seleção (`tools=a,b`; ou `case_id`, `group`, `tags`), o fator limitante (teto, memória, CPU ou disco) e a conta; 422 em seleção inválida |
-| POST | `/api/load-runs` | dispara um teste de carga (body: `mode?` tools/agent, `concurrency`, `duration_seconds`, `iterations?`, `timeout_seconds?`; tools: `tools?`, omitido = mix padrão; agent: `provider?` e no máximo um entre `case_id`, `group`, `tags`); 422 em entrada inválida, tool fora do catálogo, provedor não instalado ou seleção sem caso elegível; 409 se qualquer run estiver ativo |
+| POST | `/api/load-runs` | dispara um teste de carga do modo `tools` (body: `mode?` tools/agent, `concurrency`, `duration_seconds`, `iterations?`, `timeout_seconds?`; tools: `tools?`, omitido = mix padrão; agent: `provider?` e no máximo um entre `case_id`, `group`, `tags`); 422 em entrada inválida, tool fora do catálogo, provedor não instalado ou seleção sem caso elegível; 409 se qualquer run estiver ativo e 409 no modo `agent` (a execução passa pelo executor em container) |
 | GET | `/api/load-runs` | cargas desta sessão |
 | GET | `/api/load-runs/{run_id}` | estado de uma carga, com o progresso ao vivo (polling) |
 | POST | `/api/load-runs/{run_id}/cancel` | para a carga e encerra todos os servidores MCP; não grava |
@@ -101,40 +100,32 @@ Os `POST`, `PUT` e `DELETE` exigem o header `X-Launcher: 1` (o frontend já envi
 - **Bind fixo em `127.0.0.1`** (nunca exposto na rede).
 - **Host** restrito a `127.0.0.1`/`localhost` (anti DNS rebinding), também no `/data` do Vite.
 - **CORS** liberado só para `http://127.0.0.1:5174` e `localhost:5174`.
-- Um run por vez, **compartilhado** entre os runs de agente e os de carga
-  (`run_gate.RunGate`): com um deles ativo, o POST do outro devolve 409.
+- Um run por vez (`run_gate.RunGate`): com uma carga ativa, o POST de outra devolve 409.
   `timeout_seconds` entre 0 e 1800, só valores finitos.
 - Serving de `/data` confinado a `results/` e `metrics/` (anti path traversal); o
   subdiretório `results/load/` fica dentro dessa raiz e passa pela mesma checagem.
 - O path guard do MCP aceita o diretório de fixtures e os alvos de links dentro
   dele, desde que fiquem dentro do repositório.
 
-### Risco aceito: agentes sem restrição de tools nativas
+### Agente fora do host
 
-`--trust-all-tools` (kiro-cli) e `--dangerously-skip-permissions` (claude) liberam
-shell e leitura/escrita de arquivos sem aprovação; o path guard do MCP não limita
-essas tools. Um prompt injection num dado lido pelo agente (deck, saída de tool,
-doc) pode executar comandos com o usuário de quem roda os testes.
-
-A restrição **não** é aplicada de propósito: os casos validam se o agente prefere
-as tools do MCP às nativas (`did_not_use`), e bloquear as nativas tornaria essa
-medição sem sentido. Mitigação: rode só em dev local, com fixtures de origem
-confiável.
+O launcher não inicia processo de agente: nenhum comando que dispensa a aprovação
+de tools nativas existe no código da bateria fora do executor em container, e um
+teste varre `tests/e2e/` para garantir isso.
 
 ## Teste de carga
 
-A aba **Testes de Carga** do dashboard dispara `POST /api/load-runs` em um de dois modos
+A aba **Testes de Carga** do dashboard dispara `POST /api/load-runs` no modo `tools`
 (`tests/e2e/load/README.md` explica o mix, os casos, a cópia das fixtures por sessão,
-o isolamento e as métricas): `tools`, N sessões, cada uma com o seu próprio processo do
-servidor MCP, chamando as tools do mix (por padrão as leves e somente leitura); ou
-`agent`, N sessões de agente no provedor escolhido rodando em laço os casos da esteira
-que podem rodar em paralelo (consome tokens). Com tool ou caso que grava na seleção,
+o isolamento e as métricas): N sessões, cada uma com o seu próprio processo do
+servidor MCP, chamando as tools do mix (por padrão as leves e somente leitura). O modo
+`agent` responde 409, pois a execução de agente passa pelo executor em container. Com tool que grava na seleção,
 cada sessão roda numa cópia própria das fixtures, e o servidor dela só enxerga essa
 cópia. O launcher não reimplementa nada: roda
 `python -m tests.e2e.load.run --json-progress ...` e lê os eventos JSON que ele imprime.
 
 - **Subprocesso, não thread.** Cancelar é matar uma árvore só (motor + N servidores, ou
-  N agentes com os seus servidores), sem depender de um desligamento limpo de cada um,
+  N servidores), sem depender de um desligamento limpo de cada um,
   e a medição não disputa o event loop do HTTP. No Windows o motor entra num Job Object com
   `KILL_ON_JOB_CLOSE` (`process_tree.ProcessTree`); em POSIX é líder de sessão.
   Fechar o launcher fecha o job; o stdin do motor também fecha, e ele para sozinho.
@@ -143,9 +134,9 @@ cópia. O launcher não reimplementa nada: roda
   recusados e os limites de sessões simultâneas, duração, iterações e timeout vêm do motor
   (`GET /api/load-tools` e `GET /api/load-cases` devolvem os valores em vigor de cada
   modo). Campos de um modo no outro dão 422. No modo agent, o provedor é validado
-  contra o PATH, o teto de sessões é o do modo agent e uma seleção sem caso elegível
-  (só casos barrados, grupo inexistente...) dá 422 antes de qualquer processo. O comando
-  do servidor, o do agente e a pasta de trabalho não são configuráveis pela API.
+  contra o PATH e uma seleção sem caso elegível (só casos barrados, grupo
+  inexistente...) dá 422 antes do 409. O comando do servidor e a pasta de trabalho não
+  são configuráveis pela API.
 - **Pasta de trabalho.** Cada carga recebe uma `--work-dir` temporária criada pelo
   launcher (sessões e cópias das fixtures) e apagada depois que a árvore do motor
   termina, também no cancelamento, quando o motor é morto sem tempo de limpar.
@@ -153,7 +144,7 @@ cópia. O launcher não reimplementa nada: roda
   aguenta para a seleção (memória, CPU, disco das cópias e o teto do modo, com custo por
   sessão maior para seleções pesadas); a tela mostra a conta e avisa acima do
   recomendado, sem bloquear. O teto do modo é validado também no POST.
-- **Cancelar não grava.** Como nas baterias de agente, um run interrompido não entra
+- **Cancelar não grava.** Um run interrompido não entra
   no histórico; o estado mostra o que foi medido até ali.
 - **Progresso.** `GET /api/load-runs/{id}` devolve `phase` (`preflight`, `starting`,
   `running`, `finishing`) e `progress` (contagens, p50/p95/p99, vazão e a série dos

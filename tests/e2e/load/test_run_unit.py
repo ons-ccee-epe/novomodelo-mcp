@@ -249,84 +249,20 @@ class TestAgentMode:
         monkeypatch.setattr(run_mod, "resolve_provider", lambda _requested: _CLAUDE)
 
     @pytest.mark.parametrize(
-        "extra",
-        [
-            ["--concurrency", "9"],
-            ["--tools", "docs_list"],
-            ["--no-warmup"],
-            ["--server-command", "python -m x"],
-            ["--group", "docs", "--case", "docs-list-all"],
-            ["--timeout", "0"],
-        ],
-    )
-    def test_invalid_agent_options_exit_2_without_running(
-        self, extra: list[str], monkeypatch: pytest.MonkeyPatch, capsys
-    ) -> None:
-        monkeypatch.setattr(run_mod, "_execute_agent", lambda *a: pytest.fail("não deveria rodar"))
-        assert run_mod.main([*AGENT, *extra]) == 2
-        assert "erro:" in capsys.readouterr().err
-
-    @pytest.mark.parametrize(
         "flag", [["--provider", "claude"], ["--case", "x"], ["--group", "docs"]]
     )
     def test_agent_options_are_refused_in_tools_mode(self, flag: list[str], capsys) -> None:
         assert run_mod.main([*VALID, *flag]) == 2
         assert "não vale(m) no modo tools" in capsys.readouterr().err
 
-    def test_provider_not_installed_exits_2(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-        def missing(_requested):
-            raise RuntimeError("Provedor 'claude' nao esta instalado nesta maquina")
-
-        monkeypatch.setattr(run_mod, "resolve_provider", missing)
-        assert run_mod.main(AGENT) == 2
-        assert "nao esta instalado" in capsys.readouterr().err
-
-    def test_selection_and_timeout_reach_the_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        seen = {}
-
-        def execute(config, _args, provider):
-            seen.update(config=config, provider=provider)
-            return None, make_agent_outcome(), {"server": {}, "sandbox": NO_SANDBOX}
-
-        monkeypatch.setattr(run_mod, "_execute_agent", execute)
-        argv = [*AGENT, "--tags", "docs, list", "--timeout", "90", "--iterations", "1", "--no-save"]
-        assert run_mod.main(argv) == 0
-        config = seen["config"]
-        assert config.selection.tags == ("docs", "list")
-        assert (config.timeout_s, config.iterations, config.provider) == (90.0, 1, "claude")
-        assert seen["provider"] is _CLAUDE
-
-    def test_agent_run_saves_an_agent_record_and_prints_its_report(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    def test_agent_mode_refuses_before_any_session(
+        self, monkeypatch: pytest.MonkeyPatch, capsys
     ) -> None:
-        monkeypatch.setattr(run_mod, "_execute_agent", _fake_execute_agent())
-        assert run_mod.main([*AGENT, "--results-dir", str(tmp_path)]) == 0
-        out = capsys.readouterr().out
-        assert "(agent, claude)" in out
-        assert "aprovação 50.0%" in out
-        assert "Fora da carga (1)" in out
-        [saved] = (tmp_path / "load").glob("2*.json")
-        record = json.loads(saved.read_text(encoding="utf-8"))
-        assert record["mode"] == "agent"
-        assert record["agent"]["provider"] == "claude"
-        assert record["server"]["command"] == ["mcp.exe"]
+        monkeypatch.setattr(run_mod, "_execute_agent", lambda *a: pytest.fail("subiu sessão"))
+        monkeypatch.setattr(run_mod, "resolve_provider", lambda *a: pytest.fail("resolveu"))
 
-    def test_agent_load_error_exits_1(self, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-        def execute(*_args):
-            raise LoadError("nenhum caso da seleção (grupo run) pode rodar na carga: x")
-
-        monkeypatch.setattr(run_mod, "_execute_agent", execute)
-        assert run_mod.main([*AGENT, "--group", "run"]) == 1
-        assert "nenhum caso" in capsys.readouterr().err
-
-    def test_stopped_by_the_launcher_saves_nothing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
-    ) -> None:
-        monkeypatch.setattr(run_mod, "_execute_agent", _fake_execute_agent())
-        monkeypatch.setattr(run_mod._PARENT_GONE, "is_set", lambda: True)
-        code = run_mod.main([*AGENT, "--json-progress", "--results-dir", str(tmp_path)])
-        assert code == 3
-        assert not (tmp_path / "load").exists()
+        assert run_mod.main([*AGENT, "--json-progress"]) == 1
+        assert "executor em container" in capsys.readouterr().out
 
     def test_denied_tools_are_recorded_only_for_claude(self) -> None:
         from tests.e2e.load.mix import ToolHints
@@ -394,12 +330,3 @@ class TestSandboxRecord:
         record = json.loads(saved.read_text(encoding="utf-8"))
         assert record["sandbox"] == {"enabled": False}
         assert record["server"]["workspace"] == [str(fixtures.resolve())]
-
-    def test_agent_record_keeps_the_copy(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(run_mod, "resolve_provider", lambda _requested: _CLAUDE)
-        monkeypatch.setattr(run_mod, "_execute_agent", _fake_execute_agent(sandbox=SANDBOX))
-        assert run_mod.main([*AGENT, "--results-dir", str(tmp_path)]) == 0
-        [saved] = (tmp_path / "load").glob("2*.json")
-        assert json.loads(saved.read_text(encoding="utf-8"))["sandbox"]["copy_mb"] == 19.2

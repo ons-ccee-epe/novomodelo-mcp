@@ -102,7 +102,7 @@ def test_route_unknown_provider_is_422(client: TestClient) -> None:
 
 _E2E = Path(__file__).resolve().parents[1]
 _PASTAS_IGNORADAS = {"node_modules", "dist", "__pycache__", "executor"}
-_SUFIXOS = {".py", ".ts", ".tsx", ".js", ".mjs", ".json", ".yaml", ".yml", ".toml", ".sh"}
+_SUFIXOS = {".py", ".ts", ".tsx", ".js", ".mjs", ".json", ".yaml", ".yml", ".toml", ".sh", ".md"}
 _SEM_PERMISSAO = ("--trust-all" + "-tools", "--dangerously-skip" + "-permissions")
 
 

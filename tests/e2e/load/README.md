@@ -8,8 +8,9 @@ Há dois modos:
   processo por cliente), e chama direto as tools do mix.
 - **`agent`**: N sessões de agente (`kiro-cli` ou `claude`) ao mesmo tempo, cada uma
   rodando em laço os casos do `tests/e2e/queries/cases.yaml` que podem rodar em
-  paralelo, validados como na esteira. **Consome tokens do provedor**, em proporção
-  a sessões × casos executados. Ver [Modo agent](#modo-agent).
+  paralelo, validados como na esteira. A execução de agente passa pelo executor em
+  container: a CLI do host recusa o modo com a mensagem do executor e código de saída 1,
+  sem subir sessões. Ver [Modo agent](#modo-agent).
 
 ## Como rodar
 
@@ -32,7 +33,7 @@ python -m tests.e2e.load.run --concurrency 2 --duration 10 --tools deck_edit_jso
 | `--no-warmup` | Só tools. Não aquece as sessões: as primeiras chamadas (frias) entram nas métricas. |
 | `--provider kiro-cli\|claude` | Só agent. Sem a opção, o primeiro instalado, como na esteira. |
 | `--case ID`, `--group G`, `--tags a,b` | Só agent, no máximo uma: um caso, um grupo (o da tool esperada, como na tela) ou tags (qualquer uma). Sem nenhuma, todos os casos elegíveis. |
-| `--no-save` | Não grava em `tests/e2e/results/load/`. |
+| `--no-save` | Não grava em `results/load/` (pasta criada sob demanda). |
 | `--fixtures`, `--results-dir` | Raiz das fixtures (vira o workspace do servidor) e pasta de resultados. |
 | `--server-command` | Só tools. Comando do servidor, no lugar do padrão. |
 | `--server-log` | Arquivo para o stderr dos servidores (por padrão é descartado). |
@@ -146,9 +147,9 @@ entram nas métricas.
 
 ## Resultado gravado
 
-`tests/e2e/results/load/<id>.json` e `tests/e2e/results/load/index.json`, com o id
-no formato `{timestamp}_{git_short_sha}` do `ResultStore`. O `index.json` das
-baterias de agente (`results/index.json`) não é tocado. O JSON traz a
+`tests/e2e/results/load/<id>.json` e `tests/e2e/results/load/index.json` (pasta criada
+na primeira gravação), com o id no formato `{timestamp}_{git_short_sha}` do
+`ResultStore`. O `index.json` das baterias (`results/index.json`) não é tocado. O JSON traz a
 configuração, o mix (com os excluídos), a subida, a cópia por sessão (`sandbox`), os
 totais, o `per_tool`, a `series`, os erros agrupados e os recursos. O contrato
 espelhado no frontend está em `tests/e2e/frontend/src/shared/types.ts` (`LoadRun`).
@@ -185,10 +186,9 @@ tamanho de uma cópia ao fim (`sandbox.final_mb_max`), para conferir a folga.
 
 ## Modo agent
 
-```bash
-python -m tests.e2e.load.run --mode agent --provider claude --group docs --concurrency 2 --duration 120
-python -m tests.e2e.load.run --mode agent --case docs-list-all --concurrency 1 --duration 60 --iterations 1
-```
+O modo agent só executa pelo executor em container. No host, a CLI e o launcher
+(`POST /api/load-runs`, 409) recusam; a seleção de casos, a cópia das fixtures por
+sessão, o limitador e o formato do resultado descritos abaixo valem para esse modo.
 
 ### Quais casos entram
 
@@ -227,7 +227,6 @@ Cada sessão tem uma pasta própria numa raiz temporária do run, apagada ao fim
 |---|---|
 | TEMP/TMP/TMPDIR do agente e do servidor MCP | `tmp/` (o servidor exporta os schemas para o TEMP na primeira chamada) |
 | `NOVOMODELO_MCP_STATE_DIR` | `mcp-state/` (jobs e calibração longe do state dir do usuário) |
-| `NOVOMODELO_MCP_RESPONSE_LOG` | `mcp-responses.jsonl`, mesmo que o ambiente do launcher defina outro |
 | `NOVOMODELO_MCP_WORKSPACE` | `fixtures/`, a cópia das fixtures, se a seleção grava; senão as fixtures originais |
 | `NOVOMODELO_MCP_MAX_JOBS` | `0`: o servidor recusa `run_start` |
 | Config MCP do kiro-cli | `workspace/.kiro/settings/mcp.json`, com esse `workspace` como cwd |
@@ -308,8 +307,7 @@ avisa acima do recomendado. O launcher recusa (422) o teto.
 ## Encerramento
 
 Terminar ou cancelar deixa zero processo do servidor: o SDK encerra cada árvore
-ao sair do cliente. No modo agent, parar mata cada CLI de agente com a árvore dele
-(`QueryRunner.cancel`) e a execução em curso conta em `abandoned_calls`. Pelo launcher, o motor roda num subprocesso que entra num
+ao sair do cliente. No modo agent, parar encerra as sessões e a execução em curso conta em `abandoned_calls`. Pelo launcher, o motor roda num subprocesso que entra num
 Job Object (Windows) ou é líder de sessão (POSIX); cancelar mata o grupo todo, e um
 descendente criado no meio do kill não escapa. Ctrl+C na CLI interrompe com
 elegância e grava o parcial com `interrupted: true` (código 130); um segundo
