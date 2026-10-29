@@ -3,18 +3,18 @@
 Uso:
     python -m tests.e2e.load.run --concurrency 4 --duration 30
     python -m tests.e2e.load.run --concurrency 2 --duration 10 --tools deck_list,docs_search
-    python -m tests.e2e.load.run --mode agent --provider claude --group deck --concurrency 2 --duration 120
+    python -m tests.e2e.load.run --mode agent --mcp sem --group deck --concurrency 2 --duration 120
 
 Modos: ``tools`` (padrão) chama as tools direto, sem agente; ``agent`` roda os casos do
-``cases.yaml`` em N sessões de agente simultâneas e só executa pelo executor em container:
-fora dele, o CLI recusa logo no início, sem subir sessões.
+``cases.yaml`` em N sessões de agente simultâneas, cada execução num container do executor
+(``--mcp`` escolhe a imagem: ``sem`` ou a wheel do MCP; é preciso ter rodado ``preparar``).
 
 Códigos de saída: 0 concluída, 1 falha (servidor não sobe, nenhum caso ou chamada
 disponível, disco insuficiente para a cópia das fixtures), 2 uso inválido, 3 interrompida
 pelo launcher (nada é gravado), 130 interrompida por Ctrl+C (grava o parcial com
 ``interrupted: true``).
 
-As pastas das sessões (e as cópias das fixtures, se a seleção grava) ficam numa pasta
+As pastas das sessões (e as cópias das fixtures, no modo tools, se a seleção grava) ficam numa pasta
 temporária do run, dentro de ``--work-dir``, apagada ao fim, inclusive em erro e Ctrl+C.
 O launcher passa uma ``--work-dir`` própria e a apaga depois que a árvore do motor morre:
 um cancelamento mata o motor sem dar tempo de limpar.
@@ -34,10 +34,12 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, TextIO
 
-from tests.e2e.launcher.providers import ProviderInfo, resolve_provider
+from tests.e2e.config import carregar_config, verificar
+from tests.e2e.executor.imagens import ler_config_mcp, tag_imagem
 from tests.e2e.load.agent_cases import CaseSelection
 from tests.e2e.load.agent_engine import (
     MAX_AGENT_CONCURRENCY,
@@ -45,14 +47,8 @@ from tests.e2e.load.agent_engine import (
     AgentLoadConfig,
     AgentLoadRunner,
 )
-from tests.e2e.load.agent_session import default_run_root
-from tests.e2e.load.agent_setup import (
-    agent_server_config,
-    denied_tools,
-    make_preflight,
-    server_tool_lister,
-    session_factory,
-)
+from tests.e2e.load.agent_session import AGENTE_DO_PROVEDOR, default_run_root
+from tests.e2e.load.agent_setup import denied_tools, make_preflight, session_factory
 from tests.e2e.load.client import default_server_command, stdio_client_factory
 from tests.e2e.load.engine import (
     DEFAULT_TIMEOUT_S,
@@ -65,19 +61,15 @@ from tests.e2e.load.engine import (
 from tests.e2e.load.mix import ALLOWED_TOOLS, DEFAULT_TOOLS, select_specs
 from tests.e2e.load.resources import ResourceSampler, load_psutil
 from tests.e2e.load.sandbox import (
-    SandboxPlan,
-    SessionSandbox,
     ToolsSessions,
     check_disk,
     make_run_root,
     plan_for_specs,
     remove_tree,
-    sandbox_summary,
 )
 from tests.e2e.load.store import LoadStore, build_agent_record, build_record
-from tests.e2e.queries.mcp_workspace import WORKSPACE_ENV, workspace_roots
+from tests.e2e.queries.mcp_workspace import workspace_roots
 from tests.e2e.queries.run_queries import _build_test_result
-from tests.e2e.queries.runner import EXECUCAO_SO_NO_EXECUTOR
 
 __all__ = ["build_parser", "format_agent_report", "format_report", "main", "stderr_tail"]
 
@@ -155,7 +147,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--provider",
         choices=PROVIDERS,
         default=None,
-        help="Só agent: provedor de IA (default: o primeiro instalado, como a esteira).",
+        help="Só agent: provedor de IA (default: claude).",
+    )
+    parser.add_argument(
+        "--mcp",
+        default=None,
+        metavar="sem|WHEEL",
+        help="Só agent: 'sem' (default) ou a wheel do MCP cuja imagem as sessões usam.",
     )
     parser.add_argument("--case", default=None, help="Só agent: um caso do cases.yaml, pelo id.")
     parser.add_argument(
@@ -214,7 +212,13 @@ def _parse_tools(raw: str | None) -> tuple[str, ...] | None:
 
 
 _TOOLS_ONLY = {"tools": "--tools", "no_warmup": "--no-warmup", "server_command": "--server-command"}
-_AGENT_ONLY = {"provider": "--provider", "case": "--case", "group": "--group", "tags": "--tags"}
+_AGENT_ONLY = {
+    "provider": "--provider",
+    "mcp": "--mcp",
+    "case": "--case",
+    "group": "--group",
+    "tags": "--tags",
+}
 
 
 def _misplaced(args: argparse.Namespace) -> list[str]:
@@ -239,6 +243,7 @@ def _agent_config(args: argparse.Namespace) -> AgentLoadConfig:
         concurrency=args.concurrency,
         duration_s=args.duration,
         provider=args.provider,
+        mcp=args.mcp,
         selection=CaseSelection(case_id=args.case, group=args.group, tags=_parse_tools(args.tags)),
         iterations=args.iterations,
         timeout_s=args.timeout,
@@ -474,48 +479,43 @@ def _execute(
 
 
 def _execute_agent(
-    config: AgentLoadConfig, args: argparse.Namespace, provider: ProviderInfo
+    config: AgentLoadConfig, args: argparse.Namespace
 ) -> tuple[AgentLoadRunner, Any, dict[str, Any]]:
     """Roda a carga do modo agent; devolve ``(runner, outcome, {"server", "sandbox"})``.
 
     Raises:
-        LoadError: Se o servidor do agente não está configurado ou não sobe, ou se
-            nenhum caso pode rodar.
+        LoadError: Se o ambiente do executor não está pronto, a imagem não é uma wheel
+            do MCP existente ou nenhum caso pode rodar.
     """
-    fixtures: Path = args.fixtures.resolve()
-    server = agent_server_config(fixtures)
-    psutil = load_psutil()
-    run_root = default_run_root(args.work_dir)
-    sandboxes: list[SessionSandbox] = []
+    provider = config.provider or "claude"
+    agente = AGENTE_DO_PROVEDOR[provider]
     try:
-        with _server_errlog(args.server_log) as (log_path, errlog):
-            runner = AgentLoadRunner(
-                config,
-                make_preflight(
-                    config, fixtures, server_tool_lister(server, errlog), work_dir=run_root.parent
-                ),
-                session_factory(
-                    provider, run_root, server, fixtures, config.timeout_s, sandboxes=sandboxes
-                ),
-                build_result=_build_test_result,
-                on_progress=_progress_printer(args.json_progress),
-                resource_sampler=ResourceSampler(psutil) if psutil else None,
-            )
-            _install_stop_handlers(runner, args.json_progress)
-            try:
-                outcome = runner.run()
-            except LoadError as exc:
-                raise _with_stderr_tail(exc, log_path) from exc
-        plan = outcome.sandbox_plan or SandboxPlan(fixtures=fixtures)
-        sandbox = sandbox_summary(plan, sandboxes)
+        config_mcp = ler_config_mcp(config.mcp or "sem")
+    except ValueError as exc:
+        raise LoadError(str(exc)) from exc
+    cfg = carregar_config(os.environ)
+    itens = {"motor", "cache", "token_claude" if agente == "claude" else "volume_kiro"}
+    problemas = [p.mensagem for p in verificar(cfg) if p.item in itens]
+    if problemas:
+        raise LoadError("; ".join(problemas))
+    config = replace(config, mcp=config_mcp.nome)
+    fixtures: Path = args.fixtures.resolve()
+    run_root = default_run_root(args.work_dir)
+    try:
+        runner = AgentLoadRunner(
+            config,
+            make_preflight(config, fixtures),
+            session_factory(provider, config_mcp, cfg, run_root, config.timeout_s),
+            build_result=_build_test_result,
+            on_progress=_progress_printer(args.json_progress),
+            resource_sampler=ResourceSampler(psutil) if (psutil := load_psutil()) else None,
+        )
+        _install_stop_handlers(runner, args.json_progress)
+        outcome = runner.run()
     finally:
         remove_tree(run_root)
-    command = [str(server.get("command")), *[str(a) for a in server.get("args") or []]]
-    workspace = str((server.get("env") or {}).get(WORKSPACE_ENV, "")).split(os.pathsep)
-    if sandbox["enabled"]:
-        workspace = [_SANDBOX_WORKSPACE]
-    server_info = {"command": command, "workspace": [w for w in workspace if w]}
-    return runner, outcome, {"server": server_info, "sandbox": sandbox}
+    server_info = {"image": tag_imagem(config_mcp, agente), "workspace": []}
+    return runner, outcome, {"server": server_info, "sandbox": {"enabled": False}}
 
 
 def stderr_tail(path: Path, max_lines: int = 3) -> str:
@@ -544,15 +544,13 @@ def _install_stop_handlers(runner: LoadRunner | AgentLoadRunner, json_mode: bool
         _watch_stdin(runner)
 
 
-def _agent_info(provider: ProviderInfo, outcome: Any) -> dict[str, Any]:
-    plan = outcome.sandbox_plan
-    sandboxed = plan is not None and plan.enabled
-    denied = denied_tools(outcome.server_tools, sandboxed) if provider.id == "claude" else []
+def _agent_info(provider: str, image: str, outcome: Any) -> dict[str, Any]:
+    agente = AGENTE_DO_PROVEDOR[provider]
     return {
-        "provider": provider.id,
-        "label": provider.label,
-        "binary": provider.path or provider.binary,
-        "denied_tools": denied,
+        "provider": provider,
+        "label": f"{agente} no executor em container",
+        "binary": image,
+        "denied_tools": denied_tools(outcome.server_tools),
     }
 
 
@@ -567,27 +565,22 @@ def main(argv: list[str] | None = None) -> int:
             print(f"erro: {message}", file=sys.stderr)
         return code
 
-    if args.mode == "agent":
-        return fail(EXECUCAO_SO_NO_EXECUTOR, EXIT_FAILED)
-
     misplaced = _misplaced(args)
     if misplaced:
         return fail(f"{', '.join(misplaced)} não vale(m) no modo {args.mode}", EXIT_USAGE)
-    provider: ProviderInfo | None = None
     try:
         if args.mode == "agent":
             config: LoadConfig | AgentLoadConfig = _agent_config(args)
-            provider = resolve_provider(config.provider)
         else:
             config = _tools_config(args)
             command, command_args = _server_command(args.server_command)
-    except (ValueError, RuntimeError) as exc:
+    except ValueError as exc:
         return fail(str(exc), EXIT_USAGE)
 
     previous_handler = signal.getsignal(signal.SIGINT)
     try:
-        if provider is not None:
-            _runner, outcome, extra = _execute_agent(config, args, provider)
+        if isinstance(config, AgentLoadConfig):
+            _runner, outcome, extra = _execute_agent(config, args)
         else:
             _runner, outcome, sandbox = _execute(config, args, command, command_args)
     except LoadError as exc:
@@ -602,11 +595,11 @@ def main(argv: list[str] | None = None) -> int:
 
     store = LoadStore(args.results_dir)
     load_id = store.new_id()
-    if provider is not None:
+    if isinstance(config, AgentLoadConfig):
         record = build_agent_record(
             load_id,
             outcome,
-            _agent_info(provider, outcome),
+            _agent_info(config.provider or "claude", extra["server"]["image"], outcome),
             server=extra["server"],
             sandbox=extra["sandbox"],
         )

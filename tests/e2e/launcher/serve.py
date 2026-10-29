@@ -7,8 +7,10 @@ Uso:
     python -m tests.e2e.launcher.serve --port 9000
 
 Variaveis de ambiente relevantes:
-    QUERY_TIMEOUT_S  -> força um timeout unico; sem ele, cada caso usa o
-                        timeout_s do cases.yaml (por caso/grupo)
+    NOVOMODELO_LAUNCHER_PASTA_WHEELS -> pasta das wheels do MCP que o disparo aceita
+                        em ``mcp``; sem ela, so ``sem`` e aceito
+    NOVOMODELO_BATERIA_*             -> configuracao da bateria (``tests.e2e.config``):
+                        pasta de resultados, motor, token
 """
 
 from __future__ import annotations

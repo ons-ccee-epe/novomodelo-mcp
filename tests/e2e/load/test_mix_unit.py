@@ -134,7 +134,7 @@ class TestSelection:
         copy = tmp_path / "s0" / "fixtures"
         spec = next(s for s in select_specs(all_sources, ["deck_edit_json"]).specs)
         bound = spec.bind(copy)
-        assert Path(bound["path"]) == copy / "newave/novomodelo-caso-reduzido/config.json"
+        assert Path(bound["path"]) == copy / "newave/novomodelo-mini/config.json"
         assert spec.arguments["path"].startswith(str(all_sources.resolve()))
 
     def test_case_init_gets_a_new_folder_per_call(self, tmp_path: Path) -> None:
@@ -144,7 +144,7 @@ class TestSelection:
         assert first["directory"].endswith("1") and second["directory"].endswith("2")
 
     def test_empty_directory_and_missing_file_are_skipped_with_reason(self, tmp_path: Path) -> None:
-        (tmp_path / "newave" / "novomodelo-caso-reduzido").mkdir(parents=True)
+        (tmp_path / "newave" / "novomodelo-mini").mkdir(parents=True)
         selection = select_specs(tmp_path, tools=["deck_list", "deck_read_json"])
         assert selection.specs == []
         reasons = {item.id: item.reason for item in selection.excluded}

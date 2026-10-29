@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from tests.e2e.launcher import app as app_mod
-from tests.e2e.launcher.service import ExecucaoNoHostDesligadaError, RunAlreadyActiveError
+from tests.e2e.launcher.service import RodadaService, RunAlreadyActiveError
 
 LOCAL = "http://127.0.0.1:5175"
 HEADER = {"X-Launcher": "1"}
@@ -20,13 +19,6 @@ def client() -> TestClient:
     return TestClient(app_mod.create_app(), base_url=LOCAL)
 
 
-@pytest.fixture
-def fake_provider():
-    provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
-    with patch.object(app_mod, "resolve_provider", return_value=provider):
-        yield provider
-
-
 def test_foreign_host_is_rejected_even_for_reads() -> None:
     rebinding = TestClient(app_mod.create_app(), base_url="http://attacker.example:5175")
     assert rebinding.get("/api/health").status_code == 400
@@ -34,46 +26,49 @@ def test_foreign_host_is_rejected_even_for_reads() -> None:
 
 
 def test_post_without_launcher_header_is_forbidden(client: TestClient) -> None:
-    assert client.post("/api/runs", json={}).status_code == 403
-    assert client.post("/api/runs/x/cancel").status_code == 403
+    assert client.post("/api/rodadas", json={"mcp": ["sem"]}).status_code == 403
 
 
-@pytest.mark.parametrize("timeout", [0, -1, 1801])
-def test_timeout_outside_bounds_is_rejected(client: TestClient, timeout: float) -> None:
-    resp = client.post("/api/runs", json={"timeout_seconds": timeout}, headers=HEADER)
-    assert resp.status_code == 422
-
-
-@pytest.mark.parametrize("raw", ["Infinity", "NaN"])
-def test_infinite_or_nan_timeout_is_rejected(client: TestClient, raw: str) -> None:
-    resp = client.post(
-        "/api/runs",
-        content=f'{{"timeout_seconds": {raw}}}',
-        headers={**HEADER, "Content-Type": "application/json"},
-    )
-    assert resp.status_code == 422
-
-
-def test_second_concurrent_run_gets_409(client: TestClient, fake_provider) -> None:
-    with patch(
-        "tests.e2e.launcher.service.RunService.start_run",
-        side_effect=RunAlreadyActiveError("run abc ainda em andamento"),
-    ):
-        resp = client.post("/api/runs", json={}, headers=HEADER)
-    assert resp.status_code == 409
-
-
-def test_launcher_nao_dispara_agente_no_host(client: TestClient, fake_provider) -> None:
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"mcp": ["sem"], "repeticoes": 0},
+        {"mcp": ["sem"], "repeticoes": 51},
+        {"mcp": ["sem"], "max_minutos": -1},
+        {"mcp": ["sem"], "esperar_limite": 0},
+        {"mcp": ["sem"], "filtro": "a;b"},
+        {"mcp": ["sem"], "rodada": "--completa"},
+        {"mcp": ["sem"], "rodada": "../fora"},
+        {"mcp": ["sem"], "conjuntos": ["deterministica"]},
+        {"mcp": ["sem"], "agentes": ["gpt"]},
+        {"mcp": []},
+    ],
+)
+def test_values_outside_the_whitelist_are_422(client: TestClient, body: dict) -> None:
     with patch("subprocess.Popen") as popen:
-        resp = client.post("/api/runs", json={}, headers=HEADER)
-
-    assert resp.status_code == 409
-    assert "executor em container" in resp.json()["detail"]
+        resp = client.post("/api/rodadas", json=body, headers=HEADER)
+    assert resp.status_code == 422
     popen.assert_not_called()
 
 
-def test_execucao_desligada_nao_e_run_ativo() -> None:
-    assert not issubclass(ExecucaoNoHostDesligadaError, RunAlreadyActiveError)
+def test_second_concurrent_run_gets_409(client: TestClient) -> None:
+    with patch.object(
+        RodadaService, "disparar", side_effect=RunAlreadyActiveError("run abc ainda em andamento")
+    ):
+        resp = client.post("/api/rodadas", json={"mcp": ["sem"]}, headers=HEADER)
+    assert resp.status_code == 409
+
+
+def test_host_e_origem_continuam_restritos(client: TestClient) -> None:
+    foreign = TestClient(app_mod.create_app(), base_url="http://attacker.example:5175")
+    assert foreign.get("/api/rodadas").status_code == 400
+    assert app_mod._ALLOWED_HOSTS == ["127.0.0.1", "localhost"]
+    assert app_mod._ALLOWED_ORIGINS == ["http://127.0.0.1:5174", "http://localhost:5174"]
+    preflight = client.options(
+        "/api/rodadas",
+        headers={"Origin": "http://evil.example", "Access-Control-Request-Method": "POST"},
+    )
+    assert "access-control-allow-origin" not in preflight.headers
 
 
 def test_data_prefix_sibling_directory_is_not_served(client: TestClient, tmp_path) -> None:

@@ -23,7 +23,7 @@ from tests.e2e.load.sandbox import (
     subtrees_in,
 )
 
-DECK = "newave/novomodelo-caso-reduzido"
+DECK = "newave/novomodelo-mini"
 RESULTS = "results/sample_run"
 
 

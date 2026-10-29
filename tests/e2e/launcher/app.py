@@ -1,13 +1,11 @@
 """App FastAPI do launcher de dev.
 
 Rotas (todas sob /api, exceto o serving de dados):
-  GET  /api/providers          -> provedores de IA detectados no PATH
   GET  /api/cases              -> biblioteca de prompts (casos de teste)
-  GET  /api/command-preview    -> comando equivalente ao disparo (terminal e agente)
-  POST /api/runs               -> dispara uma bateria (esteira completa / tags / 1 caso)
-  GET  /api/runs               -> lista runs desta sessao do launcher
-  GET  /api/runs/{run_id}      -> estado de um run (polling)
-  POST /api/runs/{run_id}/cancel -> para o run
+  GET  /api/command-preview    -> comando equivalente de `python -m tests.e2e rodar`
+  POST /api/rodadas            -> dispara a bateria (opções da lista branca, sem shell)
+  GET  /api/rodadas            -> rodadas gravadas em Config.resultados
+  GET  /api/rodadas/{id}       -> manifesto, registros e decisão sem base de uma rodada
   GET  /api/load-tools         -> tools do catálogo de carga (e as barradas) e limites
   GET  /api/load-cases         -> casos por agente que podem entrar na carga e limites do modo agent
   GET  /api/load-capacity      -> sessões simultâneas recomendadas para a máquina e a seleção
@@ -31,7 +29,7 @@ Seguranca de dev:
     uma pagina que resolve para 127.0.0.1 vira same-origin e dispara agentes).
   - POSTs exigem o header X-Launcher, que um form ou request cross-origin
     simples nao consegue enviar sem preflight.
-  - Um run por vez (de agente ou de carga, na mesma trava); timeout por query limitado.
+  - Um run por vez (rodada ou carga, na mesma trava); valores do disparo validados.
   - Serving de /data confinado as raizes results/ e metrics/ (anti path traversal).
 """
 
@@ -40,23 +38,25 @@ from __future__ import annotations
 import mimetypes
 import re
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from tests.e2e.launcher.command_preview import command_preview
 from tests.e2e.launcher.load_service import LoadRunService
-from tests.e2e.launcher.providers import detect_providers, resolve_provider
 from tests.e2e.launcher.run_gate import RunGate
 from tests.e2e.launcher.service import (
-    ExecucaoNoHostDesligadaError,
+    PADRAO_DE_NOME,
+    RecusaDeDisparo,
+    RodadaRequest,
+    RodadaService,
     RunAlreadyActiveError,
-    RunService,
+    resolver_wheel,
 )
 from tests.e2e.load.agent_cases import CaseSelection, describe_cases, load_cases, select_cases
 from tests.e2e.load.agent_engine import MAX_AGENT_CONCURRENCY, AgentLoadConfig
@@ -86,7 +86,8 @@ _DATA_ROOTS = {"results": _RESULTS_DIR, "metrics": _METRICS_DIR}
 _FIXTURES_DIR = _BASE_DIR / "fixtures"
 _CASE_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.-]*$"
 _GROUP_PATTERN = r"^[a-z][a-z0-9_-]*$"
-_AGENT_ONLY_FIELDS = ("provider", "case_id", "group", "tags")
+_MCP_PATTERN = r"^(sem|[A-Za-z0-9][A-Za-z0-9._+-]{0,199}\.whl)$"
+_AGENT_ONLY_FIELDS = ("provider", "mcp", "case_id", "group", "tags")
 
 # Origens permitidas para o dev server do Vite (localhost apenas).
 _ALLOWED_ORIGINS = [
@@ -97,7 +98,6 @@ _ALLOWED_ORIGINS = [
 
 _ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 LAUNCHER_HEADER = "X-Launcher"
-MAX_TIMEOUT_SECONDS = 1800
 
 
 def _require_launcher_header(
@@ -110,18 +110,6 @@ def _require_launcher_header(
 def _within(root: Path, target: Path) -> bool:
     # is_relative_to, nao startswith: "results2" passaria num prefixo de string.
     return target.is_relative_to(root)
-
-
-class RunRequest(BaseModel):
-    """Corpo de POST /api/runs."""
-
-    provider: str | None = None  # "kiro-cli" | "claude" | None (auto)
-    tags: list[str] | None = None  # esteira parcial
-    case_id: str | None = None  # um unico caso (teste separado)
-    # allow_inf_nan=False: inf/NaN fariam o deadline do runner nunca expirar.
-    timeout_seconds: float | None = Field(
-        default=None, gt=0, le=MAX_TIMEOUT_SECONDS, allow_inf_nan=False
-    )
 
 
 class BaselineRequest(BaseModel):
@@ -147,6 +135,7 @@ class LoadRunRequest(BaseModel):
     tools: list[str] | None = Field(default=None, min_length=1, max_length=len(ALLOWED_TOOLS))
     timeout_seconds: float | None = Field(default=None, gt=0, le=MAX_TIMEOUT_S, allow_inf_nan=False)
     provider: Literal["kiro-cli", "claude"] | None = None
+    mcp: str | None = Field(default=None, max_length=200, pattern=_MCP_PATTERN)
     case_id: str | None = Field(default=None, max_length=200, pattern=_CASE_ID_PATTERN)
     group: str | None = Field(default=None, max_length=40, pattern=_GROUP_PATTERN)
     tags: list[str] | None = Field(default=None, min_length=1, max_length=20)
@@ -195,6 +184,7 @@ class LoadRunRequest(BaseModel):
     def to_config(self, provider: str | None = None) -> LoadConfig | AgentLoadConfig:
         if self.mode == "agent":
             return AgentLoadConfig(
+                mcp=self.mcp,
                 concurrency=self.concurrency,
                 duration_s=self.duration_seconds,
                 provider=provider or self.provider,
@@ -217,12 +207,14 @@ def _unprocessable(message: str) -> HTTPException:
     return HTTPException(status_code=422, detail=message)
 
 
-def _agent_provider(requested: str | None) -> str:
-    """Provedor instalado para a carga do modo agent; 422 se o pedido não está no PATH."""
-    try:
-        return resolve_provider(requested).id
-    except RuntimeError as exc:
-        raise _unprocessable(str(exc)) from exc
+def _agent_provider(requested: str | None, mcp: str | None) -> str:
+    """Provedor da carga do modo agent (padrão claude); 422 se a wheel pedida não está na pasta."""
+    if mcp is not None and mcp != "sem":
+        try:
+            resolver_wheel(mcp)
+        except RecusaDeDisparo as exc:
+            raise _unprocessable(str(exc)) from exc
+    return requested or "claude"
 
 
 def _check_agent_selection(selection: CaseSelection) -> None:
@@ -273,7 +265,7 @@ def create_app() -> FastAPI:
         title="novomodelo-mcp E2E Launcher (dev)",
         description=(
             "Launcher de desenvolvimento que dispara os testes das tools MCP "
-            "num provedor de IA (kiro-cli/claude). Nao e backend de producao."
+            "pelo executor em container. Nao e backend de producao."
         ),
         version="0.1.0",
     )
@@ -302,7 +294,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=422, content={"detail": errors})
 
     gate = RunGate()
-    service = RunService(gate=gate)
+    service = RodadaService(gate=gate)
     load_service = LoadRunService(gate=gate)
 
     # ---- meta ------------------------------------------------------------
@@ -331,24 +323,6 @@ def create_app() -> FastAPI:
         removed = ResultStore(_RESULTS_DIR, _METRICS_DIR).clear_baseline(conjunto)
         return {"conjunto": conjunto, "removed": removed}
 
-    @app.get("/api/providers")
-    def providers() -> dict[str, Any]:
-        """Provedores detectados no PATH e qual seria o default (auto)."""
-        infos = detect_providers()
-        default = next((i.id for i in infos if i.installed), None)
-        return {
-            "providers": [
-                {
-                    "id": i.id,
-                    "label": i.label,
-                    "binary": i.binary,
-                    "installed": i.installed,
-                }
-                for i in infos
-            ],
-            "default": default,
-        }
-
     @app.get("/api/cases")
     def cases() -> dict[str, Any]:
         """Biblioteca de prompts: casos de teste disponiveis."""
@@ -357,73 +331,56 @@ def create_app() -> FastAPI:
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # ---- runs ------------------------------------------------------------
+    # ---- rodadas ---------------------------------------------------------
 
-    @app.post("/api/runs", dependencies=[Depends(_require_launcher_header)])
-    def start_run(req: RunRequest) -> dict[str, Any]:
-        """Dispara uma bateria no provedor escolhido.
+    @app.post("/api/rodadas", dependencies=[Depends(_require_launcher_header)])
+    def start_rodada(req: RodadaRequest) -> dict[str, Any]:
+        """Dispara `python -m tests.e2e rodar` com as opções validadas.
 
-        - Esteira completa: body vazio (ou so provider).
-        - Esteira parcial:  tags=[...].
-        - Teste separado:   case_id="...".
+        422 se a wheel não está na pasta configurada; 409 se há outro run ativo.
         """
         try:
-            provider = resolve_provider(req.provider)
-        except RuntimeError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-        try:
-            state = service.start_run(
-                provider=provider,
-                tags=req.tags,
-                case_id=req.case_id,
-                timeout_seconds=req.timeout_seconds,
-            )
-        except (ExecucaoNoHostDesligadaError, RunAlreadyActiveError) as exc:
+            return service.disparar(req)
+        except RecusaDeDisparo as exc:
+            raise _unprocessable(str(exc)) from exc
+        except RunAlreadyActiveError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        return state.to_dict()
+
+    @app.get("/api/rodadas")
+    def list_rodadas() -> dict[str, Any]:
+        return {"rodadas": service.listar()}
+
+    @app.get("/api/rodadas/{rodada}")
+    def get_rodada(rodada: str) -> dict[str, Any]:
+        if not re.search(PADRAO_DE_NOME, rodada):
+            raise _unprocessable("nome de rodada inválido")
+        detalhe = service.detalhe(rodada)
+        if detalhe is None:
+            raise HTTPException(status_code=404, detail="rodada nao encontrada")
+        return detalhe
 
     @app.get("/api/command-preview")
     def get_command_preview(
-        provider: str | None = Query(None, max_length=40),
-        tags: str | None = Query(None, max_length=800),
-        case_id: str | None = Query(None, max_length=200, pattern=_CASE_ID_PATTERN),
+        mcp: Annotated[list[str] | None, Query(max_length=8)] = None,
+        conjuntos: str | None = Query(None, max_length=40),
+        agentes: str | None = Query(None, max_length=40),
+        filtro: str | None = Query(None, max_length=400),
+        repeticoes: int | None = Query(None),
+        completa: bool = Query(False),
     ) -> dict[str, Any]:
-        """Comando que um disparo com estes filtros executaria; nada é gravado nem iniciado."""
+        """Comando que um disparo com estas opções executaria; nada é iniciado nem gravado."""
         try:
-            resolved = resolve_provider(provider)
-        except RuntimeError as exc:
-            raise _unprocessable(str(exc)) from exc
-        names = _split(tags)
-        try:
-            cases = service.load_cases(tags=names, case_id=case_id)
-        except CasesLoaderError as exc:
-            raise _unprocessable(str(exc)) from exc
-        if not cases:
-            raise _unprocessable("Nenhum caso encontrado com os filtros informados.")
-        return command_preview(resolved, names, case_id, cases)
-
-    @app.get("/api/runs")
-    def list_runs() -> dict[str, Any]:
-        return {"runs": service.list()}
-
-    @app.get("/api/runs/{run_id}")
-    def get_run(run_id: str) -> dict[str, Any]:
-        state = service.get(run_id)
-        if state is None:
-            raise HTTPException(status_code=404, detail="run nao encontrado")
-        return state.to_dict()
-
-    @app.post("/api/runs/{run_id}/cancel", dependencies=[Depends(_require_launcher_header)])
-    def cancel_run(run_id: str) -> dict[str, Any]:
-        """Para o run: interrompe o caso em andamento e descarta os restantes.
-
-        Idempotente: num run ja encerrado, devolve o estado sem mudar nada.
-        """
-        state = service.cancel(run_id)
-        if state is None:
-            raise HTTPException(status_code=404, detail="run nao encontrado")
-        return state.to_dict()
+            req = RodadaRequest(
+                mcp=mcp or ["sem"],
+                conjuntos=_split(conjuntos),
+                agentes=_split(agentes),
+                filtro=filtro,
+                repeticoes=repeticoes,
+                completa=completa,
+            )
+        except ValidationError as exc:
+            raise _unprocessable("; ".join(e["msg"] for e in exc.errors())) from exc
+        return command_preview(req)
 
     # ---- cargas ----------------------------------------------------------
 
@@ -481,15 +438,15 @@ def create_app() -> FastAPI:
 
     @app.post("/api/load-runs", dependencies=[Depends(_require_launcher_header)])
     def start_load_run(req: LoadRunRequest) -> dict[str, Any]:
-        """Dispara um teste de carga; 422 se o provedor não está instalado ou nenhum caso
+        """Dispara um teste de carga; 422 se a wheel não está na pasta configurada ou nenhum caso
         da seleção pode rodar, 409 se qualquer outro run estiver ativo."""
         provider = None
         if req.mode == "agent":
-            provider = _agent_provider(req.provider)
+            provider = _agent_provider(req.provider, req.mcp)
             _check_agent_selection(req.selection())
         try:
             state = load_service.start_run(req.to_config(provider))
-        except (ExecucaoNoHostDesligadaError, RunAlreadyActiveError) as exc:
+        except RunAlreadyActiveError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return state.to_dict()
 

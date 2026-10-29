@@ -1,145 +1,347 @@
-"""Servico de execucao de baterias de teste (estado consultavel por polling).
+"""Serviço das rodadas da bateria: dispara `python -m tests.e2e rodar` e lê o que ela gravou.
 
-Reusa a maquinaria de tests/e2e/queries sem reimplementar nada:
-  - CasesLoader       -> carrega e filtra os casos (por tags / case_id)
-  - ProviderQueryRunner -> dispara cada prompt no provedor de IA escolhido
-  - QueryValidator    -> valida tool-call + resultado
-  - _build_test_result-> converte (case, result, validation) em TestResult
-  - ResultStore       -> cria a bateria, persiste JSON e history.jsonl
+O disparo monta a lista de argumentos a partir de uma lista branca de opções, cada uma
+com o valor validado (`RodadaRequest`); nada passa por shell e nenhum texto livre chega
+à linha de comando. O processo roda desanexado do launcher, com o log da bateria num
+arquivo, e a vaga de "um run por vez" (`RunGate`) segura o disparo seguinte até ele sair.
 
-Cada disparo da UI vira um "run" com id proprio, executado numa thread de fundo.
-O frontend cria o run (POST) e faz polling (GET) ate terminar; ao terminar, a
-bateria ja esta gravada e o frontend a le normalmente via /data/*.
+A leitura (`listar`, `detalhe`) vem de `Config.resultados`: manifesto, registros e a
+decisão do critério sem base de comparação.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import os
+import re
+import subprocess
+import sys
 import threading
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from tests.e2e.launcher.provider_runner import ProviderQueryRunner
-from tests.e2e.launcher.providers import ProviderInfo
+import jsonschema
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from tests.e2e.config import Config, carregar_config
+from tests.e2e.go_no_go.criterio import decidir
 from tests.e2e.launcher.run_gate import RunAlreadyActiveError, RunGate
-from tests.e2e.queries.loader import CasesLoader, CasesLoaderError
-from tests.e2e.queries.models import QueryTestCase, TestResult
-from tests.e2e.queries.preconditions import missing_sources, skipped_result
-from tests.e2e.queries.run_queries import _build_test_result
-from tests.e2e.queries.runner import EXECUCAO_SO_NO_EXECUTOR
-from tests.e2e.queries.store import ResultStore, conjunto_from_filters
-from tests.e2e.queries.validator import QueryValidator
+from tests.e2e.queries.loader import CasesLoader
+from tests.e2e.queries.models import QueryTestCase
+from tests.e2e.resultado.armazenamento import PADRAO_NOME, ler_manifesto, ler_registros
+from tests.e2e.resultado.modelos import VersaoDesconhecida
+from tests.e2e.rodada import ARQUIVO_BLOQUEIO, CONFIG_DETERMINISTICA
+from tests.e2e.textos import sem_caminhos
 
-__all__ = ["ExecucaoNoHostDesligadaError", "RunAlreadyActiveError", "RunService", "RunState"]
+__all__ = [
+    "PADRAO_DE_NOME",
+    "PASTA_LOGS",
+    "PASTA_WHEELS_ENV",
+    "RecusaDeDisparo",
+    "RodadaRequest",
+    "RodadaService",
+    "RunAlreadyActiveError",
+    "argumentos_do_rodar",
+    "comando_equivalente",
+    "resolver_wheel",
+]
 
-RunStatus = Literal["pending", "running", "done", "error", "cancelled"]
+PASTA_WHEELS_ENV = "NOVOMODELO_LAUNCHER_PASTA_WHEELS"
+PASTA_LOGS = ".launcher"
+PADRAO_DE_NOME = PADRAO_NOME
+NOME_DA_RODADA = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
+NOME_DE_WHEEL = r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}\.whl$"
+FILTRO = r"^[A-Za-z0-9_.*?-]+(,[A-Za-z0-9_.*?-]+)*$"
+MCP_SEM = "sem"
+ENTRADA_DO_COMANDO = "python -m tests.e2e rodar"
 
-# base_dir = tests/e2e/
 _BASE_DIR = Path(__file__).resolve().parent.parent
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 _CASES_PATH = _BASE_DIR / "queries" / "cases.yaml"
 _FIXTURES_DIR = _BASE_DIR / "fixtures"
-_RESULTS_DIR = _BASE_DIR / "results"
-_METRICS_DIR = _BASE_DIR / "metrics"
+_FORMATO_DA_RODADA = "%Y%m%dT%H%M%SZ"
+_CAMPOS_DO_RESUMO = (
+    "rodada",
+    "criado_em",
+    "configs",
+    "conjuntos",
+    "agentes",
+    "repeticoes",
+    "filtro",
+    "commit_bateria",
+)
 
-_FINISHED: frozenset[str] = frozenset({"done", "error", "cancelled"})
+
+class RecusaDeDisparo(ValueError):
+    """O pedido de rodada pede algo fora da lista branca."""
 
 
-class ExecucaoNoHostDesligadaError(Exception):
-    """O disparo de agente no host está desligado: a execução passa pelo executor em container."""
+class RodadaRequest(BaseModel):
+    """Corpo de `POST /api/rodadas`. Campo desconhecido é recusado."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rodada: str | None = Field(default=None, pattern=NOME_DA_RODADA)
+    mcp: list[str] = Field(min_length=1, max_length=8)
+    conjuntos: list[Literal["tools", "usuario"]] | None = Field(default=None, max_length=2)
+    agentes: list[Literal["claude", "kiro"]] | None = Field(default=None, max_length=2)
+    filtro: str | None = Field(default=None, max_length=400, pattern=FILTRO)
+    repeticoes: int | None = Field(default=None, ge=1, le=50)
+    completa: bool = False
+    max_execucoes: int | None = Field(default=None, ge=0, le=100_000)
+    max_minutos: int | None = Field(default=None, ge=0, le=100_000)
+    esperar_limite: int | None = Field(default=None, ge=1, le=1_440)
+    paralelo_por_agente: int | None = Field(default=None, ge=1, le=16)
+
+    @field_validator("mcp")
+    @classmethod
+    def _sem_ou_wheel(cls, valores: list[str]) -> list[str]:
+        for valor in valores:
+            if valor != MCP_SEM and not re.fullmatch(NOME_DE_WHEEL, valor):
+                raise ValueError("mcp: 'sem' ou o nome de uma wheel da pasta configurada")
+        return list(dict.fromkeys(valores))
 
 
-@dataclass
-class RunState:
-    """Estado de uma execucao de bateria disparada pela UI.
+def resolver_wheel(nome: str, env: Mapping[str, str] | None = None) -> Path:
+    """O arquivo da wheel `nome`, dentro da pasta que o launcher tem configurada.
 
-    Attributes:
-        run_id: Id unico do run (nao confundir com batch_id).
-        provider: Id do provedor usado ("kiro-cli"/"claude").
-        status: pending | running | done | error | cancelled.
-        total: Total de casos a rodar (0 ate serem carregados).
-        completed: Quantos casos ja terminaram.
-        current: Id do caso em execucao, se houver.
-        batch_id: Id da bateria gravada ao final (None ate terminar).
-        error: Mensagem de erro se status == "error".
-        cancel_requested: Parada pedida pela UI; vira "cancelled" quando o
-            caso em andamento é interrompido.
-        started_at / finished_at: ISO timestamps.
-        log: Linhas de progresso curtas para a UI mostrar ao vivo.
-        results: O TestResult de cada caso JA terminado, como dict (o mesmo
-            registro da bateria gravada), para a UI mostrar o detalhe completo
-            de cada teste assim que ele acaba, sem esperar a esteira inteira.
+    Raises:
+        RecusaDeDisparo: a pasta não está configurada, o nome não é de uma wheel ou o
+            arquivo não existe dentro da pasta (links para fora também são recusados).
     """
-
-    run_id: str
-    provider: str
-    status: RunStatus = "pending"
-    total: int = 0
-    completed: int = 0
-    current: str | None = None
-    batch_id: str | None = None
-    error: str | None = None
-    cancel_requested: bool = False
-    started_at: str = ""
-    finished_at: str | None = None
-    log: list[str] = field(default_factory=list)
-    results: list[dict[str, Any]] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "run_id": self.run_id,
-            "provider": self.provider,
-            "status": self.status,
-            "total": self.total,
-            "completed": self.completed,
-            "current": self.current,
-            "batch_id": self.batch_id,
-            "error": self.error,
-            "cancel_requested": self.cancel_requested,
-            "started_at": self.started_at,
-            "finished_at": self.finished_at,
-            "log": self.log[-50:],  # cap: ultimas 50 linhas
-            "results": self.results,
-        }
+    bruto = (env if env is not None else os.environ).get(PASTA_WHEELS_ENV)
+    if not bruto:
+        raise RecusaDeDisparo(
+            f"sem a pasta de wheels ({PASTA_WHEELS_ENV}), só 'sem' é aceito em mcp"
+        )
+    if not re.fullmatch(NOME_DE_WHEEL, nome):
+        raise RecusaDeDisparo(f"nome de wheel inválido: {nome!r}")
+    pasta = Path(bruto).expanduser().resolve()
+    alvo = (pasta / nome).resolve()
+    if not alvo.is_relative_to(pasta) or not alvo.is_file():
+        raise RecusaDeDisparo(f"wheel não encontrada na pasta configurada: {nome}")
+    return alvo
 
 
-class RunService:
-    """Gerencia runs de bateria em threads de fundo, com estado consultavel."""
+def argumentos_do_rodar(
+    req: RodadaRequest, wheel: Callable[[str], str], rodada: str | None = None
+) -> list[str]:
+    """Os argumentos de `rodar`, na ordem do pedido; `wheel` decide como cada wheel aparece."""
+    args = ["--mcp", *(valor if valor == MCP_SEM else wheel(valor) for valor in req.mcp)]
+    if nome := rodada or req.rodada:
+        args += ["--rodada", nome]
+    if req.conjuntos:
+        args += ["--conjuntos", ",".join(req.conjuntos)]
+    if req.agentes:
+        args += ["--agentes", ",".join(req.agentes)]
+    if req.filtro:
+        args += ["--filtro", req.filtro]
+    if req.repeticoes is not None:
+        args += ["--repeticoes", str(req.repeticoes)]
+    if req.completa:
+        args.append("--completa")
+    for opcao, valor in (
+        ("--max-execucoes", req.max_execucoes),
+        ("--max-minutos", req.max_minutos),
+        ("--esperar-limite", req.esperar_limite),
+        ("--paralelo-por-agente", req.paralelo_por_agente),
+    ):
+        if valor is not None:
+            args += [opcao, str(valor)]
+    return args
 
-    def __init__(self, gate: RunGate | None = None) -> None:
-        self._runs: dict[str, RunState] = {}
-        self._runners: dict[str, ProviderQueryRunner] = {}
-        self._lock = threading.Lock()
-        self._gate = gate or RunGate()
 
-    # ---- consulta -------------------------------------------------------
+def comando_equivalente(req: RodadaRequest) -> dict[str, Any]:
+    """O comando que o disparo executaria; as wheels aparecem pelo nome do arquivo."""
+    args = argumentos_do_rodar(req, wheel=lambda nome: nome)
+    texto = ENTRADA_DO_COMANDO + "".join(f" {_aspas(a)}" for a in args)
+    return {"comando": sem_caminhos(texto), "argumentos": args}
 
-    def get(self, run_id: str) -> RunState | None:
-        with self._lock:
-            return self._runs.get(run_id)
 
-    def list(self) -> list[dict[str, Any]]:
-        with self._lock:
-            return [r.to_dict() for r in self._runs.values()]
+def _aspas(arg: str) -> str:
+    return arg if re.fullmatch(r"[A-Za-z0-9_.,*=+-]+", arg) else f"'{arg}'"
 
-    # ---- casos ----------------------------------------------------------
 
-    def load_cases(
+def _desanexado() -> dict[str, Any]:
+    if os.name == "nt":
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200
+        )
+        return {"creationflags": flags}
+    return {"start_new_session": True}
+
+
+def _agora() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+class RodadaService:
+    """Dispara rodadas desanexadas e lê as rodadas gravadas em `Config.resultados`."""
+
+    def __init__(
         self,
-        tags: list[str] | None = None,
-        case_id: str | None = None,
-    ) -> list[QueryTestCase]:
-        """Carrega os casos de teste (opcionalmente filtrados).
+        gate: RunGate | None = None,
+        config: Callable[[], Config] = lambda: carregar_config(os.environ),
+        cwd: Path = _REPO_ROOT,
+    ) -> None:
+        self._gate = gate or RunGate()
+        self._config = config
+        self._cwd = cwd
+        self._disparos: dict[str, dict[str, Any]] = {}
+        self._lock = threading.Lock()
+
+    # ---- disparo -----------------------------------------------------------
+
+    def disparar(self, req: RodadaRequest) -> dict[str, Any]:
+        """Sobe `python -m tests.e2e rodar` desanexado e devolve o estado do disparo.
 
         Raises:
-            CasesLoaderError: Se o YAML nao carrega/valida.
+            RecusaDeDisparo: wheel fora da pasta configurada.
+            RunAlreadyActiveError: outro run (rodada ou carga) está ativo.
         """
-        loader = CasesLoader(_CASES_PATH, _FIXTURES_DIR)
-        return loader.load(tags=tags, case_id=case_id)
+        nome = req.rodada or datetime.now(UTC).strftime(_FORMATO_DA_RODADA)
+        args = argumentos_do_rodar(req, wheel=lambda n: str(resolver_wheel(n)), rodada=nome)
+        cfg = self._config()
+        self._gate.acquire(nome)
+        try:
+            log = self._abrir_log(cfg, nome)
+            try:
+                processo = subprocess.Popen(
+                    [sys.executable, "-m", "tests.e2e", "rodar", *args],
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    cwd=self._cwd,
+                    shell=False,
+                    **_desanexado(),
+                )
+            finally:
+                log.close()
+        except BaseException:
+            self._gate.release(nome)
+            raise
+        estado = {
+            "rodada": nome,
+            "status": "em_andamento",
+            "iniciada_em": _agora(),
+            "finalizada_em": None,
+            "codigo_saida": None,
+            "log": f"{PASTA_LOGS}/{nome}.log",
+            "comando": comando_equivalente(req)["comando"],
+        }
+        with self._lock:
+            self._disparos[nome] = estado
+        threading.Thread(
+            target=self._esperar, args=(nome, processo), name=f"rodada-{nome}", daemon=True
+        ).start()
+        return dict(estado)
+
+    @staticmethod
+    def _abrir_log(cfg: Config, nome: str):
+        pasta = cfg.resultados / PASTA_LOGS
+        pasta.mkdir(parents=True, exist_ok=True)
+        fd = os.open(pasta / f"{nome}.log", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        return os.fdopen(fd, "ab")
+
+    def _esperar(self, nome: str, processo: subprocess.Popen) -> None:
+        try:
+            codigo = processo.wait()
+        finally:
+            with self._lock:
+                estado = self._disparos[nome]
+                estado["status"] = "finalizada"
+                estado["finalizada_em"] = _agora()
+                estado["codigo_saida"] = codigo if isinstance(codigo, int) else None
+            self._gate.release(nome)
+
+    # ---- leitura -----------------------------------------------------------
+
+    def listar(self) -> list[dict[str, Any]]:
+        """Resumo de cada rodada gravada, da mais recente para a mais antiga pelo nome."""
+        pasta = self._config().resultados
+        if not pasta.is_dir():
+            return []
+        resumos = []
+        for filha in sorted(pasta.iterdir(), key=lambda p: p.name, reverse=True):
+            if not filha.is_dir() or not re.search(PADRAO_NOME, filha.name):
+                continue
+            if not (filha / "manifesto.json").is_file():
+                continue
+            resumos.append(self._resumo(filha))
+        return resumos
+
+    def detalhe(self, rodada: str) -> dict[str, Any] | None:
+        """Manifesto, registros e decisão por configuração; `None` se a rodada não existe.
+
+        Raises:
+            ValueError: o nome não segue o padrão de nome de rodada.
+        """
+        if not re.search(PADRAO_NOME, rodada):
+            raise ValueError(f"nome de rodada inválido: {rodada!r}")
+        pasta = self._config().resultados / rodada
+        if not (pasta / "manifesto.json").is_file():
+            return None
+        resumo = self._resumo(pasta)
+        if "erro" in resumo:
+            return {**resumo, "registros": [], "decisoes": {}}
+        if resumo["bloqueada"]:
+            return {**resumo, "registros": [], "decisoes": {}}
+        try:
+            manifesto = ler_manifesto(pasta)
+            registros = ler_registros(pasta)
+        except (OSError, ValueError, VersaoDesconhecida, jsonschema.ValidationError) as erro:
+            return {**resumo, "erro": self._erro(erro, pasta), "registros": [], "decisoes": {}}
+        decisoes = {}
+        for config in manifesto.configs:
+            alvo = [r for r in registros if r.config in (config, CONFIG_DETERMINISTICA)]
+            try:
+                decisoes[config] = dataclasses.asdict(decidir(alvo, None))
+            except ValueError as erro:
+                decisoes[config] = {"erro": self._erro(erro, pasta)}
+        return {
+            **resumo,
+            "manifesto": manifesto.para_dict(),
+            "registros": [r.para_dict() for r in registros],
+            "decisoes": decisoes,
+        }
+
+    def _resumo(self, pasta: Path) -> dict[str, Any]:
+        base: dict[str, Any] = {
+            "rodada": pasta.name,
+            "bloqueada": (pasta / ARQUIVO_BLOQUEIO).exists(),
+            "disparo": self._disparo(pasta.name),
+        }
+        try:
+            manifesto = ler_manifesto(pasta).para_dict()
+        except (OSError, ValueError, VersaoDesconhecida, jsonschema.ValidationError) as erro:
+            return {**base, "erro": self._erro(erro, pasta)}
+        return {**base, **{campo: manifesto.get(campo) for campo in _CAMPOS_DO_RESUMO}}
+
+    def _disparo(self, nome: str) -> dict[str, Any] | None:
+        with self._lock:
+            estado = self._disparos.get(nome)
+            return None if estado is None else dict(estado)
+
+    @staticmethod
+    def _erro(erro: BaseException, pasta: Path) -> str:
+        detalhe = erro.message if isinstance(erro, jsonschema.ValidationError) else str(erro)
+        return sem_caminhos(f"resultado ilegível: {detalhe}", (pasta, pasta.parent))
+
+    # ---- casos --------------------------------------------------------------
+
+    @staticmethod
+    def load_cases(case_id: str | None = None) -> list[QueryTestCase]:
+        """Os casos do conjunto de tools (opcionalmente um só).
+
+        Raises:
+            CasesLoaderError: o YAML não carrega ou não valida.
+        """
+        return CasesLoader(_CASES_PATH, _FIXTURES_DIR).load(case_id=case_id)
 
     def list_cases_meta(self) -> list[dict[str, Any]]:
         """Metadados dos casos para a biblioteca de prompts da UI."""
-        cases = self.load_cases()
         return [
             {
                 "id": c.id,
@@ -150,214 +352,5 @@ class RunService:
                 "timeout_s": c.timeout_s,
                 "requires": list(c.requires),
             }
-            for c in cases
+            for c in self.load_cases()
         ]
-
-    # ---- execucao -------------------------------------------------------
-
-    def start_run(
-        self,
-        provider: ProviderInfo,
-        tags: list[str] | None = None,
-        case_id: str | None = None,
-        timeout_seconds: float | None = None,
-    ) -> RunState:
-        """Recusa o disparo: o agente não roda no host, só no executor em container.
-
-        Raises:
-            ExecucaoNoHostDesligadaError: Sempre: nenhum agente roda no host.
-
-        Args:
-            provider: Provedor ja resolvido (installed=True).
-            tags: Filtro por tags (esteira parcial), ou None para a esteira completa.
-            case_id: Um unico caso (teste separado), mutuamente util com tags.
-            timeout_seconds: Timeout por query.
-        """
-        raise ExecucaoNoHostDesligadaError(EXECUCAO_SO_NO_EXECUTOR)
-
-    def cancel(self, run_id: str) -> RunState | None:
-        """Pede a parada de um run: interrompe o caso atual e não roda os demais.
-
-        Os casos já concluídos aparecem no estado do run, mas nenhuma bateria é
-        gravada — uma bateria parcial distorceria o histórico de métricas.
-
-        Returns:
-            O estado do run, ou None se o run_id não existe.
-        """
-        with self._lock:
-            state = self._runs.get(run_id)
-            if state is None or state.status in _FINISHED:
-                return state
-            state.cancel_requested = True
-            state.log.append("Parada solicitada.")
-            runner = self._runners.get(run_id)
-        if runner is not None:
-            runner.cancel()
-        return state
-
-    def _execute(
-        self,
-        state: RunState,
-        provider: ProviderInfo,
-        tags: list[str] | None,
-        case_id: str | None,
-        timeout_seconds: float | None,
-    ) -> None:
-        """Corpo do run (roda na thread de fundo).
-
-        O ``finally`` é a rede de segurança: os fins normais já liberam a vaga ao
-        publicar o estado terminal, e ``release`` é idempotente.
-        """
-        try:
-            self._execute_run(state, provider, tags, case_id, timeout_seconds)
-        finally:
-            self._gate.release(state.run_id)
-
-    def _execute_run(
-        self,
-        state: RunState,
-        provider: ProviderInfo,
-        tags: list[str] | None,
-        case_id: str | None,
-        timeout_seconds: float | None,
-    ) -> None:
-        try:
-            cases = self.load_cases(tags=tags, case_id=case_id)
-        except CasesLoaderError as exc:
-            self._fail(state, f"Erro ao carregar casos: {exc}")
-            return
-
-        if not cases:
-            self._fail(state, "Nenhum caso encontrado com os filtros informados.")
-            return
-
-        with self._lock:
-            state.total = len(cases)
-            state.status = "running"
-            state.log.append(f"Rodando {len(cases)} caso(s) via {provider.label}.")
-
-        try:
-            runner = ProviderQueryRunner(
-                provider=provider,
-                timeout_seconds=timeout_seconds,
-                workspace_dir=_FIXTURES_DIR,
-            )
-            validator = QueryValidator()
-            store = ResultStore(_RESULTS_DIR, _METRICS_DIR)
-        except Exception as exc:  # noqa: BLE001 - reportar qualquer falha de setup
-            self._fail(state, f"Falha ao inicializar o runner: {exc}")
-            return
-
-        with self._lock:
-            self._runners[state.run_id] = runner
-        try:
-            self._run_cases(
-                state, runner, validator, store, cases, conjunto_from_filters(tags, case_id)
-            )
-        finally:
-            with self._lock:
-                self._runners.pop(state.run_id, None)
-            runner.close()
-
-    def _run_cases(
-        self,
-        state: RunState,
-        runner: ProviderQueryRunner,
-        validator: QueryValidator,
-        store: ResultStore,
-        cases: list[QueryTestCase],
-        conjunto: str,
-    ) -> None:
-        test_results: list[TestResult] = []
-        for case in cases:
-            with self._lock:
-                if state.cancel_requested:
-                    break
-                state.current = case.id
-            missing = missing_sources(case)
-            if missing:
-                tr = skipped_result(case, missing)
-            else:
-                tr = self._execute_case(runner, validator, case)
-                if tr is None:
-                    break
-            test_results.append(tr)
-            self._record(state, case, tr)
-
-        if state.cancel_requested:
-            self._finish_cancelled(state)
-            return
-
-        try:
-            batch = store.create_batch(test_results, conjunto=conjunto)
-            store.save_batch(batch)
-            store.append_metrics(batch)
-        except Exception as exc:  # noqa: BLE001
-            self._fail(state, f"Falha ao gravar a bateria: {exc}")
-            return
-
-        with self._lock:
-            state.batch_id = batch.batch_id
-            state.current = None
-            state.status = "done"
-            state.finished_at = datetime.now(UTC).isoformat()
-            state.log.append(f"Bateria gravada: {batch.batch_id}")
-        self._gate.release(state.run_id)
-
-    def _record(self, state: RunState, case: QueryTestCase, tr: TestResult) -> None:
-        """Publica no estado do run o resultado de um caso (pass, fail, skip...)."""
-        with self._lock:
-            state.completed += 1
-            state.results.append(asdict(tr))
-            state.log.append(
-                f"[{state.completed}/{state.total}] {case.id}: {tr.status} ({tr.latency_ms:.0f}ms)"
-            )
-
-    def _execute_case(
-        self, runner: ProviderQueryRunner, validator: QueryValidator, case: QueryTestCase
-    ) -> TestResult | None:
-        """Roda e valida um caso; None se a execução foi interrompida pelo cancel."""
-        try:
-            result = runner.execute(case)
-            if result.status == "cancelled":
-                return None
-            validation = validator.validate(case, result)
-            return _build_test_result(case, result, validation)
-        except Exception as exc:  # noqa: BLE001 - um caso nao derruba o run
-            return TestResult(
-                test_id=case.id,
-                query=case.query,
-                expected_tool=case.expected.tool,
-                expected_tools=case.expected.tools,
-                actual_tool=None,
-                all_tool_calls=[],
-                status="fail",
-                latency_ms=0.0,
-                tool_latency_ms=None,
-                mcp_used=False,
-                correct_tool=False,
-                correct_result=False,
-                agent_response="",
-                error_message=f"Erro de execucao: {exc}",
-                tags=list(case.tags),
-                validation_checks=[],
-            )
-
-    def _finish_cancelled(self, state: RunState) -> None:
-        with self._lock:
-            state.status = "cancelled"
-            state.current = None
-            state.finished_at = datetime.now(UTC).isoformat()
-            state.log.append(
-                f"Parado após {state.completed}/{state.total} caso(s); bateria não gravada."
-            )
-        self._gate.release(state.run_id)
-
-    def _fail(self, state: RunState, message: str) -> None:
-        with self._lock:
-            state.status = "error"
-            state.error = message
-            state.current = None
-            state.finished_at = datetime.now(UTC).isoformat()
-            state.log.append(f"ERRO: {message}")
-        self._gate.release(state.run_id)

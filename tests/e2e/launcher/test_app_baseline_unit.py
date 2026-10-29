@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-
 import pytest
 from fastapi.testclient import TestClient
 
 from tests.e2e.launcher import app as app_mod
-from tests.e2e.launcher import service as service_mod
-from tests.e2e.launcher.service import RunService, RunState
 from tests.e2e.queries.models import ExpectedResult, QueryTestCase
 from tests.e2e.queries.preconditions import skipped_result
 from tests.e2e.queries.store import ResultStore
@@ -107,41 +102,3 @@ def test_delete_baseline_removes_only_that_conjunto(client: TestClient, store: R
     assert client.get("/api/baselines").json() == {"baselines": {"grupo:docs": second}}
     again = client.delete("/api/baselines/grupo%3Abridge%2Bdeck", headers=HEADER)
     assert again.json() == {"conjunto": CONJUNTO, "removed": False}
-
-
-class _Runner:
-    def __init__(self, **_kwargs) -> None:
-        pass
-
-    def execute(self, case):
-        return SimpleNamespace(status="completed")
-
-    def cancel(self) -> None:
-        pass
-
-    def close(self) -> None:
-        pass
-
-
-@pytest.mark.parametrize(
-    ("tags", "case_id", "expected"),
-    [(["docs"], None, "grupo:docs"), (None, "abc", "pergunta:abc")],
-)
-def test_run_saves_batch_with_conjunto(tags, case_id, expected) -> None:
-    store = MagicMock()
-    svc = RunService()
-    skipped = lambda case, _r, _v: skipped_result(case, ["x"])  # noqa: E731
-
-    with (
-        patch.object(service_mod, "ProviderQueryRunner", _Runner),
-        patch.object(service_mod, "QueryValidator", MagicMock),
-        patch.object(service_mod, "ResultStore", return_value=store),
-        patch.object(service_mod, "_build_test_result", skipped),
-        patch.object(RunService, "load_cases", return_value=[_case("c1", tags)]),
-    ):
-        provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
-        state = RunState(run_id="r1", provider=provider.id)
-        svc._execute(state, provider, tags, case_id, None)  # type: ignore[arg-type]
-
-    assert state.status == "done"
-    assert store.create_batch.call_args.kwargs["conjunto"] == expected

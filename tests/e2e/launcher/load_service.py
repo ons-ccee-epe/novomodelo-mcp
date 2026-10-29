@@ -2,7 +2,7 @@
 
 O motor (``tests.e2e.load.run``) roda num subprocesso próprio, não numa thread do
 launcher: o cancelamento é matar uma única árvore (motor + os N servidores MCP, ou
-no modo agent os N CLIs de agente com os seus servidores, sem depender de um
+no modo agent o motor e os containers dos agentes, sem depender de um
 desligamento limpo de cada um) e a medição não disputa o event loop do HTTP. O motor
 imprime eventos JSON em linhas; o launcher só os lê. Fechar o stdin do motor
 (launcher encerrado) o faz parar sozinho.
@@ -31,11 +31,10 @@ from typing import Any, Literal
 
 from tests.e2e.launcher.process_tree import ProcessTree
 from tests.e2e.launcher.run_gate import RunGate
-from tests.e2e.launcher.service import ExecucaoNoHostDesligadaError
+from tests.e2e.launcher.service import resolver_wheel
 from tests.e2e.load.agent_engine import AgentLoadConfig
 from tests.e2e.load.engine import LoadConfig
 from tests.e2e.load.sandbox import remove_tree
-from tests.e2e.queries.runner import EXECUCAO_SO_NO_EXECUTOR
 
 __all__ = ["LoadRunService", "LoadRunState", "build_command"]
 
@@ -53,6 +52,11 @@ def _agent_arguments(config: AgentLoadConfig) -> list[str]:
     arguments = ["--mode", "agent"]
     if config.provider is not None:
         arguments += ["--provider", config.provider]
+    if config.mcp is not None:
+        arguments += [
+            "--mcp",
+            config.mcp if config.mcp == "sem" else str(resolver_wheel(config.mcp)),
+        ]
     if config.timeout_s is not None:
         arguments += ["--timeout", repr(float(config.timeout_s))]
     selection = config.selection
@@ -151,12 +155,8 @@ class LoadRunService:
         """Cria e dispara uma carga em background.
 
         Raises:
-            ExecucaoNoHostDesligadaError: Se a carga é do modo agent: o agente só roda no
-                executor em container.
             RunAlreadyActiveError: Se outro run (de agente ou de carga) está ativo.
         """
-        if isinstance(config, AgentLoadConfig):
-            raise ExecucaoNoHostDesligadaError(EXECUCAO_SO_NO_EXECUTOR)
         run_id = uuid.uuid4().hex[:12]
         state = LoadRunState(run_id=run_id, config=config.to_dict(), started_at=_now())
         self._gate.acquire(run_id)

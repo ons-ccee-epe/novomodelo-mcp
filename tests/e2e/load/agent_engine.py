@@ -82,8 +82,8 @@ class AgentLoadConfig:
     """Parâmetros da carga do modo agent, validados na criação.
 
     ``iterations`` é por sessão (casos executados). ``timeout_s`` None usa o
-    ``timeout_s`` de cada caso no ``cases.yaml``. ``provider`` None escolhe o primeiro
-    instalado, como a esteira.
+    ``timeout_s`` de cada caso no ``cases.yaml``. ``provider`` None é o claude.
+    ``mcp`` é ``sem`` (None) ou o nome da wheel do MCP cuja imagem as sessões usam.
     """
 
     concurrency: int
@@ -92,6 +92,7 @@ class AgentLoadConfig:
     selection: CaseSelection = field(default_factory=CaseSelection)
     iterations: int | None = None
     timeout_s: float | None = None
+    mcp: str | None = None
 
     mode = "agent"
 
@@ -132,6 +133,7 @@ class AgentLoadConfig:
             "duration_seconds": self.duration_s,
             "iterations": self.iterations,
             "timeout_seconds": self.timeout_s,
+            "mcp": self.mcp,
             "selection": self.selection.to_dict(),
         }
 

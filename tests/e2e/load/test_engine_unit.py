@@ -272,11 +272,11 @@ class TestProgress:
 
 
 def _deck_fixtures(root: Path) -> Path:
-    deck = root / "fixtures" / "newave" / "novomodelo-caso-reduzido"
+    deck = root / "fixtures" / "newave" / "novomodelo-mini"
     (deck / "constraints").mkdir(parents=True)
     (deck / "config.json").write_text("{}", encoding="utf-8")
     (deck / "constraints" / "thermal_bounds.parquet").write_bytes(b"x")
-    for source in ("newave/newave-caso-reduzido", "decomp/decomp-mar-26-rv2-reduzido"):
+    for source in ("newave/newave-mini", "decomp/decomp-mini"):
         (root / "fixtures" / source).mkdir(parents=True)
         (root / "fixtures" / source / "caso.dat").write_text("x", encoding="utf-8")
     return root / "fixtures"
@@ -314,9 +314,7 @@ class TestSessionsWithCopy:
             folder = "preflight" if index < 0 else f"s{index}"
             assert Path(value).is_relative_to(run_root / folder / "fixtures"), value
             assert not Path(value).is_relative_to(fixtures.resolve())
-        assert (
-            run_root / "s0" / "fixtures" / "newave/novomodelo-caso-reduzido/config.json"
-        ).is_file()
+        assert (run_root / "s0" / "fixtures" / "newave/novomodelo-mini/config.json").is_file()
         assert sessions.close()
         assert not run_root.exists()
 
@@ -341,7 +339,7 @@ class TestSessionsWithCopy:
         assert not (tmp_path / "run" / "preflight").exists()
         summary = sessions.summary()
         assert summary["enabled"] and summary["sessions"] == 2
-        assert summary["subtrees"] == ["newave/novomodelo-caso-reduzido"]
+        assert summary["subtrees"] == ["newave/novomodelo-mini"]
         sessions.close()
 
     def test_sessions_get_their_own_folders_workspace_and_no_solver_runs(

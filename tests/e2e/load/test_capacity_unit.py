@@ -61,7 +61,7 @@ def _estimate(
 def _copy_profile(copy_mb: float) -> SelectionProfile:
     plan = SandboxPlan(
         fixtures=Path("C:/fixtures"),
-        subtrees=("newave/novomodelo-caso-reduzido",),
+        subtrees=("newave/novomodelo-mini",),
         enabled=True,
         copy_bytes=int(copy_mb * _MB),
     )
@@ -239,13 +239,13 @@ class TestProfilesFromTheSelection:
         assert not profile.heavy and not profile.writes
 
     def test_writing_and_heavy_tools_mark_the_profile(self, tmp_path: Path) -> None:
-        deck = tmp_path / "newave" / "novomodelo-caso-reduzido"
+        deck = tmp_path / "newave" / "novomodelo-mini"
         deck.mkdir(parents=True)
         (deck / "config.json").write_text("{}", encoding="utf-8")
         profile = tools_profile(tmp_path, ["deck_edit_json", "run_plan", "docs_list"])
         assert profile.heavy_tools == ("run_plan",)
         assert profile.write_tools == ("deck_edit_json",)
-        assert profile.sandbox.subtrees == ("newave/novomodelo-caso-reduzido",)
+        assert profile.sandbox.subtrees == ("newave/novomodelo-mini",)
         assert profile.sandbox.copy_bytes == 2
 
     def test_unknown_tool_is_refused(self, tmp_path: Path) -> None:

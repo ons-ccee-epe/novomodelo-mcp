@@ -319,20 +319,16 @@ class TestCopyPerSession:
         assert outcome.sandbox_plan is plan
 
 
-class TestPreflightPlan:
+class TestPreflight:
     """O pré-voo real (casos de um YAML temporário), sem subir servidor: as dicas são falsas."""
 
     def _setup(self, tmp_path):
         from tests.e2e.load.mix import ToolHints
 
-        fixtures = tmp_path / "fixtures"
-        deck = fixtures / "newave" / "novomodelo-caso-reduzido"
-        deck.mkdir(parents=True)
-        (deck / "config.json").write_text("{}", encoding="utf-8")
         cases = tmp_path / "cases.yaml"
         cases.write_text(
             "- id: deck-edit-json\n"
-            "  query: No caso {FIXTURES}/newave/novomodelo-caso-reduzido, edite o config.json\n"
+            "  query: No caso {caso:bridge_newave_mini}, edite o config.json\n"
             "  expected: {uses_mcp: true, tool: deck_edit_json, status: ok}\n"
             "- id: docs-list-all\n"
             "  query: Liste as docs\n"
@@ -343,39 +339,26 @@ class TestPreflightPlan:
             "deck_edit_json": ToolHints(read_only=False, open_world=False),
             "docs_list": ToolHints(read_only=True, open_world=False),
         }
-        return fixtures, cases, (lambda: hints)
+        return tmp_path, cases, (lambda: hints)
 
-    def test_a_writing_case_makes_the_preflight_plan_a_copy(self, tmp_path) -> None:
+    def test_the_preflight_selects_the_cases_and_plans_no_copy(self, tmp_path) -> None:
         from tests.e2e.load.agent_setup import make_preflight
 
         fixtures, cases, lister = self._setup(tmp_path)
-        result = make_preflight(_config(), fixtures, lister, cases, work_dir=tmp_path)()
+        result = make_preflight(_config(), fixtures, lister, cases)()
         assert [c.id for c in result.selection.cases] == ["deck-edit-json", "docs-list-all"]
-        assert result.sandbox_plan.enabled
-        assert result.sandbox_plan.subtrees == ("newave/novomodelo-caso-reduzido",)
+        assert result.sandbox_plan is None
 
-    def test_a_read_only_selection_needs_no_copy(self, tmp_path) -> None:
+    def test_a_selection_without_runnable_cases_fails_the_preflight(self, tmp_path) -> None:
         from tests.e2e.load.agent_setup import make_preflight
 
         fixtures, cases, lister = self._setup(tmp_path)
         config = _config(selection=CaseSelection(case_id="docs-list-all"))
-        result = make_preflight(config, fixtures, lister, cases, work_dir=tmp_path)()
-        assert not result.sandbox_plan.enabled
+        result = make_preflight(config, fixtures, lister, cases)()
+        assert [c.id for c in result.selection.cases] == ["docs-list-all"]
 
-    def test_copies_that_do_not_fit_on_disk_fail_the_preflight(
-        self, tmp_path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from types import SimpleNamespace
+        def no_hints():
+            return {}
 
-        from tests.e2e.load import agent_setup, sandbox
-
-        fixtures, cases, lister = self._setup(tmp_path)
-
-        def no_room(plan, sessions, work_dir):
-            return sandbox.check_disk(
-                plan, sessions, work_dir, disk_usage=lambda _p: SimpleNamespace(free=0)
-            )
-
-        monkeypatch.setattr(agent_setup, "check_disk", no_room)
-        with pytest.raises(LoadError, match="disco insuficiente"):
-            agent_setup.make_preflight(_config(), fixtures, lister, cases, work_dir=tmp_path)()
+        with pytest.raises(LoadError, match="nenhum caso da seleção"):
+            make_preflight(config, fixtures, no_hints, cases)()

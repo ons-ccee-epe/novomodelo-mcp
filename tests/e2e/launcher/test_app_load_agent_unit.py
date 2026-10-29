@@ -35,10 +35,7 @@ def client() -> TestClient:
 
 @pytest.fixture(autouse=True)
 def fake_catalog():
-    with (
-        patch.object(app_mod, "load_cases", return_value=CASES),
-        patch.object(app_mod, "resolve_provider", return_value=CLAUDE),
-    ):
+    with patch.object(app_mod, "load_cases", return_value=CASES):
         yield
 
 
@@ -48,13 +45,16 @@ def _post(client: TestClient, body: dict):
     return resp, start
 
 
-def test_carga_de_agente_nao_dispara_agente_no_host(client: TestClient) -> None:
-    with patch("subprocess.Popen") as popen:
+def test_carga_com_agente_nao_sobe_agente_no_host(client: TestClient) -> None:
+    fake = SimpleNamespace(stdin=None, stdout=iter(()), wait=lambda: 0)
+    with patch("subprocess.Popen", return_value=fake) as popen:
         resp = client.post("/api/load-runs", json=AGENT, headers=HEADER)
 
-    assert resp.status_code == 409
-    assert "executor em container" in resp.json()["detail"]
-    popen.assert_not_called()
+    assert resp.status_code == 200
+    command = popen.call_args.args[0]
+    assert command[1:3] == ["-m", "tests.e2e.load.run"]
+    assert command[command.index("--mode") + 1] == "agent"
+    assert popen.call_args.kwargs.get("shell") is not True
 
 
 class TestValidation:
@@ -80,12 +80,19 @@ class TestValidation:
         assert resp.status_code == 422
         start.assert_not_called()
 
-    def test_provider_not_installed_is_422(self, client: TestClient) -> None:
-        missing = RuntimeError("Provedor 'kiro-cli' nao esta instalado nesta maquina")
-        with patch.object(app_mod, "resolve_provider", side_effect=missing):
-            resp, start = _post(client, {**AGENT, "provider": "kiro-cli"})
+    @pytest.mark.parametrize("mcp", ["../x.whl", "/tmp/x.whl", "x.whl; ls", "nada"])
+    def test_mcp_outside_the_whitelist_is_422(self, client: TestClient, mcp: str) -> None:
+        resp, start = _post(client, {**AGENT, "mcp": mcp})
         assert resp.status_code == 422
-        assert "nao esta instalado" in resp.json()["detail"]
+        start.assert_not_called()
+
+    def test_wheel_without_the_configured_folder_is_422(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("NOVOMODELO_LAUNCHER_PASTA_WHEELS", raising=False)
+        resp, start = _post(client, {**AGENT, "mcp": "novomodelo_mcp-0.19.0-py3-none-any.whl"})
+        assert resp.status_code == 422
+        assert "NOVOMODELO_LAUNCHER_PASTA_WHEELS" in resp.json()["detail"]
         start.assert_not_called()
 
     @pytest.mark.parametrize(
@@ -107,7 +114,7 @@ class TestValidation:
 
 
 class TestStart:
-    def test_valid_agent_body_reaches_the_service_with_the_resolved_provider(
+    def test_valid_agent_body_reaches_the_service_with_the_default_provider(
         self, client: TestClient
     ) -> None:
         resp, start = _post(
@@ -117,6 +124,7 @@ class TestStart:
         config = start.call_args.args[0]
         assert isinstance(config, AgentLoadConfig)
         assert config.provider == "claude"
+        assert config.mcp is None
         assert config.selection == CaseSelection(group="docs")
         assert (config.concurrency, config.iterations, config.timeout_s) == (2, 1, 90.0)
 
@@ -169,7 +177,7 @@ class TestCatalogRoutes:
     def test_capacity_profile_follows_the_selection(
         self, client: TestClient, tmp_path, params: dict, heavy: bool, writes: bool
     ) -> None:
-        deck = tmp_path / "newave" / "novomodelo-caso-reduzido"
+        deck = tmp_path / "newave" / "novomodelo-mini"
         deck.mkdir(parents=True)
         (deck / "config.json").write_text("{}", encoding="utf-8")
         with (
@@ -254,3 +262,15 @@ class TestBuildCommand:
         assert command[command.index(flag) + 1] == value
         assert command[command.index("--timeout") + 1] == "45.0"
         assert "--provider" not in command
+        assert "--mcp" not in command
+
+    def test_wheel_is_resolved_inside_the_configured_folder(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        wheel = tmp_path / "novomodelo_mcp-0.19.0-py3-none-any.whl"
+        wheel.write_bytes(b"")
+        monkeypatch.setenv("NOVOMODELO_LAUNCHER_PASTA_WHEELS", str(tmp_path))
+        config = AgentLoadConfig(concurrency=1, duration_s=10, mcp=wheel.name)
+        command = build_command(config)
+        assert command[command.index("--mcp") + 1] == str(wheel.resolve())
+        assert build_command(AgentLoadConfig(concurrency=1, duration_s=10, mcp="sem"))[-1] == "sem"

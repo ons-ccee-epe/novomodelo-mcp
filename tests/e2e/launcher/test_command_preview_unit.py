@@ -1,73 +1,18 @@
-"""Testes do comando equivalente ao disparo (GET /api/command-preview)."""
+"""Comando equivalente do disparo de rodada e a varredura contra comandos inseguros."""
 
 from __future__ import annotations
 
-import shlex
-from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from tests.e2e.launcher import app as app_mod
 from tests.e2e.launcher.command_preview import command_preview
-from tests.e2e.launcher.providers import ProviderInfo, build_command
-from tests.e2e.queries.models import ExpectedResult, QueryTestCase
+from tests.e2e.launcher.service import RodadaRequest, argumentos_do_rodar
 
 LOCAL = "http://127.0.0.1:5175"
-KIRO = ProviderInfo("kiro-cli", "Kiro CLI", "kiro-cli", True, "/opt/abs/kiro-cli")
-CLAUDE = ProviderInfo("claude", "Claude Code", "claude", True, "/opt/abs/claude")
-
-
-def _case(case_id: str, query: str = "pergunta do caso") -> QueryTestCase:
-    return QueryTestCase(
-        id=case_id,
-        query=query,
-        expected=ExpectedResult(uses_mcp=True, tool="server_info"),
-    )
-
-
-def test_kiro_full_suite() -> None:
-    preview = command_preview(KIRO, None, None, [_case("a"), _case("b")])
-
-    assert preview["terminal"] == "python -m tests.e2e.queries.run_queries"
-    assert preview["terminal_note"] is None
-    assert preview["conjunto"] == "todos"
-    assert preview["total"] == 2
-    assert "<pergunta>" in preview["agent"]
-    assert preview["agent"].startswith("kiro-cli chat --no-interactive")
-
-
-def test_kiro_tags_and_case() -> None:
-    by_tags = command_preview(KIRO, ["docs", "bridge"], None, [_case("a"), _case("b")])
-    assert by_tags["terminal"].endswith(" --tags docs bridge")
-
-    by_case = command_preview(KIRO, None, "a", [_case("a", "qual a versão?")])
-    assert by_case["terminal"].endswith(" --case a")
-    assert by_case["conjunto"] == "pergunta:a"
-    assert "qual a versão?" in by_case["agent"]
-
-
-def test_claude_has_no_terminal_equivalent() -> None:
-    preview = command_preview(CLAUDE, None, None, [_case("a"), _case("b")])
-
-    assert preview["terminal"] is None
-    assert "Claude Code" in preview["terminal_note"]
-    assert "--mcp-config <config-mcp-temporaria>" in preview["agent"]
-    assert not preview["agent"].startswith("/opt/abs")
-
-
-def test_preview_matches_build_command() -> None:
-    cases = [_case("a", "uma pergunta com 'aspas' e espaços")]
-    preview = command_preview(CLAUDE, None, "a", cases)
-
-    expected = build_command(
-        replace(CLAUDE, path=None),
-        cases[0].query,
-        mcp_config_path=Path("<config-mcp-temporaria>"),
-    )
-    assert shlex.split(preview["agent"]) == expected
+WHEEL = "novomodelo_mcp-0.19.0-py3-none-any.whl"
 
 
 @pytest.fixture
@@ -75,29 +20,37 @@ def client() -> TestClient:
     return TestClient(app_mod.create_app(), base_url=LOCAL)
 
 
-def test_route_returns_preview(client: TestClient) -> None:
-    with patch.object(app_mod, "resolve_provider", return_value=KIRO):
-        resp = client.get("/api/command-preview", params={"provider": "kiro-cli", "tags": "docs"})
+def test_preview_mostra_o_comando_do_rodar_sem_caminho_do_host() -> None:
+    req = RodadaRequest(mcp=["sem", WHEEL], conjuntos=["tools"], filtro="docs-*", repeticoes=2)
+    preview = command_preview(req)
+    assert preview["comando"] == (
+        f"python -m tests.e2e rodar --mcp sem {WHEEL} --conjuntos tools "
+        "--filtro 'docs-*' --repeticoes 2".replace("'docs-*'", "docs-*")
+    )
+    assert "/" not in preview["comando"]
 
+
+def test_preview_bate_com_os_argumentos_do_disparo() -> None:
+    req = RodadaRequest(mcp=["sem"], agentes=["kiro"], completa=True, max_minutos=0)
+    reais = argumentos_do_rodar(req, wheel=lambda nome: nome)
+    assert command_preview(req)["argumentos"] == reais
+    assert reais == ["--mcp", "sem", "--agentes", "kiro", "--completa", "--max-minutos", "0"]
+
+
+def test_rota_devolve_o_comando(client: TestClient) -> None:
+    resp = client.get(
+        "/api/command-preview",
+        params={"mcp": ["sem"], "conjuntos": "tools,usuario", "completa": "true"},
+    )
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["terminal"].endswith(" --tags docs")
-    assert body["total"] >= 1
+    assert resp.json()["comando"] == (
+        "python -m tests.e2e rodar --mcp sem --conjuntos tools,usuario --completa"
+    )
 
 
-def test_route_unknown_case_is_422(client: TestClient) -> None:
-    with patch.object(app_mod, "resolve_provider", return_value=KIRO):
-        resp = client.get("/api/command-preview", params={"case_id": "nao-existe-xyz"})
-
-    assert resp.status_code == 422
-
-
-def test_route_unknown_provider_is_422(client: TestClient) -> None:
-    with patch.object(app_mod, "resolve_provider", side_effect=RuntimeError("sem provedor")):
-        resp = client.get("/api/command-preview")
-
-    assert resp.status_code == 422
-    assert "sem provedor" in resp.json()["detail"]
+@pytest.mark.parametrize("params", [{"filtro": "a b"}, {"conjuntos": "x"}, {"repeticoes": "0"}])
+def test_rota_recusa_valor_fora_da_lista(client: TestClient, params: dict) -> None:
+    assert client.get("/api/command-preview", params=params).status_code == 422
 
 
 _E2E = Path(__file__).resolve().parents[1]

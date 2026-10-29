@@ -169,11 +169,16 @@ class TestRealCatalog:
             tools = case.expected.tools or [case.expected.tool]
             assert not any(is_forbidden_tool(t) for t in tools), case.id
 
-    def test_cases_that_write_into_the_scratch_folder_run_on_the_copy(self, tmp_path: Path) -> None:
-        cases = load_cases(tmp_path)
-        scratch = [c for c in cases if "scratch" in c.query]
-        assert scratch
-        assert all(exclusion_reason(c) is None and case_writes(c) for c in scratch)
+    def test_writing_cases_name_a_destination_under_the_container_folder(
+        self, tmp_path: Path
+    ) -> None:
+        from tests.e2e.executor.container import PASTA_ESTUDOS
+
+        writing = [c for c in load_cases(tmp_path) if case_writes(c)]
+        assert writing
+        for case in writing:
+            assert exclusion_reason(case) is None, case.id
+            assert f"{PASTA_ESTUDOS}/" in case.query or "{caso:" in case.query, case.id
 
     def test_every_tool_the_server_announces_as_writing_is_copied_or_barred(self) -> None:
         from novomodelo_mcp.server import build_server
@@ -211,7 +216,7 @@ class TestSandboxPlan:
     def test_the_copy_holds_the_case_folders_cited_in_prompts_and_sources(
         self, tmp_path: Path
     ) -> None:
-        deck = tmp_path / "newave" / "novomodelo-caso-reduzido"
+        deck = tmp_path / "newave" / "novomodelo-mini"
         (deck / "output").mkdir(parents=True)
         (deck / "config.json").write_text("{}", encoding="utf-8")
         (tmp_path / "decomp" / "outro").mkdir(parents=True)
@@ -225,5 +230,5 @@ class TestSandboxPlan:
         missing = replace(missing, query=f"Liste {tmp_path / 'nonexistent'}")
         plan = plan_for_cases(tmp_path, [dashboard, missing, DOCS])
         assert plan.enabled
-        assert plan.subtrees == ("newave/novomodelo-caso-reduzido",)
+        assert plan.subtrees == ("newave/novomodelo-mini",)
         assert plan.copy_bytes == 2

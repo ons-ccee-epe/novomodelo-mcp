@@ -1,193 +1,129 @@
-"""Isolamento de uma sessão de agente da carga: nada que uma sessão grava é lido por outra.
+"""Sessão de agente da carga: cada caso roda no container do executor, descartável.
 
-Cada sessão tem uma pasta própria sob a raiz temporária do run:
-
-- ``tmp/``: TEMP/TMP/TMPDIR do agente e do servidor MCP. O servidor exporta os schemas
-  para ``<TEMP>/novomodelo_mcp_schemas`` na primeira chamada; com o TEMP comum, um
-  servidor leria arquivos que outro ainda está gravando.
-- ``mcp-state/``: NOVOMODELO_MCP_STATE_DIR (jobs e calibração), longe do state dir do usuário.
-- kiro-cli: ``workspace/.kiro/settings/mcp.json`` e esse ``workspace`` como cwd. O kiro lê a
-  definição do servidor do cwd; só assim o ambiente acima chega ao servidor sem depender
-  de o kiro repassar o próprio ambiente, e o ``mcp.json`` das fixtures (o da esteira)
-  não é regravado.
-- claude: ``claude-mcp.json`` para o ``--mcp-config`` e ``--no-session-persistence``. O cwd
-  fica nas fixtures, como na esteira: o claude procura o CLAUDE.md subindo a partir do
-  cwd, e um cwd temporário mudaria o contexto do agente.
-- ``fixtures/``: a cópia das fixtures (``sandbox.SessionSandbox``) quando a seleção tem caso
-  que grava. O servidor da sessão só enxerga a cópia (``NOVOMODELO_MCP_WORKSPACE``), o
-  prompt de cada caso é reescrito para ela e, antes de cada execução depois da primeira, ela
-  volta ao estado da subida: o caso seguinte não encontra o que o anterior gravou.
-
-O servidor de toda sessão roda com ``NOVOMODELO_MCP_MAX_JOBS=0``: nenhum agente dispara o
-solver, nem por conta própria.
-
-O agente espera a subida do servidor MCP tanto quanto o modo tools espera
-(``client.STARTUP_TIMEOUT_S``): com N servidores subindo juntos, o limite padrão do
-claude estoura, o agente fica sem as tools do MCP e a carga mediria isso, não o
-servidor.
+O container recebe a cópia própria do caso público citado no pedido (marcador
+``{caso:<nome>}``), então nada que uma sessão grava é lido por outra, e o agente não vê o
+host. A carga não libera tool que grava: uma tool que pede aprovação fica negada, como no
+conjunto de tools sem ``liberar``.
 """
 
 from __future__ import annotations
 
-import json
 import os
-from collections.abc import Iterable
-from dataclasses import dataclass, replace
+import threading
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Literal, cast
 
-from tests.e2e.launcher.provider_runner import ProviderQueryRunner
-from tests.e2e.launcher.providers import ProviderInfo, claude_mcp_config
-from tests.e2e.load.client import STARTUP_TIMEOUT_S
-from tests.e2e.load.sandbox import (
-    MAX_JOBS_ENV,
-    STATE_DIR_ENV,
-    TEMP_VARS,
-    SandboxPlan,
-    SessionSandbox,
-    make_run_root,
+from tests.e2e.config import Config
+from tests.e2e.conjuntos.tools.adaptador import (
+    CONJUNTO,
+    TIMEOUT_PADRAO,
+    _pedido,
+    caso_logico,
+    para_query_result,
 )
-from tests.e2e.queries.mcp_workspace import SERVER_NAME, WORKSPACE_ENV
+from tests.e2e.executor.casos import pasta_preparados
+from tests.e2e.executor.container import Execucao, executar
+from tests.e2e.executor.eventos import Leitura
+from tests.e2e.executor.imagens import ConfigMCP, tag_imagem
+from tests.e2e.load.sandbox import make_run_root
 from tests.e2e.queries.models import QueryResult, QueryTestCase
+from tests.e2e.resultado.modelos import Avaliacao, Metricas, Registro
+from tests.e2e.rodada import encerrar_em_voo, prefixo_do_container
 
-__all__ = [
-    "AgentSessionRunner",
-    "SessionPaths",
-    "default_run_root",
-    "prepare_session",
-    "session_server_config",
-]
+__all__ = ["AGENTE_DO_PROVEDOR", "ExecutorSessionRunner", "default_run_root"]
 
-MCP_STARTUP_TIMEOUT_MS = int(STARTUP_TIMEOUT_S * 1000)
-# Limite de subida do servidor MCP: chave do mcp.json do kiro-cli.
-_KIRO_STARTUP_KEY = "initializationTimeout"
+AGENTE_DO_PROVEDOR = {"claude": "claude", "kiro-cli": "kiro"}
+PREFIXO_TEMPO_ESGOTADO = "tempo esgotado"
+Executor = Callable[[Execucao, Config, Path, Callable[[Leitura], Avaliacao]], Registro]
 
 
-@dataclass(frozen=True)
-class SessionPaths:
-    """Arquivos e pastas exclusivos de uma sessão."""
+class ExecutorSessionRunner:
+    """Roda um caso por vez no executor; cada sessão da carga tem a sua instância.
 
-    index: int
-    root: Path
-    tmp: Path
-    state: Path
-    kiro_workspace: Path
-    claude_config: Path
-    sandbox: SessionSandbox | None = None
-
-    @classmethod
-    def under(cls, run_root: Path, index: int) -> SessionPaths:
-        root = Path(run_root) / f"s{index}"
-        return cls(
-            index=index,
-            root=root,
-            tmp=root / "tmp",
-            state=root / "mcp-state",
-            kiro_workspace=root / "workspace",
-            claude_config=root / "claude-mcp.json",
-        )
-
-    def env(self) -> dict[str, str]:
-        """Variáveis que isolam a sessão: TEMP e state dir do MCP."""
-        values = {STATE_DIR_ENV: str(self.state)}
-        values.update(dict.fromkeys(TEMP_VARS, str(self.tmp)))
-        return values
-
-
-def session_server_config(server: dict[str, Any], paths: SessionPaths) -> dict[str, Any]:
-    """Cópia da definição do servidor com o ambiente da sessão por cima do original.
-
-    Com a cópia das fixtures, o path guard da sessão é só ela: manter as fixtures originais
-    como raiz deixaria um caso que grava alterá-las.
-    """
-    env = {**(server.get("env") or {}), **paths.env(), MAX_JOBS_ENV: "0"}
-    if paths.sandbox is not None and paths.sandbox.enabled:
-        env[WORKSPACE_ENV] = paths.sandbox.workspace_env()
-    return {**server, "env": env}
-
-
-def prepare_session(
-    run_root: Path,
-    index: int,
-    server: dict[str, Any],
-    provider_id: str,
-    sandbox_plan: SandboxPlan | None = None,
-) -> SessionPaths:
-    """Cria a pasta da sessão ``index`` (e a cópia das fixtures, se o plano pede) e grava a
-    config MCP que só ela lê."""
-    paths = SessionPaths.under(run_root, index)
-    for folder in (paths.tmp, paths.state):
-        folder.mkdir(parents=True, exist_ok=True)
-    if sandbox_plan is not None and sandbox_plan.enabled:
-        sandbox = SessionSandbox(sandbox_plan, paths.root)
-        sandbox.create()
-        paths = replace(paths, sandbox=sandbox)
-    session_server = session_server_config(server, paths)
-    if provider_id == "kiro-cli":
-        settings = paths.kiro_workspace / ".kiro" / "settings"
-        settings.mkdir(parents=True, exist_ok=True)
-        session_server.setdefault(_KIRO_STARTUP_KEY, MCP_STARTUP_TIMEOUT_MS)
-        payload: dict[str, Any] = {"mcpServers": {SERVER_NAME: session_server}}
-        (settings / "mcp.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    else:
-        paths.claude_config.write_text(
-            json.dumps(claude_mcp_config(session_server), indent=2), encoding="utf-8"
-        )
-    return paths
-
-
-class AgentSessionRunner(ProviderQueryRunner):
-    """``ProviderQueryRunner`` de uma sessão: cwd, config MCP e TEMP próprios.
-
-    Uma instância roda um caso por vez (o processo em curso é estado da instância);
-    cada sessão da carga tem a sua.
+    ``execute`` devolve o ``QueryResult`` do stream, ``status="timeout"`` quando o vigia
+    encerrou o container e levanta ``RuntimeError`` com o motivo quando a execução não
+    chegou a rodar (``erro_infra``).
     """
 
     def __init__(
         self,
-        provider: ProviderInfo,
-        paths: SessionPaths,
-        fixtures_dir: str | Path,
-        timeout_seconds: float | None = None,
-        denied_tools: Iterable[str] = (),
+        agente: str,
+        config_mcp: ConfigMCP,
+        cfg: Config,
+        pasta: Path,
+        timeout_s: float | None = None,
+        preparados: Path | None = None,
+        executor: Executor = executar,
     ) -> None:
-        self._paths = paths
-        self._denied_tools = tuple(denied_tools)
-        self._executions = 0
-        super().__init__(
-            provider=provider,
-            timeout_seconds=timeout_seconds,
-            workspace_dir=None,
-        )
-        self.workspace_dir = (
-            paths.kiro_workspace if provider.id == "kiro-cli" else Path(fixtures_dir).resolve()
-        )
+        self._agente = agente
+        self._config_mcp = config_mcp
+        self._cfg = cfg
+        self._pasta = pasta
+        self._timeout_s = timeout_s
+        self._preparados = preparados
+        self._executor = executor
+        self._execucoes = 0
+        self._cancelado = threading.Event()
+        self._atual: Execucao | None = None
+        pasta.mkdir(parents=True, exist_ok=True)
 
-    @property
-    def paths(self) -> SessionPaths:
-        return self._paths
-
-    @property
-    def copy_ms(self) -> float | None:
-        """Tempo da cópia das fixtures da sessão, à parte do preparo; None sem cópia."""
-        sandbox = self._paths.sandbox
-        if sandbox is None or sandbox.copy_seconds is None:
-            return None
-        return sandbox.copy_seconds * 1000.0
+    def _execucao(self, caso: QueryTestCase) -> Execucao:
+        nome = caso_logico(caso)
+        base = self._preparados or pasta_preparados(self._cfg)
+        self._execucoes += 1
+        return Execucao(
+            conjunto=CONJUNTO,
+            caso=caso.id,
+            agente=cast("Literal['claude', 'kiro']", self._agente),
+            config=self._config_mcp.nome,
+            repeticao=self._execucoes,
+            pedido=_pedido(caso),
+            caso_origem=base / nome if nome else None,
+            somente_leitura=False,
+            timeout_s=int(self._timeout_s or caso.timeout_s or TIMEOUT_PADRAO),
+            imagem=tag_imagem(self._config_mcp, self._agente),
+        )
 
     def execute(self, test_case: QueryTestCase) -> QueryResult:
-        """Roda o caso na cópia da sessão, se houver: prompt e fontes apontam para ela."""
-        sandbox = self._paths.sandbox
-        if sandbox is not None and sandbox.enabled:
-            if self._executions:
-                sandbox.reset()
-            self._executions += 1
-            test_case = replace(
-                test_case,
-                query=sandbox.rewrite(test_case.query),
-                requires=tuple(sandbox.rewrite(source) for source in test_case.requires),
-            )
-        return super().execute(test_case)
+        if self._cancelado.is_set():
+            return self._sem_stream(test_case, "cancelled")
+        execucao = self._execucao(test_case)
+        self._atual = execucao
+        leituras: list[Leitura] = []
+
+        def avaliar(leitura: Leitura) -> Avaliacao:
+            leituras.append(leitura)
+            return Avaliacao("passou", "carga: o motor valida o stream", Metricas())
+
+        registro = self._executor(execucao, self._cfg, self._pasta, avaliar)
+        if self._cancelado.is_set():
+            return self._sem_stream(test_case, "cancelled")
+        if registro.estado == "erro_infra" or not leituras:
+            if registro.motivo.startswith(PREFIXO_TEMPO_ESGOTADO):
+                return replace(
+                    self._sem_stream(test_case, "timeout"),
+                    latency_ms=registro.duracao_s * 1000.0,
+                    timeout_s=float(execucao.timeout_s),
+                )
+            raise RuntimeError(registro.motivo or "execução sem stream")
+        resultado = para_query_result(test_case, leituras[-1])
+        return replace(resultado, latency_ms=registro.duracao_s * 1000.0)
+
+    @staticmethod
+    def _sem_stream(test_case: QueryTestCase, status: str) -> QueryResult:
+        return QueryResult(test_case, [], "", 0.0, status, "", "")
+
+    def cancel(self) -> None:
+        """Encerra o container em andamento; a execução volta como cancelada."""
+        self._cancelado.set()
+        execucao = self._atual
+        if execucao is not None:
+            encerrar_em_voo(self._cfg, [prefixo_do_container(execucao, self._pasta.name)])
+
+    def close(self) -> None:
+        """Nada a liberar: o container de cada execução já foi removido pelo executor."""
 
 
 def default_run_root(work_dir: str | Path | None = None) -> Path:

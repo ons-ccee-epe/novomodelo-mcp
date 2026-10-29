@@ -15,7 +15,7 @@ modos, as de ``is_forbidden_tool`` (o solver e os jobs dele, e a rede), com o mo
 ``barred_reason``. Uma tool do catálogo entra no mix só se o servidor a anuncia sem
 ``openWorldHint`` e, se não for das que gravam, com ``readOnlyHint``.
 
-Os caminhos vêm de ``cases.yaml`` (decks ``novomodelo-caso-reduzido`` e
+Os caminhos vêm de ``cases.yaml`` (decks ``novomodelo-mini`` e
 ``novomodelo-mar-26-rv2-reduzido``), do README das fixtures (``newave-determ`` e
 ``results/sample_run``) e dos exemplos nas docstrings das tools. Uma chamada cuja fonte
 falta (ou é uma pasta vazia) é pulada, não falha. ``{CALL}`` vira um número por chamada:
@@ -76,13 +76,13 @@ BARRED_TOOLS: tuple[str, ...] = (
     "incluir_pastas",
 )
 
-_NEWAVE_AGO = "newave/novomodelo-caso-reduzido"
-_NEWAVE_AGO_SRC = "newave/newave-caso-reduzido"
+_NEWAVE_AGO = "newave/novomodelo-mini"
+_NEWAVE_AGO_SRC = "newave/newave-mini"
 _DECOMP_MAR = "decomp/novomodelo-mar-26-rv2-reduzido"
-_DECOMP_MAR_SRC = "decomp/decomp-mar-26-rv2-reduzido"
+_DECOMP_MAR_SRC = "decomp/decomp-mini"
 _NEWAVE_DETERM = "newave-determ/novomodelo-set-24-reduzido-calibrado-determ-2000"
 _RESULTS_SAMPLE = "results/sample_run"
-_RESULTS_NEWAVE_AGO = "newave/novomodelo-caso-reduzido/output"
+_RESULTS_NEWAVE_AGO = "newave/novomodelo-mini/output"
 _RESULTS_DECOMP_MAR = "decomp/novomodelo-mar-26-rv2-reduzido/output"
 _SCRATCH = "scratch"
 

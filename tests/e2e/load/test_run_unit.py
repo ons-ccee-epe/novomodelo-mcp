@@ -228,31 +228,42 @@ class TestServerStderrInError:
 
 
 AGENT = ["--mode", "agent", "--concurrency", "2", "--duration", "60", "--provider", "claude"]
-_CLAUDE = SimpleNamespace(id="claude", label="Claude Code", binary="claude", path="C:/claude.exe")
 
 
 class TestAgentMode:
-    @pytest.fixture(autouse=True)
-    def installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(run_mod, "resolve_provider", lambda _requested: _CLAUDE)
-
     @pytest.mark.parametrize(
-        "flag", [["--provider", "claude"], ["--case", "x"], ["--group", "docs"]]
+        "flag", [["--provider", "claude"], ["--mcp", "sem"], ["--case", "x"], ["--group", "docs"]]
     )
     def test_agent_options_are_refused_in_tools_mode(self, flag: list[str], capsys) -> None:
         assert run_mod.main([*VALID, *flag]) == 2
         assert "não vale(m) no modo tools" in capsys.readouterr().err
 
-    def test_agent_mode_refuses_before_any_session(
-        self, monkeypatch: pytest.MonkeyPatch, capsys
+    def test_agent_mode_fails_on_an_unknown_wheel_before_any_session(
+        self, tmp_path: Path, capsys
     ) -> None:
-        monkeypatch.setattr(run_mod, "_execute_agent", lambda *a: pytest.fail("subiu sessão"))
-        monkeypatch.setattr(run_mod, "resolve_provider", lambda *a: pytest.fail("resolveu"))
+        code = run_mod.main([*AGENT, "--mcp", str(tmp_path / "x-0.1-py3-none-any.whl")])
+        assert code == run_mod.EXIT_FAILED
+        assert "wheel" in capsys.readouterr().err
 
-        assert run_mod.main([*AGENT, "--json-progress"]) == 1
-        assert "executor em container" in capsys.readouterr().out
+    def test_agent_mode_hands_the_config_to_the_executor_runner(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen = {}
 
-    def test_denied_tools_are_recorded_only_for_claude(self) -> None:
+        def fake_execute(config, args):
+            seen["config"] = config
+            return (
+                SimpleNamespace(),
+                make_agent_outcome(),
+                {"server": {"image": "x"}, "sandbox": {}},
+            )
+
+        monkeypatch.setattr(run_mod, "_execute_agent", fake_execute)
+        code = run_mod.main([*AGENT, "--mcp", "sem", "--no-save"])
+        assert code == 0
+        assert seen["config"].mcp == "sem"
+
+    def test_denied_tools_are_the_ones_the_server_announces_as_writing(self) -> None:
         from tests.e2e.load.mix import ToolHints
 
         outcome = make_agent_outcome()
@@ -260,27 +271,17 @@ class TestAgentMode:
             "deck_edit_json": ToolHints(read_only=False, open_world=False),
             "docs_list": ToolHints(read_only=True, open_world=False),
         }
-        assert run_mod._agent_info(_CLAUDE, outcome)["denied_tools"] == ["deck_edit_json"]
-        kiro = SimpleNamespace(id="kiro-cli", label="Kiro", binary="kiro-cli", path=None)
-        assert run_mod._agent_info(kiro, outcome)["denied_tools"] == []
-
-    def test_with_the_copy_only_barred_writing_tools_are_denied(self, tmp_path: Path) -> None:
-        from tests.e2e.load.mix import ToolHints
-        from tests.e2e.load.sandbox import SandboxPlan
-
-        outcome = make_agent_outcome()
-        outcome.server_tools = {
-            "deck_edit_json": ToolHints(read_only=False, open_world=False),
-            "run_start": ToolHints(read_only=False, open_world=False),
-            "docs_list": ToolHints(read_only=True, open_world=False),
-        }
-        outcome.sandbox_plan = SandboxPlan(fixtures=tmp_path, enabled=True)
-        assert run_mod._agent_info(_CLAUDE, outcome)["denied_tools"] == ["run_start"]
+        info = run_mod._agent_info("claude", "img:claude-sem-mcp", outcome)
+        assert info["denied_tools"] == ["deck_edit_json"]
+        assert info["binary"] == "img:claude-sem-mcp"
+        assert (
+            run_mod._agent_info("kiro-cli", "img:kiro-sem-mcp", outcome)["provider"] == "kiro-cli"
+        )
 
 
 SANDBOX = {
     "enabled": True,
-    "subtrees": ["newave/novomodelo-caso-reduzido"],
+    "subtrees": ["newave/novomodelo-mini"],
     "copy_mb": 19.2,
     "per_session_mb": 38.4,
     "growth": 1.0,
@@ -297,10 +298,7 @@ class TestSandboxRecord:
     ) -> None:
         monkeypatch.setattr(run_mod, "_execute", _fake_execute(sandbox=SANDBOX))
         assert run_mod.main([*VALID, "--results-dir", str(tmp_path)]) == 0
-        assert (
-            "Cópia por sessão: 19.2 MB (newave/novomodelo-caso-reduzido)"
-            in capsys.readouterr().out
-        )
+        assert "Cópia por sessão: 19.2 MB (newave/novomodelo-mini)" in capsys.readouterr().out
         [saved] = (tmp_path / "load").glob("2*.json")
         record = json.loads(saved.read_text(encoding="utf-8"))
         assert record["sandbox"] == SANDBOX

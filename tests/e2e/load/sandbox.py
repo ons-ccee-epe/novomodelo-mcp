@@ -1,7 +1,7 @@
 """Cópia das fixtures por sessão (sandbox) para as cargas cuja seleção grava arquivos.
 
 Com uma tool ou um caso que grava na seleção, cada sessão recebe, na sua pasta temporária,
-uma cópia só das subárvores das fixtures que a seleção usa (``newave/novomodelo-caso-reduzido``,
+uma cópia só das subárvores das fixtures que a seleção usa (``newave/novomodelo-mini``,
 ``results/sample_run``...) e uma ``scratch/`` vazia, com o mesmo layout das originais. Os
 caminhos das chamadas e dos prompts passam a apontar para a cópia, e o
 ``NOVOMODELO_MCP_WORKSPACE`` do servidor da sessão é só a cópia: o path guard do servidor

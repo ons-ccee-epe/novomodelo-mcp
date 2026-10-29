@@ -6,11 +6,11 @@ Há dois modos:
 - **`tools`** (padrão): não usa agente de IA. Abre N sessões pelo SDK `mcp`, **cada
   uma com o seu próprio processo do servidor** (stdio, como em produção, onde há um
   processo por cliente), e chama direto as tools do mix.
-- **`agent`**: N sessões de agente (`kiro-cli` ou `claude`) ao mesmo tempo, cada uma
+- **`agent`**: N sessões de agente (`claude` ou `kiro`) ao mesmo tempo, cada uma
   rodando em laço os casos do `tests/e2e/queries/cases.yaml` que podem rodar em
-  paralelo, validados como na esteira. A execução de agente passa pelo executor em
-  container: a CLI do host recusa o modo com a mensagem do executor e código de saída 1,
-  sem subir sessões. Ver [Modo agent](#modo-agent).
+  paralelo, validados como no conjunto de tools. Cada execução é um container do
+  executor, com a cópia própria do caso público citado no pedido. Ver
+  [Modo agent](#modo-agent).
 
 ## Como rodar
 
@@ -31,7 +31,8 @@ python -m tests.e2e.load.run --concurrency 2 --duration 10 --tools deck_edit_jso
 | `--tools a,b` | Só tools. Tools do catálogo (`mix.ALLOWED_TOOLS`); sem a opção, o mix padrão (`mix.DEFAULT_TOOLS`: as leves e somente leitura). As que gravam e as pesadas entram só pelo nome. |
 | `--timeout T` | tools: segundos sem resposta até contar `timeout` e recriar a sessão. agent: timeout de cada caso (sem a opção, o `timeout_s` do próprio caso). |
 | `--no-warmup` | Só tools. Não aquece as sessões: as primeiras chamadas (frias) entram nas métricas. |
-| `--provider kiro-cli\|claude` | Só agent, que no host recusa a execução. Sem a opção, o primeiro instalado, como na esteira. |
+| `--provider kiro-cli\|claude` | Só agent. Sem a opção, `claude`. |
+| `--mcp sem\|WHEEL` | Só agent: a imagem das sessões, a da configuração `sem` ou a da wheel do MCP (a mesma que `python -m tests.e2e preparar --mcp` construiu). Sem a opção, `sem`. |
 | `--case ID`, `--group G`, `--tags a,b` | Só agent, no máximo uma: um caso, um grupo (o da tool esperada, como na tela) ou tags (qualquer uma). Sem nenhuma, todos os casos elegíveis. |
 | `--no-save` | Não grava em `results/load/` (pasta criada sob demanda). |
 | `--fixtures`, `--results-dir` | Raiz das fixtures (vira o workspace do servidor) e pasta de resultados. |
@@ -44,8 +45,8 @@ python -m tests.e2e.load.run --concurrency 2 --duration 10 --tools deck_edit_jso
 `engine.py`: `MIN_CONCURRENCY` a `MAX_CONCURRENCY`, `MIN_DURATION_S` a
 `MAX_DURATION_S`, `MAX_TIMEOUT_S`, `MAX_ITERATIONS`; no modo agent o teto de sessões
 é `MAX_AGENT_CONCURRENCY`, em `agent_engine.py`). Valores fora deles, opções do outro
-modo ou um provedor que não está no PATH saem com código 2, sem subir nenhum processo.
-Se as cópias das fixtures por sessão não cabem no disco, a carga sai com código 1 antes
+modo ou provedor desconhecido saem com código 2, sem subir nenhum processo.
+No modo agent, ambiente do executor incompleto (motor, token ou volume) ou wheel inexistente saem com código 1 sem subir sessão; no modo tools, se as cópias das fixtures por sessão não cabem no disco, a carga sai com código 1 antes
 de copiar ([Cópia das fixtures por sessão](#cópia-das-fixtures-por-sessão)).
 
 Pela UI: aba **Carga** do dashboard (`tests/e2e/frontend`), que dispara pelo
@@ -54,8 +55,8 @@ launcher (`tests/e2e/launcher/README.md`).
 No modo tools, o servidor testado é o do **checkout**: o Python do `.venv` do
 projeto com `-m novomodelo_mcp` (`client.default_server_command`). O
 `~/.kiro/settings/mcp.json` não é usado, porque costuma apontar para outra
-instalação (`uv tool`), e a carga mediria a instalação errada. No modo agent é o
-contrário: o agente usa o servidor desse `mcp.json`, como na esteira.
+instalação (`uv tool`), e a carga mediria a instalação errada. No modo agent o servidor é o
+que a imagem do `--mcp` traz.
 
 ## O mix de chamadas
 
@@ -157,20 +158,16 @@ JSONs gravados antes da cópia por sessão não têm `sandbox` e continuam legí
 
 ## Cópia das fixtures por sessão
 
-Quando a seleção tem tool ou caso que grava, cada sessão recebe, na pasta temporária do
+Só no modo tools. Quando a seleção tem tool que grava, cada sessão recebe, na pasta temporária do
 run, uma cópia própria das fixtures (`sandbox.py`), feita na subida da sessão:
 
 - só as subárvores que a seleção usa (`categoria/caso`, como
-  `newave/novomodelo-caso-reduzido` ou `results/sample_run`), com o layout das originais,
+  `newave/novomodelo-mini` ou `results/sample_run`), com o layout das originais,
   mais uma `scratch/` vazia; um caminho que não existe nas fixtures também não existe
   na cópia (os casos de erro continuam dando erro);
-- os argumentos das chamadas (modo tools) e o prompt e as fontes de cada caso (modo
-  agent) passam a apontar para a cópia;
+- os argumentos das chamadas passam a apontar para a cópia;
 - o `NOVOMODELO_MCP_WORKSPACE` do servidor da sessão é **só a cópia**: o path guard do
   servidor, fail-closed, recusa as fixtures originais e a cópia de outra sessão;
-- no modo agent, antes de cada execução depois da primeira, a cópia volta ao estado da
-  subida (o que o caso anterior criou é apagado, o que alterou é recopiado), fora da
-  latência do caso;
 - a pasta do run é apagada ao fim, em erro e em Ctrl+C; pelo launcher, que mata o motor
   no cancelamento, quem apaga é o launcher, depois que a árvore do motor morre.
 
@@ -186,75 +183,47 @@ tamanho de uma cópia ao fim (`sandbox.final_mb_max`), para conferir a folga.
 
 ## Modo agent
 
-O modo agent só executa pelo executor em container. No host, a CLI e o launcher
-(`POST /api/load-runs`, 409) recusam; a seleção de casos, a cópia das fixtures por
-sessão, o limitador e o formato do resultado descritos abaixo valem para esse modo.
+Cada execução de caso é um container do executor (`executor.container.executar`, sem
+`liberar`): o agente não vê o host, recebe a cópia do caso e o MCP da imagem escolhida em
+`--mcp`. Antes, `python -m tests.e2e preparar --mcp ...` constrói a imagem e o secret do
+token; a carga confere o ambiente (`verificar`) e sai com código 1 se faltar algo.
 
 ### Quais casos entram
 
-A seleção é a da esteira (todos, um grupo ou um caso; pela CLI também tags). Fica de
-fora da carga, com o motivo no resultado (`cases.excluded`) e na tela, o caso:
+A seleção é a do conjunto de tools (todos, um grupo ou um caso; pela CLI também tags).
+Fica de fora da carga, com o motivo no resultado (`cases.excluded`) e na tela, o caso:
 
 - cuja tool esperada (`tool`, ou qualquer uma de `tools`) é barrada por
   `mix.is_forbidden_tool`, a mesma barreira do modo tools (o solver e os jobs dele, e a
   rede; ver [O mix de chamadas](#o-mix-de-chamadas));
 - que não usa o MCP (não exercita o servidor);
 - cuja fonte (`requires`) falta;
-- cuja tool o servidor do agente anuncia com rede, ou como escrita sem ser das que
-  rodam na cópia (pré-voo).
+- cuja tool o servidor deste checkout anuncia com rede, ou como escrita sem ser das que
+  gravam arquivos (pré-voo, `executor.container.tools_do_servidor`).
 
-Os casos que gravam (conversão, comparação, dashboard, edição de deck, `case_init`,
-`schema_export`, `run_apply`) entram, e a seleção que tem algum roda cada sessão na sua
-cópia das fixtures. Os casos pesados (`bridge_*`, `run_plan`) também entram.
+O marcador `{caso:<nome lógico>}` do pedido vira `/estudos/<nome lógico>` e a cópia do caso
+público vem de `executor.casos.pasta_preparados`, como no conjunto de tools. Os casos
+pesados (`bridge_*`, `run_plan`) também entram.
 
 `GET /api/load-cases` lista cada caso com `available`, `reason`, `writes` e `heavy`. O
 teste `test_agent_cases_unit.py::TestRealCatalog` confere, contra as anotações do
-servidor do checkout, que toda tool que o servidor anuncia como escrita roda na cópia
-ou está barrada, e que toda tool de rede está barrada.
+servidor do checkout, que toda tool que grava está na lista das que gravam ou barrada, e
+que toda tool de rede está barrada.
 
-O agente ainda pode chamar por conta própria uma tool que grava. No claude, a carga
-passa em `--disallowedTools` as tools de escrita que a sessão não pode usar: todas, se
-não há cópia; com a cópia, só as barradas. O kiro-cli não tem flag equivalente
-(`--trust-tools` pediria confirmação, que o modo headless não responde), e para ele a
-garantia é a do path guard: sem cópia, as fixtures; com cópia, só a cópia da sessão.
+A carga não libera nenhuma tool: uma tool que pede aprovação fica negada no container,
+nos dois agentes, e o resultado traz as tools negadas (`agent.denied_tools`).
 
 ### Isolamento entre sessões
 
-Cada sessão tem uma pasta própria numa raiz temporária do run, apagada ao fim
-(`agent_session.py`), e nenhuma sessão grava onde outra lê:
-
-| O que | Por sessão |
-|---|---|
-| TEMP/TMP/TMPDIR do agente e do servidor MCP | `tmp/` (o servidor exporta os schemas para o TEMP na primeira chamada) |
-| `NOVOMODELO_MCP_STATE_DIR` | `mcp-state/` (jobs e calibração longe do state dir do usuário) |
-| `NOVOMODELO_MCP_WORKSPACE` | `fixtures/`, a cópia das fixtures, se a seleção grava; senão as fixtures originais |
-| `NOVOMODELO_MCP_MAX_JOBS` | `0`: o servidor recusa `run_start` |
-| Config MCP do kiro-cli | `workspace/.kiro/settings/mcp.json`, com esse `workspace` como cwd |
-| Config MCP do claude | `claude-mcp.json` (`--mcp-config`) e `--no-session-persistence` |
-
-O agente espera a subida do servidor MCP o mesmo que o modo tools
-(`client.STARTUP_TIMEOUT_S`): `MCP_TIMEOUT` no claude (se o ambiente não definir outro) e
-`initializationTimeout` no `mcp.json` da sessão do kiro-cli (se a definição não tiver
-um). Com N servidores subindo juntos numa máquina ocupada, o limite padrão do claude
-estoura, o agente roda sem as tools do MCP e a carga mediria isso, não o
-servidor.
-
-O kiro-cli lê a definição do servidor do cwd, por isso cada sessão roda na sua pasta;
-o `mcp.json` das fixtures (o da esteira) não é regravado. O claude roda com o cwd nas
-fixtures, como na esteira, porque procura o CLAUDE.md subindo a partir do cwd. Os
-runners das N sessões são criados em sequência antes de qualquer agente rodar.
-
-O servidor MCP usado pelos agentes é o definido no `~/.kiro/settings/mcp.json` (o
-mesmo da esteira), com o path guard restrito às fixtures (ou à cópia da sessão); o
-comando medido fica em `server.command` no resultado. Ele pode ser outra instalação que
-não a do checkout.
+Cada sessão tem a sua pasta de registros sob a raiz temporária do run, apagada ao fim
+(`agent_session.py`), e cada execução é um container descartável com a cópia própria do
+caso, sem home nem socket do host; o servidor MCP de cada container tem o seu TEMP e o
+seu state dir.
 
 ### Fases e métricas
 
-`preflight` (carrega os casos, aplica as exclusões, sobe uma vez o servidor do
-agente para ler as dicas das tools e, se a seleção grava, monta o plano da cópia e
-confere o disco; não gasta tokens), `starting` (pastas, cópias e runners; a cópia de
-cada sessão fica em `sessions.events[].copy_ms`),
+`preflight` (carrega os casos, aplica as exclusões e lê as dicas das tools do servidor
+deste checkout; não gasta tokens), `starting` (pastas e runners das sessões),
 `running` e `finishing`: ao fim da janela nenhuma sessão começa caso novo, e os casos
 em curso terminam, limitados pelo timeout do próprio caso.
 
@@ -269,9 +238,8 @@ Cada execução tem dois resultados separados:
 
 Por caso e no total: execuções, contagem por status, aprovação, taxa de erro, vazão
 (casos/min), latência e a média de tool-calls (todas e só as do MCP). A série usa
-buckets de `AGENT_BUCKET_SECONDS`. CPU e RSS somam a árvore inteira: CLIs de agente,
-servidores MCP e os filhos deles. O JSON gravado traz `mode: "agent"`, o provedor, as
-tools negadas ao claude, as sessões e os casos selecionados e excluídos. A tela só
+buckets de `AGENT_BUCKET_SECONDS`. CPU e RSS somam a árvore do motor (o cliente do container); o agente e o servidor MCP rodam dentro do container e não entram. O JSON gravado traz `mode: "agent"`, o provedor, a imagem, as
+tools negadas, as sessões e os casos selecionados e excluídos. A tela só
 compara cargas do mesmo modo.
 
 ## Limitador de sessões simultâneas
