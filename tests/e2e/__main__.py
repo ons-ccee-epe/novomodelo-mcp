@@ -9,6 +9,7 @@ import re
 import sys
 import tempfile
 from collections.abc import Callable
+from dataclasses import asdict
 from pathlib import Path
 
 import jsonschema
@@ -41,6 +42,7 @@ from tests.e2e.resultado.modelos import Manifesto, Registro, VersaoDesconhecida
 
 NOME_RELATORIO = "relatorio-go-no-go.md"
 NOME_JUNIT = "junit.xml"
+NOME_DECISAO = "decisao-go-no-go.json"
 CODIGOS_DO_VEREDITO = {"go": 0, "no-go": 1, "inconclusivo": 2}
 CODIGO_SEGREDO = rodada.CODIGO_SEGREDO
 CODIGO_USO = 64
@@ -440,9 +442,23 @@ def _go_no_go(cfg, args) -> int:
         ),
     )
     _atomico(pasta / NOME_JUNIT, lambda tmp: escrever_junit(alvo, tmp))
+    _atomico(
+        pasta / NOME_DECISAO,
+        lambda tmp: tmp.write_text(
+            json.dumps(
+                {"schema_versao": 1, "alvo": args.alvo, "base": rotulo, **asdict(decisao)},
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+            newline="\n",
+        ),
+    )
     print(f"veredito: {decisao.veredito}")
     print(f"relatório: {NOME_RELATORIO}")
     print(f"junit: {NOME_JUNIT}")
+    print(f"decisão: {NOME_DECISAO}")
     return CODIGOS_DO_VEREDITO[decisao.veredito]
 
 

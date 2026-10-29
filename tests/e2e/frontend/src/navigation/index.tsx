@@ -14,7 +14,7 @@ export function AppRoutes() {
         <Route path={ROUTES.functional.path} element={<Functional />} />
         <Route path={ROUTES.load.path} element={<Load />} />
         <Route path={ROUTES.history.path} element={<History />} />
-        <Route path={`${ROUTES.history.path}/:batchId`} element={<History />} />
+        <Route path={`${ROUTES.history.path}/:rodadaId`} element={<History />} />
         <Route path={ROUTES.historyLoad.path} element={<History />} />
         <Route path={`${ROUTES.historyLoad.path}/:loadId`} element={<History />} />
       </Route>

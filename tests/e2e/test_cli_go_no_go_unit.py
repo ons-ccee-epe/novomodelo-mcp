@@ -290,3 +290,25 @@ def test_arquivos_gravados_seguem_o_umask(tmp_path):
         os.umask(antigo)
     for nome in ("relatorio-go-no-go.md", "junit.xml"):
         assert (pasta / nome).stat().st_mode & 0o777 == 0o644
+
+
+def test_grava_a_decisao_em_json_com_veredito_base_e_bloqueios(tmp_path):
+    pasta = _rodada(tmp_path, "r1", {"antiga": {"c": "passou"}, "nova": {"c": "falhou"}})
+    assert _go("r1", "--alvo", "nova", "--baseline-config", "antiga") == 1
+    dados = json.loads((pasta / "decisao-go-no-go.json").read_text(encoding="utf-8"))
+    assert dados["schema_versao"] == 1
+    assert dados["veredito"] == "no-go"
+    assert dados["alvo"] == "nova"
+    assert dados["base"] == "antiga · rodada r1"
+    assert dados["bloqueios"][0]["caso"] == "c"
+    assert dados["bloqueios"][0]["evidencia"]
+    for campo in ("inconclusivos", "pulados", "sem_base", "ausentes"):
+        assert isinstance(dados[campo], list)
+    assert not list(pasta.glob(".decisao-go-no-go.json.*"))
+
+
+def test_decisao_sem_base_grava_base_nula(tmp_path):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}})
+    assert _go("r1", "--alvo", "mcp") == 0
+    dados = json.loads((pasta / "decisao-go-no-go.json").read_text(encoding="utf-8"))
+    assert dados["veredito"] == "go" and dados["base"] is None

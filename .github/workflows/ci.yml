@@ -96,6 +96,34 @@ jobs:
       - name: Termos proibidos na árvore
         run: python3 scripts/ci/check_termos_proibidos.py
 
+  painel:
+    name: painel (lint, test, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tests/e2e/frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      # Mesma versão do engines.node do package.json.
+      - name: Instalar o Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "25.9.0"
+
+      - name: Instalar dependências (npm ci)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
   test:
     # Os alvos e as versões do Python que o projeto suporta.
     strategy:

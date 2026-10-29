@@ -1,16 +1,10 @@
 /**
- * Cliente do launcher de dev (FastAPI).
+ * Pontos comuns do launcher de dev (FastAPI): base das rotas, header dos POSTs, saúde e
+ * espera cancelável. As rodadas ficam em `@/data/rodada`; as cargas em `loadApi`.
  *
- * O launcher dispara os testes num provedor de IA (kiro-cli/claude) e grava a
- * bateria; o frontend consome a bateria depois via resultsApi (/data/*). Aqui
- * ficam so as chamadas de CONTROLE: detectar provedores, listar os casos
- * (biblioteca de prompts) e disparar/poll de um run.
- *
- * Base: em dev, o Vite faz proxy de /api para VITE_LAUNCHER_URL (ver
- * vite.config.ts). Assim o frontend sempre chama caminhos relativos /api/*.
+ * Base: em dev, o Vite faz proxy de /api e /data para VITE_LAUNCHER_URL (ver
+ * vite.config.ts). Assim o frontend sempre chama caminhos relativos.
  */
-
-import type { TestResult } from "@/shared/types";
 
 export const API = "api";
 
@@ -26,22 +20,11 @@ export interface ProviderInfo {
   installed: boolean;
 }
 
-export interface ProvidersResponse {
-  providers: ProviderInfo[];
-  default: ProviderId | null;
-}
-
-export interface CaseMeta {
-  id: string;
-  query: string;
-  expected_tool: string | null;
-  expected_tools: string[] | null;
-  tags: string[];
-  /** Timeout (s) da sessão do agente neste caso, já resolvido (caso > grupo > default). */
-  timeout_s: number | null;
-  /** Fontes que precisam existir; sem elas o caso sai como "skip". */
-  requires: string[];
-}
+/** Os agentes que `POST /api/load-runs` aceita no modo agente (o padrão do launcher é o primeiro). */
+export const PROVEDORES_DA_CARGA: ProviderInfo[] = [
+  { id: "claude", label: "Claude Code", binary: "claude", installed: true },
+  { id: "kiro-cli", label: "Kiro", binary: "kiro-cli", installed: true },
+];
 
 export type RunStatus = "pending" | "running" | "done" | "error" | "cancelled";
 
@@ -49,34 +32,6 @@ const FINISHED: ReadonlySet<RunStatus> = new Set(["done", "error", "cancelled"])
 
 export function isFinished(status: RunStatus): boolean {
   return FINISHED.has(status);
-}
-
-/** Resultado resumido de um caso ja terminado (transparencia incremental). */
-/** O resultado de um caso, publicado assim que ele termina: o mesmo TestResult da bateria. */
-export type RunResultItem = TestResult;
-
-export interface RunState {
-  run_id: string;
-  provider: string;
-  status: RunStatus;
-  total: number;
-  completed: number;
-  current: string | null;
-  batch_id: string | null;
-  error: string | null;
-  /** Parada pedida; o status vira "cancelled" quando o caso atual é interrompido. */
-  cancel_requested: boolean;
-  started_at: string;
-  finished_at: string | null;
-  log: string[];
-  results: RunResultItem[];
-}
-
-export interface StartRunBody {
-  provider?: ProviderId | null;
-  tags?: string[] | null;
-  case_id?: string | null;
-  timeout_seconds?: number | null;
 }
 
 /** True se o launcher esta no ar (usado para habilitar os controles de disparo). */
@@ -87,108 +42,6 @@ export async function launcherHealthy(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export async function fetchProviders(): Promise<ProvidersResponse> {
-  const res = await fetch(`${API}/providers`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Falha ao detectar provedores: HTTP ${res.status}`);
-  return (await res.json()) as ProvidersResponse;
-}
-
-export async function fetchCases(): Promise<CaseMeta[]> {
-  const res = await fetch(`${API}/cases`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Falha ao carregar casos: HTTP ${res.status}`);
-  const data = (await res.json()) as { cases: CaseMeta[] };
-  return data.cases ?? [];
-}
-
-export async function startRun(body: StartRunBody): Promise<RunState> {
-  const res = await fetch(`${API}/runs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...LAUNCHER_HEADERS },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const err = (await res.json()) as { detail?: string };
-      if (err.detail) detail = err.detail;
-    } catch {
-      /* ignora corpo nao-JSON */
-    }
-    throw new Error(`Falha ao disparar o run: ${detail}`);
-  }
-  return (await res.json()) as RunState;
-}
-
-export async function fetchRun(runId: string, signal?: AbortSignal): Promise<RunState> {
-  const res = await fetch(`${API}/runs/${runId}`, { cache: "no-store", signal });
-  if (!res.ok) throw new Error(`Falha ao consultar o run: HTTP ${res.status}`);
-  return (await res.json()) as RunState;
-}
-
-/** Pede a parada do run: o caso em andamento é interrompido e os demais não rodam. */
-export async function cancelRun(runId: string): Promise<RunState> {
-  const res = await fetch(`${API}/runs/${runId}/cancel`, {
-    method: "POST",
-    headers: LAUNCHER_HEADERS,
-  });
-  if (!res.ok) throw new Error(`Falha ao parar o run: HTTP ${res.status}`);
-  return (await res.json()) as RunState;
-}
-
-async function failWithDetail(res: Response, prefix: string): Promise<never> {
-  let detail = `HTTP ${res.status}`;
-  try {
-    const err = (await res.json()) as { detail?: string };
-    if (err.detail) detail = err.detail;
-  } catch {
-    /* ignora corpo nao-JSON */
-  }
-  throw new Error(`${prefix}: ${detail}`);
-}
-
-/** Marca a bateria como baseline do conjunto. */
-export async function setBaseline(conjunto: string, batchId: string): Promise<void> {
-  const res = await fetch(`${API}/baselines/${encodeURIComponent(conjunto)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", ...LAUNCHER_HEADERS },
-    body: JSON.stringify({ batch_id: batchId }),
-  });
-  if (!res.ok) await failWithDetail(res, "Falha ao definir a baseline");
-}
-
-/** Remove a baseline do conjunto. */
-export async function clearBaseline(conjunto: string): Promise<void> {
-  const res = await fetch(`${API}/baselines/${encodeURIComponent(conjunto)}`, {
-    method: "DELETE",
-    headers: LAUNCHER_HEADERS,
-  });
-  if (!res.ok) await failWithDetail(res, "Falha ao remover a baseline");
-}
-
-export type CommandPreview = {
-  conjunto: string;
-  total: number;
-  terminal: string | null;
-  terminal_note: string | null;
-  agent: string;
-};
-
-export async function fetchCommandPreview(p: {
-  provider: string | null;
-  tags?: string[];
-  caseId?: string;
-}): Promise<CommandPreview> {
-  const params = new URLSearchParams();
-  if (p.provider) params.set("provider", p.provider);
-  if (p.tags && p.tags.length > 0) params.set("tags", p.tags.join(","));
-  if (p.caseId) params.set("case_id", p.caseId);
-  const res = await fetch(`${API}/command-preview?${params.toString()}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) await failWithDetail(res, "Falha ao montar o comando");
-  return (await res.json()) as CommandPreview;
 }
 
 export const POLL_INTERVAL_MS = 1500;
@@ -208,28 +61,4 @@ export function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
     }
     signal?.addEventListener("abort", onAbort, { once: true });
   });
-}
-
-/**
- * Faz polling de um run até terminar (done/error/cancelled), estourar o teto de tempo ou
- * ser cancelado pelo ``signal``. Chama onUpdate a cada tick.
- */
-export async function pollRun(
-  runId: string,
-  onUpdate: (state: RunState) => void,
-  opts: { intervalMs?: number; maxMs?: number; signal?: AbortSignal } = {},
-): Promise<RunState> {
-  const interval = opts.intervalMs ?? POLL_INTERVAL_MS;
-  const maxMs = opts.maxMs ?? POLL_MAX_MS;
-  const start = Date.now();
-
-  for (;;) {
-    const state = await fetchRun(runId, opts.signal);
-    onUpdate(state);
-    if (isFinished(state.status)) return state;
-    if (Date.now() - start > maxMs) {
-      return { ...state, status: "error", error: "Timeout de polling no frontend." };
-    }
-    await waitOrAbort(interval, opts.signal);
-  }
 }

@@ -4,90 +4,58 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Functional } from "./index";
 
-const CASES = [
-  { id: "q_deck", query: "lista decks", expected_tool: "deck_list", expected_tools: null, tags: [], timeout_s: null, requires: [] },
-  { id: "q_docs", query: "busca docs", expected_tool: "docs_search", expected_tools: null, tags: [], timeout_s: null, requires: [] },
-];
-
-function stub(online: boolean) {
-  const mock = vi.fn(async (url: string) => {
-    const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
-    if (!online) return { ok: false, status: 503, json: async () => ({}) } as Response;
-    if (url === "api/health") return ok({});
-    if (url === "api/providers") {
-      return ok({ providers: [{ id: "claude", label: "Claude", binary: "claude", installed: true }], default: "claude" });
-    }
-    if (url === "api/cases") return ok({ cases: CASES });
-    if (url.startsWith("api/command-preview")) {
-      return ok({ conjunto: "todos", total: 2, terminal: "cmd-terminal", terminal_note: null, agent: "cmd-agente" });
-    }
-    return { ok: false, status: 404, json: async () => ({}) } as Response;
+function stub() {
+  const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+    const corpo = init?.method === "POST"
+      ? { rodada: "r9", status: "em_andamento" }
+      : { comando: "python -m tests.e2e rodar --mcp sem", argumentos: [] };
+    return { ok: true, status: 200, json: async () => corpo } as unknown as Response;
   });
-  vi.stubGlobal("fetch", mock);
-  return mock;
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 }
 
-function previewUrls(mock: ReturnType<typeof stub>): string[] {
-  return mock.mock.calls.map(([u]) => u as string).filter((u) => u.startsWith("api/command-preview"));
-}
+afterEach(() => vi.unstubAllGlobals());
 
-function renderIt() {
-  return render(
-    <MemoryRouter>
-      <Functional />
-    </MemoryRouter>,
-  );
-}
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-describe("Functional", () => {
-  it("mostra o preview da esteira completa sem filtros", async () => {
-    const mock = stub(true);
-    renderIt();
-    expect(await screen.findByText("cmd-terminal")).toBeInTheDocument();
-    expect(previewUrls(mock).at(-1)).toBe("api/command-preview?provider=claude");
-  });
-
-  it("o comando equivalente vem antes da lista de testes", async () => {
-    stub(true);
-    renderIt();
-    const box = await screen.findByText("cmd-terminal");
-    const list = screen.getByRole("button", { name: /q_docs/ });
-    expect(box.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("escolher um grupo atualiza o preview com tags", async () => {
-    const mock = stub(true);
-    renderIt();
-    await screen.findByText("cmd-terminal");
-
-    fireEvent.click(screen.getByRole("button", { name: /^deck \(1\)/ }));
-
-    await waitFor(() =>
-      expect(previewUrls(mock).at(-1)).toBe("api/command-preview?provider=claude&tags=deck"),
+describe("Disparo da rodada", () => {
+  it("dispara por POST /api/rodadas só com os campos da lista branca", async () => {
+    const fetchMock = stub();
+    render(
+      <MemoryRouter>
+        <Functional />
+      </MemoryRouter>,
     );
+    fireEvent.change(screen.getByLabelText("Repetições"), { target: { value: "3" } });
+    fireEvent.click(screen.getByLabelText("usuário"));
+    fireEvent.click(screen.getByRole("button", { name: "Disparar rodada" }));
+    await screen.findByRole("status");
+    const post = fetchMock.mock.calls.find(([, i]) => i?.method === "POST")!;
+    expect(post[0]).toBe("api/rodadas");
+    expect(JSON.parse(post[1]!.body as string)).toEqual({
+      mcp: ["sem"],
+      conjuntos: ["usuario"],
+      repeticoes: 3,
+    });
+    expect(screen.getByRole("link", { name: "Ver no Histórico" })).toHaveAttribute("href", "/historico/r9");
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => /providers|\/runs/.test(u))).toBe(false);
   });
 
-  it("escolher uma pergunta atualiza o preview com case_id", async () => {
-    const mock = stub(true);
-    renderIt();
-    await screen.findByText("cmd-terminal");
-
-    fireEvent.click(screen.getByRole("button", { name: /q_docs/ }));
-
-    await waitFor(() =>
-      expect(previewUrls(mock).at(-1)).toBe("api/command-preview?provider=claude&case_id=q_docs"),
+  it("mostra o motivo da recusa do launcher", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_u: string, init?: RequestInit) =>
+        init?.method === "POST"
+          ? ({ ok: false, status: 409, json: async () => ({ detail: "já há um run ativo" }) } as unknown as Response)
+          : ({ ok: true, status: 200, json: async () => ({ comando: "x", argumentos: [] }) } as unknown as Response),
+      ),
     );
-  });
-
-  it("com o launcher offline não mostra o comando equivalente", async () => {
-    const mock = stub(false);
-    renderIt();
-    expect(await screen.findByText(/Launcher de testes offline/)).toBeInTheDocument();
-    expect(screen.queryByText("Bateria pelo terminal")).not.toBeInTheDocument();
-    expect(previewUrls(mock)).toHaveLength(0);
+    render(
+      <MemoryRouter>
+        <Functional />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Disparar rodada" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("já há um run ativo"));
   });
 });

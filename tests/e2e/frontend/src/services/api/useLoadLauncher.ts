@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  fetchProviders,
   isFinished,
   launcherHealthy,
+  PROVEDORES_DA_CARGA,
   type ProviderId,
 } from "@/services/launcherApi";
 import {
@@ -150,21 +150,17 @@ export function useLoadLauncher(onFinished: () => void): LoadLauncherData {
         } catch (e: unknown) {
           if (alive) setError(e instanceof Error ? e.message : String(e));
         }
-        const [cases, providers] = await Promise.allSettled([fetchLoadCases(), fetchProviders()]);
-        if (!alive) return;
-        if (cases.status === "fulfilled" && providers.status === "fulfilled") {
+        try {
+          const cases = await fetchLoadCases();
+          if (!alive) return;
           setAgent({
-            cases: cases.value.cases ?? [],
-            limits: cases.value.limits,
-            providers: providers.value.providers ?? [],
-            defaultProvider: providers.value.default ?? null,
+            cases: cases.cases ?? [],
+            limits: cases.limits,
+            providers: PROVEDORES_DA_CARGA,
+            defaultProvider: PROVEDORES_DA_CARGA[0]?.id ?? null,
           });
-        } else {
-          const failed = [cases, providers].find(
-            (r): r is PromiseRejectedResult => r.status === "rejected",
-          );
-          const reason: unknown = failed?.reason;
-          setAgentError(reason instanceof Error ? reason.message : String(reason));
+        } catch (reason: unknown) {
+          if (alive) setAgentError(reason instanceof Error ? reason.message : String(reason));
         }
       }
       if (alive) setChecking(false);

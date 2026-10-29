@@ -1983,3 +1983,27 @@ details[open] > summary.nm-call-head::before {
   gap: 0.4rem;
   margin-bottom: 0.5rem;
 }
+
+/* ===== Rodadas ===== */
+.nm-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+
+.nm-decisoes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nm-decisoes > li + li {
+  margin-top: 0.75rem;
+}
+
+.nm-form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}

@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 
-import type { CaseMeta, RunResultItem } from "@/services/launcherApi";
 import type { LoadCaseInfo } from "@/services/loadApi";
-import { CaseList } from "@/features/Functional/components/launcher/CaseList";
+import { CaseList } from "./CaseList";
 import { LoadBadges } from "./LoadBadges";
 
 export type CaseScope = "all" | "group" | "case";
@@ -35,9 +34,6 @@ export function describeWeight(writes: number, heavy: number): string {
   return parts.map((p) => ` · ${p}`).join("");
 }
 
-// A biblioteca só mostra resultados na esteira; aqui os casos nunca rodam por esta lista.
-const NO_RESULTS = new Map<string, RunResultItem>();
-
 export function countGroups(cases: LoadCaseInfo[]): GroupCount[] {
   const map = new Map<string, GroupCount>();
   for (const c of cases) {
@@ -57,18 +53,6 @@ export function countGroups(cases: LoadCaseInfo[]): GroupCount[] {
     map.set(c.group, entry);
   }
   return [...map.values()].sort((a, b) => a.group.localeCompare(b.group));
-}
-
-function toCaseMeta(c: LoadCaseInfo): CaseMeta {
-  return {
-    id: c.id,
-    query: c.query,
-    expected_tool: c.expected_tool,
-    expected_tools: c.expected_tools,
-    tags: c.tags,
-    timeout_s: c.timeout_s,
-    requires: [],
-  };
 }
 
 function CaseSummary({ item }: { item: LoadCaseInfo }) {
@@ -126,7 +110,6 @@ export function AgentCasePicker({
     () => eligible.filter((c) => libraryGroup === null || c.group === libraryGroup),
     [eligible, libraryGroup],
   );
-  const libraryMeta = useMemo(() => library.map(toCaseMeta), [library]);
   const chosen = eligible.find((c) => c.id === caseId) ?? null;
   const eligibleWrites = eligible.filter((c) => c.writes).length;
   const eligibleHeavy = eligible.filter((c) => c.heavy).length;
@@ -212,11 +195,9 @@ export function AgentCasePicker({
           </div>
           <div className="nm-launcher-split">
             <CaseList
-              cases={libraryMeta}
+              cases={library}
               selectedGroup={libraryGroup}
               selectedCaseId={caseId}
-              runningCaseId={null}
-              resultById={NO_RESULTS}
               onSelectCase={onCase}
             />
             {chosen ? (

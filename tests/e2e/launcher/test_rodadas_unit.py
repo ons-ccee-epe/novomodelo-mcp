@@ -220,6 +220,22 @@ def test_detalhe_traz_manifesto_registros_e_decisao_sem_base(
     assert corpo["decisoes"]["sem-mcp"]["veredito"] == "go"
 
 
+def test_detalhe_devolve_a_decisao_do_go_no_go_quando_gravada(
+    client: TestClient, resultados: Path
+) -> None:
+    pasta = _gravar(resultados, "r1")
+    assert client.get("/api/rodadas/r1").json()["go_no_go"] is None
+
+    (pasta / "decisao-go-no-go.json").write_text(
+        json.dumps({"schema_versao": 1, "veredito": "go", "alvo": "sem-mcp", "base": None}),
+        encoding="utf-8",
+    )
+    assert client.get("/api/rodadas/r1").json()["go_no_go"]["veredito"] == "go"
+
+    (pasta / "decisao-go-no-go.json").write_text("{", encoding="utf-8")
+    assert "erro" in client.get("/api/rodadas/r1").json()["go_no_go"]
+
+
 def test_rodada_bloqueada_por_segredo_nao_expoe_registros(
     client: TestClient, resultados: Path
 ) -> None:

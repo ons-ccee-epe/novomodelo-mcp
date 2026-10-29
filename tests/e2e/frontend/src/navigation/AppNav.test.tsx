@@ -3,10 +3,11 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppRoutes } from "@/navigation";
-import { fetchIndex } from "@/services/resultsApi";
+import { carregarRodadas } from "@/data/rodada";
 
-vi.mock("@/services/resultsApi", () => ({
-  fetchIndex: vi.fn(),
+vi.mock("@/data/rodada", () => ({
+  carregarRodadas: vi.fn(),
+  carregarRodada: vi.fn().mockRejectedValue(new Error("sem rodada")),
 }));
 vi.mock("@/services/launcherApi", () => ({
   launcherHealthy: vi.fn().mockResolvedValue(true),
@@ -18,7 +19,7 @@ vi.mock("@/features/Load", () => ({
   Load: () => <div>tela carga</div>,
 }));
 
-const mockedIndex = vi.mocked(fetchIndex);
+const mockedIndex = vi.mocked(carregarRodadas);
 
 function renderAt(path: string) {
   return render(
@@ -30,12 +31,10 @@ function renderAt(path: string) {
 
 beforeEach(() => {
   mockedIndex.mockReset();
-  mockedIndex.mockResolvedValue({
-    batches: [
-      { batch_id: "20261025_100000_abc", version: "1.2.3" },
-      { batch_id: "20261024_100000_abc", version: "1.2.2" },
-    ],
-  } as never);
+  mockedIndex.mockResolvedValue([
+    { rodada: "20261025_100000_abc", configs: ["sem-mcp", "mcp-1.2"] },
+    { rodada: "20261024_100000_abc", configs: ["sem-mcp"] },
+  ] as never);
 });
 
 describe("AppLayout", () => {
@@ -53,12 +52,12 @@ describe("AppLayout", () => {
     await waitFor(() => expect(mockedIndex).toHaveBeenCalled());
   });
 
-  it("mostra a última bateria, a versão e o launcher na engrenagem", async () => {
+  it("mostra a última rodada, as configurações e o launcher na engrenagem", async () => {
     renderAt("/funcionais");
     await waitFor(() => expect(mockedIndex).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Informações do ambiente" }));
     expect(await screen.findByText("20261025_100000_abc")).toBeInTheDocument();
-    expect(screen.getByText("v1.2.3")).toBeInTheDocument();
+    expect(screen.getByText("sem-mcp, mcp-1.2")).toBeInTheDocument();
     expect(await screen.findByText("online")).toBeInTheDocument();
     expect(screen.getByText("stdio")).toBeInTheDocument();
   });
@@ -91,20 +90,10 @@ describe("AppLayout", () => {
     );
   });
 
-  it("mantém Histórico ativa no detalhe de uma bateria", async () => {
+  it("mantém Histórico ativa no detalhe de uma rodada", async () => {
     renderAt("/historico/20261024_100000_abc");
     expect(screen.getByRole("link", { name: "Histórico" })).toHaveAttribute("aria-current", "page");
     await waitFor(() => expect(mockedIndex).toHaveBeenCalled());
-  });
-
-  it("omite a versão quando desconhecida", async () => {
-    mockedIndex.mockResolvedValue({
-      batches: [{ batch_id: "20261025_100000_abc", version: "unknown" }],
-    } as never);
-    renderAt("/funcionais");
-    fireEvent.click(screen.getByRole("button", { name: "Informações do ambiente" }));
-    expect(await screen.findByText("20261025_100000_abc")).toBeInTheDocument();
-    expect(screen.queryByText(/^v[0-9]/)).not.toBeInTheDocument();
   });
 
   it("não mostra nada quando o index falha", async () => {

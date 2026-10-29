@@ -6,9 +6,9 @@ export const ROUTES = {
   historyLoad: { path: "/historico/carga" },
 } as const;
 
-/** Caminho do detalhe de uma bateria no histórico. */
-export function historyBatchPath(batchId: string): string {
-  return `${ROUTES.history.path}/${encodeURIComponent(batchId)}`;
+/** Caminho do detalhe de uma rodada no histórico. */
+export function historyRodadaPath(rodadaId: string): string {
+  return `${ROUTES.history.path}/${encodeURIComponent(rodadaId)}`;
 }
 
 /** Caminho de uma carga gravada no histórico. */

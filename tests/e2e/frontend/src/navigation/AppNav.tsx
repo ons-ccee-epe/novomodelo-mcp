@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { launcherHealthy } from "@/services/launcherApi";
-import { fetchIndex } from "@/services/resultsApi";
+import { carregarRodadas } from "@/data/rodada";
 import { ROUTES } from "@/shared/constants/Routes";
 import { useColorScheme } from "@/theme/colorScheme";
 
@@ -12,22 +12,21 @@ const LINKS = [
   { to: ROUTES.history.path, label: "Histórico" },
 ] as const;
 
-interface LatestBatch {
+interface LatestRodada {
   id: string;
-  version: string | null;
+  configs: string[];
 }
 
-/** Bateria mais recente do index; null se o index falha ou não tem baterias. */
-function useLatestBatch(): LatestBatch | null {
-  const [latest, setLatest] = useState<LatestBatch | null>(null);
+/** Rodada mais recente; null se a lista falha ou não tem rodadas. */
+function useLatestRodada(): LatestRodada | null {
+  const [latest, setLatest] = useState<LatestRodada | null>(null);
   useEffect(() => {
     let alive = true;
-    fetchIndex()
-      .then(({ batches }) => {
-        const first = batches[0];
+    carregarRodadas()
+      .then((rodadas) => {
+        const first = rodadas[0];
         if (!alive || !first) return;
-        const version = first.version && first.version !== "unknown" ? first.version : null;
-        setLatest({ id: first.batch_id, version });
+        setLatest({ id: first.rodada, configs: first.configs });
       })
       .catch(() => undefined);
     return () => {
@@ -77,8 +76,8 @@ function GearIcon() {
   );
 }
 
-/** Engrenagem: informações do ambiente (última bateria, versão, launcher, transporte). */
-function SettingsMenu({ latest }: { latest: LatestBatch | null }) {
+/** Engrenagem: informações do ambiente (última rodada, launcher, transporte). */
+function SettingsMenu({ latest }: { latest: LatestRodada | null }) {
   const [open, setOpen] = useState(false);
   const [online, setOnline] = useState<boolean | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -119,12 +118,12 @@ function SettingsMenu({ latest }: { latest: LatestBatch | null }) {
       {open && (
         <dl className="nm-settings-panel" aria-label="Ambiente">
           <div className="nm-settings-row">
-            <dt>Bateria</dt>
+            <dt>Rodada</dt>
             <dd>{latest?.id ?? "—"}</dd>
           </div>
           <div className="nm-settings-row">
-            <dt>Versão do MCP</dt>
-            <dd>{latest?.version ? `v${latest.version}` : "—"}</dd>
+            <dt>Configurações</dt>
+            <dd>{latest && latest.configs.length > 0 ? latest.configs.join(", ") : "—"}</dd>
           </div>
           <div className="nm-settings-row">
             <dt>Launcher</dt>
@@ -142,7 +141,7 @@ function SettingsMenu({ latest }: { latest: LatestBatch | null }) {
 
 /** Cabeçalho fixo: título, abas, modo noturno e as informações do ambiente. */
 export function AppNav() {
-  const latest = useLatestBatch();
+  const latest = useLatestRodada();
   const [scheme, toggleScheme] = useColorScheme();
   const headerRef = useRef<HTMLElement>(null);
   useHeaderHeight(headerRef);
