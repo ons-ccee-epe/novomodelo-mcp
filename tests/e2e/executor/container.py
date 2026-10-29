@@ -26,7 +26,17 @@ from tests.e2e.resultado.modelos import ChamadaTool, Estado, Registro
 HOME_AGENTE = "/home/agente"
 PASTA_ESTUDOS = "/estudos"
 SEGREDO_CLAUDE = "novomodelo-bateria-claude-token"
+UID_AGENTE = 1000
+GID_AGENTE = 1000
 LIMITE_PIDS = 1024
+# O usuário de quem roda vira o `agente` da imagem: com `keep-id` sem uid/gid o agente
+# grava com um subuid no host, e o que ele cria na cópia do caso não sai no `rmtree`.
+ENDURECIMENTO = (
+    f"--pids-limit={LIMITE_PIDS}",
+    "--security-opt=no-new-privileges",
+    "--cap-drop=ALL",
+    f"--userns=keep-id:uid={UID_AGENTE},gid={GID_AGENTE}",
+)
 LIMITE = re.compile(
     r"usage limit|rate.?limit|limit reached|hit your limit|quota|too many requests|"
     r"throttl|\b429\b|overloaded|credits? (exhausted|remaining: 0)",
@@ -145,10 +155,7 @@ def _comando(
         f"--name={nome}",
         f"--memory={cfg.memoria}",
         f"--memory-swap={cfg.memoria}",
-        f"--pids-limit={LIMITE_PIDS}",
-        "--security-opt=no-new-privileges",
-        "--cap-drop=ALL",
-        "--userns=keep-id",
+        *ENDURECIMENTO,
     ]
     if e.agente == "claude":
         cmd += ["--secret", f"{SEGREDO_CLAUDE},type=env,target=CLAUDE_CODE_OAUTH_TOKEN"]

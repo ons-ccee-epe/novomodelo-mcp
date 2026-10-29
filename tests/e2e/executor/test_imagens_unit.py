@@ -4,17 +4,26 @@ from __future__ import annotations
 
 import json
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
 
 from tests.e2e.config import MOTIVO_MOTOR, Config
 from tests.e2e.executor import imagens
-from tests.e2e.executor.container import HOME_AGENTE, PASTA_ESTUDOS, SEGREDO_CLAUDE
+from tests.e2e.executor.container import (
+    ENDURECIMENTO,
+    GID_AGENTE,
+    HOME_AGENTE,
+    PASTA_ESTUDOS,
+    SEGREDO_CLAUDE,
+    UID_AGENTE,
+)
 from tests.e2e.executor.imagens import (
     CLAUDE_CODE_VERSAO,
     ConfigMCP,
     FalhaPreparo,
+    aviso_do_bridge,
     construir,
     criar_segredo,
     ler_config_mcp,
@@ -39,9 +48,13 @@ def _cfg(tmp_path: Path, motor: str = "podman") -> Config:
     )
 
 
-def _wheel(tmp_path: Path, nome: str = WHEEL) -> Path:
+def _wheel(tmp_path: Path, nome: str = WHEEL, pin: str | None = NOVOMODELO) -> Path:
     arquivo = tmp_path / nome
-    arquivo.write_bytes(b"wheel falsa")
+    linhas = ["Metadata-Version: 2.4", "Name: novomodelo-mcp", "Requires-Dist: mcp>=1"]
+    if pin is not None:
+        linhas.append(f"Requires-Dist: novomodelo-bridge=={pin}")
+    with zipfile.ZipFile(arquivo, "w") as z:
+        z.writestr("novomodelo_mcp-x.dist-info/METADATA", "\n".join(linhas) + "\n")
     return arquivo
 
 
@@ -96,6 +109,56 @@ def test_config_mcp_recusa_wheel_ausente(tmp_path):
         ler_config_mcp(str(tmp_path / WHEEL))
 
 
+def test_config_mcp_recusa_versao_vazia(tmp_path):
+    with pytest.raises(ValueError):
+        ler_config_mcp(str(_wheel(tmp_path, "novomodelo_mcp--py3-none-any.whl")))
+
+
+def _versoes_mcp(mcp: str, bridge: str = NOVOMODELO) -> dict[str, str]:
+    return {
+        "novomodelo": NOVOMODELO,
+        "novomodelo-bridge": bridge,
+        "claude-code": CLAUDE_CODE_VERSAO,
+        "novomodelo-mcp": mcp,
+    }
+
+
+def test_versao_local_da_wheel_compara_pela_original_e_nao_pela_da_tag(tmp_path):
+    c = ler_config_mcp(str(_wheel(tmp_path, "novomodelo_mcp-1.2.3+local.1-py3-none-any.whl")))
+    assert c.nome == "mcp-1.2.3_local.1"
+    versoes = construir(
+        c, "claude", _cfg(tmp_path), rodar=MotorFalso(_versoes_mcp("1.2.3+local.1"))
+    )
+    assert versoes["mcp:mcp-1.2.3_local.1"] == "1.2.3+local.1"
+
+
+def test_build_com_mcp_compara_o_bridge_com_o_pin_da_wheel(tmp_path):
+    c = ler_config_mcp(str(_wheel(tmp_path, pin="5.0.0")))
+    versoes = construir(
+        c, "claude", _cfg(tmp_path), rodar=MotorFalso(_versoes_mcp("1.2.3", "5.0.0"))
+    )
+    assert versoes["novomodelo-bridge"] == "5.0.0"
+    with pytest.raises(FalhaPreparo, match="novomodelo-bridge"):
+        construir(c, "claude", _cfg(tmp_path), rodar=MotorFalso(_versoes_mcp("1.2.3")))
+
+
+def test_build_com_wheel_sem_pin_do_bridge_falha_antes_do_motor(tmp_path):
+    motor = MotorFalso()
+    with pytest.raises(FalhaPreparo):
+        construir(
+            ler_config_mcp(str(_wheel(tmp_path, pin=None))), "claude", _cfg(tmp_path), rodar=motor
+        )
+    assert motor.chamadas == []
+
+
+def test_aviso_quando_o_bridge_da_wheel_diverge_do_checkout(tmp_path):
+    assert aviso_do_bridge(ler_config_mcp("sem")) is None
+    assert aviso_do_bridge(ler_config_mcp(str(_wheel(tmp_path)))) is None
+    outra = ler_config_mcp(str(_wheel(tmp_path, "novomodelo_mcp-2.0.0-py3-none-any.whl", "5.0.0")))
+    aviso = aviso_do_bridge(outra)
+    assert aviso is not None and "5.0.0" in aviso and NOVOMODELO in aviso
+
+
 def test_tag_por_agente_e_config(tmp_path):
     sem = ler_config_mcp("sem")
     com = ler_config_mcp(str(_wheel(tmp_path)))
@@ -144,6 +207,8 @@ def test_build_passa_as_versoes_fixadas(tmp_path):
         "CONFIG": "mcp",
         "HOME_AGENTE": HOME_AGENTE,
         "PASTA_ESTUDOS": PASTA_ESTUDOS,
+        "UID_AGENTE": str(UID_AGENTE),
+        "GID_AGENTE": str(GID_AGENTE),
     }
     assert motor.contexto == ["wheel", f"wheel/{WHEEL}"]
     assert not any(TOKEN_FALSO in a or "token" in a.lower() for a in build)
@@ -151,6 +216,7 @@ def test_build_passa_as_versoes_fixadas(tmp_path):
     leitura, _ = motor.chamadas[1]
     assert leitura[:3] == ["podman", "run", "--rm"]
     assert "--network=none" in leitura
+    assert all(opcao in leitura for opcao in ENDURECIMENTO)
     assert leitura[-2:] == ["cat", f"{HOME_AGENTE}/versoes.json"]
     assert versoes == {
         "novomodelo": NOVOMODELO,
@@ -186,6 +252,7 @@ def test_build_com_falha_do_motor_nao_le_versoes(tmp_path):
         {"novomodelo": NOVOMODELO, "novomodelo-bridge": NOVOMODELO},
         {"novomodelo": NOVOMODELO, "novomodelo-bridge": NOVOMODELO, "claude-code": "0.0.1"},
         {"novomodelo": "0.0.1", "novomodelo-bridge": NOVOMODELO, "claude-code": CLAUDE_CODE_VERSAO},
+        {"novomodelo": NOVOMODELO, "novomodelo-bridge": "0.0.1", "claude-code": CLAUDE_CODE_VERSAO},
     ],
 )
 def test_build_recusa_imagem_com_versao_ausente_ou_diferente_da_fixada(tmp_path, versoes):
@@ -250,3 +317,19 @@ def test_segredo_recusado_pelo_motor_nao_mostra_o_valor(tmp_path):
     with pytest.raises(FalhaPreparo) as erro:
         criar_segredo(cfg, rodar=recusa)
     assert TOKEN_FALSO not in str(erro.value)
+
+
+@pytest.mark.parametrize("erro", [OSError("motor sumiu"), subprocess.TimeoutExpired("podman", 60)])
+def test_segredo_com_motor_ausente_ou_parado_falha_sem_o_valor(tmp_path, erro):
+    cfg = _cfg(tmp_path)
+    cfg.token_claude.write_text(TOKEN_FALSO, encoding="utf-8")
+
+    def quebra(cmd, **kwargs):
+        if cmd[1:3] == ["secret", "create"]:
+            raise erro
+        return subprocess.CompletedProcess(cmd, 1, "", "")
+
+    with pytest.raises(FalhaPreparo) as falha:
+        criar_segredo(cfg, rodar=quebra)
+    assert TOKEN_FALSO not in str(falha.value)
+    assert type(erro).__name__ in str(falha.value)

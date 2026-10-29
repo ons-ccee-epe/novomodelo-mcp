@@ -7,13 +7,21 @@ import re
 import shutil
 import subprocess
 import tempfile
+import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from novomodelo_mcp.adapters.versions import expected_version
 from tests.e2e.config import MOTIVO_MOTOR, Config, motor_suportado
-from tests.e2e.executor.container import HOME_AGENTE, PASTA_ESTUDOS, SEGREDO_CLAUDE
+from tests.e2e.executor.container import (
+    ENDURECIMENTO,
+    GID_AGENTE,
+    HOME_AGENTE,
+    PASTA_ESTUDOS,
+    SEGREDO_CLAUDE,
+    UID_AGENTE,
+)
 
 CONTAINERFILE = Path(__file__).with_name("Containerfile")
 REPOSITORIO = "localhost/novomodelo-mcp-bateria"
@@ -25,6 +33,7 @@ NAO_FIXADA = " (não fixada)"
 CLIENTES = {"claude": "claude-code", "kiro": "kiro"}
 CHAVE_DO_AGENTE = {"claude": "claude-code", "kiro": "kiro-cli"}
 DIST_WHEEL = "novomodelo_mcp"
+_PIN_BRIDGE = re.compile(r"^Requires-Dist:\s*novomodelo[-_]bridge\s*==\s*([^;\s,]+)", re.MULTILINE)
 TEMPO_LEITURA = 300
 TEMPO_SEGREDO = 60
 _FORA_DA_TAG = re.compile(r"[^A-Za-z0-9_.-]")
@@ -51,12 +60,62 @@ def ler_config_mcp(valor: str) -> ConfigMCP:
     if valor == "sem":
         return ConfigMCP("sem-mcp", None)
     wheel = Path(valor).expanduser()
-    partes = wheel.name[: -len(".whl")].split("-") if wheel.suffix == ".whl" else []
-    if len(partes) < 5 or partes[0] != DIST_WHEEL:
-        raise ValueError(f"não é 'sem' nem uma wheel do novomodelo-mcp: {wheel.name}")
+    versao = versao_da_wheel(wheel)
     if not wheel.is_file():
         raise ValueError(f"wheel não encontrada: {wheel}")
-    return ConfigMCP(f"mcp-{_FORA_DA_TAG.sub('_', partes[1])}", wheel.resolve())
+    return ConfigMCP(f"mcp-{_FORA_DA_TAG.sub('_', versao)}", wheel.resolve())
+
+
+def versao_da_wheel(wheel: Path) -> str:
+    """A versão como o nome da wheel a escreve; `ConfigMCP.nome` traz só a forma da tag.
+
+    Raises:
+        ValueError: não é uma wheel do novomodelo-mcp ou a versão está vazia.
+    """
+    partes = wheel.name[: -len(".whl")].split("-") if wheel.suffix == ".whl" else []
+    if len(partes) < 5 or partes[0] != DIST_WHEEL or not partes[1]:
+        raise ValueError(f"não é 'sem' nem uma wheel do novomodelo-mcp: {wheel.name}")
+    return partes[1]
+
+
+def pin_do_bridge(wheel: Path) -> str:
+    """O `novomodelo-bridge==` que a wheel exige, lido do METADATA dela.
+
+    Raises:
+        FalhaPreparo: wheel ilegível ou sem o pin do bridge.
+    """
+    try:
+        with zipfile.ZipFile(wheel) as arquivo:
+            nome = next(
+                n
+                for n in arquivo.namelist()
+                if n.endswith(".dist-info/METADATA") and n.count("/") == 1
+            )
+            texto = arquivo.read(nome).decode("utf-8")
+    except (OSError, StopIteration, UnicodeDecodeError, zipfile.BadZipFile):
+        raise FalhaPreparo(f"METADATA ilegível na wheel {wheel.name}") from None
+    achado = _PIN_BRIDGE.search(texto)
+    if achado is None:
+        raise FalhaPreparo(f"a wheel {wheel.name} não fixa o novomodelo-bridge")
+    return achado.group(1)
+
+
+def aviso_do_bridge(c: ConfigMCP) -> str | None:
+    """Aviso quando o bridge da wheel não é o do pin deste checkout (as versões divergem).
+
+    Raises:
+        FalhaPreparo: wheel ilegível ou sem o pin do bridge.
+    """
+    if c.wheel is None:
+        return None
+    da_wheel = pin_do_bridge(c.wheel)
+    do_checkout = expected_version()
+    if do_checkout is not None and da_wheel != do_checkout:
+        return (
+            f"a wheel {c.wheel.name} fixa o novomodelo-bridge {da_wheel}; "
+            f"o pin deste checkout é {do_checkout}"
+        )
+    return None
 
 
 def tag_imagem(c: ConfigMCP, agente: str) -> str:
@@ -99,6 +158,7 @@ def construir(
     _exigir_podman(cfg)
     tag = tag_imagem(c, agente)
     fixadas = versoes_fixadas()
+    bridge = pin_do_bridge(c.wheel) if c.wheel is not None else fixadas["BRIDGE_VERSAO"]
     args = {
         **fixadas,
         "AGENTE": agente,
@@ -106,6 +166,8 @@ def construir(
         "CONFIG": "mcp" if c.wheel is not None else "sem-mcp",
         "HOME_AGENTE": HOME_AGENTE,
         "PASTA_ESTUDOS": PASTA_ESTUDOS,
+        "UID_AGENTE": str(UID_AGENTE),
+        "GID_AGENTE": str(GID_AGENTE),
     }
     with tempfile.TemporaryDirectory(prefix="novomodelo-bateria-contexto-") as pasta:
         contexto = Path(pasta)
@@ -119,7 +181,7 @@ def construir(
         feito = rodar(cmd, check=False)
     if feito.returncode != 0:
         raise FalhaPreparo(f"build da imagem {tag} falhou (código {feito.returncode})")
-    return _versoes_da_imagem(c, agente, cfg, tag, fixadas, rodar)
+    return _versoes_da_imagem(c, agente, cfg, tag, {**fixadas, "BRIDGE_VERSAO": bridge}, rodar)
 
 
 def _versoes_da_imagem(
@@ -132,7 +194,7 @@ def _versoes_da_imagem(
 ) -> dict[str, str]:
     # Com o mesmo --userns das execuções: o primeiro run rootless com keep-id prepara a
     # imagem (dezenas de segundos), e fora daqui esse tempo cairia na primeira execução.
-    cmd = [cfg.motor, "run", "--rm", "--userns=keep-id", "--network=none", tag]
+    cmd = [cfg.motor, "run", "--rm", *ENDURECIMENTO, "--network=none", tag]
     cmd += ["cat", f"{HOME_AGENTE}/versoes.json"]
     try:
         feito = rodar(cmd, capture_output=True, text=True, timeout=TEMPO_LEITURA, check=False)
@@ -142,7 +204,10 @@ def _versoes_da_imagem(
     if not isinstance(lidas, dict):
         raise FalhaPreparo(f"versoes.json ilegível na imagem {tag}")
     chave = CHAVE_DO_AGENTE[agente]
-    esperadas = {"novomodelo": fixadas["NOVOMODELO_VERSAO"]}
+    esperadas = {
+        "novomodelo": fixadas["NOVOMODELO_VERSAO"],
+        "novomodelo-bridge": fixadas["BRIDGE_VERSAO"],
+    }
     if agente == "claude":
         esperadas[chave] = CLAUDE_CODE_VERSAO
     elif KIRO_CLI_VERSAO:
@@ -150,7 +215,7 @@ def _versoes_da_imagem(
     obrigatorias = ["novomodelo", "novomodelo-bridge", chave]
     if c.wheel is not None:
         obrigatorias.append("novomodelo-mcp")
-        esperadas["novomodelo-mcp"] = c.nome.removeprefix("mcp-")
+        esperadas["novomodelo-mcp"] = versao_da_wheel(c.wheel)
     for nome in obrigatorias:
         if not isinstance(lidas.get(nome), str) or not lidas[nome]:
             raise FalhaPreparo(f"versão de {nome} ausente na imagem {tag}")

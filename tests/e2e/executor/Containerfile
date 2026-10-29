@@ -15,28 +15,45 @@ FROM ${UV_IMAGE} AS uv
 FROM ${BASE} AS base
 ARG HOME_AGENTE
 ARG PASTA_ESTUDOS
+ARG UID_AGENTE
+ARG GID_AGENTE
 ARG NOVOMODELO_VERSAO
-RUN test -n "$HOME_AGENTE" && test -n "$PASTA_ESTUDOS" && test -n "$NOVOMODELO_VERSAO"
+RUN test -n "$HOME_AGENTE" && test -n "$PASTA_ESTUDOS" && test -n "$NOVOMODELO_VERSAO" \
+    && test -n "$UID_AGENTE" && test -n "$GID_AGENTE"
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils unzip \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=uv /uv /uvx /usr/local/bin/
-RUN useradd --create-home --home-dir "$HOME_AGENTE" --shell /bin/bash agente \
+RUN groupadd --gid "$GID_AGENTE" agente \
+    && useradd --create-home --home-dir "$HOME_AGENTE" --uid "$UID_AGENTE" --gid "$GID_AGENTE" \
+       --shell /bin/bash agente \
     && mkdir "$PASTA_ESTUDOS" && chown agente "$PASTA_ESTUDOS"
 USER agente
 WORKDIR $HOME_AGENTE
-ENV PATH=$HOME_AGENTE/.local/bin:$HOME_AGENTE/.cargo/bin:$PATH
-RUN curl --proto '=https' --tlsv1.2 -LsSf \
-      "https://github.com/ons-ccee-epe/novomodelo/releases/download/v${NOVOMODELO_VERSAO}/novomodelo-cli-installer.sh" | sh \
-    && novomodelo version
+ENV PATH=$HOME_AGENTE/.local/bin:$PATH
+# O executável vem do artefato do release, conferido pelo .sha256 que o próprio release publica.
+RUN set -eu; \
+    alvo="novomodelo-cli-$(uname -m)-unknown-linux-gnu"; \
+    release="https://github.com/ons-ccee-epe/novomodelo/releases/download/v${NOVOMODELO_VERSAO}"; \
+    baixa="$(mktemp -d)"; cd "$baixa"; \
+    curl --proto '=https' --tlsv1.2 -fsSLO "$release/$alvo.tar.xz"; \
+    curl --proto '=https' --tlsv1.2 -fsSLO "$release/$alvo.tar.xz.sha256"; \
+    sha256sum -c "$alvo.tar.xz.sha256"; \
+    mkdir -p "$HOME_AGENTE/.local/bin"; \
+    tar -xJf "$alvo.tar.xz" --strip-components=1 -C "$HOME_AGENTE/.local/bin" "$alvo/novomodelo"; \
+    cd /; rm -rf "$baixa"; \
+    novomodelo version
 
+# O pacote npm do Claude Code exige Node 22, e o Debian 13 traz o 20: fica o instalador
+# oficial, que baixa a versão fixada e confere o sha256 do manifesto dessa versão.
 FROM base AS agente-claude
 ARG CLAUDE_CODE_VERSAO
 RUN test -n "$CLAUDE_CODE_VERSAO" \
     && curl -fsSL https://claude.ai/install.sh | bash -s "$CLAUDE_CODE_VERSAO" \
     && claude --version
 
-# O instalador oficial do Kiro só instala a última versão: com KIRO_CLI_VERSAO vazio a
-# versão encontrada é registrada como não fixada; preenchido, o build confere a instalada.
+# O instalador oficial do Kiro só instala a última versão e não publica checksum (risco
+# aceito): com KIRO_CLI_VERSAO vazio a versão encontrada é registrada como não fixada;
+# preenchido, o build confere a instalada.
 FROM base AS agente-kiro
 ARG KIRO_CLI_VERSAO
 RUN curl -fsSL https://cli.kiro.dev/install | bash \

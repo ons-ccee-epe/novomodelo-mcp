@@ -15,9 +15,12 @@ import pytest
 from tests.e2e.config import MOTIVO_MOTOR, Config
 from tests.e2e.executor import container
 from tests.e2e.executor.container import (
+    ENDURECIMENTO,
+    GID_AGENTE,
     HOME_AGENTE,
     LIMITE_PIDS,
     SEGREDO_CLAUDE,
+    UID_AGENTE,
     ComandoRecusado,
     Execucao,
     MotorAusente,
@@ -111,6 +114,7 @@ def test_comando_endurece_o_container(tmp_path):
     assert "--security-opt=no-new-privileges" in cmd
     assert "--cap-drop=ALL" in cmd
     assert cmd.index("--cap-drop=ALL") < cmd.index("localhost/bateria:local")
+    assert all(opcao in cmd for opcao in ENDURECIMENTO)
     assert f"--pids-limit={LIMITE_PIDS}" in cmd and 0 < LIMITE_PIDS <= 4096
     assert f"--name={NOME}" in cmd
     assert cmd.index(f"--name={NOME}") < cmd.index("localhost/bateria:local")
@@ -203,7 +207,8 @@ def test_comando_usa_o_motor_da_config(tmp_path, motor):
         return
     cmd = _cmd(_exec(), _cfg(tmp_path, motor), tmp_path)
     assert cmd[:4] == [motor, "run", "--rm", "-i"]
-    assert "localhost/bateria:local" in cmd and "--userns=keep-id" in cmd
+    assert "localhost/bateria:local" in cmd
+    assert f"--userns=keep-id:uid={UID_AGENTE},gid={GID_AGENTE}" in cmd
 
 
 def test_claude_so_com_o_mcp_do_configurar(tmp_path):

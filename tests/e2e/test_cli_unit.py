@@ -31,6 +31,7 @@ def ambiente(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "carregar_config", lambda env: _cfg(tmp_path))
     monkeypatch.setattr(cli, "verificar", lambda cfg: list(problemas))
     monkeypatch.setattr(cli, "avisos", lambda cfg: [])
+    monkeypatch.setattr(cli, "aviso_do_bridge", lambda c: None)
 
     def construir(c, agente, cfg):
         chamadas["construir"].append((c, agente))
@@ -102,3 +103,9 @@ def test_cli_preparar_recusa_argumento_invalido(ambiente, argv):
     with pytest.raises(SystemExit) as saida:
         cli.main(argv)
     assert saida.value.code == 2
+
+
+def test_cli_preparar_avisa_bridge_divergente_sem_falhar(ambiente, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "aviso_do_bridge", lambda c: "bridge 5.0.0 na wheel")
+    assert cli.main(["preparar", "--mcp", "sem", "--agentes", "kiro"]) == 0
+    assert "aviso: bridge 5.0.0 na wheel" in capsys.readouterr().out

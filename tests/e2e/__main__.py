@@ -13,6 +13,7 @@ from tests.e2e.executor.imagens import (
     CLIENTES,
     ConfigMCP,
     FalhaPreparo,
+    aviso_do_bridge,
     construir,
     criar_segredo,
     ler_config_mcp,
@@ -79,6 +80,8 @@ def _preparar(cfg, configs: list[ConfigMCP], agentes: list[str]) -> int:
             criar_segredo(cfg)
             print(f"secret {SEGREDO_CLAUDE} criado a partir do arquivo de token", flush=True)
         for c in configs:
+            if aviso := aviso_do_bridge(c):
+                print(f"aviso: {aviso}", flush=True)
             for agente in agentes:
                 versoes = construir(c, agente, cfg)
                 linha = {"imagem": tag_imagem(c, agente), "versoes": versoes}
