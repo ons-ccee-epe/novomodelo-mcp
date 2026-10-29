@@ -50,6 +50,7 @@ class GitFalso:
     def __init__(self, commit: str, conteudo: tuple[str, ...], primeira_leitura: str | None = None):
         self.commit = commit
         self.primeira_leitura = primeira_leitura
+        self.sujeira = ""
         self.conteudo = conteudo
         self.chamadas: list[list[str]] = []
 
@@ -59,7 +60,14 @@ class GitFalso:
         assert isinstance(cmd, list)
         assert kwargs.get("timeout")
         assert not kwargs.get("shell")
+        assert tuple(cmd[: len(casos.PREFIXO_GIT)]) == casos.PREFIXO_GIT
+        assert kwargs["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
+        assert kwargs["env"]["GIT_CONFIG_GLOBAL"] == os.devnull
+        cmd = ["git", *cmd[len(casos.PREFIXO_GIT) :]]
         sub = cmd[1]
+        self.chamadas[-1] = cmd
+        if sub == "status":
+            return subprocess.CompletedProcess(cmd, 0, self.sujeira, "")
         if sub == "clone":
             destino = Path(cmd[-1])
             (destino / ".git").mkdir(parents=True)
@@ -273,3 +281,85 @@ def test_nenhum_nome_interno_no_codigo(tmp_path):
     )
     subprocess.run(["git", "-C", str(raiz), "add", "-A"], check=True, capture_output=True)
     assert _checar(raiz, termos).returncode == 1
+
+
+@pytest.mark.parametrize("sujeira", [" M tests/decks/newave_mini/arquivo.txt\n", "?? novo.txt\n"])
+def test_cache_com_alteracao_ou_arquivo_novo_e_refeito(tmp_path, sujeira):
+    cfg = _cfg(tmp_path)
+    preparar_decks(VERSAO, COMMIT, cfg, rodar=GitFalso(COMMIT, _decks()))
+    git = GitFalso(COMMIT, _decks())
+    git.sujeira = sujeira
+    preparar_decks(VERSAO, COMMIT, cfg, rodar=_limpa_apos_clone(git))
+    assert any(c[1] == "clone" for c in git.chamadas)
+
+
+def _limpa_apos_clone(git):
+    def rodar(cmd, **kw):
+        res = git(cmd, **kw)
+        if "clone" in cmd:
+            git.sujeira = ""
+        return res
+
+    return rodar
+
+
+def test_cache_intacto_e_reutilizado_com_a_conferencia_de_status(tmp_path):
+    cfg = _cfg(tmp_path)
+    preparar_decks(VERSAO, COMMIT, cfg, rodar=GitFalso(COMMIT, _decks()))
+    git = GitFalso(COMMIT, _decks())
+    preparar_decks(VERSAO, COMMIT, cfg, rodar=git)
+    assert not any(c[1] == "clone" for c in git.chamadas)
+    status = next(c for c in git.chamadas if c[1] == "status")
+    assert status[2:] == ["--porcelain", "--untracked-files=all"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="link simbólico exige privilégio")
+def test_link_para_fora_da_pasta_copiada_e_recusado(tmp_path):
+    fonte = tmp_path / "fonte"
+    fonte.mkdir()
+    (tmp_path / "alvo.txt").write_text("x")
+    (fonte / "link").symlink_to(tmp_path / "alvo.txt")
+    with pytest.raises(FalhaPreparo, match="link simbólico"):
+        casos._publicar(fonte, tmp_path / "saida")
+    assert not (tmp_path / "saida").exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="link simbólico exige privilégio")
+def test_link_para_dentro_da_pasta_e_copiado(tmp_path):
+    fonte = tmp_path / "fonte"
+    fonte.mkdir()
+    (fonte / "a.txt").write_text("x")
+    (fonte / "link").symlink_to("a.txt")
+    casos._publicar(fonte, tmp_path / "saida")
+    assert (tmp_path / "saida" / "link").is_symlink()
+
+
+def test_1dtoy_rodado_nome_unico_e_container_encerrado(tmp_path, monkeypatch):
+    cfg = _cfg(tmp_path)
+    (pasta_preparados(cfg) / "exemplo_1dtoy").mkdir(parents=True)
+    encerrados: list[str] = []
+    monkeypatch.setattr(casos, "encerrar_container", lambda m, n: encerrados.append(n) or True)
+    nomes: list[str] = []
+
+    def estoura(cmd, **kw):
+        nomes.append(next(c for c in cmd if c.startswith("--name=")))
+        raise subprocess.TimeoutExpired(cmd, 1)
+
+    for _ in range(2):
+        with pytest.raises(FalhaPreparo):
+            preparar_1dtoy_rodado("imagem:x", cfg, rodar=estoura)
+    assert nomes[0] != nomes[1]
+    assert encerrados == [n.removeprefix("--name=") for n in nomes]
+
+
+def test_1dtoy_rodado_recusa_caminho_com_virgula(tmp_path):
+    cfg = _cfg(tmp_path / "a,b")
+    (pasta_preparados(cfg) / "exemplo_1dtoy").mkdir(parents=True)
+    with pytest.raises(FalhaPreparo, match="vírgula"):
+        preparar_1dtoy_rodado("imagem:x", cfg, rodar=lambda *a, **k: None)
+
+
+@pytest.mark.parametrize("nome", ["../x", "caso/x", "caso_grande_rodado/..", "a\\b", ""])
+def test_resolver_recusa_separador_e_pai_no_nome(tmp_path, nome):
+    with pytest.raises(ValueError):
+        resolver(nome, _cfg(tmp_path), tmp_path)

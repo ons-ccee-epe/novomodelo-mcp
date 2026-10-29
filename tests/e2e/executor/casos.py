@@ -11,7 +11,15 @@ import tomllib
 from pathlib import Path
 
 from tests.e2e.config import Config
-from tests.e2e.executor.container import ENDURECIMENTO, PASTA_ESTUDOS
+from tests.e2e.executor.container import (
+    ENDURECIMENTO,
+    PASTA_ESTUDOS,
+    ComandoRecusado,
+    Execucao,
+    _montagem,
+    encerrar_container,
+    nome_container,
+)
 from tests.e2e.executor.imagens import FalhaPreparo, Rodar
 
 PUBLICOS = frozenset(
@@ -28,8 +36,14 @@ PASTA_1DTOY = "examples/1dtoy"
 TEMPO_GIT = 300
 TEMPO_RODADA = 900
 _VERSAO = re.compile(r"[0-9][0-9A-Za-z.+-]*")
+_NOME_LOGICO = re.compile(r"[A-Za-z0-9_]+")
 _COMMIT = re.compile(r"[0-9a-f]{40}")
-_AMBIENTE_GIT = {"GIT_TERMINAL_PROMPT": "0"}
+_AMBIENTE_GIT = {
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_NOSYSTEM": "1",
+}
+PREFIXO_GIT = ("git", "-c", "protocol.allow=never", "-c", "protocol.https.allow=always")
 
 
 def pasta_preparados(cfg: Config) -> Path:
@@ -42,6 +56,8 @@ def resolver(nome: str, cfg: Config, preparados: Path) -> Path | None:
     Raises:
         ValueError: o nome não é de um caso conhecido.
     """
+    if not _NOME_LOGICO.fullmatch(nome):
+        raise ValueError(f"caso desconhecido: {nome!r}")
     if nome in PUBLICOS:
         pasta = preparados / nome
     elif nome in CASOS_GRANDES:
@@ -69,7 +85,7 @@ def commit_esperado(repo: str, versao: str, fontes: Path = FONTES) -> str:
 def _git(args: list[str], rodar: Rodar, *, cwd: Path | None = None) -> str:
     try:
         feito = rodar(
-            ["git", *args],
+            [*PREFIXO_GIT, *args],
             capture_output=True,
             text=True,
             timeout=TEMPO_GIT,
@@ -98,7 +114,13 @@ def _clone_esparso(
     destino = cfg.cache / "fontes" / f"{repo}-v{versao}"
     if (destino / ".git").is_dir():
         try:
-            if _git(["rev-parse", "HEAD"], rodar, cwd=destino).strip() == commit:
+            intacto = (
+                _git(["rev-parse", "HEAD"], rodar, cwd=destino).strip() == commit
+                and not _git(
+                    ["status", "--porcelain", "--untracked-files=all"], rodar, cwd=destino
+                ).strip()
+            )
+            if intacto:
                 _git(["sparse-checkout", "set", "--", pasta], rodar, cwd=destino)
                 return destino
         except FalhaPreparo:
@@ -116,8 +138,20 @@ def _clone_esparso(
     return destino
 
 
+def _recusar_links_para_fora(origem: Path) -> None:
+    raiz = origem.resolve()
+    for caminho in origem.rglob("*"):
+        if caminho.is_symlink() and not caminho.resolve().is_relative_to(raiz):
+            raise FalhaPreparo(f"link simbólico para fora da pasta copiada: {caminho.name}")
+
+
 def _publicar(origem: Path, destino: Path) -> None:
-    """Troca `destino` pela cópia de `origem`, sem deixar uma cópia pela metade."""
+    """Troca `destino` pela cópia de `origem`, sem deixar uma cópia pela metade.
+
+    Raises:
+        FalhaPreparo: a origem tem um link simbólico cujo alvo sai dela.
+    """
+    _recusar_links_para_fora(origem)
     destino.parent.mkdir(parents=True, exist_ok=True)
     parcial = Path(tempfile.mkdtemp(prefix=f".{destino.name}-", dir=destino.parent))
     try:
@@ -182,16 +216,26 @@ def preparar_1dtoy_rodado(imagem: str, cfg: Config, rodar: Rodar = subprocess.ru
         shutil.copytree(exemplo, caso, symlinks=True)
         shutil.rmtree(caso / "output", ignore_errors=True)
         dentro = f"{PASTA_ESTUDOS}/{caso.name}"
+        nome = nome_container(
+            Execucao(
+                "preparo", caso.name, "claude", "sem-mcp", 0, "", None, False, TEMPO_RODADA, imagem
+            ),
+            "preparo",
+        )
+        try:
+            montagem = _montagem("bind", str(caso), dentro, "relabel=private")
+        except ComandoRecusado as erro:
+            raise FalhaPreparo(str(erro)) from None
         cmd = [
             cfg.motor,
             "run",
             "--rm",
+            f"--name={nome}",
             f"--memory={cfg.memoria}",
             f"--memory-swap={cfg.memoria}",
             *ENDURECIMENTO,
             "--network=none",
-            "--mount",
-            f"type=bind,src={caso},dst={dentro},relabel=private",
+            *montagem,
             "-w",
             PASTA_ESTUDOS,
             imagem,
@@ -204,6 +248,8 @@ def preparar_1dtoy_rodado(imagem: str, cfg: Config, rodar: Rodar = subprocess.ru
             feito = rodar(cmd, capture_output=True, timeout=TEMPO_RODADA, check=False)
         except (OSError, subprocess.SubprocessError) as erro:
             raise FalhaPreparo(f"a rodada do 1dtoy falhou: {type(erro).__name__}") from None
+        finally:
+            encerrar_container(cfg.motor, nome)
         if feito.returncode != 0:
             raise FalhaPreparo(f"a rodada do 1dtoy falhou (código {feito.returncode})")
         if not (caso / "output").is_dir():
