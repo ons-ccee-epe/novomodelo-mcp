@@ -96,32 +96,25 @@ def plan_token_count(path: Path) -> int:
 
 def main() -> int:
     churn = churn_map()
-    rows: list[tuple[str, int, int, int, int, int]] = []
+    rows: list[tuple[str, tuple[int, ...]]] = []
     for path in iter_py_files(SRC_ROOT):
         relpath = rel(path)
-        rows.append(
-            (
-                relpath,
-                churn.get(relpath, 0),
-                sum(1 for _ in path.open(encoding="utf-8")),
-                long_fn_count(path),
-                suppression_count(path),
-                plan_token_count(path),
-            )
+        counts = (
+            churn.get(relpath, 0),
+            sum(1 for _ in path.open(encoding="utf-8")),
+            long_fn_count(path),
+            suppression_count(path),
+            plan_token_count(path),
         )
+        rows.append((relpath, counts))
 
-    maxima = [max((row[i] for row in rows), default=0) or 1 for i in range(1, 6)]
+    maxima = [max((c[i] for _, c in rows), default=0) or 1 for i in range(5)]
     weights = list(WEIGHTS.values())
-    scored = sorted(
-        (
-            (
-                100 * sum(w * (row[i + 1] / maxima[i]) for i, w in enumerate(weights)),
-                row,
-            )
-            for row in rows
-        ),
-        reverse=True,
-    )
+
+    def weighted(counts: tuple[int, ...]) -> float:
+        return 100 * sum(w * (counts[i] / maxima[i]) for i, w in enumerate(weights))
+
+    scored = sorted(((weighted(c), relpath, c) for relpath, c in rows), reverse=True)
 
     print(f"Code-quality hotspots (churn since {CHURN_SINCE}). Higher = act first.\n")
     counts = " ".join(f"{n:>5}" for n in ("churn", "loc", ">100L", "suppr", "plan"))
@@ -129,7 +122,7 @@ def main() -> int:
     print(header)
     print("-" * len(header))
     shown = 0
-    for score, (relpath, c, loc, lf, sup, plan) in scored:
+    for score, relpath, (c, loc, lf, sup, plan) in scored:
         if TOP_N and shown >= TOP_N:
             break
         if score < 0.5:
