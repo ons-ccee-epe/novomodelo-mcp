@@ -29,6 +29,7 @@ file adds only what an agent working in this checkout needs beyond them.
 uv sync                                       # install, dev group included (--system-certs behind a corporate CA)
 uv run novomodelo-mcp                         # start the server on stdio
 uv run pytest -q                              # offline suite; real-binary and network tests skip
+uv run --package novomodelo-mcp-e2e pytest e2e -q   # e2e battery suite (its own uv workspace member)
 uv run ruff check . && uv run ruff format --check .   # whole tree, as CI and the pre-commit hook run it
 python3 scripts/ci/check_no_plan_leaks.py     # hard gates, also run by CI
 python3 scripts/ci/check_comment_refs.py
@@ -88,7 +89,7 @@ These are non-negotiable. Fix them before any commit.
   pairs — or the asymmetry is recorded.
 - **No secrets or credentials** committed; no `.env` files.
 - **No plan-structure vocabulary** (`epic`, `ticket`, `sprint`, plan ids) in
-  `src/`, `tests/` prose, `README.md`, `CONTRIBUTING.md`, or `CHANGELOG.md`.
+  `src/`, `tests/` or `e2e/` prose, `README.md`, `CONTRIBUTING.md`, or `CHANGELOG.md`.
   Plans live in the gitignored `plans/`. Commit messages may reference them.
 - **No rot-prone references** in shipped prose: no `file.py:NNN`, no
   `MEMORY.md`, no machine-local (`~/git/...`) or gitignored paths, no paths into
@@ -105,3 +106,4 @@ These are non-negotiable. Fix them before any commit.
 | Shared transport  | `src/novomodelo_mcp/adapters/`    | CLI runners, path guard, error envelope  |
 | Tools             | `src/novomodelo_mcp/tools/`       | Registered MCP tools, grouped by phase   |
 | Security model    | `README.md` (Segurança)      | Workspace guard and force-write gate     |
+| e2e battery       | `e2e/README.md`              | Agent runs, advisory go/no-go, load, dashboard; not shipped |

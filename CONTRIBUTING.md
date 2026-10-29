@@ -81,6 +81,19 @@ As outras opções: `--mcp-instalado [CAMINHO]` (o pacote instalado em vez do c�
 
 `tests/try_tools.py` é um utilitário manual, fora da CI.
 
+**Bateria e2e com agentes** (`e2e/`): rodadas com o Claude Code e o Kiro num executor em
+container, juiz, go/no-go, teste de carga e o painel. É um projeto à parte no workspace do
+uv (`e2e/pyproject.toml`, `novomodelo-mcp-e2e`), fora do sdist e do wheel, e o
+`uv run pytest` da raiz não a coleta. A CI roda a suíte dela num job próprio, além do lint,
+dos testes e do build do painel:
+
+```bash
+uv sync --package novomodelo-mcp-e2e
+uv run --package novomodelo-mcp-e2e pytest e2e -q
+```
+
+Pré-requisitos, rodadas, go/no-go, carga e painel estão em `e2e/README.md`.
+
 ## Convenções que a CI confere
 
 As regras em `.claude/rules/` são escritas para um agente agir sobre elas e valem também
@@ -199,6 +212,9 @@ faz o push. `.github/workflows/release.yml`:
 
 Para ensaiar sem publicar, faça push numa branch `ensaio/<nome>` (ou use "Run workflow"
 na aba Actions): os arquivos ficam como artefato da execução.
+
+A decisão de go/no-go da bateria e2e (`e2e/README.md`) é consultiva: informa quem cria a
+tag, mas não bloqueia o release, e o `release.yml` não roda a bateria.
 
 Se a organização não permitir `contents: write` ao `GITHUB_TOKEN`, o job do release do
 GitHub falha e o resto continua valendo. Nesse caso, baixe o artefato da execução e

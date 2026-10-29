@@ -68,6 +68,8 @@ uv run --package novomodelo-mcp-e2e python -m novomodelo_mcp_e2e marcar-lancamen
 - `go-no-go` grava `relatorio-go-no-go.md`, `junit.xml` e `decisao-go-no-go.json` na pasta da rodada, depois de o gitleaks varrê-la com o `.gitleaks.toml` do repositório; achado ou varredura que não roda grava `BLOQUEADO-SEGREDO.txt` e nada mais. Só uma rodada completa decide: execução do plano do manifesto sem registro (no alvo ou na base) ou último `fim` do `rodada.jsonl` com código diferente de 0 dão inconclusivo, com a lista do que falta (um no-go já observado continua no-go). Rodada com o `rodar` em andamento é recusada. A base de comparação é, nesta ordem: `--baseline-config` (na mesma rodada, ou na de `--baseline` quando vêm juntas), `--baseline`, o último lançamento marcado, ou nenhuma (só a determinística bloqueia). O relatório lista, por configuração, a versão, o SHA-256 e a origem do wheel, e as versões de cada imagem.
 - `marcar-lancamento` torna uma configuração da rodada a base do próximo `go-no-go`; só por decisão de quem libera a versão, e só com a configuração completa na rodada.
 
+A decisão do `go-no-go` é consultiva: informa quem libera a versão e não bloqueia o release (`CONTRIBUTING.md`, "Release").
+
 Variáveis de ambiente da `Config` (todas opcionais):
 
 | Variável | O que faz | Default |

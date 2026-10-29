@@ -28,6 +28,11 @@ network or escapes the workspace. Auto-loads under `tests/`.
 Use the cheapest tier that catches the regression: a transport or guard
 contract gets an offline test with the fake CLI first.
 
+The e2e battery (`e2e/`, the `novomodelo-mcp-e2e` uv workspace member) sits
+outside both tiers: `uv run pytest` never collects it, and its own suite runs
+with `uv run --package novomodelo-mcp-e2e pytest e2e`. `e2e/README.md` owns its
+commands.
+
 ## Offline and sandbox discipline
 
 - **No network outside the `rede` marker.** No offline test makes an outbound
