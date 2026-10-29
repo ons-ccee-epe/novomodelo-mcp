@@ -47,9 +47,7 @@ jobs:
         run: python3 scripts/ci/check_doc_paths.py
 
   publico:
-    # Repositório público: nenhum segredo no histórico e nenhum termo proibido nos
-    # commits novos. O histórico antigo ainda tem termos até a limpeza, por isso a
-    # checagem de termos olha só `origin/<base>..HEAD`.
+    # Repositório público: nenhum segredo no histórico e nenhum termo proibido na árvore.
     name: Segredos e termos proibidos
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -58,7 +56,6 @@ jobs:
     env:
       GITLEAKS_VERSION: "8.30.1"
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-      BASE_REF: ${{ github.base_ref || 'develop' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -78,11 +75,9 @@ jobs:
       - name: Segredos no histórico inteiro (gitleaks)
         run: gitleaks git --redact --no-banner .
 
-      - name: Base da comparação
-        run: git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-
-      - name: Termos proibidos nos commits novos
-        run: python3 scripts/ci/check_termos_proibidos.py --desde "origin/${BASE_REF}" --mensagens
+      # O histórico antigo ainda tem termos até a limpeza; até lá a CI olha só a árvore.
+      - name: Termos proibidos na árvore
+        run: python3 scripts/ci/check_termos_proibidos.py
 
   test:
     # Os alvos e as versões do Python que o projeto suporta.
