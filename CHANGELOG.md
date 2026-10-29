@@ -54,7 +54,8 @@ só do MCP vira `X.Y.Z.postN`.
   refeita. O resource `novomodelo://schema/{tipo}` passa a `novomodelo://schema/{type}`
   (a URI de cada schema não muda). As instruções do servidor, o prompt `metodologia` e a
   linha que o `configurar` grava nas instruções do cliente pedem a citação como
-  `page#section`.
+  `page#section`. O `section` do `docs_list`, que é um prefixo do caminho da página,
+  passa a `prefix`: no `docs_read` e no `docs_search`, `section` é a âncora de uma seção.
 
   | Tool | Antes | Agora |
   |---|---|---|
@@ -65,6 +66,7 @@ só do MCP vira `X.Y.Z.postN`.
   | `schema_get` | `tipo` | `type` |
   | `docs_search` | `consulta` | `query` |
   | `docs_read` | `secao` | `section` |
+  | `docs_list` | `section` (prefixo do caminho da página) | `prefix` |
 
 - As versões mínimas das dependências passam a ser as que a CI testa: mcp 1.30.0,
   polars 2.1.0, jsonschema 4.26.0, duckdb 2.0.0 e truststore 0.10.5. As mínimas

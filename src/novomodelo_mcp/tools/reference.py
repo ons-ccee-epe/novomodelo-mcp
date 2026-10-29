@@ -29,10 +29,12 @@ def register_reference(mcp, settings: Settings) -> None:
         return cap_envelope(REF.read_schema(settings, type), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def docs_list(section: str | None = None) -> dict:
-        """Páginas das docs embutidas, com título e descrição (opcional: filtra por prefixo,
-        ex.: 'reference')."""
-        return cap_envelope(REF.list_docs(settings, section), settings)
+    def docs_list(prefix: str | None = None) -> dict:
+        """Páginas das docs embutidas, com título e descrição.
+
+        `prefix`: só as páginas cujo caminho começa por ele (ex.: 'reference').
+        """
+        return cap_envelope(REF.list_docs(settings, prefix), settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def docs_search(query: str, k: int = 5) -> dict:

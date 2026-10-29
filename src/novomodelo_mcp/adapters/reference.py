@@ -169,14 +169,14 @@ def _docs_unavailable(settings: Settings) -> dict:
     )
 
 
-def list_docs(settings: Settings, section: str | None = None) -> dict:
+def list_docs(settings: Settings, prefix: str | None = None) -> dict:
     root = docs_root(settings)
     if root is None:
         return _docs_unavailable(settings)
     base = Path(root)
     items = []
     for rel, path in iter_doc_pages(base):
-        if section and not rel.startswith(section):
+        if prefix and not rel.startswith(prefix):
             continue
         fields = frontmatter_fields(path.read_text(encoding="utf-8", errors="replace"))
         items.append({"page": rel, "title": fields["title"], "description": fields["description"]})

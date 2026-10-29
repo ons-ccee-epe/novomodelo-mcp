@@ -280,7 +280,7 @@ def test_schema_get_recusa_traversal(cliente):
 
 
 def test_docs_list_reference(cliente):
-    assert cliente.chamar("docs_list", {"section": "reference"}).get("count", 0) > 0
+    assert cliente.chamar("docs_list", {"prefix": "reference"}).get("count", 0) > 0
 
 
 def test_docs_read_cli_reference(cliente):
