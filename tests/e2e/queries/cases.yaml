@@ -14,9 +14,11 @@
 # de tests.e2e.executor.casos.PUBLICOS são aceitos, um por caso. A pasta de
 # trabalho do MCP no container é /estudos.
 #
-# Tools que pedem aprovação (as que gravam, as destrutivas e as de rede) são
-# negadas no container, que roda com as permissões do `configurar`: o caso
-# delas confere só a chamada, porque o envelope não chega.
+# O container roda com as permissões do `configurar`; as tools esperadas de
+# cada caso que pedem aprovação (as que gravam e as destrutivas) entram em
+# `Execucao.liberar`, e o caso confere o envelope delas. instalar_novomodelo
+# nunca é liberada (baixa e executa o instalador): o caso dela confere só a
+# chamada.
 #
 # O status do bridge (ok, warnings, will-not-convert) não é o do envelope de
 # erro do MCP: ele é conferido em content.status.
@@ -79,6 +81,9 @@ cases:
   expected:
     uses_mcp: true
     tool: bridge_convert_newave
+    status: ok
+    content:
+      artifacts.deck: "__any__"
   tags: [bridge, newave, conversion]
 
 - id: bridge-convert-decomp
@@ -86,27 +91,39 @@ cases:
   expected:
     uses_mcp: true
     tool: bridge_convert_decomp
+    status: ok
+    content:
+      artifacts.deck: "__any__"
   tags: [bridge, decomp, conversion]
 
-- id: bridge-compare-newave-saida
+# Os decks mini não trazem os resultados do NEWAVE/DECOMP nem uma pasta output/: o
+# caso confere o erro do bridge com a assinatura atual (deck + saída da rodada).
+- id: bridge-compare-newave-sem-saida
   query: Compare os resultados do NEWAVE em {caso:bridge_newave_mini} com a saída da rodada do novomodelo na pasta output desse mesmo caso
   expected:
     uses_mcp: true
     tool: bridge_compare_newave
-  tags: [bridge, newave, comparison]
+    status: error
+    error_contains: "not found"
+  tags: [bridge, newave, comparison, error]
 
-- id: bridge-compare-decomp-saida
+- id: bridge-compare-decomp-sem-saida
   query: Compare os resultados do DECOMP em {caso:bridge_decomp_mini} com a saída da rodada do novomodelo na pasta output desse mesmo caso
   expected:
     uses_mcp: true
     tool: bridge_compare_decomp
-  tags: [bridge, decomp, comparison]
+    status: error
+    error_contains: "not found"
+  tags: [bridge, decomp, comparison, error]
 
 - id: bridge-dashboard-generate
   query: Gere um dashboard HTML dos resultados do caso {caso:exemplo_1dtoy_rodado}
   expected:
     uses_mcp: true
     tool: bridge_dashboard
+    status: ok
+    content:
+      artifacts.dashboard: "__any__"
   tags: [bridge, dashboard]
 
 # ============================================================================
@@ -165,6 +182,10 @@ cases:
   expected:
     uses_mcp: true
     tool: deck_edit_parquet
+    status: ok
+    content:
+      written: true
+      matched_rows: 1
   tags: [deck, edit, parquet]
 
 - id: deck-read-json-config
@@ -190,6 +211,9 @@ cases:
   expected:
     uses_mcp: true
     tool: deck_edit_json
+    status: ok
+    content:
+      written: true
   tags: [deck, edit, json]
 
 - id: deck-sql-query
@@ -379,6 +403,9 @@ cases:
   expected:
     uses_mcp: true
     tool: schema_export
+    status: ok
+    content:
+      artifacts.schemas: "__any__"
   tags: [schema, export]
 
 # ============================================================================
@@ -407,6 +434,9 @@ cases:
   expected:
     uses_mcp: true
     tool: run_apply
+    status: ok
+    content:
+      written: true
   tags: [run, apply]
 
 - id: run-start
@@ -414,6 +444,9 @@ cases:
   expected:
     uses_mcp: true
     tool: run_start
+    status: ok
+    content:
+      job_id: "__nonempty__"
   tags: [run, start]
 
 - id: run-status-invalid
@@ -439,6 +472,8 @@ cases:
   expected:
     uses_mcp: true
     tool: run_cancel
+    status: error
+    error_contains: "job inexistente"
   tags: [run, cancel]
 
 # ============================================================================
@@ -475,6 +510,9 @@ cases:
   expected:
     uses_mcp: true
     tool: case_init
+    status: ok
+    content:
+      artifacts.case_dir: "__any__"
   tags: [case, init]
 
 # ============================================================================
@@ -510,6 +548,9 @@ cases:
   expected:
     uses_mcp: true
     tool: incluir_pastas
+    status: ok
+    content:
+      incluidas: "__nonempty__"
   tags: [meta, workspace]
 
 # ============================================================================

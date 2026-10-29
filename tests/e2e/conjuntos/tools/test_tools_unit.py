@@ -18,6 +18,7 @@ from tests.e2e.conjuntos.tools.adaptador import (
     caso_logico,
     para_execucoes,
     para_query_result,
+    tools_a_liberar,
 )
 from tests.e2e.executor.casos import PUBLICOS
 from tests.e2e.executor.eventos import Leitura, ler_claude, ler_kiro
@@ -37,12 +38,13 @@ def _caso(**expected) -> QueryTestCase:
     )
 
 
-def _claude(*chamadas: tuple[str, dict | None], resposta: str = "feito") -> Leitura:
-    """Stream do Claude: cada chamada é (nome, envelope); `None` deixa a chamada sem resultado."""
+def _claude(*chamadas: tuple, resposta: str = "feito") -> Leitura:
+    """Stream do Claude: cada chamada é (nome, envelope[, argumentos]); envelope `None`
+    deixa a chamada sem resultado."""
     linhas, t = [], 0.0
-    for i, (nome, envelope) in enumerate(chamadas):
+    for i, (nome, envelope, *args) in enumerate(chamadas):
         t += 1.0
-        uso = {"type": "tool_use", "id": f"t{i}", "name": nome, "input": {}}
+        uso = {"type": "tool_use", "id": f"t{i}", "name": nome, "input": args[0] if args else {}}
         linhas.append({"t": t, "evento": {"type": "assistant", "message": {"content": [uso]}}})
         if envelope is not None:
             t += 0.5
@@ -276,3 +278,85 @@ def test_para_execucoes_caso_nao_preparado_fica_para_o_executor(tmp_path: Path) 
         preparados=tmp_path / "vazio",
     )
     assert execucoes[0].caso_origem == tmp_path / "vazio" / "exemplo_1dtoy"
+
+
+def test_argumentos_e_envelope_vem_da_mesma_chamada() -> None:
+    caso = _caso(tool="results_status", status="ok")
+    recusa = {"status": "error", "exit_code": 2, "diagnostics": ["não é a pasta de uma rodada"]}
+    leitura = _claude(
+        (f"{PREFIXO}results_status", recusa, {"output_dir": "/estudos/x"}),
+        (f"{PREFIXO}results_status", {"status": "ok"}, {"output_dir": "/estudos/x/output"}),
+    )
+    envelope = para_query_result(caso, leitura).envelope
+    assert envelope["arguments"] == {"output_dir": "/estudos/x/output"}
+    assert envelope["result"] == {"status": "ok"}
+
+
+def test_chamada_escolhida_tambem_confere_o_content() -> None:
+    caso = _caso(tool="case_init", status="ok", content={"artifacts.case_dir": "__any__"})
+    leitura = _claude(
+        (f"{PREFIXO}case_init", {"status": "ok", "templates": []}, {"list": True}),
+        (
+            f"{PREFIXO}case_init",
+            {"status": "ok", "artifacts": {"case_dir": "/estudos/novo"}},
+            {"directory": "/estudos/novo", "template": "1dtoy"},
+        ),
+    )
+    assert para_query_result(caso, leitura).envelope["arguments"]["template"] == "1dtoy"
+    assert avaliar_tools(caso)(leitura).estado == "passou"
+
+
+def test_caso_logico_fora_dos_publicos_nunca_vira_caminho(tmp_path: Path) -> None:
+    interno = QueryTestCase(
+        id="x",
+        query="Liste {caso:caso_interno}",
+        expected=ExpectedResult(uses_mcp=True, tool="deck_list"),
+    )
+    with pytest.raises(ValueError, match="não é público"):
+        caso_logico(interno)
+    with pytest.raises(ValueError, match="não é público"):
+        para_execucoes(
+            [interno],
+            _cfg(tmp_path),
+            agentes=["claude"],
+            configs=[ConfigMCP("mcp-1_0", None)],
+            repeticoes=1,
+            preparados=tmp_path,
+        )
+
+
+@pytest.mark.parametrize(
+    ("esperado", "liberar"),
+    [
+        ({"tool": "run_start"}, ("run_start",)),
+        ({"tool": "deck_edit_json"}, ("deck_edit_json",)),
+        ({"tool": "deck_list"}, ()),
+        ({"tool": "instalar_novomodelo"}, ()),
+        ({"tools": ["case_validate", "bridge_check_newave"]}, ()),
+        ({"tools": ["bridge_dashboard", "deck_list"]}, ("bridge_dashboard",)),
+    ],
+)
+def test_para_execucoes_libera_so_as_esperadas_que_pedem_aprovacao(
+    tmp_path: Path, esperado: dict, liberar: tuple[str, ...]
+) -> None:
+    caso = _caso(**esperado)
+    assert tools_a_liberar(caso) == liberar
+    (execucao,) = para_execucoes(
+        [caso],
+        _cfg(tmp_path),
+        agentes=["claude"],
+        configs=[ConfigMCP("mcp-1_0", None)],
+        repeticoes=1,
+        preparados=tmp_path,
+    )
+    assert execucao.liberar == liberar
+
+
+def test_todo_caso_do_yaml_libera_so_tools_do_mcp_que_gravam() -> None:
+    from tests.e2e.executor.container import conferir_liberadas, tools_do_servidor
+
+    so_leitura = tools_do_servidor()
+    for caso in carregar_casos():
+        liberar = tools_a_liberar(caso)
+        assert conferir_liberadas(liberar) == liberar, caso.id
+        assert all(not so_leitura[n] for n in liberar), caso.id

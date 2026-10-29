@@ -33,6 +33,7 @@ __all__ = [
     "MCP_TOOLS",
     "NATIVE_TOOLS",
     "NOMES_EQUIVALENTES",
+    "campos_conferem",
     "classify_tool",
     "normalizar_nomes",
     "get_nested",
@@ -251,6 +252,15 @@ def values_match(expected: Any, actual: Any) -> bool:
 
     # Comparação direta
     return expected == actual
+
+
+def campos_conferem(obj: Any, content: dict[str, Any]) -> bool:
+    """Todo caminho de `content` existe em `obj` e casa com o seu matcher."""
+    for path, expected in content.items():
+        actual = get_nested(obj, path)
+        if actual is _MISSING or not values_match(expected, actual):
+            return False
+    return True
 
 
 # =============================================================================

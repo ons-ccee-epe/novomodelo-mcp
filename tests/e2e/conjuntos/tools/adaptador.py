@@ -1,7 +1,8 @@
 """Casos por tool pelo executor: uma `Execucao` por caso e o `avaliar` que valida o stream.
 
 O caso cita o caso público pelo marcador `{caso:<nome lógico>}` no pedido; no container
-ele vira `/estudos/<nome lógico>`, a cópia que o executor monta.
+ele vira `/estudos/<nome lógico>`, a cópia que o executor monta. As tools esperadas que
+pedem aprovação vão em `Execucao.liberar`, para o envelope delas chegar ao stream.
 """
 
 from __future__ import annotations
@@ -11,13 +12,18 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from tests.e2e.config import Config
-from tests.e2e.executor.casos import pasta_preparados
-from tests.e2e.executor.container import PASTA_ESTUDOS, Execucao
+from tests.e2e.executor.casos import PUBLICOS, pasta_preparados
+from tests.e2e.executor.container import (
+    NUNCA_LIBERADAS,
+    PASTA_ESTUDOS,
+    Execucao,
+    tools_do_servidor,
+)
 from tests.e2e.executor.eventos import Evento, Leitura
 from tests.e2e.executor.imagens import ConfigMCP, tag_imagem
 from tests.e2e.queries.loader import MARCADOR_CASO, CasesLoader
 from tests.e2e.queries.models import QueryResult, QueryTestCase, ToolCall
-from tests.e2e.queries.validator import QueryValidator
+from tests.e2e.queries.validator import QueryValidator, campos_conferem
 from tests.e2e.resultado.modelos import Avaliacao, Metricas
 
 CONJUNTO = "tools"
@@ -35,8 +41,34 @@ def carregar_casos(caminho: Path = CASES_PATH) -> list[QueryTestCase]:
 
 
 def caso_logico(caso: QueryTestCase) -> str | None:
+    """O nome lógico do caso público citado no pedido, ou `None` sem marcador.
+
+    Raises:
+        ValueError: o nome não é de um caso público; o caminho nunca é montado.
+    """
     achado = MARCADOR_CASO.search(caso.query)
-    return achado.group(1) if achado else None
+    if achado is None:
+        return None
+    if achado.group(1) not in PUBLICOS:
+        raise ValueError(f"caso {caso.id!r} cita um caso que não é público")
+    return achado.group(1)
+
+
+def _esperadas(caso: QueryTestCase) -> set[str]:
+    e = caso.expected
+    return {e.tool} if e.tool else set(e.tools or ())
+
+
+def tools_a_liberar(caso: QueryTestCase) -> tuple[str, ...]:
+    """As tools esperadas que pedem aprovação, menos as que o executor nunca libera."""
+    so_leitura = tools_do_servidor()
+    return tuple(
+        sorted(
+            n
+            for n in _esperadas(caso)
+            if n in so_leitura and not so_leitura[n] and n not in NUNCA_LIBERADAS
+        )
+    )
 
 
 def _pedido(caso: QueryTestCase) -> str:
@@ -56,11 +88,15 @@ def para_execucoes(
 
     Um caso público ausente de `preparados` segue com o caminho esperado: o executor
     grava `erro_infra` (o preparo não rodou), e não um caso pulado.
+
+    Raises:
+        ValueError: um caso cita um caso que não é público.
     """
     base = preparados if preparados is not None else pasta_preparados(cfg)
     execucoes = []
     for caso in casos:
         nome = caso_logico(caso)
+        liberar = tools_a_liberar(caso)
         for config in configs:
             for agente in agentes:
                 for repeticao in range(1, repeticoes + 1):
@@ -76,6 +112,7 @@ def para_execucoes(
                             somente_leitura=False,
                             timeout_s=int(caso.timeout_s or TIMEOUT_PADRAO),
                             imagem=tag_imagem(config, agente),
+                            liberar=liberar,
                         )
                     )
     return execucoes
@@ -93,32 +130,50 @@ def _envelope(ev: Evento) -> dict | None:
     return None
 
 
-def _esperadas(caso: QueryTestCase) -> set[str]:
+def _chamadas_com_resultado(leitura: Leitura) -> list[tuple[str, dict, dict | None]]:
+    """(nome, argumentos, envelope) de cada chamada do MCP que teve resultado.
+
+    O resultado fecha a chamada aberta mais antiga da mesma tool: os argumentos e o
+    envelope são sempre da mesma chamada.
+    """
+    abertas: list[Evento] = []
+    pares = []
+    for ev in leitura.eventos:
+        if not ev.do_mcp or not ev.nome:
+            continue
+        if ev.tipo == "tool":
+            abertas.append(ev)
+        elif ev.tipo == "resultado_tool":
+            chamada = next((a for a in abertas if a.nome == ev.nome), None)
+            if chamada is not None:
+                abertas.remove(chamada)
+            pares.append((ev.nome, dict(chamada.args) if chamada else {}, _envelope(ev)))
+    return pares
+
+
+def _mostra_o_caso(caso: QueryTestCase, envelope: dict) -> bool:
     e = caso.expected
-    return {e.tool} if e.tool else set(e.tools or ())
+    if e.status is not None and envelope.get("status") != e.status:
+        return False
+    return campos_conferem(envelope, e.content or {})
 
 
-def _resultados_mcp(leitura: Leitura) -> list[tuple[str, dict | None]]:
-    return [
-        (ev.nome, _envelope(ev))
-        for ev in leitura.eventos
-        if ev.tipo == "resultado_tool" and ev.do_mcp and ev.nome
-    ]
-
-
-def _escolher_envelope(caso: QueryTestCase, leitura: Leitura) -> tuple[str, dict] | None:
-    """O primeiro envelope da tool esperada com o status esperado, senão o último dela.
+def _escolher_envelope(caso: QueryTestCase, leitura: Leitura) -> tuple[str, dict, dict] | None:
+    """A primeira chamada da tool esperada com o status e o content do caso, senão a última.
 
     O agente pode receber uma recusa guiada (`output_sugerido`) e acertar na segunda
-    chamada, ou provocar o erro pedido e seguir com outra chamada: vale a chamada que
-    mostra o comportamento do caso, não sempre a primeira tool do MCP.
+    chamada, listar antes de agir, ou provocar o erro pedido e seguir com outra chamada:
+    vale a chamada que mostra o comportamento do caso, não sempre a primeira do MCP.
     """
     alvo = _esperadas(caso)
-    da_tool = [(n, env) for n, env in _resultados_mcp(leitura) if env is not None and n in alvo]
+    da_tool = [
+        (nome, args, env)
+        for nome, args, env in _chamadas_com_resultado(leitura)
+        if env is not None and nome in alvo
+    ]
     if not da_tool:
         return None
-    esperado = caso.expected.status
-    return next((r for r in da_tool if r[1].get("status") == esperado), da_tool[-1])
+    return next((c for c in da_tool if _mostra_o_caso(caso, c[2])), da_tool[-1])
 
 
 def _fim(leitura: Leitura) -> Evento | None:
@@ -134,8 +189,7 @@ def para_query_result(caso: QueryTestCase, leitura: Leitura) -> QueryResult:
     escolhido = _escolher_envelope(caso, leitura)
     envelope = None
     if escolhido is not None:
-        nome, resultado = escolhido
-        args = next((c.args for c in chamadas if c.name == nome), {})
+        nome, args, resultado = escolhido
         envelope = {"tool": nome, "arguments": args, "result": resultado}
     fim = _fim(leitura)
     t_total = fim.t if fim else (leitura.eventos[-1].t if leitura.eventos else 0.0)
