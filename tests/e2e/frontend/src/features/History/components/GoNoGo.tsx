@@ -39,6 +39,7 @@ export function GoNoGo({ decisao }: Props) {
             alvo <code>{decisao.alvo}</code> · base{" "}
             {decisao.base ? <code>{limparCaminhos(decisao.base)}</code> : "sem base"}
           </p>
+          <Lista titulo="Incompleto" itens={decisao.incompleto} />
           {decisao.bloqueios.length > 0 && (
             <ul className="nm-decisoes" aria-label="Bloqueios">
               {decisao.bloqueios.map((b) => (

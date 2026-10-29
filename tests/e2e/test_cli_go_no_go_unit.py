@@ -9,9 +9,14 @@ from pathlib import Path
 import pytest
 
 from tests.e2e import __main__ as cli
+from tests.e2e import rodada
 from tests.e2e.config import Config
 from tests.e2e.go_no_go.lancamentos import marcar_lancamento
-from tests.e2e.resultado.armazenamento import gravar_manifesto, gravar_registro, ler_decisao
+from tests.e2e.resultado.armazenamento import (
+    gravar_manifesto,
+    gravar_registro,
+    ler_decisao,
+)
 from tests.e2e.resultado.modelos import Conjunto, Estado, Manifesto, Registro
 
 VERSOES = {
@@ -39,9 +44,26 @@ def _cfg(tmp_path: Path) -> Config:
     )
 
 
+def _plano_dos_casos_gravados(manifesto: Manifesto, cfg: Config) -> set[tuple]:
+    """O plano do manifesto, com o catálogo trocado pelos casos que a rodada gravou."""
+    execucoes = cfg.resultados / manifesto.rodada / "execucoes"
+    casos = {
+        (a.parent.name, a.name) for a in execucoes.glob("*/*") if a.parent.name != "deterministica"
+    }
+    return {
+        (conjunto, caso, agente, config, rep)
+        for conjunto, caso in casos
+        for agente in manifesto.agentes
+        for config in manifesto.configs
+        for rep in range(1, manifesto.repeticoes + 1)
+    }
+
+
 @pytest.fixture(autouse=True)
 def _ambiente(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "carregar_config", lambda env: _cfg(tmp_path))
+    monkeypatch.setattr(rodada, "chaves_planejadas", _plano_dos_casos_gravados)
+    monkeypatch.setattr(rodada, "varrer_segredos", lambda pasta: rodada.Varredura())
 
 
 def _reg(rodada, config, caso, estado: Estado, conjunto: Conjunto = "tools", rep=1) -> Registro:
@@ -59,8 +81,20 @@ def _reg(rodada, config, caso, estado: Estado, conjunto: Conjunto = "tools", rep
     )
 
 
-def _rodada(tmp_path, nome, dados: dict[str, dict[str, Estado]], det: Estado = "passou") -> Path:
-    """`dados`: configuração -> caso -> estado."""
+def _fim(pasta: Path, codigo: int) -> None:
+    with (pasta / rodada.ARQUIVO_LOG).open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"evento": "fim", "codigo": codigo, "motivo": "teste"}) + "\n")
+
+
+def _rodada(
+    tmp_path,
+    nome,
+    dados: dict[str, dict[str, Estado]],
+    det: Estado = "passou",
+    repeticoes: int = 1,
+    codigo_fim: int | None = 0,
+) -> Path:
+    """`dados`: configuração -> caso -> estado, gravado na repetição 1."""
     pasta = tmp_path / "res" / nome
     gravar_manifesto(
         pasta,
@@ -70,7 +104,7 @@ def _rodada(tmp_path, nome, dados: dict[str, dict[str, Estado]], det: Estado = "
             configs=tuple(dados),
             conjuntos=("deterministica", "tools"),
             agentes=("claude",),
-            repeticoes=1,
+            repeticoes=repeticoes,
             flags={"completa": False},
             versoes=VERSOES,
             commit_bateria="abc",
@@ -80,6 +114,8 @@ def _rodada(tmp_path, nome, dados: dict[str, dict[str, Estado]], det: Estado = "
     for config, casos in dados.items():
         for caso, estado in casos.items():
             gravar_registro(pasta, _reg(nome, config, caso, estado))
+    if codigo_fim is not None:
+        _fim(pasta, codigo_fim)
     return pasta
 
 
@@ -318,3 +354,96 @@ def test_decisao_gravada_valida_contra_o_schema(tmp_path):
     pasta = _rodada(tmp_path, "r1", {"antiga": {"c": "passou"}, "nova": {"c": "falhou"}})
     assert _go("r1", "--alvo", "nova", "--baseline-config", "antiga") == 1
     assert ler_decisao(pasta)["veredito"] == "no-go"
+
+
+def test_repeticoes_faltando_dao_inconclusivo_com_a_lista(tmp_path):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, repeticoes=3)
+    assert _go("r1", "--alvo", "mcp") == 2
+    dados = ler_decisao(pasta)
+    assert dados["veredito"] == "inconclusivo"
+    assert dados["incompleto"] == ["tools/c/claude/mcp/2", "tools/c/claude/mcp/3"]
+    relatorio = (pasta / "relatorio-go-no-go.md").read_text(encoding="utf-8")
+    assert "## Incompleto" in relatorio and "`tools/c/claude/mcp/3`" in relatorio
+
+
+def test_base_incompleta_tambem_da_inconclusivo(tmp_path):
+    _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, repeticoes=2)
+    _rodada(tmp_path, "r2", {"mcp": {"c": "passou"}})
+    assert _go("r2", "--alvo", "mcp", "--baseline", "r1") == 2
+    assert ler_decisao(tmp_path / "res" / "r2")["incompleto"] == ["base: tools/c/claude/mcp/2"]
+
+
+def test_so_a_config_do_alvo_precisa_estar_completa(tmp_path):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}, "outra": {"c": "passou"}})
+    for arquivo in (pasta / "execucoes" / "tools" / "c" / "claude" / "outra").rglob("*.json"):
+        arquivo.unlink()
+    assert _go("r1", "--alvo", "mcp") == 0
+
+
+@pytest.mark.parametrize("codigo_fim", [5, None])
+def test_fim_com_codigo_nao_zero_ou_sem_fim_da_inconclusivo(tmp_path, codigo_fim):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, codigo_fim=codigo_fim)
+    assert _go("r1", "--alvo", "mcp") == 2
+    [item] = ler_decisao(pasta)["incompleto"]
+    assert "rodada.jsonl" in item
+
+
+def test_vale_o_ultimo_fim_da_rodada_retomada(tmp_path):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, codigo_fim=4)
+    _fim(pasta, 0)
+    assert _go("r1", "--alvo", "mcp") == 0
+    _fim(pasta, 5)
+    assert _go("r1", "--alvo", "mcp") == 2
+
+
+def test_falha_comprovada_continua_no_go_mesmo_incompleta(tmp_path):
+    _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, det="falhou", codigo_fim=1)
+    assert _go("r1", "--alvo", "mcp") == 1
+    assert ler_decisao(tmp_path / "res" / "r1")["incompleto"]
+
+
+def test_rodada_completa_decide_normal_com_incompleto_vazio(tmp_path):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, repeticoes=1)
+    assert _go("r1", "--alvo", "mcp") == 0
+    assert ler_decisao(pasta)["incompleto"] == []
+    assert "Rodada completa." in (pasta / "relatorio-go-no-go.md").read_text(encoding="utf-8")
+
+
+def test_trava_viva_recusa_go_no_go_e_marcar_lancamento_com_64(tmp_path, monkeypatch, capsys):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}})
+    (pasta / rodada.ARQUIVO_TRAVA).write_text("4242 2026-01-01T00:00:00Z\n", encoding="utf-8")
+    monkeypatch.setattr(rodada, "pid_vivo", lambda pid: pid == 4242)
+    assert _go("r1", "--alvo", "mcp") == 64
+    assert "em andamento" in capsys.readouterr().err
+    assert not (pasta / "relatorio-go-no-go.md").exists()
+    assert cli.main(["marcar-lancamento", "r1", "1.0.0", "--config", "mcp"]) == 64
+    assert not (tmp_path / "res" / "lancamentos.json").exists()
+
+
+def test_marcar_lancamento_recusa_rodada_incompleta(tmp_path, capsys):
+    _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, repeticoes=2)
+    assert cli.main(["marcar-lancamento", "r1", "1.0.0", "--config", "mcp"]) == 64
+    assert "tools/c/claude/mcp/2" in capsys.readouterr().err
+    _rodada(tmp_path, "r2", {"mcp": {"c": "passou"}}, codigo_fim=5)
+    assert cli.main(["marcar-lancamento", "r2", "1.0.0", "--config", "mcp"]) == 64
+    assert not (tmp_path / "res" / "lancamentos.json").exists()
+
+
+@pytest.mark.parametrize(
+    "varredura",
+    [
+        rodada.Varredura(arquivos=("execucoes/x/log.jsonl",)),
+        rodada.Varredura(erro="gitleaks fora do PATH"),
+    ],
+)
+def test_varredura_bloqueia_antes_do_relatorio(tmp_path, monkeypatch, capsys, varredura):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}})
+    varridas = []
+    monkeypatch.setattr(rodada, "varrer_segredos", lambda p: varridas.append(p) or varredura)
+    assert _go("r1", "--alvo", "mcp") == 3
+    assert varridas == [pasta]
+    bloqueio = (pasta / rodada.ARQUIVO_BLOQUEIO).read_text(encoding="utf-8")
+    assert (varredura.erro or varredura.arquivos[0]) in bloqueio
+    for nome in ("relatorio-go-no-go.md", "junit.xml", "decisao-go-no-go.json"):
+        assert not (pasta / nome).exists()
+    assert "segredo" in capsys.readouterr().err

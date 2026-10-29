@@ -543,6 +543,42 @@ def planejar(
     )
 
 
+Chave = tuple[str, str, str, str, int]
+
+
+def chaves_planejadas(m: Manifesto, cfg: Config) -> set[Chave]:
+    """As execuções com agente que o plano do manifesto prevê: conjunto, caso, agente, config e
+    repetição, com o filtro dele; um caso pulado também tem registro e entra no plano."""
+    configs = [
+        ConfigMCP(nome, Path(m.wheels[nome]["arquivo"]) if nome in m.wheels else None)
+        for nome in m.configs
+    ]
+    conjuntos = [c for c in m.conjuntos if c in CONJUNTOS_COM_AGENTE]
+    return {
+        (e.conjunto, e.caso, e.agente, e.config, e.repeticao)
+        for e in (
+            p.execucao for p in planejar(configs, conjuntos, m.agentes, m.repeticoes, cfg, m.filtro)
+        )
+    }
+
+
+def ultimo_fim(pasta: Path) -> tuple[int, str] | None:
+    """O código e o motivo do último evento `fim` do log da rodada; `None` sem nenhum."""
+    try:
+        linhas = (pasta / ARQUIVO_LOG).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for linha in reversed(linhas):
+        try:
+            evento = json.loads(linha)
+        except ValueError:
+            continue
+        if isinstance(evento, dict) and evento.get("evento") == "fim":
+            codigo = evento.get("codigo")
+            return (codigo if isinstance(codigo, int) else -1), str(evento.get("motivo", ""))
+    return None
+
+
 def _imagens_da_rodada(
     configs: Sequence[ConfigMCP], agentes: Sequence[str], com_juiz: bool
 ) -> list[tuple[ConfigMCP, str]]:
@@ -789,14 +825,20 @@ def _rodar_com_trava(
     return pasta
 
 
-def _bloquear_se_achar(pasta: Path, log: _Log, dep: Dependencias) -> bool:
-    """Varre a pasta; achado ou varredura que não rodou grava `ARQUIVO_BLOQUEIO`."""
-    varredura = dep.varrer(pasta)
+def gravar_bloqueio(pasta: Path, varredura: Varredura) -> bool:
+    """Achado ou varredura que não rodou grava `ARQUIVO_BLOQUEIO`; devolve se bloqueou."""
     if not (varredura.erro or varredura.arquivos):
         return False
     linhas = [varredura.erro] if varredura.erro else []
     linhas += [f"segredo encontrado em: {a}" for a in varredura.arquivos]
     (pasta / ARQUIVO_BLOQUEIO).write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    return True
+
+
+def _bloquear_se_achar(pasta: Path, log: _Log, dep: Dependencias) -> bool:
+    varredura = dep.varrer(pasta)
+    if not gravar_bloqueio(pasta, varredura):
+        return False
     log("segredo", arquivos=list(varredura.arquivos), erro=varredura.erro)
     return True
 

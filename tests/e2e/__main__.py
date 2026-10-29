@@ -9,7 +9,7 @@ import re
 import sys
 import tempfile
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import jsonschema
@@ -29,7 +29,7 @@ from tests.e2e.executor.imagens import (
     ler_config_mcp,
     tag_imagem,
 )
-from tests.e2e.go_no_go.criterio import Decisao, decidir
+from tests.e2e.go_no_go.criterio import Decisao, com_incompleto, decidir
 from tests.e2e.go_no_go.lancamentos import (
     LancamentosCorrompido,
     marcar_lancamento,
@@ -52,6 +52,7 @@ CODIGOS_DO_VEREDITO = {"go": 0, "no-go": 1, "inconclusivo": 2}
 CODIGO_SEGREDO = rodada.CODIGO_SEGREDO
 CODIGO_USO = 64
 SUBCOMANDOS_DE_USO_64 = ("go-no-go", "marcar-lancamento")
+LIMITE_FALTAS = 20
 ITENS_DO_AGENTE = {"claude": "token_claude", "kiro": "volume_kiro"}
 
 
@@ -196,7 +197,10 @@ def _parser() -> argparse.ArgumentParser:
             "--baseline quando as duas vêm juntas); --baseline (a configuração de mesmo nome "
             "do --alvo); o último lançamento marcado (a configuração dele, procurada primeiro "
             "nesta rodada); sem base, só a determinística bloqueia. Base cuja rodada está "
-            'bloqueada por segredo é recusada com 64 ("base indisponível").'
+            'bloqueada por segredo é recusada com 64 ("base indisponível"). Só uma rodada '
+            "completa decide: com execução do plano sem registro, na rodada ou na base, ou com o "
+            f"último fim do {rodada.ARQUIVO_LOG} diferente de 0, o veredito é inconclusivo e o "
+            "relatório lista o que falta. Antes de gravar, o gitleaks varre a pasta da rodada."
         ),
         epilog=_codigos_do_go_no_go(),
     )
@@ -213,7 +217,7 @@ def _parser() -> argparse.ArgumentParser:
         epilog=(
             "códigos de saída do marcar-lancamento: 0 marcado; 3 rodada bloqueada por segredo; "
             "64 recusa de uso (argumentos inválidos, rodada ou configuração inexistente, "
-            "manifesto ou lancamentos.json ilegível)"
+            "rodada em andamento ou incompleta, manifesto ou lancamentos.json ilegível)"
         ),
     )
     _uso_sai_64(marcar)
@@ -226,7 +230,8 @@ def _parser() -> argparse.ArgumentParser:
 def _codigos_do_go_no_go() -> str:
     return (
         "códigos de saída do go-no-go (não são os do rodar): 0 go; 1 no-go; "
-        "2 inconclusivo; 3 segredo bloqueado na rodada; 64 recusa de uso (argumentos inválidos, "
+        "2 inconclusivo (inclui rodada incompleta); 3 segredo bloqueado na rodada ou varredura "
+        "que não rodou; 64 recusa de uso (argumentos inválidos, rodada em andamento, "
         "rodada, alvo ou configuração inexistente, manifesto ilegível, --baseline igual à própria rodada sem "
         "--baseline-config, lançamento marcado cuja rodada ou configuração não existe mais)"
     )
@@ -348,6 +353,9 @@ def _pasta_da_rodada(cfg, nome: str, alvo: bool = True) -> Path:
     pasta = cfg.resultados / nome
     if not (pasta / "manifesto.json").is_file():
         raise _Recusa(f"rodada {nome!r} não existe em {cfg.resultados.name}/")
+    if (dono := rodada.trava_viva(pasta, rodada.pid_vivo)) is not None:
+        quem = f"PID {dono}" if dono else "outro processo"
+        raise _Recusa(f"rodada {nome!r} em andamento ({quem}); espere o fim do rodar")
     if (pasta / rodada.ARQUIVO_BLOQUEIO).exists():
         erro = _Bloqueada if alvo else _Recusa
         raise erro(
@@ -374,25 +382,67 @@ def _config_no_manifesto(manifesto: Manifesto, config: str, flag: str) -> None:
         )
 
 
-def _base_de_outra_rodada(cfg, nome: str, config: str) -> tuple[list[Registro], str]:
+def _faltas(
+    cfg, pasta: Path, manifesto: Manifesto, registros: list[Registro], config: str
+) -> list[str]:
+    """O que falta para a configuração estar completa na rodada: o último `fim` do log com
+    código 0 e uma execução gravada para cada uma do plano do manifesto."""
+    faltas = []
+    fim = rodada.ultimo_fim(pasta)
+    if fim is None:
+        faltas.append(f"{rodada.ARQUIVO_LOG}: sem evento fim (rodada não terminou)")
+    elif fim[0] != 0:
+        faltas.append(f"{rodada.ARQUIVO_LOG}: fim com código {fim[0]} ({fim[1]})")
     try:
-        manifesto, registros = _ler(_pasta_da_rodada(cfg, nome, alvo=False))
+        plano = rodada.chaves_planejadas(manifesto, cfg)
+    except (OSError, ValueError) as erro:
+        return [*faltas, f"plano do manifesto ilegível: {type(erro).__name__}"]
+    gravadas = {(r.conjunto, r.caso, r.agente, r.config, r.repeticao) for r in registros}
+    faltam = sorted(c for c in plano - gravadas if c[3] == config)
+    return faltas + ["/".join(map(str, c)) for c in faltam]
+
+
+@dataclass(frozen=True)
+class _Base:
+    registros: list[Registro] | None = None
+    rotulo: str | None = None
+    faltas: tuple[str, ...] = ()
+
+
+def _base_de_outra_rodada(cfg, nome: str, config: str) -> _Base:
+    try:
+        pasta = _pasta_da_rodada(cfg, nome, alvo=False)
+        manifesto, registros = _ler(pasta)
         _config_no_manifesto(manifesto, config, "base")
     except _Recusa as erro:
         raise _Recusa(f"base indisponível: {erro}") from erro
-    return [r for r in registros if r.config == config], f"{config} · rodada {nome}"
+    return _Base(
+        [r for r in registros if r.config == config],
+        f"{config} · rodada {nome}",
+        tuple(_faltas(cfg, pasta, manifesto, registros, config)),
+    )
+
+
+def _base_da_rodada(
+    cfg, pasta: Path, manifesto: Manifesto, registros: list[Registro], config: str, rotulo: str
+) -> _Base:
+    return _Base(
+        [r for r in registros if r.config == config],
+        rotulo,
+        tuple(_faltas(cfg, pasta, manifesto, registros, config)),
+    )
 
 
 def _escolher_base(
-    cfg, args, manifesto: Manifesto, registros: list[Registro]
-) -> tuple[list[Registro] | None, str | None]:
-    """Devolve os registros da base e o rótulo dela, na ordem de escolha do `--help`."""
+    cfg, args, pasta: Path, manifesto: Manifesto, registros: list[Registro]
+) -> _Base:
+    """A base de comparação, na ordem de escolha do `--help`."""
     if args.baseline_config:
         if args.baseline and args.baseline != manifesto.rodada:
             return _base_de_outra_rodada(cfg, args.baseline, args.baseline_config)
         _config_no_manifesto(manifesto, args.baseline_config, "--baseline-config")
-        base = [r for r in registros if r.config == args.baseline_config]
-        return base, f"{args.baseline_config} · rodada {manifesto.rodada}"
+        rotulo = f"{args.baseline_config} · rodada {manifesto.rodada}"
+        return _base_da_rodada(cfg, pasta, manifesto, registros, args.baseline_config, rotulo)
     if args.baseline:
         if args.baseline == manifesto.rodada:
             raise _Recusa("--baseline é a própria rodada; informe --baseline-config")
@@ -402,15 +452,15 @@ def _escolher_base(
     except LancamentosCorrompido as erro:
         raise _Recusa(str(erro)) from erro
     if ultimo is None:
-        return None, None
+        return _Base()
     config, de_rodada = ultimo["config"], ultimo["rodada"]
     if config in manifesto.configs and config != args.alvo:
-        base = [r for r in registros if r.config == config]
-        return base, f"{config} · rodada {manifesto.rodada} (lançamento {ultimo['versao']})"
+        rotulo = f"{config} · rodada {manifesto.rodada} (lançamento {ultimo['versao']})"
+        return _base_da_rodada(cfg, pasta, manifesto, registros, config, rotulo)
     if de_rodada == manifesto.rodada and config == args.alvo:
-        return None, None
-    base, rotulo = _base_de_outra_rodada(cfg, de_rodada, config)
-    return base, f"{rotulo} (lançamento {ultimo['versao']})"
+        return _Base()
+    base = _base_de_outra_rodada(cfg, de_rodada, config)
+    return replace(base, rotulo=f"{base.rotulo} (lançamento {ultimo['versao']})")
 
 
 def _atomico(destino: Path, escrever: Callable[[Path], object]) -> None:
@@ -433,23 +483,34 @@ def _go_no_go(cfg, args) -> int:
         pasta = _pasta_da_rodada(cfg, args.rodada)
         manifesto, registros = _ler(pasta)
         _config_no_manifesto(manifesto, args.alvo, "--alvo")
-        base, rotulo = _escolher_base(cfg, args, manifesto, registros)
+        base = _escolher_base(cfg, args, pasta, manifesto, registros)
     except _Recusa as erro:
         print(f"erro: {erro}", file=sys.stderr)
         return erro.codigo
+    if rodada.gravar_bloqueio(pasta, rodada.varrer_segredos(pasta)):
+        print(
+            f"erro: varredura de segredos bloqueou a rodada: {rodada.ARQUIVO_BLOQUEIO}; "
+            "sem relatório nem veredito",
+            file=sys.stderr,
+        )
+        return CODIGO_SEGREDO
     alvo = [r for r in registros if r.config in (args.alvo, rodada.CONFIG_DETERMINISTICA)]
-    decisao: Decisao = decidir(alvo, base)
-    do_relatorio = alvo + [r for r in (base or []) if r not in alvo]
+    faltas = _faltas(cfg, pasta, manifesto, registros, args.alvo)
+    if not any(r.conjunto == "deterministica" for r in registros):
+        faltas.append("deterministica: sem registro")
+    faltas += [f"base: {f}" for f in base.faltas]
+    decisao: Decisao = com_incompleto(decidir(alvo, base.registros), list(dict.fromkeys(faltas)))
+    do_relatorio = alvo + [r for r in (base.registros or []) if r not in alvo]
     _atomico(
         pasta / NOME_RELATORIO,
         lambda tmp: escrever_relatorio(
-            manifesto, do_relatorio, decisao, args.rodada, rotulo, tmp, config_alvo=args.alvo
+            manifesto, do_relatorio, decisao, args.rodada, base.rotulo, tmp, config_alvo=args.alvo
         ),
     )
     _atomico(pasta / NOME_JUNIT, lambda tmp: escrever_junit(alvo, tmp))
     gravar_decisao(
         pasta,
-        {"schema_versao": SCHEMA_VERSAO, "alvo": args.alvo, "base": rotulo, **asdict(decisao)},
+        {"schema_versao": SCHEMA_VERSAO, "alvo": args.alvo, "base": base.rotulo, **asdict(decisao)},
     )
     print(f"veredito: {decisao.veredito}")
     print(f"relatório: {NOME_RELATORIO}")
@@ -461,8 +522,15 @@ def _go_no_go(cfg, args) -> int:
 def _marcar_lancamento(cfg, args) -> int:
     try:
         pasta = _pasta_da_rodada(cfg, args.rodada)
-        manifesto, _ = _ler(pasta)
+        manifesto, registros = _ler(pasta)
         _config_no_manifesto(manifesto, args.config, "--config")
+        if faltas := _faltas(cfg, pasta, manifesto, registros, args.config):
+            resto = f"; e mais {len(faltas) - LIMITE_FALTAS}" if len(faltas) > LIMITE_FALTAS else ""
+            raise _Recusa(
+                f"rodada {args.rodada!r} incompleta para {args.config!r}: "
+                + "; ".join(faltas[:LIMITE_FALTAS])
+                + resto
+            )
         marcar_lancamento(cfg.resultados, args.rodada, args.versao, args.config)
     except _Recusa as erro:
         print(f"erro: {erro}", file=sys.stderr)

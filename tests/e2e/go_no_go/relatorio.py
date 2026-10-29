@@ -289,6 +289,7 @@ def escrever_relatorio(
         "",
         f"Rodada `{alvo}` · {alvo_config}baseline: {baseline} · criada em {m.criado_em}",
         "",
+        *_lista("Incompleto", decisao.incompleto, "Rodada completa."),
         *_bloqueios(decisao),
         *_lista("Inconclusivos", decisao.inconclusivos, "Nenhum."),
         *_lista("Pulados", decisao.pulados, "Nenhum."),

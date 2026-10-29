@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -34,6 +34,7 @@ class Decisao:
     pulados: tuple[str, ...]
     sem_base: tuple[str, ...]
     ausentes: tuple[str, ...] = ()
+    incompleto: tuple[str, ...] = ()
 
 
 def _maioria(passou: int, falhou: int) -> bool:
@@ -131,3 +132,15 @@ def decidir(alvo: Sequence[Registro], base: Sequence[Registro] | None) -> Decisa
         sem_base=tuple(sem_base),
         ausentes=tuple(ausentes),
     )
+
+
+def com_incompleto(decisao: Decisao, incompleto: Sequence[str]) -> Decisao:
+    """Registra o que falta na rodada; com falta, um `go` vira `inconclusivo`.
+
+    Um `no-go` fica: a falha que bloqueou foi observada, e a falta de outras execuções não a
+    desfaz (a determinística que falha para a rodada antes dos agentes).
+    """
+    if not incompleto:
+        return decisao
+    veredito: Veredito = "no-go" if decisao.veredito == "no-go" else "inconclusivo"
+    return replace(decisao, veredito=veredito, incompleto=tuple(incompleto))

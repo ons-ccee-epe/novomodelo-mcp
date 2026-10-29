@@ -100,6 +100,8 @@ export interface Decisao {
   pulados: string[];
   sem_base: string[];
   ausentes: string[];
+  /** O que falta para a rodada estar completa; vazio numa rodada completa. */
+  incompleto: string[];
 }
 
 export const CAMPOS_DECISAO: Record<keyof Decisao, true> = {
@@ -112,7 +114,11 @@ export const CAMPOS_DECISAO: Record<keyof Decisao, true> = {
   pulados: true,
   sem_base: true,
   ausentes: true,
+  incompleto: true,
 };
+
+/** Campos que uma decisão gravada sem eles ainda lê, com o valor que assumem. */
+export const OPCIONAIS_DECISAO: Partial<Decisao> = { incompleto: [] };
 
 export const CAMPOS_BLOQUEIO: Record<keyof Bloqueio, true> = {
   regra: true,
@@ -262,12 +268,13 @@ export function adaptarRegistro(bruto: unknown): Registro {
 
 /** A decisão gravada pelo go-no-go; recusa `schema_versao` desconhecido e campo faltando. */
 export function adaptarDecisao(bruto: unknown): Decisao {
-  const dados = objeto(bruto, "decisão");
+  const dados = { ...OPCIONAIS_DECISAO, ...objeto(bruto, "decisão") };
   conferir(dados, CAMPOS_DECISAO, "decisão");
   if (!VEREDITOS.includes(dados.veredito as Veredito)) {
     throw new Error(`decisão: veredito ${String(dados.veredito)} desconhecido`);
   }
   if (!Array.isArray(dados.bloqueios)) throw new Error("decisão: bloqueios deve ser uma lista");
+  if (!Array.isArray(dados.incompleto)) throw new Error("decisão: incompleto deve ser uma lista");
   for (const b of dados.bloqueios) {
     const bloqueio = objeto(b, "decisão.bloqueio");
     const faltam = Object.keys(CAMPOS_BLOQUEIO).filter((c) => !(c in bloqueio));

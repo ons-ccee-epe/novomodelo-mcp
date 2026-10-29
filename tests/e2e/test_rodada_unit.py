@@ -1042,3 +1042,29 @@ def test_trava_e_liberada_no_fim_e_em_excecao(tmp_path):
         rodada.rodar("r2", [_wheel(tmp_path)], ["usuario"], ["claude"], 1, cfg, dep=dep)
     assert not (cfg.resultados / "r2" / rodada.ARQUIVO_TRAVA).exists()
     assert rodada.trava_viva(cfg.resultados / "r2") is None
+
+
+def test_plano_do_manifesto_casa_com_o_que_a_rodada_grava(tmp_path):
+    cfg = _cfg(tmp_path)
+    pasta = _rodar(
+        Falsos(),
+        cfg,
+        [_wheel(tmp_path), ler_config_mcp("sem")],
+        conjuntos=["tools", "usuario"],
+        repeticoes=2,
+        filtro="bridge-check-newave-valid,i01*",
+    )
+    gravadas = {(r.conjunto, r.caso, r.agente, r.config, r.repeticao) for r in _agentes(pasta)}
+    planejadas = rodada.chaves_planejadas(ler_manifesto(pasta), cfg)
+    assert planejadas == gravadas
+    assert {c for c, *_ in planejadas} == {"tools", "usuario"}
+    assert rodada.ultimo_fim(pasta) == (0, "rodada completa")
+
+
+def test_ultimo_fim_ignora_linha_ilegivel_e_falta_de_log(tmp_path):
+    assert rodada.ultimo_fim(tmp_path) is None
+    (tmp_path / rodada.ARQUIVO_LOG).write_text(
+        '{"evento": "fim", "codigo": 4, "motivo": "limite"}\nnao-json\n{"evento": "inicio"}\n',
+        encoding="utf-8",
+    )
+    assert rodada.ultimo_fim(tmp_path) == (4, "limite")

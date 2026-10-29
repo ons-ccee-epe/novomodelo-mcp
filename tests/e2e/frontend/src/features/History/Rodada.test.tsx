@@ -126,6 +126,15 @@ describe("Histórico das rodadas", () => {
     expect(ordem.indexOf("Veredito do go-no-go")).toBeLessThan(ordem.indexOf("Configurações"));
   });
 
+  it("lista o que falta quando a rodada está incompleta", async () => {
+    const incompleto = ["rodada.jsonl: fim com código 5 (orçamento)", "tools/ferramenta-a/claude/mcp-1.1/3"];
+    servir(rodada("r1", REGISTROS, { go_no_go: { ...DECISAO_GO, veredito: "inconclusivo", incompleto } }));
+    abrir();
+    const painel = await screen.findByRole("region", { name: "Veredito do go-no-go" });
+    expect(within(painel).getByText("inconclusivo")).toBeInTheDocument();
+    expect(within(painel).getByText(/Incompleto: .*mcp-1\.1\/3/)).toBeInTheDocument();
+  });
+
   it("avisa quando o go-no-go ainda não rodou", async () => {
     servir(rodada("r1", REGISTROS, { go_no_go: null }));
     abrir();

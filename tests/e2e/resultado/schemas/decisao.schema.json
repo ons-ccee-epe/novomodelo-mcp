@@ -96,6 +96,12 @@
       "items": {
         "type": "string"
       }
+    },
+    "incompleto": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   }
 }

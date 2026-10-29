@@ -82,6 +82,7 @@ export const DECISAO_GO: Decisao = {
   pulados: [],
   sem_base: [],
   ausentes: [],
+  incompleto: [],
 };
 
 export function rodada(id: string, registros: Registro[], parcial: Partial<Rodada> = {}): Rodada {

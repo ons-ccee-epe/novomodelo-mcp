@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CAMPOS_BLOQUEIO,
   CAMPOS_DECISAO,
+  OPCIONAIS_DECISAO,
   CAMPOS_MANIFESTO,
   CAMPOS_METRICAS,
   CAMPOS_REGISTRO,
@@ -91,7 +92,13 @@ describe("decisão do go-no-go contra o schema", () => {
 
   it("os campos e os enums são os do schema", () => {
     expect(Object.keys(CAMPOS_DECISAO).sort()).toEqual(Object.keys(esquema.properties).sort());
-    expect(Object.keys(CAMPOS_DECISAO).sort()).toEqual([...esquema.required].sort());
+    const opcionais = Object.keys(OPCIONAIS_DECISAO);
+    expect(
+      Object.keys(CAMPOS_DECISAO)
+        .filter((c) => !opcionais.includes(c))
+        .sort(),
+    ).toEqual([...esquema.required].sort());
+    expect(opcionais.every((c) => !esquema.required.includes(c))).toBe(true);
     const bloqueio = esquema.properties.bloqueios.items;
     expect(Object.keys(CAMPOS_BLOQUEIO).sort()).toEqual([...bloqueio.required].sort());
     expect([...VEREDITOS]).toEqual(esquema.properties.veredito!.enum);
@@ -107,6 +114,15 @@ describe("decisão do go-no-go contra o schema", () => {
     expect(() => adaptarDecisao({ ...DECISAO_GO, veredito: "talvez" })).toThrow(/veredito/);
     const bloqueio = { regra: "outra", conjunto: "tools", caso: "c", agente: "a", evidencia: [] };
     expect(() => adaptarDecisao({ ...DECISAO_GO, bloqueios: [bloqueio] })).toThrow(/regra/);
+  });
+
+  it("decisão gravada sem incompleto lê como rodada completa; com incompleto, repassa", () => {
+    const semCampo: Record<string, unknown> = { ...DECISAO_GO };
+    delete semCampo.incompleto;
+    expect(adaptarDecisao(semCampo).incompleto).toEqual([]);
+    const falta = ["tools/c/claude/mcp-1.1/3"];
+    expect(adaptarDecisao({ ...DECISAO_GO, veredito: "inconclusivo", incompleto: falta }).incompleto).toEqual(falta);
+    expect(() => adaptarDecisao({ ...DECISAO_GO, incompleto: "x" })).toThrow(/incompleto/);
   });
 
   it("carregarRodada recusa uma decisão com schema_versao desconhecido", async () => {
