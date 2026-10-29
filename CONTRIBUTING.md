@@ -28,8 +28,9 @@ O servidor fala **stdio**: não abre porta e é iniciado pelo cliente MCP como
 subprocesso. A rede só é usada pelas tools listadas em `NETWORK_TOOLS`
 (`src/novomodelo_mcp/tools/annotations.py`), pelo `src/novomodelo_mcp/adapters/versions.py`.
 
-O hook de pre-commit roda as mesmas checagens de lint e os gates da CI antes de cada
-commit:
+O hook de pre-commit roda antes de cada commit as mesmas checagens de lint e os gates da
+CI, inclusive o de termos proibidos, e o gitleaks nas mudanças preparadas quando ele está
+instalado (a CI varre o histórico inteiro de qualquer jeito):
 
 ```bash
 ln -sf ../../scripts/pre-commit .git/hooks/pre-commit

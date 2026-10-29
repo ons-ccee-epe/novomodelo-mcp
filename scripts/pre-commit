@@ -22,4 +22,14 @@ python3 scripts/ci/check_comment_refs.py
 echo "==> shipped-doc path gate..."
 python3 scripts/ci/check_doc_paths.py
 
+echo "==> forbidden-terms gate (public repository)..."
+python3 scripts/ci/check_termos_proibidos.py
+
+if command -v gitleaks >/dev/null 2>&1; then
+    echo "==> gitleaks (staged changes)..."
+    gitleaks git --pre-commit --staged --redact --no-banner .
+else
+    echo "==> gitleaks not installed: skipped here; CI scans the whole history."
+fi
+
 echo "==> Pre-commit checks passed."
