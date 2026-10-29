@@ -48,7 +48,7 @@ uv run --group e2e python -m tests.e2e.load.run --concurrency 4 --duration 30
 
 ## Configuração
 
-Tudo vem de variável de ambiente ou de argumento. Hoje a bateria lê:
+Tudo vem de variável de ambiente ou de argumento. A bateria lê:
 
 | Variável | O que faz | Default |
 |---|---|---|

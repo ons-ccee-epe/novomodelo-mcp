@@ -95,7 +95,6 @@ Os runners gravam JSON, que o painel lê:
 
 - `tests/e2e/queries/run_queries.py --report` → imprime como abrir o frontend.
 - `tests/e2e/eval/run.py` → grava `reports/latest.json`, sem `latest.html`.
-- `tests/eval/pytest_bridge.py` → grava `reports/latest.json`, sem `latest.html`.
 
 Este frontend é o único dashboard.
 
