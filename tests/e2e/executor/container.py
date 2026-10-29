@@ -52,6 +52,8 @@ _TEMPO_LEITOR_ERRO = 30
 _TEMPO_REMOCAO = 30
 _MEMORIA_VALIDA = re.compile(r"[0-9]+[bkmgBKMG]?")
 _FORA_DO_NOME = re.compile(r"[^A-Za-z0-9_.-]+")
+_DESTINO_VALIDO = re.compile(r"/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*")
+SEM_OUTPUT = ("output", "output-*")
 _INICIO_CAMINHO = r"(?:[A-Za-z]:[\\/]|\\\\|/(?!/))"
 _CAMINHO_ENTRE_ASPAS = re.compile(rf"'{_INICIO_CAMINHO}[^']*'|\"{_INICIO_CAMINHO}[^\"]*\"")
 _CAMINHO_ABSOLUTO = re.compile(
@@ -80,6 +82,8 @@ class Execucao:
     somente_leitura: bool
     timeout_s: int
     imagem: str
+    montar_em: str | None = None
+    sem_output: bool = False
 
 
 @dataclass(frozen=True)
@@ -129,12 +133,25 @@ def _montagem(tipo: str, fonte: str, destino: str, *opcoes: str) -> list[str]:
     return ["--mount", ",".join((f"type={tipo}", f"src={fonte}", f"dst={destino}", *opcoes))]
 
 
+def destino_do_caso(e: Execucao) -> str:
+    """Onde o caso fica no container: `<montar_em>/<nome da pasta>`, `/estudos` por padrão.
+
+    Raises:
+        ComandoRecusado: `montar_em` não é um caminho absoluto simples (sem `..`).
+    """
+    base = e.montar_em or PASTA_ESTUDOS
+    if not _DESTINO_VALIDO.fullmatch(base) or ".." in base.split("/"):
+        raise ComandoRecusado(f"destino do caso no container inválido: {base!r}")
+    nome = e.caso_origem.name if e.caso_origem is not None else ""
+    return f"{base}/{nome}"
+
+
 def comando(e: Execucao, cfg: Config, trabalho: Path, nome: str) -> list[str]:
     """Linha de comando do podman; o token só entra pelo secret do motor, nunca por `-e`.
 
     Raises:
         ComandoRecusado: motor que não é o podman, memória inválida, caso na raiz ou na
-            home de quem roda, ou caminho que não pode ser montado.
+            home de quem roda, destino do caso inválido ou caminho que não pode ser montado.
     """
     real = _conferir_caso_origem(e.caso_origem) if e.caso_origem is not None else None
     return _comando(e, cfg, trabalho, nome, real)
@@ -162,7 +179,7 @@ def _comando(
     else:
         cmd += _montagem("volume", cfg.volume_kiro, f"{HOME_AGENTE}/.local/share/kiro-cli")
     if e.caso_origem is not None and caso_real is not None:
-        destino = f"{PASTA_ESTUDOS}/{e.caso_origem.name}"
+        destino = destino_do_caso(e)
         if e.somente_leitura:
             # Sem relabel: a pasta de casos é de quem roda e não pode ser reetiquetada.
             cmd += _montagem("bind", str(caso_real), destino, "readonly")
@@ -451,9 +468,14 @@ def executar(
             if e.caso_origem is not None and caso_real is not None and not e.somente_leitura:
                 # Links copiados como links: seguir um link do caso copiaria arquivos do host
                 # de fora dele para dentro do container.
-                shutil.copytree(caso_real, trabalho / e.caso_origem.name, symlinks=True)
+                ignorar = shutil.ignore_patterns(*SEM_OUTPUT) if e.sem_output else None
+                shutil.copytree(
+                    caso_real, trabalho / e.caso_origem.name, symlinks=True, ignore=ignorar
+                )
             popen_chamado = True
             saida = rodar_container(cmd, e.timeout_s)
+            # O `avaliar` (e o juiz) só veem o stream mascarado: o agente pode ecoar o token.
+            saida = replace(saida, linhas=[mascarar(linha, segredos) for linha in saida.linhas])
             leitura = (ler_claude if e.agente == "claude" else ler_kiro)(saida.linhas)
             motivo_infra = _motivo_de_infra(saida, leitura)
             if motivo_infra is not None:

@@ -781,3 +781,64 @@ def test_erro_infra_sem_leitura_tem_metricas_vazias(tmp_path, monkeypatch):
     _falso(monkeypatch, FileNotFoundError("podman"))
     r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
     assert r.estado == "erro_infra" and r.metricas == Metricas()
+
+
+def test_avaliar_recebe_a_leitura_mascarada(tmp_path, monkeypatch, remocoes):
+    cfg = _cfg(tmp_path)
+    cfg.token_claude.parent.mkdir(parents=True)
+    cfg.token_claude.write_text("valor-literal-do-token-falso\n", encoding="utf-8")
+    linha = json.dumps(
+        {"t": 1.5, "evento": {"type": "result", "result": "eco valor-literal-do-token-falso"}}
+    )
+    _falso(monkeypatch, Saida([*_stream_com_token(), linha], "", 0, False))
+    recebidas: list[Leitura] = []
+
+    def avaliar(leitura: Leitura) -> Avaliacao:
+        recebidas.append(leitura)
+        return Avaliacao("passou", "ok")
+
+    executar(_exec(), cfg, _pasta(tmp_path), avaliar)
+    [leitura] = recebidas
+    texto = json.dumps([(ev.args, ev.dados) for ev in leitura.eventos], ensure_ascii=False)
+    assert TOKEN_FALSO not in texto and "valor-literal-do-token-falso" not in texto
+    assert "***" in texto
+
+
+def test_caso_do_c08_montado_em_montar_em_com_o_nome_logico(tmp_path):
+    origem = tmp_path / "preparados" / "exemplo_1dtoy"
+    e = _exec(caso_origem=origem, montar_em="/mnt/outros")
+    [montagem] = _montagens(_cmd(e, _cfg(tmp_path), tmp_path / "trabalho"))
+    assert montagem["dst"] == "/mnt/outros/exemplo_1dtoy"
+    assert montagem["src"] == str(tmp_path / "trabalho" / "exemplo_1dtoy")
+    [padrao] = _montagens(_cmd(_exec(caso_origem=origem), _cfg(tmp_path), tmp_path / "t"))
+    assert padrao["dst"] == "/estudos/exemplo_1dtoy"
+
+
+@pytest.mark.parametrize("destino", ["relativo", "/mnt/../etc", "/mnt/a b", "/"])
+def test_montar_em_invalido_e_recusado(tmp_path, destino):
+    e = _exec(caso_origem=tmp_path / "casos" / "c", montar_em=destino)
+    with pytest.raises(ComandoRecusado, match="destino"):
+        _cmd(e, _cfg(tmp_path), tmp_path)
+
+
+def test_sem_output_copia_o_caso_sem_as_pastas_de_saida(tmp_path, monkeypatch):
+    caso = tmp_path / "casos" / "v18"
+    (caso / "output" / "simulation").mkdir(parents=True)
+    (caso / "output-2").mkdir()
+    (caso / "system").mkdir()
+    (caso / "config.json").write_text("{}", encoding="utf-8")
+    copiados: list[list[str]] = []
+
+    def rodar(cmd, timeout_s):
+        [montagem] = _montagens(cmd)
+        copiados.append(sorted(p.name for p in Path(montagem["src"]).iterdir()))
+        return Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False)
+
+    monkeypatch.setattr(container, "rodar_container", rodar)
+    monkeypatch.setattr(container.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
+    for sem_output, esperado in ((True, ["config.json", "system"]), (False, None)):
+        e = _exec(caso_origem=caso, sem_output=sem_output, repeticao=1 if sem_output else 2)
+        executar(e, _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
+        if esperado is not None:
+            assert copiados[-1] == esperado
+    assert copiados[-1] == ["config.json", "output", "output-2", "system"]
