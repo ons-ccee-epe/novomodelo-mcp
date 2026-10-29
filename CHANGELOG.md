@@ -76,6 +76,10 @@ só do MCP vira `X.Y.Z.postN`.
 - Toda resposta de erro traz `exit_code` e `diagnostics`. Alguns erros do `deck_edit_json`,
   do `deck_edit_parquet`, do `schema_get` e do `docs_read` vinham sem `exit_code`, e a
   validação reprovada do `case_validate` vinha sem `diagnostics`.
+- Quando os runs de referência não tinham medição do treino (por exemplo, uma entrada do
+  registro de calibração editada à mão), o `run_plan` respondia com um erro `TypeError` e
+  o `run_start` recusava rodar. O plano agora sai `indeterminado`, como quando não há
+  referência, e o `run_start` roda.
 
 ## [0.19.1] - 2026-10-28
 

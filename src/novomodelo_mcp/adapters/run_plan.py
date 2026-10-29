@@ -117,7 +117,7 @@ def _times(
     iters: int,
     openings: list[int],
     sim: int | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     scen = (params["simulation_scenarios"] or 0) if sim is None else sim
     return runtime.estimate(
         points,
@@ -295,6 +295,13 @@ def build_plan(
         )
 
     now = _times(params, points, target, fwd, iters, openings)
+    if now is None:
+        plan.update(verdict="indeterminado", reference=None)
+        warnings.append(
+            "os runs de referência não têm medição do treino. "
+            "Rode um caso uma vez nesta máquina (run_start) e replaneje."
+        )
+        return plan
     sim0 = params["simulation_scenarios"] or 0
     s_fwd, s_iters, s_open, s_sim = fwd, iters, openings, sim0
     budget = float(time_budget_s)
@@ -312,8 +319,10 @@ def build_plan(
             s_sim = 0
         reduced.append("simulation_scenarios" if s_sim else "simulation_enabled")
 
-    def t(f, i, o):
-        return _times(params, points, target, f, i, o, s_sim)
+    def t(f: int, i: int, o: list[int]) -> dict[str, Any]:
+        est = _times(params, points, target, f, i, o, s_sim)
+        assert est is not None, "mesmos pontos e threads de `now`, que já estimou"
+        return est
 
     base = t(fwd, iters, openings)
     train_budget = budget - base["simulation_seconds"]
