@@ -169,10 +169,7 @@ def prune_jobs(settings: Settings, keep_days: float = KEEP_DAYS) -> list[str]:
 
 def _spawn_kwargs() -> dict[str, Any]:
     if _WIN:
-        flags = (
-            subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
-            | subprocess.CREATE_NO_WINDOW
-        )  # type: ignore[attr-defined]
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
         return {"creationflags": flags}
     return {"start_new_session": True}
 
