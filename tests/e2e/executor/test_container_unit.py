@@ -303,11 +303,42 @@ def test_tool_recusada_em_liberar_vira_erro_infra_sem_container(tmp_path, monkey
     assert not chamado
 
 
-def test_tools_do_servidor_marca_as_de_leitura():
+def test_tools_do_servidor_marca_as_de_leitura_e_as_de_rede():
     tools = container.tools_do_servidor()
-    assert tools["deck_list"] is True
-    assert tools["run_start"] is False
-    assert tools["incluir_pastas"] is False
+    assert tools["deck_list"] == container.AnotacoesTool(so_leitura=True, rede=False)
+    assert tools["run_start"] == container.AnotacoesTool(so_leitura=False, rede=False)
+    assert tools["incluir_pastas"].so_leitura is False
+    assert tools["server_info"].rede is True
+
+
+@pytest.mark.parametrize("agente", ["claude", "kiro"])
+@pytest.mark.parametrize(
+    ("anotacoes", "motivo"),
+    [
+        (container.AnotacoesTool(so_leitura=False, rede=True), "usa a rede"),
+        (container.AnotacoesTool(so_leitura=True, rede=True), "usa a rede"),
+        (container.AnotacoesTool(so_leitura=None, rede=None), "sem anotação"),
+        (container.AnotacoesTool(so_leitura=False, rede=None), "sem anotação"),
+        (container.AnotacoesTool(so_leitura=None, rede=False), "sem anotação"),
+    ],
+)
+def test_liberar_recusa_tool_de_rede_ou_sem_anotacao_pelo_que_o_servidor_declara(
+    tmp_path, monkeypatch, agente, anotacoes, motivo
+):
+    falsas = {
+        **container.tools_do_servidor(),
+        "tool_falsa": anotacoes,
+    }
+    monkeypatch.setattr(container, "tools_do_servidor", lambda: falsas)
+    with pytest.raises(ComandoRecusado, match=motivo):
+        _cmd(_exec(agente=agente, liberar=("tool_falsa",)), _cfg(tmp_path), tmp_path)
+
+
+def test_liberar_aceita_tool_falsa_anotada_que_grava_sem_rede(tmp_path, monkeypatch):
+    falsas = {"tool_falsa": container.AnotacoesTool(so_leitura=False, rede=False)}
+    monkeypatch.setattr(container, "tools_do_servidor", lambda: falsas)
+    cmd = _cmd(_exec(liberar=("tool_falsa",)), _cfg(tmp_path), tmp_path)
+    assert cmd[cmd.index("--allowedTools") + 1] == "mcp__novomodelo__tool_falsa"
 
 
 @pytest.mark.parametrize("memoria", ["6g", "3g"])

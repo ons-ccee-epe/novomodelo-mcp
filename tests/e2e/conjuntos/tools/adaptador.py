@@ -61,12 +61,12 @@ def _esperadas(caso: QueryTestCase) -> set[str]:
 
 def tools_a_liberar(caso: QueryTestCase) -> tuple[str, ...]:
     """As tools esperadas que pedem aprovação, menos as que o executor nunca libera."""
-    so_leitura = tools_do_servidor()
+    registradas = tools_do_servidor()
     return tuple(
         sorted(
             n
             for n in _esperadas(caso)
-            if n in so_leitura and not so_leitura[n] and n not in NUNCA_LIBERADAS
+            if n in registradas and registradas[n].so_leitura is False and n not in NUNCA_LIBERADAS
         )
     )
 
@@ -133,8 +133,9 @@ def _envelope(ev: Evento) -> dict | None:
 def _chamadas_com_resultado(leitura: Leitura) -> list[tuple[str, dict, dict | None]]:
     """(nome, argumentos, envelope) de cada chamada do MCP que teve resultado.
 
-    O resultado fecha a chamada aberta mais antiga da mesma tool: os argumentos e o
-    envelope são sempre da mesma chamada.
+    O resultado fecha a chamada com o mesmo id (`dados["id"]`): argumentos e envelope
+    são sempre da mesma chamada, mesmo com resultados fora de ordem. Sem id no stream,
+    fecha a chamada aberta mais antiga da mesma tool.
     """
     abertas: list[Evento] = []
     pares = []
@@ -144,7 +145,15 @@ def _chamadas_com_resultado(leitura: Leitura) -> list[tuple[str, dict, dict | No
         if ev.tipo == "tool":
             abertas.append(ev)
         elif ev.tipo == "resultado_tool":
-            chamada = next((a for a in abertas if a.nome == ev.nome), None)
+            ident = ev.dados.get("id")
+            chamada = next(
+                (
+                    a
+                    for a in abertas
+                    if (a.dados.get("id") == ident if ident else a.nome == ev.nome)
+                ),
+                None,
+            )
             if chamada is not None:
                 abertas.remove(chamada)
             pares.append((ev.nome, dict(chamada.args) if chamada else {}, _envelope(ev)))

@@ -355,8 +355,82 @@ def test_para_execucoes_libera_so_as_esperadas_que_pedem_aprovacao(
 def test_todo_caso_do_yaml_libera_so_tools_do_mcp_que_gravam() -> None:
     from tests.e2e.executor.container import conferir_liberadas, tools_do_servidor
 
-    so_leitura = tools_do_servidor()
+    registradas = tools_do_servidor()
     for caso in carregar_casos():
         liberar = tools_a_liberar(caso)
         assert conferir_liberadas(liberar) == liberar, caso.id
-        assert all(not so_leitura[n] for n in liberar), caso.id
+        assert all(registradas[n].so_leitura is False for n in liberar), caso.id
+
+
+def _linha(t: float, evento: dict) -> str:
+    return json.dumps({"t": t, "evento": evento})
+
+
+def test_resultado_fora_de_ordem_pareia_pelo_id_da_chamada_no_claude() -> None:
+    def uso(ident: str, pasta: str) -> dict:
+        bloco = {
+            "type": "tool_use",
+            "id": ident,
+            "name": f"{PREFIXO}results_status",
+            "input": {"output_dir": pasta},
+        }
+        return {"type": "assistant", "message": {"content": [bloco]}}
+
+    def resultado(ident: str, envelope: dict) -> dict:
+        bloco = {
+            "type": "tool_result",
+            "tool_use_id": ident,
+            "content": [{"type": "text", "text": json.dumps(envelope)}],
+        }
+        return {"type": "user", "message": {"content": [bloco]}}
+
+    leitura = ler_claude(
+        [
+            _linha(1.0, uso("a", "/estudos/x")),
+            _linha(1.1, uso("b", "/estudos/x/output")),
+            _linha(2.0, resultado("b", {"status": "ok"})),
+            _linha(2.5, resultado("a", {"status": "error", "diagnostics": ["recusa"]})),
+            _linha(3.0, {"type": "result", "result": "", "usage": {}}),
+        ]
+    )
+    caso = _caso(tool="results_status", status="ok")
+    envelope = para_query_result(caso, leitura).envelope
+    assert envelope["arguments"] == {"output_dir": "/estudos/x/output"}
+    assert envelope["result"] == {"status": "ok"}
+    caso_erro = _caso(tool="results_status", status="error")
+    assert para_query_result(caso_erro, leitura).envelope["arguments"] == {
+        "output_dir": "/estudos/x"
+    }
+
+
+def test_resultado_fora_de_ordem_pareia_pelo_id_da_chamada_no_kiro() -> None:
+    def chamada(ident: str, pasta: str) -> dict:
+        u = {
+            "sessionUpdate": "tool_call",
+            "toolCallId": ident,
+            "title": "results_status",
+            "rawInput": {"output_dir": pasta},
+            "_meta": {"kiro": {"mcpServerName": "novomodelo", "toolName": "results_status"}},
+        }
+        return {"type": "sessionUpdate", "data": {"update": u}}
+
+    def resultado(ident: str, envelope: dict) -> dict:
+        u = {
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": ident,
+            "status": "completed",
+            "content": [{"type": "content", "content": {"text": json.dumps(envelope)}}],
+        }
+        return {"type": "sessionUpdate", "data": {"update": u}}
+
+    leitura = ler_kiro(
+        [
+            _linha(1.0, chamada("k1", "/estudos/x")),
+            _linha(1.1, chamada("k2", "/estudos/x/output")),
+            _linha(2.0, resultado("k2", {"status": "ok"})),
+            _linha(2.5, resultado("k1", {"status": "error", "diagnostics": ["recusa"]})),
+            _linha(3.0, {"type": "runFinished", "data": {"status": "success"}}),
+        ]
+    )
+    envelope = para_query_result(_caso(tool="results_status", status="ok"), leitura).envelope
+    assert envelope["arguments"] == {"output_dir": "/estudos/x/output"}

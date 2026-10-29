@@ -3,6 +3,8 @@
 O log gravado pelo executor tem uma linha JSON por evento do agente, embrulhada com o
 instante de chegada: {"t": <segundos desde o início>, "evento": <linha original>}.
 Uma linha sem embrulho (log cru) vale com `t` igual ao do evento anterior.
+Os eventos `tool` e `resultado_tool` levam em `dados["id"]` o id da chamada que o
+agente informa (`tool_use_id` no Claude, `toolCallId` no Kiro).
 """
 
 from __future__ import annotations
@@ -81,7 +83,13 @@ def ler_claude(linhas: Iterable[str]) -> Leitura:
                     nome, mcp = _nome_tool(bloco.get("name", ""))
                     nomes_por_id[bloco.get("id", "")] = (nome, mcp)
                     eventos.append(
-                        Evento("tool", nome, bloco.get("input") or {}, t, dados={"mcp": mcp})
+                        Evento(
+                            "tool",
+                            nome,
+                            bloco.get("input") or {},
+                            t,
+                            dados={"mcp": mcp, "id": bloco.get("id", "")},
+                        )
                     )
                 elif bloco.get("type") == "text":
                     eventos.append(
@@ -98,7 +106,11 @@ def ler_claude(linhas: Iterable[str]) -> Leitura:
                             {},
                             t,
                             erro=bool(bloco.get("is_error")),
-                            dados={"mcp": mcp, "conteudo": _texto(bloco.get("content"))},
+                            dados={
+                                "mcp": mcp,
+                                "conteudo": _texto(bloco.get("content")),
+                                "id": bloco.get("tool_use_id", ""),
+                            },
                         )
                     )
         elif tipo == "result":
@@ -200,7 +212,11 @@ def ler_kiro(linhas: Iterable[str]) -> Leitura:
             if qual == "tool_call" and ident not in por_id:
                 por_id[ident] = _nome_kiro(u)
                 nome, mcp = por_id[ident]
-                eventos.append(Evento("tool", nome, u.get("rawInput") or {}, t, dados={"mcp": mcp}))
+                eventos.append(
+                    Evento(
+                        "tool", nome, u.get("rawInput") or {}, t, dados={"mcp": mcp, "id": ident}
+                    )
+                )
             elif qual == "tool_call_update" and u.get("status") in ("completed", "failed"):
                 nome, mcp = por_id.get(ident, (None, False))
                 texto = "\n".join(
@@ -218,7 +234,7 @@ def ler_kiro(linhas: Iterable[str]) -> Leitura:
                         {},
                         t,
                         erro=u.get("status") == "failed",
-                        dados={"mcp": mcp, "conteudo": texto},
+                        dados={"mcp": mcp, "conteudo": texto, "id": ident},
                     )
                 )
         elif tipo in ("permissionRequest", "requestPermission", "permissionDenied"):

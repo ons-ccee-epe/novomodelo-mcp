@@ -100,9 +100,17 @@ class Saida:
     estourou: bool
 
 
+@dataclass(frozen=True)
+class AnotacoesTool:
+    """As dicas MCP de uma tool; `None` é dica que o servidor não declarou."""
+
+    so_leitura: bool | None
+    rede: bool | None
+
+
 @cache
-def tools_do_servidor() -> Mapping[str, bool]:
-    """As tools que o servidor deste checkout registra, com `True` para as só de leitura.
+def tools_do_servidor() -> Mapping[str, AnotacoesTool]:
+    """As tools que o servidor deste checkout registra, com as anotações de cada uma.
 
     Lidas do servidor montado em memória, sem subir processo: as anotações são a fonte
     única do que pede aprovação.
@@ -112,7 +120,10 @@ def tools_do_servidor() -> Mapping[str, bool]:
     from novomodelo_mcp.server import build_server
 
     return {
-        t.name: bool(t.annotations and t.annotations.readOnlyHint)
+        t.name: AnotacoesTool(
+            so_leitura=t.annotations.readOnlyHint if t.annotations else None,
+            rede=t.annotations.openWorldHint if t.annotations else None,
+        )
         for t in anyio.run(build_server().list_tools)
     }
 
@@ -121,11 +132,13 @@ def conferir_liberadas(nomes: tuple[str, ...]) -> tuple[str, ...]:
     """Os nomes de `liberar`, se todos são tools do MCP que podem ser liberadas.
 
     Só tools do servidor novomodelo entram: um nome nativo (Bash, Write, WebFetch)
-    ou um curinga liberaria o agente para fora do MCP.
+    ou um curinga liberaria o agente para fora do MCP. A recusa de rede e de tool sem
+    anotação não depende do nome: uma tool nova sem classificação nunca é liberada.
 
     Raises:
-        ComandoRecusado: nome fora do padrão, que o servidor não registra, ou
-            `instalar_novomodelo`, que baixa e executa o instalador.
+        ComandoRecusado: nome fora do padrão, que o servidor não registra, de
+            `NUNCA_LIBERADAS`, com acesso à rede (`openWorldHint`) ou sem
+            `readOnlyHint`/`openWorldHint` declarados.
     """
     if not nomes:
         return ()
@@ -135,8 +148,13 @@ def conferir_liberadas(nomes: tuple[str, ...]) -> tuple[str, ...]:
             raise ComandoRecusado(f"tool a liberar inválida: {nome!r}")
         if nome in NUNCA_LIBERADAS:
             raise ComandoRecusado(f"{nome} nunca é liberada: baixa e executa o instalador")
-        if nome not in registradas:
+        anotacoes = registradas.get(nome)
+        if anotacoes is None:
             raise ComandoRecusado(f"tool a liberar não registrada no servidor: {nome}")
+        if anotacoes.so_leitura is None or anotacoes.rede is None:
+            raise ComandoRecusado(f"tool a liberar sem anotação de leitura e rede: {nome}")
+        if anotacoes.rede:
+            raise ComandoRecusado(f"tool a liberar usa a rede: {nome}")
     return tuple(dict.fromkeys(nomes))
 
 
