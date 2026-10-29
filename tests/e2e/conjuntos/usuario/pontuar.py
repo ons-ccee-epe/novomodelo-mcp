@@ -9,7 +9,7 @@ from pathlib import Path
 
 from tests.e2e.config import Config
 from tests.e2e.conjuntos.usuario.cenario import Cenario
-from tests.e2e.conjuntos.usuario.juiz import Juiz, julgar
+from tests.e2e.conjuntos.usuario.juiz import Juiz, conferencias_das_tools, julgar
 from tests.e2e.executor.eventos import Evento, Leitura
 from tests.e2e.resultado.modelos import Avaliacao, Metricas
 
@@ -248,7 +248,13 @@ def avaliar_usuario(
     def avaliar(leitura: Leitura) -> Avaliacao:
         r = pontuar(c, leitura.eventos, agente, repeticao, leitura_mcp)
         veredito = julgar(
-            juiz, c, _resposta(leitura.eventos), cfg, imagem=imagem, destino_log=destino_log
+            juiz,
+            c,
+            _resposta(leitura.eventos),
+            cfg,
+            imagem=imagem,
+            destino_log=destino_log,
+            conferencias=conferencias_das_tools(c, leitura.eventos),
         )
         nota = veredito["nota"]
         falhas = []

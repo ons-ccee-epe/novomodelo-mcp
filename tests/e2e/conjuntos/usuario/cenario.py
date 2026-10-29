@@ -36,6 +36,7 @@ class Cenario:
     tools_alternativas: tuple[str, ...] = ()
     acerto_pela_resposta: bool = False
     sem_output: bool = False
+    juiz_ve_tools: bool = False
     gabarito: str = ""
 
 
@@ -73,6 +74,7 @@ def ler_cenario(arquivo: Path) -> Cenario:
         tools_alternativas=tuple(dados.get("tools_alternativas", ())),
         acerto_pela_resposta=bool(dados.get("acerto_pela_resposta", False)),
         sem_output=bool(dados.get("sem_output", False)),
+        juiz_ve_tools=bool(dados.get("juiz_ve_tools", False)),
         gabarito=dados.get("gabarito", "").strip(),
     )
 
