@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -11,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from tests.e2e.launcher import app as app_mod
 from tests.e2e.launcher import service as service_mod
-from tests.e2e.launcher.service import RunService
+from tests.e2e.launcher.service import RunService, RunState
 from tests.e2e.queries.models import ExpectedResult, QueryTestCase
 from tests.e2e.queries.preconditions import skipped_result
 from tests.e2e.queries.store import ResultStore
@@ -141,10 +140,8 @@ def test_run_saves_batch_with_conjunto(tags, case_id, expected) -> None:
         patch.object(RunService, "load_cases", return_value=[_case("c1", tags)]),
     ):
         provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
-        state = svc.start_run(provider=provider, tags=tags, case_id=case_id)  # type: ignore[arg-type]
-        deadline = time.monotonic() + 10
-        while state.status not in ("done", "error", "cancelled") and time.monotonic() < deadline:
-            time.sleep(0.05)
+        state = RunState(run_id="r1", provider=provider.id)
+        svc._execute(state, provider, tags, case_id, None)  # type: ignore[arg-type]
 
     assert state.status == "done"
     assert store.create_batch.call_args.kwargs["conjunto"] == expected

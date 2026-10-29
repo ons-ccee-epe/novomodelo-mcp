@@ -12,7 +12,8 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.e2e.queries.runner import QueryRunner
+from tests.e2e.queries.models import ExpectedResult, QueryTestCase
+from tests.e2e.queries.runner import EXECUCAO_SO_NO_EXECUTOR, QueryRunner
 
 
 class TestParseToolCalls:
@@ -20,9 +21,8 @@ class TestParseToolCalls:
 
     @pytest.fixture
     def runner(self):
-        """Cria runner mockando validação do Kiro CLI."""
-        with patch.object(QueryRunner, "_validate_kiro_cli"):
-            return QueryRunner()
+        """Cria o runner."""
+        return QueryRunner()
 
     def test_parse_assistant_tool_use_format(self, runner: QueryRunner):
         """Parseia formato AssistantToolUse completo."""
@@ -118,9 +118,8 @@ class TestParseArgs:
 
     @pytest.fixture
     def runner(self):
-        """Cria runner mockando validação do Kiro CLI."""
-        with patch.object(QueryRunner, "_validate_kiro_cli"):
-            return QueryRunner()
+        """Cria o runner."""
+        return QueryRunner()
 
     def test_parse_valid_json(self, runner: QueryRunner):
         """Parseia JSON válido."""
@@ -158,9 +157,8 @@ class TestExtractAgentResponse:
 
     @pytest.fixture
     def runner(self):
-        """Cria runner mockando validação do Kiro CLI."""
-        with patch.object(QueryRunner, "_validate_kiro_cli"):
-            return QueryRunner()
+        """Cria o runner."""
+        return QueryRunner()
 
     def test_extract_simple_response(self, runner: QueryRunner):
         """Extrai resposta simples."""
@@ -230,6 +228,21 @@ class TestClassifyTool:
     def test_classify_unknown_tools(self):
         """Tools desconhecidas retornam 'unknown'."""
         assert QueryRunner.classify_tool("some_unknown_tool") == "unknown"
+
+
+class TestExecute:
+    """O runner não executa agente no host."""
+
+    def test_execute_recusa_e_nao_cria_processo(self):
+        case = QueryTestCase(
+            id="c1", query="q", expected=ExpectedResult(uses_mcp=True, tool="server_info")
+        )
+
+        with patch("subprocess.Popen") as popen, pytest.raises(RuntimeError) as erro:
+            QueryRunner().execute(case)
+
+        assert str(erro.value) == EXECUCAO_SO_NO_EXECUTOR
+        popen.assert_not_called()
 
 
 if __name__ == "__main__":

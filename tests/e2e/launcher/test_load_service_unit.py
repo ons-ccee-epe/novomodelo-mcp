@@ -6,15 +6,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 
-from tests.e2e.launcher import service as service_mod
 from tests.e2e.launcher.load_service import LoadRunService, build_command
 from tests.e2e.launcher.run_gate import RunAlreadyActiveError, RunGate
-from tests.e2e.launcher.service import RunService
 from tests.e2e.load.engine import LoadConfig
 
 CONFIG = LoadConfig(concurrency=2, duration_s=5, tools=("docs_list", "deck_list"), timeout_s=30)
@@ -202,19 +198,6 @@ class TestSharedGate:
         with pytest.raises(RunAlreadyActiveError, match="agente-1"):
             _service(_COMPLETES, gate).start_run(CONFIG)
 
-    def test_an_agent_run_is_refused_while_a_load_holds_the_slot(self) -> None:
-        gate = RunGate()
-        load = _service(_SPAWNS_CHILD_AND_WAITS, gate)
-        state = load.start_run(CONFIG)
-        try:
-            agent = RunService(gate=gate)
-            provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
-            with pytest.raises(RunAlreadyActiveError, match=state.run_id):
-                agent.start_run(provider=provider)  # type: ignore[arg-type]
-        finally:
-            load.cancel(state.run_id)
-            assert _wait_until(lambda: state.status == "cancelled")
-
     def test_a_second_load_is_refused_and_the_slot_returns_after_the_first_ends(self) -> None:
         gate = RunGate()
         svc = _service(_SPAWNS_CHILD_AND_WAITS, gate)
@@ -227,13 +210,3 @@ class TestSharedGate:
         svc2 = _service(_COMPLETES, gate)
         second = svc2.start_run(CONFIG)
         assert _wait_until(lambda: second.status == "done")
-
-    def test_the_agent_service_frees_the_slot_when_its_run_ends(self) -> None:
-        gate = RunGate()
-        agent = RunService(gate=gate)
-        provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
-        with patch.object(RunService, "load_cases", return_value=[]):
-            state = agent.start_run(provider=provider)  # type: ignore[arg-type]
-            assert _wait_until(lambda: state.status == "error")
-        assert gate.owner is None
-        assert service_mod.RunAlreadyActiveError is RunAlreadyActiveError

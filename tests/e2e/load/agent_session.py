@@ -6,8 +6,6 @@ Cada sessão tem uma pasta própria sob a raiz temporária do run:
   para ``<TEMP>/novomodelo_mcp_schemas`` na primeira chamada; com o TEMP comum, um
   servidor leria arquivos que outro ainda está gravando.
 - ``mcp-state/``: NOVOMODELO_MCP_STATE_DIR (jobs e calibração), longe do state dir do usuário.
-- ``mcp-responses.jsonl``: NOVOMODELO_MCP_RESPONSE_LOG da sessão, mesmo que o ambiente do
-  launcher defina outro.
 - kiro-cli: ``workspace/.kiro/settings/mcp.json`` e esse ``workspace`` como cwd. O kiro lê a
   definição do servidor do cwd; só assim o ambiente acima chega ao servidor sem depender
   de o kiro repassar o próprio ambiente, e o ``mcp.json`` das fixtures (o da esteira)
@@ -39,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from tests.e2e.launcher.provider_runner import ProviderQueryRunner
-from tests.e2e.launcher.providers import ProviderInfo, build_command, claude_mcp_config
+from tests.e2e.launcher.providers import ProviderInfo, claude_mcp_config
 from tests.e2e.load.client import STARTUP_TIMEOUT_S
 from tests.e2e.load.sandbox import (
     MAX_JOBS_ENV,
@@ -60,10 +58,8 @@ __all__ = [
     "session_server_config",
 ]
 
-RESPONSE_LOG_ENV = "NOVOMODELO_MCP_RESPONSE_LOG"
 MCP_STARTUP_TIMEOUT_MS = int(STARTUP_TIMEOUT_S * 1000)
-# Limite de subida dos servidores MCP: variável do claude e chave do mcp.json do kiro-cli.
-_CLAUDE_STARTUP_ENV = "MCP_TIMEOUT"
+# Limite de subida do servidor MCP: chave do mcp.json do kiro-cli.
 _KIRO_STARTUP_KEY = "initializationTimeout"
 
 
@@ -75,7 +71,6 @@ class SessionPaths:
     root: Path
     tmp: Path
     state: Path
-    response_log: Path
     kiro_workspace: Path
     claude_config: Path
     sandbox: SessionSandbox | None = None
@@ -88,14 +83,13 @@ class SessionPaths:
             root=root,
             tmp=root / "tmp",
             state=root / "mcp-state",
-            response_log=root / "mcp-responses.jsonl",
             kiro_workspace=root / "workspace",
             claude_config=root / "claude-mcp.json",
         )
 
     def env(self) -> dict[str, str]:
-        """Variáveis que isolam a sessão: TEMP, state dir e log de respostas do MCP."""
-        values = {RESPONSE_LOG_ENV: str(self.response_log), STATE_DIR_ENV: str(self.state)}
+        """Variáveis que isolam a sessão: TEMP e state dir do MCP."""
+        values = {STATE_DIR_ENV: str(self.state)}
         values.update(dict.fromkeys(TEMP_VARS, str(self.tmp)))
         return values
 
@@ -143,7 +137,7 @@ def prepare_session(
 
 
 class AgentSessionRunner(ProviderQueryRunner):
-    """``ProviderQueryRunner`` de uma sessão: cwd, config MCP, TEMP e log de respostas próprios.
+    """``ProviderQueryRunner`` de uma sessão: cwd, config MCP e TEMP próprios.
 
     Uma instância roda um caso por vez (o processo em curso é estado da instância);
     cada sessão da carga tem a sua.
@@ -163,7 +157,6 @@ class AgentSessionRunner(ProviderQueryRunner):
         super().__init__(
             provider=provider,
             timeout_seconds=timeout_seconds,
-            response_log_dir=str(paths.root),
             workspace_dir=None,
         )
         self.workspace_dir = (
@@ -195,28 +188,6 @@ class AgentSessionRunner(ProviderQueryRunner):
                 requires=tuple(sandbox.rewrite(source) for source in test_case.requires),
             )
         return super().execute(test_case)
-
-    def _response_log_file(self, test_case: QueryTestCase) -> Path:
-        return self._paths.response_log
-
-    def _agent_env(self) -> dict[str, str]:
-        env = {**super()._agent_env(), **self._paths.env()}
-        if self._provider.id == "claude":
-            env[_CLAUDE_STARTUP_ENV] = os.environ.get(
-                _CLAUDE_STARTUP_ENV, str(MCP_STARTUP_TIMEOUT_MS)
-            )
-        return env
-
-    def _build_command(self, query: str) -> list[str]:
-        if self._provider.id != "claude":
-            return build_command(self._provider, query)
-        return build_command(
-            self._provider,
-            query,
-            mcp_config_path=self._paths.claude_config,
-            persist_session=False,
-            disallowed_tools=[f"mcp__{SERVER_NAME}__{tool}" for tool in self._denied_tools],
-        )
 
 
 def default_run_root(work_dir: str | Path | None = None) -> Path:

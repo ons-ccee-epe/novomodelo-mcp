@@ -36,7 +36,7 @@ def test_kiro_full_suite() -> None:
     assert preview["conjunto"] == "todos"
     assert preview["total"] == 2
     assert "<pergunta>" in preview["agent"]
-    assert preview["agent"].startswith("kiro-cli chat --no-interactive --trust-all-tools")
+    assert preview["agent"].startswith("kiro-cli chat --no-interactive")
 
 
 def test_kiro_tags_and_case() -> None:
@@ -98,3 +98,23 @@ def test_route_unknown_provider_is_422(client: TestClient) -> None:
 
     assert resp.status_code == 422
     assert "sem provedor" in resp.json()["detail"]
+
+
+_E2E = Path(__file__).resolve().parents[1]
+_PASTAS_IGNORADAS = {"node_modules", "dist", "__pycache__", "executor"}
+_SUFIXOS = {".py", ".ts", ".tsx", ".js", ".mjs", ".json", ".yaml", ".yml", ".toml", ".sh"}
+_SEM_PERMISSAO = ("--trust-all" + "-tools", "--dangerously-skip" + "-permissions")
+
+
+def test_nenhum_comando_inseguro_fora_do_executor() -> None:
+    achados = [
+        f"{arquivo.relative_to(_E2E).as_posix()}: {flag}"
+        for arquivo in sorted(_E2E.rglob("*"))
+        if arquivo.suffix in _SUFIXOS
+        and arquivo.is_file()
+        and not _PASTAS_IGNORADAS.intersection(arquivo.relative_to(_E2E).parts)
+        for flag in _SEM_PERMISSAO
+        if flag in arquivo.read_text(encoding="utf-8", errors="replace")
+    ]
+
+    assert achados == []

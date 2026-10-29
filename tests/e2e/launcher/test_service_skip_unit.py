@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from tests.e2e.launcher import service as service_mod
-from tests.e2e.launcher.service import RunService
+from tests.e2e.launcher.service import RunService, RunState
 from tests.e2e.queries.models import ExpectedResult, QueryTestCase
 
 
@@ -28,10 +27,9 @@ def test_case_without_source_is_skipped_and_agent_not_started(tmp_path) -> None:
         patch.object(service_mod, "ResultStore", return_value=store),
         patch.object(RunService, "load_cases", return_value=[case]),
     ):
-        state = svc.start_run(provider=SimpleNamespace(id="kiro-cli", label="Kiro CLI"))  # type: ignore[arg-type]
-        deadline = time.monotonic() + 10
-        while state.status not in ("done", "error") and time.monotonic() < deadline:
-            time.sleep(0.05)
+        provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
+        state = RunState(run_id="r1", provider=provider.id)
+        svc._execute(state, provider, None, None, None)  # type: ignore[arg-type]
 
     assert state.status == "done"
     runner.execute.assert_not_called()

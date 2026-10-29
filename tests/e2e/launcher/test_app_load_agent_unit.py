@@ -48,6 +48,15 @@ def _post(client: TestClient, body: dict):
     return resp, start
 
 
+def test_carga_de_agente_nao_dispara_agente_no_host(client: TestClient) -> None:
+    with patch("subprocess.Popen") as popen:
+        resp = client.post("/api/load-runs", json=AGENT, headers=HEADER)
+
+    assert resp.status_code == 409
+    assert "executor em container" in resp.json()["detail"]
+    popen.assert_not_called()
+
+
 class TestValidation:
     @pytest.mark.parametrize(
         "body",

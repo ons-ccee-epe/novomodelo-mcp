@@ -184,15 +184,10 @@ class TestSharedLock:
         assert resp.status_code == 409
         assert "agente-1" in resp.json()["detail"]
 
-    def test_agent_run_is_409_while_a_load_is_active(self) -> None:
+    def test_second_load_is_409_while_a_load_is_active(self) -> None:
         client, _gate = _build_client(_SLEEPS)
         run_id = client.post("/api/load-runs", json=VALID, headers=HEADER).json()["run_id"]
-        provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
         try:
-            with patch.object(app_mod, "resolve_provider", return_value=provider):
-                resp = client.post("/api/runs", json={}, headers=HEADER)
-            assert resp.status_code == 409
-            assert run_id in resp.json()["detail"]
             second = client.post("/api/load-runs", json=VALID, headers=HEADER)
             assert second.status_code == 409
         finally:

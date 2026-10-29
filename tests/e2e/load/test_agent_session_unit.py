@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from tests.e2e.launcher import provider_runner
 from tests.e2e.launcher.providers import ProviderInfo
 from tests.e2e.load.agent_cases import AgentSelection
 from tests.e2e.load.agent_engine import PreflightResult
@@ -16,13 +15,13 @@ from tests.e2e.load.agent_session import AgentSessionRunner, SessionPaths, prepa
 from tests.e2e.load.agent_setup import denied_tools, session_factory
 from tests.e2e.load.fakes import make_case
 from tests.e2e.load.mix import ToolHints
+from tests.e2e.queries.runner import QueryRunner
 
 SERVER = {
     "command": "novomodelo-mcp.exe",
     "args": ["--x"],
     "env": {
         "NOVOMODELO_MCP_WORKSPACE": "C:/fixtures",
-        "NOVOMODELO_MCP_RESPONSE_LOG": "C:/compartilhado.jsonl",
     },
     "timeout": 960000,
     "autoApprove": ["docs_list"],
@@ -31,13 +30,8 @@ CLAUDE = ProviderInfo("claude", "Claude Code", "claude", True, "C:/bin/claude.ex
 KIRO = ProviderInfo("kiro-cli", "Kiro CLI", "kiro-cli", True, "C:/bin/kiro-cli.exe")
 
 
-@pytest.fixture(autouse=True)
-def no_user_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(provider_runner, "tool_timeout_ms", lambda *_a: 960000)
-
-
 def _session_files(paths: SessionPaths) -> list[Path]:
-    return [paths.tmp, paths.state, paths.response_log, paths.kiro_workspace, paths.claude_config]
+    return [paths.tmp, paths.state, paths.kiro_workspace, paths.claude_config]
 
 
 class TestPaths:
@@ -53,7 +47,6 @@ class TestPaths:
         paths = prepare_session(tmp_path, 0, SERVER, "claude")
         env = paths.env()
         assert set(env) == {
-            "NOVOMODELO_MCP_RESPONSE_LOG",
             "NOVOMODELO_MCP_STATE_DIR",
             "TEMP",
             "TMP",
@@ -73,7 +66,6 @@ class TestConfigs:
         assert server["command"] == "novomodelo-mcp.exe"
         assert server["timeout"] == 960000
         assert server["env"]["NOVOMODELO_MCP_WORKSPACE"] == "C:/fixtures"
-        assert server["env"]["NOVOMODELO_MCP_RESPONSE_LOG"] == str(paths.response_log)
         assert server["env"]["TEMP"] == str(paths.tmp)
         assert not paths.claude_config.exists()
 
@@ -88,70 +80,19 @@ class TestConfigs:
 
     def test_the_shared_definition_is_not_mutated(self, tmp_path: Path) -> None:
         prepare_session(tmp_path, 0, SERVER, "kiro-cli")
-        assert SERVER["env"]["NOVOMODELO_MCP_RESPONSE_LOG"] == "C:/compartilhado.jsonl"
-
-
-class _Captured:
-    def __init__(self) -> None:
-        self.calls: list[dict] = []
-
-
-def _capture(runner: AgentSessionRunner, captured: _Captured) -> None:
-    def run_process(cmd, env, timeout):
-        captured.calls.append({"cmd": cmd, "env": env, "cwd": runner.workspace_dir})
-        return "completed", "", ""
-
-    runner._run_process = run_process  # type: ignore[method-assign]
+        assert SERVER["env"] == {"NOVOMODELO_MCP_WORKSPACE": "C:/fixtures"}
 
 
 class TestRunner:
-    def test_claude_command_uses_the_session_config_and_load_only_flags(
-        self, tmp_path: Path
-    ) -> None:
-        paths = prepare_session(tmp_path, 0, SERVER, "claude")
-        runner = AgentSessionRunner(
-            CLAUDE, paths, tmp_path / "fixtures", denied_tools=["deck_edit_json"]
-        )
-        cmd = runner._build_command("pergunta")
-        assert cmd[0] == "C:/bin/claude.exe" and cmd[-1] == "pergunta"
-        assert "--no-session-persistence" in cmd
-        assert cmd[cmd.index("--disallowedTools") + 1] == "mcp__novomodelo__deck_edit_json"
-        assert cmd[cmd.index("--mcp-config") + 1] == str(paths.claude_config)
-        assert "--strict-mcp-config" in cmd
-
     def test_kiro_runs_in_the_session_workspace(self, tmp_path: Path) -> None:
         paths = prepare_session(tmp_path, 0, SERVER, "kiro-cli")
         runner = AgentSessionRunner(KIRO, paths, tmp_path / "fixtures", denied_tools=["x"])
         assert runner.workspace_dir == paths.kiro_workspace
-        assert "--mcp-config" not in runner._build_command("pergunta")
 
     def test_claude_runs_in_the_fixtures_like_the_esteira(self, tmp_path: Path) -> None:
         paths = prepare_session(tmp_path, 0, SERVER, "claude")
         runner = AgentSessionRunner(CLAUDE, paths, tmp_path / "fixtures")
         assert runner.workspace_dir == (tmp_path / "fixtures").resolve()
-
-    def test_session_environment_wins_over_the_launcher_environment(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("NOVOMODELO_MCP_RESPONSE_LOG", str(tmp_path / "global.jsonl"))
-        monkeypatch.setenv("TEMP", str(tmp_path / "temp-global"))
-        paths = prepare_session(tmp_path, 3, SERVER, "claude")
-        runner = AgentSessionRunner(CLAUDE, paths, tmp_path / "fixtures")
-        captured = _Captured()
-        _capture(runner, captured)
-        runner.execute(make_case())
-        env = captured.calls[0]["env"]
-        assert env["NOVOMODELO_MCP_RESPONSE_LOG"] == str(paths.response_log)
-        assert env["TEMP"] == str(paths.tmp)
-        assert env["MCP_TOOL_TIMEOUT"] == "960000"
-
-    def test_the_session_config_survives_each_execution(self, tmp_path: Path) -> None:
-        paths = prepare_session(tmp_path, 0, SERVER, "claude")
-        runner = AgentSessionRunner(CLAUDE, paths, tmp_path / "fixtures")
-        _capture(runner, _Captured())
-        runner.execute(make_case())
-        runner.execute(make_case())
-        assert paths.claude_config.exists()
 
     def test_runner_does_not_rewrite_the_fixtures_workspace_config(self, tmp_path: Path) -> None:
         fixtures = tmp_path / "fixtures"
@@ -180,24 +121,7 @@ class TestFactory:
 
 
 class TestMcpStartup:
-    """Com N servidores subindo juntos, o limite padrão de 30 s do claude estoura."""
-
-    def test_claude_waits_for_the_server_as_long_as_the_tools_mode(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from tests.e2e.load.client import STARTUP_TIMEOUT_S
-
-        monkeypatch.delenv("MCP_TIMEOUT", raising=False)
-        paths = prepare_session(tmp_path, 0, SERVER, "claude")
-        env = AgentSessionRunner(CLAUDE, paths, tmp_path)._agent_env()
-        assert env["MCP_TIMEOUT"] == str(int(STARTUP_TIMEOUT_S * 1000))
-
-    def test_an_explicit_claude_timeout_is_kept(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("MCP_TIMEOUT", "600000")
-        paths = prepare_session(tmp_path, 0, SERVER, "claude")
-        assert AgentSessionRunner(CLAUDE, paths, tmp_path)._agent_env()["MCP_TIMEOUT"] == "600000"
+    """Com N servidores subindo juntos, o limite padrão de subida do kiro-cli estoura."""
 
     def test_kiro_config_gets_the_startup_timeout_unless_it_has_one(self, tmp_path: Path) -> None:
         def startup(server: dict, index: int) -> int:
@@ -278,7 +202,7 @@ class TestSandbox:
         assert env["NOVOMODELO_MCP_MAX_JOBS"] == "0"
 
     def test_the_prompt_points_to_the_copy_and_each_execution_starts_clean(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         fixtures = _fixtures(tmp_path)
         paths = prepare_session(tmp_path / "run", 0, SERVER, "claude", self._plan(fixtures))
@@ -287,16 +211,15 @@ class TestSandbox:
         seen: list[str] = []
         leftovers: list[bool] = []
 
-        def run_process(cmd, env, timeout):
-            seen.append(cmd[-1])
+        def execute(_self, test_case):
+            seen.append(test_case.query)
             leftovers.append((box / "scratch" / "saida.json").exists())
             (box / "scratch" / "saida.json").write_text("{}", encoding="utf-8")
             (box / "newave/novomodelo-caso-reduzido/config.json").write_text(
                 "{}", encoding="utf-8"
             )
-            return "completed", "", ""
 
-        runner._run_process = run_process  # type: ignore[method-assign]
+        monkeypatch.setattr(QueryRunner, "execute", execute)
         case = _writing_case(fixtures)
         runner.execute(case)
         assert str(box / "newave" / "novomodelo-caso-reduzido") in seen[0]

@@ -1,17 +1,9 @@
-"""Execução de queries via Kiro CLI.
+"""Parsers de saída de agente e o ponto de entrada de execução da bateria.
 
-Este módulo implementa o QueryRunner que executa queries em linguagem natural
-via Kiro CLI e extrai informações do output para validação.
-
-O fluxo de execução é:
-1. Validar que Kiro CLI está instalado
-2. Configurar log de respostas MCP (NOVOMODELO_MCP_RESPONSE_LOG)
-3. Construir comando com flags apropriadas
-4. Executar query com timeout
-5. Parsear tool calls do log verbose
-6. Ler envelopes MCP do arquivo de log de respostas
-7. Extrair resposta do agente
-8. Retornar QueryResult para validação
+O QueryRunner não executa agente no host: a execução passa pelo executor em
+container. ``execute`` recusa com ``EXECUCAO_SO_NO_EXECUTOR``; o que fica aqui é a
+leitura da saída de um agente (tool calls e resposta final) e o cálculo de timeout
+por caso.
 """
 
 from __future__ import annotations
@@ -19,12 +11,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
-import signal
-import subprocess
-import tempfile
-import threading
-import time
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -41,61 +27,25 @@ from tests.e2e.queries.validator import (
 )
 
 __all__ = [
+    "DEFAULT_TIMEOUT_S",
+    "EXECUCAO_SO_NO_EXECUTOR",
     "QueryRunner",
 ]
 
-
-_COLLECT_POLL_S = 0.5
 DEFAULT_TIMEOUT_S = 120.0
-
-
-def _kill_process_tree(process: subprocess.Popen[str]) -> None:
-    """Mata o agente e os filhos dele (o servidor MCP sobe como filho do CLI).
-
-    Matar só o pai deixaria o MCP órfão segurando os pipes, e o ``communicate``
-    ficaria esperando.
-    """
-    if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-            capture_output=True,
-            check=False,
-        )
-        return
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+EXECUCAO_SO_NO_EXECUTOR = "a execução passa pelo executor em container"
 
 
 class QueryRunner:
-    """Executa queries via Kiro CLI.
-
-    O QueryRunner é responsável por:
-    - Validar que o Kiro CLI está instalado
-    - Configurar captura de respostas MCP via NOVOMODELO_MCP_RESPONSE_LOG
-    - Executar queries em modo não-interativo
-    - Parsear tool calls do log verbose
-    - Ler envelopes MCP do arquivo de log de respostas
-    - Extrair resposta do agente
-    - Retornar QueryResult com métricas de execução
+    """Interpreta a saída de um agente e recusa executá-lo no host.
 
     Attributes:
-        timeout_seconds: Timeout em segundos para execução da query.
+        timeout_seconds: Timeout em segundos aplicado quando o caso não declara o seu.
         api_key: Chave de API opcional para autenticação.
-        MCP_TOOLS: Conjunto de tools do MCP novomodelo (37 tools).
-        NATIVE_TOOLS: Conjunto de tools nativas do Kiro.
-
-    Example:
-        >>> runner = QueryRunner(timeout_seconds=60.0)
-        >>> result = runner.execute(test_case)
-        >>> print(f"Tool calls: {len(result.tool_calls)}")
-        >>> print(f"Latency: {result.latency_ms}ms")
-        >>> if result.envelope:
-        ...     print(f"MCP envelope: {result.envelope}")
+        MCP_TOOLS: Conjunto de tools do MCP novomodelo.
+        NATIVE_TOOLS: Conjunto de tools nativas do agente.
     """
 
-    # Reexpose constants from validator for backwards compatibility and design conformance
     MCP_TOOLS: ClassVar[frozenset[str]] = MCP_TOOLS
     NATIVE_TOOLS: ClassVar[frozenset[str]] = NATIVE_TOOLS
 
@@ -103,126 +53,32 @@ class QueryRunner:
         self,
         timeout_seconds: float | None = None,
         api_key: str | None = None,
-        response_log_dir: str | None = None,
         workspace_dir: str | Path | None = None,
     ) -> None:
-        """Inicializa o QueryRunner.
+        """Inicializa o runner.
 
         Args:
             timeout_seconds: Timeout forçado (s) para todos os casos. Se None,
                 usa QUERY_TIMEOUT_S; sem ele, cada caso usa o próprio ``timeout_s``
                 (cases.yaml) e DEFAULT_TIMEOUT_S só quando o caso não tem um.
             api_key: Chave de API opcional para autenticação.
-                Se não fornecida, assume autenticação via kiro-cli login.
-            response_log_dir: Diretório para arquivos de log de respostas MCP.
-                Se None, usa diretório temporário.
-            workspace_dir: Raiz do path guard do MCP e cwd do agente
-                (ver ``mcp_workspace``). Se None, vale a config global do usuário.
-
-        Raises:
-            RuntimeError: Se Kiro CLI não está instalado, ou se
-                workspace_dir é dado e o servidor novomodelo não está configurado.
+            workspace_dir: Raiz do path guard do MCP (ver ``mcp_workspace``).
+                Se None, vale a config global do usuário.
         """
         if timeout_seconds is None and os.environ.get("QUERY_TIMEOUT_S"):
             timeout_seconds = float(os.environ["QUERY_TIMEOUT_S"])
-        # Explícito (argumento ou QUERY_TIMEOUT_S) vale para todos os casos;
-        # senão cada caso usa o seu timeout_s, e este é só o fallback.
         self._forced_timeout = timeout_seconds
         self.timeout_seconds = timeout_seconds if timeout_seconds is not None else DEFAULT_TIMEOUT_S
         self.api_key = api_key
-
-        # Configurar diretório para logs de resposta MCP
-        if response_log_dir:
-            self._response_log_dir = Path(response_log_dir)
-            self._response_log_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            self._temp_dir = tempfile.mkdtemp(prefix="mcp_response_log_")
-            self._owns_temp_dir = True
-            self._response_log_dir = Path(self._temp_dir)
-
-        self._process: subprocess.Popen[str] | None = None
-        self._process_lock = threading.Lock()
-        self._cancelled = False
-
-        self._validate_kiro_cli()
         self.workspace_dir = prepare_workspace(workspace_dir) if workspace_dir else None
 
     def execute(self, test_case: QueryTestCase) -> QueryResult:
-        """Executa uma query via Kiro CLI.
+        """Recusa: nenhum agente roda no host.
 
-        Implements:
-        - Invocar kiro-cli chat --no-interactive --trust-all-tools -vvv
-        - Capturar stdout e stderr do Kiro CLI para parsing
-        - Garantir Session_Isolation iniciando sessão limpa
-        - Coletar tempo total de execução em milissegundos
-        - NEW: Capturar envelopes MCP via NOVOMODELO_MCP_RESPONSE_LOG
-
-        Args:
-            test_case: Caso de teste a executar.
-
-        Returns:
-            QueryResult com tool_calls, resposta, envelope MCP e métricas.
+        Raises:
+            RuntimeError: Sempre, com ``EXECUCAO_SO_NO_EXECUTOR``.
         """
-        log_file = self._response_log_file(test_case)
-
-        # Record log file size before test to read only new entries after
-        log_size_before = log_file.stat().st_size if log_file.exists() else 0
-
-        cmd = self._build_command(test_case.query)
-
-        # Prepare environment with MCP response logging enabled
-        env = os.environ.copy()
-        env["NOVOMODELO_MCP_RESPONSE_LOG"] = str(log_file)
-        env.update(self._agent_env())
-
-        # Execute with subprocess and measure time
-        start_time = time.perf_counter()
-        timeout = self.timeout_for(test_case)
-        status, stdout, stderr = self._run_process(cmd, env, timeout)
-        end_time = time.perf_counter()
-        latency_ms = (end_time - start_time) * 1000
-
-        # Parse tool calls from stderr AND stdout (Kiro may output logs to either)
-        # Combine both streams for parsing to ensure we capture tool calls
-        combined_log = (stderr or "") + "\n" + (stdout or "")
-        tool_calls = self._parse_tool_calls(combined_log)
-
-        # Read MCP response envelopes from log file (only new entries)
-        mcp_responses = self._read_mcp_response_log(log_file, offset=log_size_before)
-
-        # Match tool calls with their MCP envelopes
-        envelope = self._extract_primary_envelope(tool_calls, mcp_responses)
-
-        # Extract agent response from stdout
-        agent_response = self._extract_agent_response(stdout)
-
-        return QueryResult(
-            test_case=test_case,
-            tool_calls=tool_calls,
-            agent_response=agent_response,
-            latency_ms=latency_ms,
-            status=status,
-            stdout=stdout,
-            stderr=stderr,
-            envelope=envelope,
-            timeout_s=timeout,
-        )
-
-    def _response_log_file(self, test_case: QueryTestCase) -> Path:
-        """Arquivo NOVOMODELO_MCP_RESPONSE_LOG do caso: env, depois mcp.json, depois um por caso."""
-        fixed_log_file = os.environ.get("NOVOMODELO_MCP_RESPONSE_LOG")
-        if not fixed_log_file:
-            fixed_log_file = self._read_log_path_from_mcp_json()
-        if fixed_log_file:
-            return Path(fixed_log_file)
-        # Um arquivo por caso não funciona se o servidor já estiver rodando com outro caminho.
-        return (
-            self._response_log_dir / f"mcp_responses_{test_case.id}_{int(time.time() * 1000)}.jsonl"
-        )
-
-    def _agent_env(self) -> dict[str, str]:
-        """Variáveis extras para o processo do agente (o kiro-cli não precisa de nenhuma)."""
-        return {}
+        raise RuntimeError(EXECUCAO_SO_NO_EXECUTOR)
 
     def timeout_for(self, test_case: QueryTestCase) -> float:
         """Timeout aplicado a um caso: o forçado, senão o do caso, senão o fallback."""
@@ -230,175 +86,11 @@ class QueryRunner:
             return self._forced_timeout
         return test_case.timeout_s or self.timeout_seconds
 
-    def _run_process(
-        self, cmd: list[str], env: dict[str, str], timeout: float
-    ) -> tuple[str, str, str]:
-        """Roda o agente e devolve (status, stdout, stderr).
-
-        status: "completed", "timeout" (saída parcial retida) ou
-        "cancelled" (``cancel()`` chamado durante ou antes da execução).
-        """
-        with self._process_lock:
-            if self._cancelled:
-                return "cancelled", "", ""
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.DEVNULL,  # headless: nunca ficar pendurado aguardando entrada/confirmacao
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                env=env,
-                cwd=self.workspace_dir,
-                start_new_session=os.name != "nt",
-            )
-            self._process = process
-        try:
-            return self._collect(process, timeout)
-        finally:
-            with self._process_lock:
-                self._process = None
-
-    def _collect(self, process: subprocess.Popen[str], timeout: float) -> tuple[str, str, str]:
-        # Um neto criado durante o kill escapa do taskkill /T e segura os pipes;
-        # com o pai já morto, desistir da saída em vez de esperar o neto.
-        deadline = time.monotonic() + timeout
-        timed_out = False
-        while True:
-            try:
-                stdout, stderr = process.communicate(timeout=_COLLECT_POLL_S)
-                break
-            except subprocess.TimeoutExpired:
-                if (self._cancelled or timed_out) and process.poll() is not None:
-                    return ("timeout" if timed_out else "cancelled"), "", ""
-                if not timed_out and time.monotonic() > deadline:
-                    timed_out = True
-                    _kill_process_tree(process)
-        if timed_out:
-            return "timeout", stdout or "", stderr or ""
-        return ("cancelled" if self._cancelled else "completed"), stdout or "", stderr or ""
+    def cancel(self) -> None:
+        """Sem processo de agente no host: nada a interromper."""
 
     def close(self) -> None:
-        """Remove o diretório temporário de logs criado pelo runner, se houver."""
-        if getattr(self, "_owns_temp_dir", False):
-            shutil.rmtree(self._temp_dir, ignore_errors=True)
-
-    def cancel(self) -> None:
-        """Interrompe a query em andamento e recusa as próximas (definitivo)."""
-        with self._process_lock:
-            self._cancelled = True
-            process = self._process
-        if process is not None and process.poll() is None:
-            _kill_process_tree(process)
-
-    def _read_mcp_response_log(self, log_file: Path, offset: int = 0) -> list[dict[str, Any]]:
-        """Lê o arquivo de log de respostas MCP.
-
-        Args:
-            log_file: Caminho para o arquivo JSONL de log.
-            offset: Posição em bytes a partir da qual ler (para ler só entradas novas).
-
-        Returns:
-            Lista de entradas de log, cada uma com tool, arguments, result, duration_ms.
-        """
-        if not log_file.exists():
-            return []
-
-        entries = []
-        try:
-            with open(log_file, encoding="utf-8") as f:
-                if offset > 0:
-                    f.seek(offset)
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entries.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            pass
-        except Exception:
-            pass
-
-        return entries
-
-    def _extract_primary_envelope(
-        self,
-        tool_calls: list[ToolCall],
-        mcp_responses: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
-        """Extrai o envelope MCP da tool principal.
-
-        Encontra a primeira tool MCP chamada e retorna seu envelope de resposta.
-
-        Args:
-            tool_calls: Lista de tool calls detectadas no log.
-            mcp_responses: Lista de respostas MCP do arquivo de log.
-
-        Returns:
-            Envelope MCP da tool principal, ou None se não encontrado.
-        """
-        if not mcp_responses:
-            return None
-
-        # Find the first MCP tool call
-        for tc in tool_calls:
-            if classify_tool(tc.name) == "mcp":
-                # Find matching response in MCP log
-                for response in mcp_responses:
-                    if response.get("tool") == tc.name:
-                        return {
-                            "tool": response.get("tool"),
-                            "arguments": response.get("arguments"),
-                            "result": response.get("result"),
-                            "duration_ms": response.get("duration_ms"),
-                        }
-
-        # If no match found, return the first MCP response (fallback)
-        if mcp_responses:
-            first = mcp_responses[0]
-            return {
-                "tool": first.get("tool"),
-                "arguments": first.get("arguments"),
-                "result": first.get("result"),
-                "duration_ms": first.get("duration_ms"),
-            }
-
-        return None
-
-    def _build_command(self, query: str) -> list[str]:
-        """Constrói comando Kiro CLI (modo verbose legado).
-
-        NOTA DE DESIGN — por que a base NAO delega a
-        ``tests.e2e.launcher.providers.build_command`` (fonte única do comando):
-
-        - O ``QueryRunner`` base é o caminho de compatibilidade: parseia o log
-          *verbose* (``_parse_tool_calls`` com 6 padrões regex) e lê os envelopes
-          do arquivo ``NOVOMODELO_MCP_RESPONSE_LOG`` (``_read_mcp_response_log``).
-          Esse parser exige a saída verbose ``-vvv``, NÃO ``stream-json``.
-        - ``build_command`` já emite ``--output-format stream-json`` para o
-          kiro-cli; delegar aqui quebraria o parser verbose desta classe (o
-          stream-json tem schema totalmente diferente) e o contrato de
-          backward-compat da instanciação direta de ``QueryRunner``.
-        - A unificação "fonte única" é atendida no caminho de produção: o
-          ``ProviderQueryRunner`` (usado pela UI via ``service.py``) delega a
-          ``providers.build_command`` em seu ``_build_command`` e faz o parsing
-          stream-json por provedor. Esta duplicata é intencional e preservada.
-
-        Args:
-            query: Query em linguagem natural a ser executada.
-
-        Returns:
-            Lista de argumentos para subprocess.
-        """
-        return [
-            "kiro-cli",
-            "chat",
-            "--no-interactive",
-            "--trust-all-tools",
-            "-vvv",
-            query,
-        ]
+        """Sem recursos do host a liberar."""
 
     def _parse_tool_calls(self, log_content: str) -> list[ToolCall]:
         """Extrai tool calls do log verbose.
@@ -717,57 +409,3 @@ class QueryRunner:
             "unknown" se não está em nenhuma lista (tratada como native por segurança)
         """
         return classify_tool(tool_name)
-
-    def _validate_kiro_cli(self) -> None:
-        """Valida que Kiro CLI está instalado.
-
-        Implements:
-        - THE Query_Runner SHALL validar que Kiro CLI está instalado
-                    antes de executar testes
-
-        Raises:
-            RuntimeError: Se kiro-cli não está disponível no PATH.
-        """
-        if shutil.which("kiro-cli") is None:
-            raise RuntimeError(
-                "Kiro CLI not found. Please install it first or ensure it's in your PATH."
-            )
-
-    def _read_log_path_from_mcp_json(self) -> str | None:
-        """Lê o caminho do log de respostas MCP do arquivo mcp.json do Kiro.
-
-        O mcp.json pode estar em:
-        - ~/.kiro/settings/mcp.json (user-level)
-        - .kiro/settings/mcp.json (workspace-level)
-
-        Procura em mcpServers.novomodelo.env.NOVOMODELO_MCP_RESPONSE_LOG
-
-        Returns:
-            Caminho do arquivo de log, ou None se não encontrado.
-        """
-        # Possíveis locais do mcp.json
-        candidates = [
-            Path.home() / ".kiro" / "settings" / "mcp.json",
-            Path.cwd() / ".kiro" / "settings" / "mcp.json",
-        ]
-
-        for mcp_json_path in candidates:
-            if not mcp_json_path.exists():
-                continue
-
-            try:
-                with open(mcp_json_path, encoding="utf-8") as f:
-                    config = json.load(f)
-
-                # Procurar em mcpServers.novomodelo.env
-                servers = config.get("mcpServers", {})
-                novomodelo = servers.get("novomodelo", {})
-                env = novomodelo.get("env", {})
-                log_path = env.get("NOVOMODELO_MCP_RESPONSE_LOG")
-
-                if log_path:
-                    return log_path
-            except (json.JSONDecodeError, OSError):
-                continue
-
-        return None

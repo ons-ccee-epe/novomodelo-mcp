@@ -36,7 +36,7 @@ def test_workspace_override_keeps_rest_of_user_server(fake_home: Path, tmp_path:
         {
             "command": "novomodelo-mcp",
             "args": ["--x"],
-            "env": {WORKSPACE_ENV: "/pasta/do/usuario", "NOVOMODELO_MCP_RESPONSE_LOG": "log.jsonl"},
+            "env": {WORKSPACE_ENV: "/pasta/do/usuario", "NOVOMODELO_MCP_STATE_DIR": "estado"},
         },
     )
     fixtures = tmp_path / "fixtures"
@@ -45,7 +45,7 @@ def test_workspace_override_keeps_rest_of_user_server(fake_home: Path, tmp_path:
 
     assert server is not None
     assert server["env"][WORKSPACE_ENV] == str(fixtures.resolve())
-    assert server["env"]["NOVOMODELO_MCP_RESPONSE_LOG"] == "log.jsonl"
+    assert server["env"]["NOVOMODELO_MCP_STATE_DIR"] == "estado"
     assert server["command"] == "novomodelo-mcp"
     assert server["args"] == ["--x"]
 

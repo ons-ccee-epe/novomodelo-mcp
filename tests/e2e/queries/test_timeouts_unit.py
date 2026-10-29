@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import json
-import sys
-import time
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -76,8 +73,7 @@ def _case(timeout_s: float | None) -> QueryTestCase:
 
 
 def _runner(timeout_seconds: float | None = None) -> QueryRunner:
-    with patch.object(QueryRunner, "_validate_kiro_cli"):
-        return QueryRunner(timeout_seconds=timeout_seconds)
+    return QueryRunner(timeout_seconds=timeout_seconds)
 
 
 def test_runner_uses_case_timeout_unless_forced(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,19 +86,6 @@ def test_runner_uses_case_timeout_unless_forced(monkeypatch: pytest.MonkeyPatch)
 def test_env_var_forces_timeout_for_every_case(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("QUERY_TIMEOUT_S", "45")
     assert _runner().timeout_for(_case(900)) == 45
-
-
-def test_execute_cuts_at_case_timeout_and_reports_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("QUERY_TIMEOUT_S", raising=False)
-    runner = _runner()
-    runner._build_command = lambda q: [sys.executable, "-c", "import time; time.sleep(60)"]  # type: ignore[method-assign]
-
-    started = time.monotonic()
-    result = runner.execute(_case(1))
-
-    assert result.status == "timeout"
-    assert result.timeout_s == 1
-    assert time.monotonic() - started < 15
 
 
 def test_tool_timeout_follows_mcp_cli_timeout_plus_margin() -> None:
@@ -123,15 +106,3 @@ def test_workspace_config_carries_kiro_tool_timeout(
 
     written = json.loads((root / ".kiro" / "settings" / "mcp.json").read_text(encoding="utf-8"))
     assert written["mcpServers"]["novomodelo"]["timeout"] == 960_000
-
-
-def test_claude_gets_mcp_tool_timeout_env() -> None:
-    from types import SimpleNamespace
-
-    from tests.e2e.launcher.provider_runner import ProviderQueryRunner
-
-    claude = SimpleNamespace(id="claude", binary="claude", path="claude", installed=True)
-    kiro = SimpleNamespace(id="kiro-cli", binary="kiro-cli", path="kiro-cli", installed=True)
-    with patch.object(mcp_workspace, "load_server_config", return_value={"env": {}}):
-        assert ProviderQueryRunner(claude)._agent_env() == {"MCP_TOOL_TIMEOUT": "960000"}  # type: ignore[arg-type]
-        assert ProviderQueryRunner(kiro)._agent_env() == {}  # type: ignore[arg-type]

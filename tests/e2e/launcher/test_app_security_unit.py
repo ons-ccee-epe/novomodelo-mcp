@@ -63,6 +63,15 @@ def test_second_concurrent_run_gets_409(client: TestClient, fake_provider) -> No
     assert resp.status_code == 409
 
 
+def test_launcher_nao_dispara_agente_no_host(client: TestClient, fake_provider) -> None:
+    with patch("subprocess.Popen") as popen:
+        resp = client.post("/api/runs", json={}, headers=HEADER)
+
+    assert resp.status_code == 409
+    assert "executor em container" in resp.json()["detail"]
+    popen.assert_not_called()
+
+
 def test_data_prefix_sibling_directory_is_not_served(client: TestClient, tmp_path) -> None:
     results = tmp_path / "results"
     sibling = tmp_path / "results2"

@@ -1,70 +1,24 @@
-"""CLI Entry Point para execução de testes E2E via query.
+"""CLI de execução da bateria de queries.
 
-Este módulo implementa a interface de linha de comando para executar testes E2E
-via query no Kiro CLI.
-
-Implements:
-- Executável via `python -m tests.e2e.queries.run_queries`
-- Flag `--tags` para filtrar testes por tags
-- Flag `--case` para executar um teste específico por ID
-- Flag `--parallel N` para execução paralela
-- Durante execução, exibir progresso no terminal
-- Após execução, exibir sumário com total passed/failed/skipped
-- Exit code 1 se qualquer teste falha
-- Flag `--report` para gerar dashboard
-- Flag `--set-baseline` para marcar bateria como baseline
-- Flag `--compare BATCH_ID` para comparar com bateria específica
-- Configuração via variáveis de ambiente
-
-Usage:
-    python -m tests.e2e.queries.run_queries
-    python -m tests.e2e.queries.run_queries --tags bridge deck
-    python -m tests.e2e.queries.run_queries --case check-newave-valid
-    python -m tests.e2e.queries.run_queries --parallel 4 --report
-    python -m tests.e2e.queries.run_queries --set-baseline
-    python -m tests.e2e.queries.run_queries --compare 20241215_143052_abc1234
+A execução do agente passa pelo executor em container: o CLI aceita os mesmos
+argumentos e recusa com erro explícito. Este módulo também guarda
+``_build_test_result``, que converte (caso, resultado, validação) em ``TestResult``.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
-from tests.e2e.queries.loader import CasesLoader, CasesLoaderError
 from tests.e2e.queries.models import (
     QueryResult,
     QueryTestCase,
     TestResult,
 )
-from tests.e2e.queries.preconditions import missing_sources, skipped_result
-from tests.e2e.queries.runner import QueryRunner
-from tests.e2e.queries.store import ResultStore, conjunto_from_filters
-from tests.e2e.queries.validator import QueryValidator, ValidationResult
+from tests.e2e.queries.runner import EXECUCAO_SO_NO_EXECUTOR
+from tests.e2e.queries.validator import ValidationResult
 
 __all__ = ["main"]
-
-# Lock for thread-safe progress output
-_print_lock = threading.Lock()
-
-
-def _get_env_path(name: str, default: Path) -> Path:
-    """Obtém variável de ambiente como Path.
-
-    Args:
-        name: Nome da variável de ambiente
-        default: Valor padrão se não definida
-
-    Returns:
-        Path da variável ou default
-    """
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return Path(value)
 
 
 def _build_test_result(
@@ -170,11 +124,11 @@ def main() -> int:
     """Entry point principal do CLI.
 
     Returns:
-        0 se todos os testes passaram, 1 se qualquer teste falhou.
+        1: a execução passa pelo executor em container.
     """
     parser = argparse.ArgumentParser(
         prog="run_queries",
-        description="Executa testes E2E via query no Kiro CLI",
+        description="Executa a bateria de queries (só pelo executor em container)",
     )
     parser.add_argument(
         "--tags",
@@ -221,214 +175,10 @@ def main() -> int:
         help="Comparar com bateria específica",
     )
 
-    args = parser.parse_args()
+    parser.parse_args()
 
-    # Configuração de diretórios
-    # base_dir é tests/e2e/ (parent de queries/)
-    base_dir = Path(__file__).parent.parent
-    cases_path = Path(__file__).parent / "cases.yaml"
-
-    # Fixtures: configurável via QUERY_FIXTURES_DIR
-    default_fixtures_dir = base_dir / "fixtures"
-    fixtures_dir = _get_env_path("QUERY_FIXTURES_DIR", default_fixtures_dir)
-
-    # Outros diretórios
-    results_dir = base_dir / "results"
-    metrics_dir = base_dir / "metrics"
-
-    # API key: via KIRO_API_KEY
-    api_key = os.environ.get("KIRO_API_KEY")
-
-    # Carregar casos de teste
-    try:
-        loader = CasesLoader(cases_path, fixtures_dir)
-        cases = loader.load(tags=args.tags, case_id=args.case)
-    except CasesLoaderError as e:
-        print(f"Erro ao carregar casos de teste: {e}", file=sys.stderr)
-        return 1
-
-    if not cases:
-        print("Nenhum caso de teste encontrado com os filtros especificados.")
-        return 0
-
-    print(f"Carregados {len(cases)} casos de teste")
-
-    # Inicializar componentes
-    runner = QueryRunner(
-        timeout_seconds=float(args.timeout) if args.timeout is not None else None,
-        api_key=api_key,
-        workspace_dir=fixtures_dir,
-    )
-    validator = QueryValidator()
-    store = ResultStore(results_dir, metrics_dir)
-
-    # Executar testes
-    test_results: list[TestResult] = []
-    total_cases = len(cases)
-
-    if args.parallel <= 1:
-        # Execução sequencial (default)
-        for i, case in enumerate(cases, 1):
-            print(f"[{i}/{total_cases}] {case.id}...", end=" ", flush=True)
-
-            missing = missing_sources(case)
-            if missing:
-                test_results.append(skipped_result(case, missing))
-                print(f"[SKIP] fonte ausente: {'; '.join(missing)}")
-                continue
-
-            result = runner.execute(case)
-            validation = validator.validate(case, result)
-
-            test_result = _build_test_result(case, result, validation)
-            test_results.append(test_result)
-
-            # Use ASCII-safe icons to avoid encoding issues on Windows cp1252
-            if test_result.status == "pass":
-                status_icon = "[OK]"
-            elif test_result.status == "partial":
-                status_icon = "[PARTIAL]"
-            else:
-                status_icon = "[FAIL]"
-
-            print(f"{status_icon} {test_result.status} ({result.latency_ms:.0f}ms)")
-
-            # Mostrar detalhes para partial e fail
-            if test_result.status in ("partial", "fail"):
-                for check in validation.checks:
-                    # Use ASCII-safe icons to avoid encoding issues on Windows cp1252
-                    check_icon = "[OK]" if check.passed else "[X]"
-                    print(f"    {check_icon} {check.message}")
-    else:
-        # Execução paralela com ThreadPoolExecutor
-        print(f"Executando com {args.parallel} threads em paralelo...")
-
-        # Dictionary to store results in order
-        results_by_index: dict[int, TestResult] = {}
-        completed_count = 0
-        completed_lock = threading.Lock()
-
-        def execute_test(idx: int, case: QueryTestCase) -> tuple[int, TestResult, ValidationResult]:
-            """Executa um único teste e retorna índice, resultado e validação."""
-            missing = missing_sources(case)
-            if missing:
-                skipped = skipped_result(case, missing)
-                return idx, skipped, ValidationResult(valid=False, status="skip", checks=[])
-            result = runner.execute(case)
-            validation = validator.validate(case, result)
-            test_result = _build_test_result(case, result, validation)
-            return idx, test_result, validation
-
-        with ThreadPoolExecutor(max_workers=args.parallel) as executor:
-            # Submit all tasks
-            futures = {
-                executor.submit(execute_test, idx, case): (idx, case)
-                for idx, case in enumerate(cases)
-            }
-
-            # Process results as they complete
-            for future in as_completed(futures):
-                idx, case = futures[future]
-                try:
-                    result_idx, test_result, validation = future.result()
-                    results_by_index[result_idx] = test_result
-
-                    # Thread-safe progress update
-                    with completed_lock:
-                        completed_count += 1
-                        current = completed_count
-
-                    # Thread-safe print
-                    # Use ASCII-safe icons to avoid encoding issues on Windows cp1252
-                    status_icon = "[OK]" if validation.valid else "[FAIL]"
-                    with _print_lock:
-                        print(
-                            f"[{current}/{total_cases}] {case.id}... "
-                            f"{status_icon} {validation.status} "
-                            f"({test_result.latency_ms:.0f}ms)"
-                        )
-
-                except Exception as e:
-                    # Handle execution errors gracefully
-                    with completed_lock:
-                        completed_count += 1
-                        current = completed_count
-
-                    # Create a failed test result for the error case
-                    error_result = TestResult(
-                        test_id=case.id,
-                        query=case.query,
-                        expected_tool=case.expected.tool,
-                        expected_tools=case.expected.tools,
-                        actual_tool=None,
-                        all_tool_calls=[],
-                        status="fail",
-                        latency_ms=0.0,
-                        tool_latency_ms=None,
-                        mcp_used=False,
-                        correct_tool=False,
-                        correct_result=False,
-                        agent_response="",
-                        error_message=f"Execution error: {e}",
-                        tags=list(case.tags),
-                        validation_checks=[],
-                    )
-                    results_by_index[idx] = error_result
-
-                    with _print_lock:
-                        print(
-                            f"[{current}/{total_cases}] {case.id}... "
-                            f"✗ error (execution failed: {e})"
-                        )
-
-        # Reconstruct results in original order
-        test_results = [results_by_index[i] for i in range(total_cases)]
-
-    # Criar e salvar batch
-    batch = store.create_batch(test_results, conjunto=conjunto_from_filters(args.tags, args.case))
-    batch_path = store.save_batch(batch)
-    store.append_metrics(batch)
-
-    if args.set_baseline:
-        conjunto = store.set_baseline(batch.batch_id)
-        print(f"Bateria {batch.batch_id} definida como baseline de {conjunto}")
-
-    print()
-    print("=" * 60)
-    print(f"Batch: {batch.batch_id}")
-    print(
-        f"Total: {batch.total_tests} | "
-        f"Passed: {batch.passed} | "
-        f"Partial: {batch.partial} | "
-        f"Failed: {batch.failed} | "
-        f"Timeout: {batch.timeout}"
-    )
-    print(
-        f"MCP Used: {batch.metrics.pct_mcp_used:.1f}% | "
-        f"Correct Tool: {batch.metrics.pct_correct_tool:.1f}%"
-    )
-    print("=" * 60)
-
-    # Dados persistidos em JSON (results/*.json + metrics/history.jsonl).
-    # O dashboard é o frontend Vite em tests/e2e/frontend, que consome esses JSON.
-    if args.report:
-        frontend_dir = base_dir / "frontend"
-        print()
-        print("Dados prontos para o dashboard (frontend Vite consome os JSON):")
-        print(f"  Bateria:   {batch_path}")
-        print(f"  Historico: {metrics_dir / 'history.jsonl'}")
-        print()
-        print("Para visualizar, rode o frontend uma vez:")
-        print(f"  cd {frontend_dir}")
-        print("  npm install        # primeira vez")
-        print("  npm run dev         # abre em http://127.0.0.1:5174")
-        print()
-        print("O dashboard atualiza ao dar refresh apos cada execucao de testes.")
-        if args.compare:
-            print(f"Comparacao: selecione '{args.compare}' no seletor 'Comparar com'.")
-
-    # Exit code: 0 se não houve falhas reais (partial conta como sucesso parcial)
-    return 0 if batch.failed == 0 and batch.timeout == 0 else 1
+    print(f"Erro: {EXECUCAO_SO_NO_EXECUTOR}.", file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":

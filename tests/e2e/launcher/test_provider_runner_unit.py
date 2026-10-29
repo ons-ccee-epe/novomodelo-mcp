@@ -14,8 +14,6 @@ teste não depender do arquivo de notas.
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 
 from tests.e2e.launcher.provider_runner import ProviderQueryRunner
@@ -48,7 +46,7 @@ CLAUDE_SAMPLE = r"""{"type":"system","subtype":"init","session_id":"c-1"}
 
 
 def _make_runner(provider_id: str) -> ProviderQueryRunner:
-    """Instancia o runner para um provedor, mockando a validação do binário."""
+    """Instancia o runner para um provedor."""
     provider = ProviderInfo(
         id=provider_id,  # type: ignore[arg-type]
         label="Test",
@@ -56,8 +54,7 @@ def _make_runner(provider_id: str) -> ProviderQueryRunner:
         installed=True,
         path=provider_id,
     )
-    with patch.object(ProviderQueryRunner, "_validate_kiro_cli"):
-        return ProviderQueryRunner(provider)
+    return ProviderQueryRunner(provider)
 
 
 @pytest.fixture
@@ -88,21 +85,6 @@ class TestKiroAcpParsing:
         assert tc.tool_id == "toolu_bdrk_01EFDtr2vKjDS4uC2oxaz6fC"
         # rawInput vira args.
         assert tc.args == {"__tool_use_purpose": "verificar versao"}
-
-    def test_read_mcp_response_log_builds_envelope(self, kiro_runner):
-        # Precisa parsear antes para popular self._kiro_log.
-        kiro_runner._parse_tool_calls(ACP_SAMPLE)
-        envelopes = kiro_runner._read_mcp_response_log(None)
-        assert len(envelopes) == 1
-        env = envelopes[0]
-        assert env["tool"] == "server_info"
-        # O envelope veio do rawOutput e foi desserializado de JSON.
-        assert env["result"] == {
-            "server": "novomodelo-mcp",
-            "versao_mcp": "0.18.0.post1",
-        }
-        assert env["result"]  # não vazio
-        assert set(env.keys()) == {"tool", "arguments", "result", "duration_ms"}
 
     def test_extract_agent_response_uses_final_text(self, kiro_runner):
         response = kiro_runner._extract_agent_response(ACP_SAMPLE)
@@ -142,13 +124,6 @@ class TestClaudeRegression:
         assert tool_calls[0].name == "solver_version"
         assert tool_calls[0].name in MCP_TOOLS
         assert tool_calls[0].tool_id == "toolu_claude_1"
-
-    def test_read_mcp_response_log_from_stream(self, claude_runner):
-        claude_runner._parse_tool_calls(CLAUDE_SAMPLE)
-        envelopes = claude_runner._read_mcp_response_log(None)
-        assert len(envelopes) == 1
-        assert envelopes[0]["tool"] == "solver_version"
-        assert envelopes[0]["result"] == {"status": "ok", "version": "0.18.0"}
 
     def test_extract_agent_response_from_result_event(self, claude_runner):
         response = claude_runner._extract_agent_response(CLAUDE_SAMPLE)

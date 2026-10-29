@@ -31,9 +31,11 @@ from typing import Any, Literal
 
 from tests.e2e.launcher.process_tree import ProcessTree
 from tests.e2e.launcher.run_gate import RunGate
+from tests.e2e.launcher.service import ExecucaoNoHostDesligadaError
 from tests.e2e.load.agent_engine import AgentLoadConfig
 from tests.e2e.load.engine import LoadConfig
 from tests.e2e.load.sandbox import remove_tree
+from tests.e2e.queries.runner import EXECUCAO_SO_NO_EXECUTOR
 
 __all__ = ["LoadRunService", "LoadRunState", "build_command"]
 
@@ -149,8 +151,12 @@ class LoadRunService:
         """Cria e dispara uma carga em background.
 
         Raises:
+            ExecucaoNoHostDesligadaError: Se a carga é do modo agent: o agente só roda no
+                executor em container.
             RunAlreadyActiveError: Se outro run (de agente ou de carga) está ativo.
         """
+        if isinstance(config, AgentLoadConfig):
+            raise ExecucaoNoHostDesligadaError(EXECUCAO_SO_NO_EXECUTOR)
         run_id = uuid.uuid4().hex[:12]
         state = LoadRunState(run_id=run_id, config=config.to_dict(), started_at=_now())
         self._gate.acquire(run_id)

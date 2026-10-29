@@ -6,10 +6,9 @@ Uso:
     python -m tests.e2e.launcher.serve            # porta 5175
     python -m tests.e2e.launcher.serve --port 9000
 
-Variaveis de ambiente relevantes (herdadas pelo subprocess do provedor):
-    NOVOMODELO_MCP_RESPONSE_LOG  -> onde o MCP novomodelo grava os envelopes
-    QUERY_TIMEOUT_S              -> força um timeout unico; sem ele, cada caso usa o
-                                    timeout_s do cases.yaml (por caso/grupo)
+Variaveis de ambiente relevantes:
+    QUERY_TIMEOUT_S  -> força um timeout unico; sem ele, cada caso usa o
+                        timeout_s do cases.yaml (por caso/grupo)
 """
 
 from __future__ import annotations

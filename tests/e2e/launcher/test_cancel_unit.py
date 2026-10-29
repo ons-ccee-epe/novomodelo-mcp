@@ -1,25 +1,15 @@
-"""Testes unitários da parada de runs: QueryRunner.cancel e RunService.cancel."""
+"""Testes unitários da parada de runs: RunService.cancel."""
 
 from __future__ import annotations
 
-import sys
 import threading
 import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from tests.e2e.launcher import service as service_mod
-from tests.e2e.launcher.service import RunService
+from tests.e2e.launcher.service import RunService, RunState
 from tests.e2e.queries.models import ExpectedResult, QueryTestCase, TestResult
-from tests.e2e.queries.runner import QueryRunner
-
-# O filho herda os pipes do pai: se só o pai morrer, o communicate fica preso
-# até o filho acabar. O teste prova que a árvore inteira é encerrada.
-_SPAWNS_CHILD_AND_SLEEPS = (
-    "import subprocess, sys, time; "
-    "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
-    "time.sleep(60)"
-)
 
 
 def _case(case_id: str) -> QueryTestCase:
@@ -31,13 +21,6 @@ def _case(case_id: str) -> QueryTestCase:
     )
 
 
-def _sleeping_runner(timeout_seconds: float = 60) -> QueryRunner:
-    with patch.object(QueryRunner, "_validate_kiro_cli"):
-        runner = QueryRunner(timeout_seconds=timeout_seconds)
-    runner._build_command = lambda query: [sys.executable, "-c", _SPAWNS_CHILD_AND_SLEEPS]  # type: ignore[method-assign]
-    return runner
-
-
 def _wait_until(predicate, timeout: float = 10.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -45,43 +28,6 @@ def _wait_until(predicate, timeout: float = 10.0) -> bool:
             return True
         time.sleep(0.05)
     return False
-
-
-def test_cancel_interrupts_running_query_and_its_children() -> None:
-    runner = _sleeping_runner()
-    outcome: dict = {}
-    worker = threading.Thread(target=lambda: outcome.update(result=runner.execute(_case("c1"))))
-    started = time.monotonic()
-    worker.start()
-    assert _wait_until(lambda: runner._process is not None)
-
-    runner.cancel()
-    worker.join(timeout=20)
-
-    assert not worker.is_alive(), "communicate ficou preso: a árvore de processos não foi encerrada"
-    assert outcome["result"].status == "cancelled"
-    assert time.monotonic() - started < 20
-
-
-def test_timeout_kills_process_tree_and_reports_timeout() -> None:
-    runner = _sleeping_runner(timeout_seconds=1)
-
-    started = time.monotonic()
-    result = runner.execute(_case("c1"))
-
-    assert result.status == "timeout"
-    assert time.monotonic() - started < 15
-
-
-def test_cancelled_runner_refuses_next_queries_without_spawning() -> None:
-    runner = _sleeping_runner()
-    runner.cancel()
-
-    with patch("subprocess.Popen") as popen:
-        result = runner.execute(_case("c1"))
-
-    assert result.status == "cancelled"
-    popen.assert_not_called()
 
 
 class _BlockingRunner:
@@ -143,7 +89,11 @@ def test_service_cancel_stops_remaining_cases_and_skips_batch() -> None:
         patch.object(RunService, "load_cases", return_value=cases),
     ):
         provider = SimpleNamespace(id="kiro-cli", label="Kiro CLI")
-        state = svc.start_run(provider=provider)  # type: ignore[arg-type]
+        state = RunState(run_id="r1", provider=provider.id)
+        svc._runs[state.run_id] = state
+        threading.Thread(
+            target=svc._execute, args=(state, provider, None, None, None), daemon=True
+        ).start()
         assert _wait_until(lambda: state.current == "c2")
 
         svc.cancel(state.run_id)

@@ -180,20 +180,18 @@ def build_command(
 ) -> list[str]:
     """Constroi o comando headless do provedor para rodar um prompt.
 
-    kiro-cli: chat --no-interactive --trust-all-tools
-              --output-format stream-json "<query>"
+    kiro-cli: chat --no-interactive --output-format stream-json "<query>"
 
               O stream-json emite os eventos ACP do kiro-cli como JSON Lines no
               stdout (um evento autodescritivo por linha). O parser do
               ProviderQueryRunner reconhece os sessionUpdate (tool_call /
               tool_call_update / agent_message_chunk) e o runFinished, extraindo
               tool calls, envelopes MCP e a resposta final direto do stream
-              (sem depender do log verbose nem do NOVOMODELO_MCP_RESPONSE_LOG).
+              (sem depender do log verbose).
               `--output-format stream-json` ja implica `--no-interactive`;
-              mantemos `--no-interactive` e `--trust-all-tools` explicitos.
+              mantemos `--no-interactive` explicito.
     claude:   --print --verbose --output-format stream-json
-              --dangerously-skip-permissions --mcp-config <cfg> --strict-mcp-config
-              "<query>"
+              --mcp-config <cfg> --strict-mcp-config "<query>"
 
               VALIDADO (claude 2.1.302): sem --mcp-config o claude NAO ve o
               servidor novomodelo (registro MCP proprio, separado do kiro). Com a
@@ -215,14 +213,14 @@ def build_command(
             que o modo headless nao responde); para ele a lista e ignorada.
 
     Returns:
-        Lista de argumentos para subprocess.
+        Lista de argumentos. Nenhuma flag que dispense a confirmacao de tools entra
+        aqui: quem executa o agente e o executor em container.
     """
     if provider.id == "kiro-cli":
         return [
             provider.path or provider.binary,
             "chat",
             "--no-interactive",
-            "--trust-all-tools",
             "--output-format",
             "stream-json",
             query,
@@ -234,7 +232,6 @@ def build_command(
             "--verbose",
             "--output-format",
             "stream-json",
-            "--dangerously-skip-permissions",
         ]
         if not persist_session:
             cmd.append("--no-session-persistence")

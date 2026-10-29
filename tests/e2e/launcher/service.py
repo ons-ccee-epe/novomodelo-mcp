@@ -15,7 +15,6 @@ bateria ja esta gravada e o frontend a le normalmente via /data/*.
 from __future__ import annotations
 
 import threading
-import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,10 +27,11 @@ from tests.e2e.queries.loader import CasesLoader, CasesLoaderError
 from tests.e2e.queries.models import QueryTestCase, TestResult
 from tests.e2e.queries.preconditions import missing_sources, skipped_result
 from tests.e2e.queries.run_queries import _build_test_result
+from tests.e2e.queries.runner import EXECUCAO_SO_NO_EXECUTOR
 from tests.e2e.queries.store import ResultStore, conjunto_from_filters
 from tests.e2e.queries.validator import QueryValidator
 
-__all__ = ["RunAlreadyActiveError", "RunService", "RunState"]
+__all__ = ["ExecucaoNoHostDesligadaError", "RunAlreadyActiveError", "RunService", "RunState"]
 
 RunStatus = Literal["pending", "running", "done", "error", "cancelled"]
 
@@ -43,6 +43,10 @@ _RESULTS_DIR = _BASE_DIR / "results"
 _METRICS_DIR = _BASE_DIR / "metrics"
 
 _FINISHED: frozenset[str] = frozenset({"done", "error", "cancelled"})
+
+
+class ExecucaoNoHostDesligadaError(RunAlreadyActiveError):
+    """O disparo de agente no host está desligado; a rota responde 409 como num run ativo."""
 
 
 @dataclass
@@ -158,11 +162,10 @@ class RunService:
         case_id: str | None = None,
         timeout_seconds: float | None = None,
     ) -> RunState:
-        """Cria e dispara um run em background. Retorna o estado inicial.
+        """Recusa o disparo: o agente não roda no host, só no executor em container.
 
         Raises:
-            RunAlreadyActiveError: Se outro run ainda não terminou — cada run
-                sobe uma árvore de agente + servidor MCP; em paralelo, esgota a máquina.
+            ExecucaoNoHostDesligadaError: Sempre: nenhum agente roda no host.
 
         Args:
             provider: Provedor ja resolvido (installed=True).
@@ -170,24 +173,7 @@ class RunService:
             case_id: Um unico caso (teste separado), mutuamente util com tags.
             timeout_seconds: Timeout por query.
         """
-        run_id = uuid.uuid4().hex[:12]
-        state = RunState(
-            run_id=run_id,
-            provider=provider.id,
-            status="pending",
-            started_at=datetime.now(UTC).isoformat(),
-        )
-        self._gate.acquire(run_id)
-        with self._lock:
-            self._runs[run_id] = state
-
-        thread = threading.Thread(
-            target=self._execute,
-            args=(state, provider, tags, case_id, timeout_seconds),
-            daemon=True,
-        )
-        thread.start()
-        return state
+        raise ExecucaoNoHostDesligadaError(EXECUCAO_SO_NO_EXECUTOR)
 
     def cancel(self, run_id: str) -> RunState | None:
         """Pede a parada de um run: interrompe o caso atual e não roda os demais.
