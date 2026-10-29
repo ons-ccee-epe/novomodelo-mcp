@@ -254,7 +254,8 @@ def run_readonly_sql(
         try:
             con.execute(f"SET allowed_directories=[{lista}]")
             con.execute("SET enable_external_access=false")
-            gravadas = con.execute("SELECT current_setting('allowed_directories')").fetchone()[0]
+            linha = con.execute("SELECT current_setting('allowed_directories')").fetchone()
+            gravadas = linha[0] if linha else []
             if not set(pastas) <= set(gravadas):
                 raise ValueError(f"allowed_directories gravado diverge: {gravadas}")
         except Exception as exc:  # noqa: BLE001 - qualquer falha aqui recusa a query

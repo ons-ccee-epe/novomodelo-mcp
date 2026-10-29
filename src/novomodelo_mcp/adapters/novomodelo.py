@@ -102,7 +102,11 @@ def validate_deck_binding(
     except ImportError:
         return _error(127, f"{BINDING_DIST} ausente no venv; rode: uv sync --system-certs")
     try:
-        report = _cio.validate(case_dir, **({"output_dir": output_dir} if output_dir else {}))
+        report = (
+            _cio.validate(case_dir, output_dir=output_dir)
+            if output_dir
+            else _cio.validate(case_dir)
+        )
     except FileNotFoundError as exc:
         return _error(2, f"caso nao encontrado: {exc}")
     except Exception as exc:  # noqa: BLE001 - repassa como erro, nao derruba o servidor

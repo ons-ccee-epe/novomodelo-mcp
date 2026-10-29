@@ -28,19 +28,21 @@ def _sessao(cmd: list[str]):
         encoding="utf-8",
         errors="replace",
     )
+    stdin, stdout, stderr = proc.stdin, proc.stdout, proc.stderr
+    assert stdin is not None and stdout is not None and stderr is not None
     ids = iter(range(1, 1000))
 
     def pedir(method: str, params: dict | None = None) -> dict:
         req_id = next(ids)
-        proc.stdin.write(
+        stdin.write(
             json.dumps({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params or {}})
             + "\n"
         )
-        proc.stdin.flush()
+        stdin.flush()
         while True:
-            line = proc.stdout.readline()
+            line = stdout.readline()
             if not line:
-                raise Falha(f"o servidor fechou a saída ({method}): {proc.stderr.read()[-2000:]}")
+                raise Falha(f"o servidor fechou a saída ({method}): {stderr.read()[-2000:]}")
             msg = json.loads(line)
             if msg.get("id") == req_id:
                 if "error" in msg:
@@ -48,8 +50,8 @@ def _sessao(cmd: list[str]):
                 return msg["result"]
 
     def avisar(method: str) -> None:
-        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": method}) + "\n")
-        proc.stdin.flush()
+        stdin.write(json.dumps({"jsonrpc": "2.0", "method": method}) + "\n")
+        stdin.flush()
 
     return proc, pedir, avisar
 

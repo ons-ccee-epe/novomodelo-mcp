@@ -12,7 +12,7 @@ from typing import Any
 MAX_DETAIL_CHARS = 2000
 
 
-def error(code: int, message: str, detail: str = "", **extra: Any) -> dict[str, Any]:
+def error(code: int, message: str, detail: str = "", /, **extra: Any) -> dict[str, Any]:
     """Envelope de erro padrão: {status, exit_code, diagnostics}, mais os campos de `extra`."""
     diagnostics = [message[:MAX_DETAIL_CHARS]]
     if detail:

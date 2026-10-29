@@ -19,6 +19,7 @@ import inspect
 import json
 import os
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -63,7 +64,7 @@ _CONFIG_DIRS = frozenset({"appdata", "library"})
 _PASTAS_FILE = "pastas.json"
 
 
-def _resolve_all(parts: list[str]) -> list[Path]:
+def _resolve_all(parts: Iterable[str]) -> list[Path]:
     roots: list[Path] = []
     for part in parts:
         part = part.strip()

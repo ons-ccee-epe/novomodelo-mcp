@@ -117,7 +117,8 @@ class _WithVersionWarnings:
                     warnings = []
                 return attach_version_warnings(result, warnings)
 
-            with_warnings._version_warnings = True
+            # Marcador lido por test_versions: toda tool registrada passa por aqui.
+            with_warnings._version_warnings = True  # ty: ignore[unresolved-attribute]
             if is_guarded_tool(fn):
                 with_warnings.__doc__ = f"{(fn.__doc__ or '').rstrip()}\n\n{AVISO_NA_TOOL}"
             return register(with_warnings)

@@ -159,7 +159,7 @@ def termination_fields(
     `iterations.completed`; campo ausente vira None.
     """
     t = training if isinstance(training, dict) else {}
-    conv = t.get("convergence") if isinstance(t.get("convergence"), dict) else {}
+    conv = raw if isinstance(raw := t.get("convergence"), dict) else {}
     its = t.get("iterations")
     out: dict[str, Any] = {
         "training": {
@@ -193,11 +193,11 @@ def numeric_diagnosis(output_dir: str) -> dict[str, Any]:
     report = _read_object(Path(output_dir) / "training" / "scaling_report.json")
     if isinstance(report, str):
         return {}
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = raw if isinstance(raw := report.get("summary"), dict) else {}
     worst = summary.get("worst_pre_scaling_matrix_ratio")
     if not isinstance(worst, (int, float)):
         return {}
-    stages = report.get("stages") if isinstance(report.get("stages"), list) else []
+    stages = raw if isinstance(raw := report.get("stages"), list) else []
     stage = next(
         (
             s
@@ -476,7 +476,7 @@ def simulation_query(
         lf = pl.scan_parquet(str(base / "**" / "*.parquet"))
         if scenario is not None:
             lf = lf.filter(pl.col("scenario_id") == scenario)
-        if group_by:
+        if group_by and agg and columns:
             lf = lf.group_by(group_by).agg(_agg_exprs(pl, agg, columns)).sort(group_by)
         elif columns:
             lf = lf.select(columns)

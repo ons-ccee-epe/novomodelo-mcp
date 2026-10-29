@@ -74,8 +74,10 @@ def _expected_sha256(version: str) -> str | dict[str, str]:
         assets = json.loads(body).get("assets") or []
     except (ValueError, AttributeError):
         return {"network_warning": "resposta da API do GitHub ilegível"}
-    digest = next((a.get("digest") for a in assets if a.get("name") == _installer_name()), None)
-    if not (digest or "").startswith("sha256:"):
+    digest = (
+        next((a.get("digest") for a in assets if a.get("name") == _installer_name()), None) or ""
+    )
+    if not digest.startswith("sha256:"):
         return {"error": f"o release v{version} não publica o SHA-256 de {_installer_name()}"}
     return digest.split(":", 1)[1]
 

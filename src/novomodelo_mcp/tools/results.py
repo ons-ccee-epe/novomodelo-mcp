@@ -35,6 +35,7 @@ def register_results(mcp, settings: Settings) -> None:
             return env
         t = env["training"]
         s = env.get("simulation") or {}
+        termination = R.termination_fields(t, env.get("simulation"))
         out = {
             "status": "ok",
             "run_status": t.get("status"),
@@ -47,11 +48,11 @@ def register_results(mcp, settings: Settings) -> None:
             "software_version": t.get("software_version"),
             "simulation_ran": env["simulation_ran"],
             "simulation_cost": s.get("cost"),
-            **R.termination_fields(t, env.get("simulation")),
+            **termination,
         }
         if env.get("warnings"):
             out["warnings"] = env["warnings"]
-        if out["training"].get("termination_reason") == "error":
+        if termination["training"].get("termination_reason") == "error":
             out.update(R.numeric_diagnosis(output_dir))
         return cap_envelope(out, settings)
 
