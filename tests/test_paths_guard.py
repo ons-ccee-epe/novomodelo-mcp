@@ -2,9 +2,10 @@
 
 import os
 from pathlib import Path
+from typing import Any
 
 from novomodelo_mcp.adapters.paths import ensure_in_workspace
-from novomodelo_mcp.config import load_settings
+from novomodelo_mcp.config import Settings, load_settings
 
 
 def test_unrestricted(monkeypatch):
@@ -33,6 +34,12 @@ def test_traversal_blocked(tmp_path, monkeypatch):
     assert err is not None and err["status"] == "error", err
 
 
+def _refused(*paths: str, settings: Settings) -> dict[str, Any]:
+    err = ensure_in_workspace(*paths, settings=settings)
+    assert err is not None
+    return err
+
+
 def _ambiente(monkeypatch, roots, base: Path):
     """Workspace, state dir e HOME temporários."""
     casa = base / "casa"
@@ -51,7 +58,7 @@ def test_refusal_tells_agent_not_to_bypass_and_suggests_the_folder(tmp_path, mon
     ws.mkdir()
     fora.mkdir()
     st = _ambiente(monkeypatch, [ws], tmp_path)
-    err = ensure_in_workspace(str(fora), settings=st)
+    err = _refused(str(fora), settings=st)
     assert err["status"] == "error" and err["exit_code"] == 13, err
     assert NAO_CONTORNE in err["diagnostics"], err
     assert err["suggested_folder"] == str(fora.resolve()), err
@@ -64,7 +71,7 @@ def test_refusal_of_a_file_suggests_its_folder(tmp_path, monkeypatch):
     fora.mkdir()
     (fora / "config.json").write_text("{}", encoding="utf-8")
     st = _ambiente(monkeypatch, [ws], tmp_path)
-    err = ensure_in_workspace(str(fora / "config.json"), settings=st)
+    err = _refused(str(fora / "config.json"), settings=st)
     assert err["suggested_folder"] == str(fora.resolve()), err
 
 
@@ -72,7 +79,7 @@ def test_refusal_suggests_the_resolved_folder_not_the_dotdot_text(tmp_path, monk
     ws = tmp_path / "ws"
     ws.mkdir()
     st = _ambiente(monkeypatch, [ws], tmp_path)
-    err = ensure_in_workspace(str(ws / ".." / "ws2"), settings=st)
+    err = _refused(str(ws / ".." / "ws2"), settings=st)
     assert ".." not in err["suggested_folder"], err
 
 
@@ -83,7 +90,7 @@ def test_included_folders_are_accepted_at_once_and_others_still_refused(tmp_path
     for p in (ws, a, b, c):
         p.mkdir()
     st = _ambiente(monkeypatch, [ws], tmp_path)
-    assert ensure_in_workspace(str(a), settings=st)["exit_code"] == 13
+    assert _refused(str(a), settings=st)["exit_code"] == 13
     out = include_folders([str(a), str(b)], settings=st)
     assert out["status"] == "ok" and out["included"] == [
         str(a.resolve()),
@@ -91,7 +98,7 @@ def test_included_folders_are_accepted_at_once_and_others_still_refused(tmp_path
     ], out
     assert ensure_in_workspace(str(a / "caso"), str(b), settings=st) is None
     assert ensure_in_workspace(str(ws), settings=st) is None
-    assert ensure_in_workspace(str(c), settings=st)["exit_code"] == 13
+    assert _refused(str(c), settings=st)["exit_code"] == 13
     again = include_folders([str(a)], settings=st)
     assert again["already_included"] == [str(a.resolve())] and again["included"] == [], again
 
@@ -114,7 +121,7 @@ def test_include_refuses_home_root_config_and_missing_folders(tmp_path, monkeypa
     out = include_folders(perigosas, settings=st)
     assert out["status"] == "error" and out["exit_code"] == 22, out
     assert len(out["refused"]) == len(perigosas), out
-    assert ensure_in_workspace(str(casa / ".ssh"), settings=st)["exit_code"] == 13
+    assert _refused(str(casa / ".ssh"), settings=st)["exit_code"] == 13
 
 
 def test_unreadable_included_file_grants_nothing(tmp_path, monkeypatch):
@@ -124,7 +131,7 @@ def test_unreadable_included_file_grants_nothing(tmp_path, monkeypatch):
     (tmp_path / "state").mkdir()
     (tmp_path / "state" / "pastas.json").write_text("{ quebrado", encoding="utf-8")
     st = _ambiente(monkeypatch, [ws], tmp_path)
-    assert ensure_in_workspace(str(fora), settings=st)["exit_code"] == 13
+    assert _refused(str(fora), settings=st)["exit_code"] == 13
 
 
 def test_results_query_entity_traversal_blocked(tmp_path, monkeypatch):

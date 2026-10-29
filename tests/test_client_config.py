@@ -9,6 +9,7 @@ import sysconfig
 from pathlib import Path
 
 import pytest
+from mcp.server.fastmcp.tools import Tool
 
 from novomodelo_mcp import client_config as C
 from novomodelo_mcp.server import build_server
@@ -29,10 +30,13 @@ def home(tmp_path, monkeypatch):
     return casa
 
 
+def _read_only(tool: Tool) -> bool:
+    assert tool.annotations is not None
+    return bool(tool.annotations.readOnlyHint)
+
+
 def _leitura_do_servidor():
-    return sorted(
-        t.name for t in build_server()._tool_manager.list_tools() if t.annotations.readOnlyHint
-    )
+    return sorted(t.name for t in build_server()._tool_manager.list_tools() if _read_only(t))
 
 
 def _entrada(cliente):
@@ -94,7 +98,7 @@ def test_lista_liberada_e_a_das_tools_de_leitura_do_servidor(home):
 
 def test_nenhuma_tool_que_grava_entra_na_lista(home):
     tools = {t.name: t for t in build_server()._tool_manager.list_tools()}
-    grava = {n for n, t in tools.items() if not t.annotations.readOnlyHint}
+    grava = {n for n, t in tools.items() if not _read_only(t)}
     assert grava and not grava & set(C.read_only_tools())
     C.main(["--irrestrito", "--cliente", "claude-code"])
     allow = json.loads((home / ".claude" / "settings.json").read_text(encoding="utf-8"))[

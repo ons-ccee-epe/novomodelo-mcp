@@ -26,6 +26,7 @@ def test_guard_refusal_brings_no_bypass_and_suggested_folder():
     from novomodelo_mcp.adapters.paths import NAO_CONTORNE
 
     err = S.guard_sql("SELECT * FROM read_parquet('/estudos/x.parquet')", WS)
+    assert err is not None
     assert err["exit_code"] == 13 and NAO_CONTORNE in err["diagnostics"], err
     assert err["suggested_folder"] == str(Path("/estudos").resolve()), err
 
@@ -78,13 +79,15 @@ def test_guard_offset_not_confused_with_set():
 
 
 def test_guard_empty_query():
-    assert S.guard_sql("   ", WS)["status"] == "error"
+    err = S.guard_sql("   ", WS)
+    assert err is not None and err["status"] == "error"
 
 
 def test_guard_unrestricted_allows_any_local_path():
     # sem raizes (workspace irrestrito): caminho local passa, remoto ainda barra
     assert S.guard_sql("SELECT * FROM read_parquet('/anywhere/a.parquet')", []) is None
-    assert S.guard_sql("SELECT * FROM read_parquet('http://h/a.parquet')", [])["exit_code"] == 13
+    remote = S.guard_sql("SELECT * FROM read_parquet('http://h/a.parquet')", [])
+    assert remote is not None and remote["exit_code"] == 13
 
 
 # ---------- EXECUCAO ----------

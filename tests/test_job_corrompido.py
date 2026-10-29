@@ -31,4 +31,6 @@ def test_job_valido_continua_listado(settings):
     d = jobs.jobs_root(settings) / "20261024-000000-abcdef"
     d.mkdir()
     (d / "job.json").write_text(json.dumps({"started_at": 1.0, "argv": []}), encoding="utf-8")
-    assert jobs.read_meta(settings, d.name)["started_at"] == 1.0
+    meta = jobs.read_meta(settings, d.name)
+    assert meta is not None
+    assert meta["started_at"] == 1.0
