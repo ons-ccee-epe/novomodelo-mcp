@@ -36,7 +36,7 @@ desconhecido é recusado (`422`) e nada passa por shell:
 | `rodada` | `--rodada` | nome de rodada começado por letra ou dígito (`[A-Za-z0-9._-]`, até 100); sem ele o launcher gera um e devolve |
 | `conjuntos` | `--conjuntos` | `tools`, `usuario` |
 | `agentes` | `--agentes` | `claude`, `kiro` |
-| `filtro` | `--filtro` | padrões de nome (`[A-Za-z0-9_.*?-]`) separados por vírgula |
+| `filtro` | `--filtro=<valor>` | padrões de nome (`[A-Za-z0-9_.*?-]`) separados por vírgula; o primeiro caractere é alfanumérico |
 | `repeticoes`, `max_execucoes`, `max_minutos`, `esperar_limite`, `paralelo_por_agente`, `completa` | as opções de mesmo nome do `rodar` | inteiros em faixas fixas e booleano |
 
 A pasta das wheels vem da variável de ambiente do launcher `NOVOMODELO_LAUNCHER_PASTA_WHEELS`.
@@ -45,10 +45,21 @@ O corpo cita a wheel só pelo nome do arquivo; o launcher a resolve dentro da pa
 não é exposto: a origem da wheel é texto livre.
 
 O processo roda desanexado (sessão própria no POSIX, grupo de processos no Windows), com a
-saída da bateria em `<resultados>/.launcher/<rodada>.log` (modo `600`). O launcher
-responde `409` enquanto a rodada anterior, ou uma carga, não terminou. A rodada é retomável
-pelo mesmo `rodada`; o estado do disparo (`em_andamento`, `finalizada`, código de saída) vale
-só enquanto o launcher estiver de pé.
+saída da bateria em `<resultados>/.launcher/<rodada>.log` (modo `600`). Ao fim, o gitleaks
+varre a pasta `.launcher/`; com achado, ou se a varredura não rodar, o log é substituído por
+um aviso. O launcher responde `409` enquanto a rodada anterior, ou uma carga, não terminou.
+
+O subprocesso não herda o ambiente do launcher: recebe só `PATH`, `HOME`, `USERPROFILE`,
+`LANG`, `TMPDIR`, `TEMP`, `TMP`, `SYSTEMROOT`, `APPDATA`, `LOCALAPPDATA`, `VIRTUAL_ENV` e as
+variáveis com prefixo `NOVOMODELO_BATERIA_`, `NOVOMODELO_LAUNCHER_`, `LC_`, `XDG_`, `UV_` e
+`CONTAINERS_` (`service.AMBIENTE_PERMITIDO` e `PREFIXOS_DO_AMBIENTE`).
+
+A rodada tem uma trava em `<resultados>/<rodada>/.trava` (PID e hora), criada de forma
+exclusiva por `rodar` e removida ao fim, também em exceção. Trava com PID vivo faz o `rodar`
+sair com código 2 e o `POST /api/rodadas` responder `409`; trava de PID que não existe mais
+é substituída e registrada no `rodada.jsonl`. `em_andamento` em `GET /api/rodadas` e
+`GET /api/rodadas/{id}` vem da trava, não da memória do launcher. A rodada é retomável pelo
+mesmo `rodada`.
 
 `GET /api/rodadas` resume cada pasta com `manifesto.json`; `GET /api/rodadas/{id}` devolve o
 manifesto, os registros e, por configuração do manifesto, a decisão do critério sem base de

@@ -32,11 +32,18 @@ from tests.e2e.queries.loader import CasesLoader
 from tests.e2e.queries.models import QueryTestCase
 from tests.e2e.resultado.armazenamento import PADRAO_NOME, ler_manifesto, ler_registros
 from tests.e2e.resultado.modelos import VersaoDesconhecida
-from tests.e2e.rodada import ARQUIVO_BLOQUEIO, CONFIG_DETERMINISTICA
+from tests.e2e.rodada import (
+    ARQUIVO_BLOQUEIO,
+    CONFIG_DETERMINISTICA,
+    Varredura,
+    trava_viva,
+    varrer_segredos,
+)
 from tests.e2e.textos import sem_caminhos
 
 __all__ = [
     "PADRAO_DE_NOME",
+    "AMBIENTE_PERMITIDO",
     "PASTA_LOGS",
     "PASTA_WHEELS_ENV",
     "RecusaDeDisparo",
@@ -53,7 +60,7 @@ PASTA_LOGS = ".launcher"
 PADRAO_DE_NOME = PADRAO_NOME
 NOME_DA_RODADA = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
 NOME_DE_WHEEL = r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}\.whl$"
-FILTRO = r"^[A-Za-z0-9_.*?-]+(,[A-Za-z0-9_.*?-]+)*$"
+FILTRO = r"^[A-Za-z0-9][A-Za-z0-9_.*?-]*(,[A-Za-z0-9_.*?-]+)*$"
 MCP_SEM = "sem"
 ENTRADA_DO_COMANDO = "python -m tests.e2e rodar"
 
@@ -137,7 +144,7 @@ def argumentos_do_rodar(
     if req.agentes:
         args += ["--agentes", ",".join(req.agentes)]
     if req.filtro:
-        args += ["--filtro", req.filtro]
+        args.append(f"--filtro={req.filtro}")
     if req.repeticoes is not None:
         args += ["--repeticoes", str(req.repeticoes)]
     if req.completa:
@@ -173,6 +180,45 @@ def _desanexado() -> dict[str, Any]:
     return {"start_new_session": True}
 
 
+AMBIENTE_PERMITIDO = (
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "LANG",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "SYSTEMROOT",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "VIRTUAL_ENV",
+)
+PREFIXOS_DO_AMBIENTE = (
+    "NOVOMODELO_BATERIA_",
+    "NOVOMODELO_LAUNCHER_",
+    "LC_",
+    "XDG_",
+    "UV_",
+    "CONTAINERS_",
+)
+
+
+def ambiente_do_subprocesso(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """O ambiente da rodada: só `AMBIENTE_PERMITIDO` e os prefixos de `PREFIXOS_DO_AMBIENTE`.
+
+    O resto do ambiente do launcher (tokens, chaves de nuvem) não chega ao processo da
+    bateria; o token do Claude entra por arquivo e secret do motor, não por variável.
+    """
+    origem = env if env is not None else os.environ
+    ambiente = {
+        k: v
+        for k, v in origem.items()
+        if k in AMBIENTE_PERMITIDO or k.startswith(PREFIXOS_DO_AMBIENTE)
+    }
+    ambiente["PYTHONUNBUFFERED"] = "1"
+    return ambiente
+
+
 def _agora() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -185,10 +231,12 @@ class RodadaService:
         gate: RunGate | None = None,
         config: Callable[[], Config] = lambda: carregar_config(os.environ),
         cwd: Path = _REPO_ROOT,
+        varrer: Callable[[Path], Varredura] | None = None,
     ) -> None:
         self._gate = gate or RunGate()
         self._config = config
         self._cwd = cwd
+        self._varrer = varrer
         self._disparos: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
 
@@ -204,6 +252,8 @@ class RodadaService:
         nome = req.rodada or datetime.now(UTC).strftime(_FORMATO_DA_RODADA)
         args = argumentos_do_rodar(req, wheel=lambda n: str(resolver_wheel(n)), rodada=nome)
         cfg = self._config()
+        if (dono := trava_viva(cfg.resultados / nome)) is not None:
+            raise RunAlreadyActiveError(f"a rodada {nome} já está em andamento (PID {dono})")
         self._gate.acquire(nome)
         try:
             log = self._abrir_log(cfg, nome)
@@ -214,6 +264,7 @@ class RodadaService:
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     cwd=self._cwd,
+                    env=ambiente_do_subprocesso(),
                     shell=False,
                     **_desanexado(),
                 )
@@ -234,7 +285,10 @@ class RodadaService:
         with self._lock:
             self._disparos[nome] = estado
         threading.Thread(
-            target=self._esperar, args=(nome, processo), name=f"rodada-{nome}", daemon=True
+            target=self._esperar,
+            args=(nome, processo, cfg.resultados / PASTA_LOGS),
+            name=f"rodada-{nome}",
+            daemon=True,
         ).start()
         return dict(estado)
 
@@ -245,16 +299,32 @@ class RodadaService:
         fd = os.open(pasta / f"{nome}.log", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         return os.fdopen(fd, "ab")
 
-    def _esperar(self, nome: str, processo: subprocess.Popen) -> None:
+    def _esperar(self, nome: str, processo: subprocess.Popen, pasta_logs: Path) -> None:
+        codigo = None
+        bloqueado = False
         try:
             codigo = processo.wait()
+            bloqueado = self._varrer_log(nome, pasta_logs)
         finally:
-            with self._lock:
-                estado = self._disparos[nome]
-                estado["status"] = "finalizada"
-                estado["finalizada_em"] = _agora()
-                estado["codigo_saida"] = codigo if isinstance(codigo, int) else None
-            self._gate.release(nome)
+            try:
+                with self._lock:
+                    estado = self._disparos[nome]
+                    estado["status"] = "finalizada"
+                    estado["finalizada_em"] = _agora()
+                    estado["codigo_saida"] = codigo if isinstance(codigo, int) else None
+                    estado["log_bloqueado"] = bloqueado
+            finally:
+                self._gate.release(nome)
+
+    def _varrer_log(self, nome: str, pasta_logs: Path) -> bool:
+        """Varre a pasta de logs com o gitleaks; achado ou varredura que não rodou apaga o log."""
+        varredura = (self._varrer or varrer_segredos)(pasta_logs)
+        if not (varredura.erro or varredura.arquivos):
+            return False
+        (pasta_logs / f"{nome}.log").write_text(
+            "log removido: a varredura de segredos acusou achado ou não rodou\n", encoding="utf-8"
+        )
+        return True
 
     # ---- leitura -----------------------------------------------------------
 
@@ -312,6 +382,7 @@ class RodadaService:
             "rodada": pasta.name,
             "bloqueada": (pasta / ARQUIVO_BLOQUEIO).exists(),
             "disparo": self._disparo(pasta.name),
+            "em_andamento": trava_viva(pasta) is not None,
         }
         try:
             manifesto = ler_manifesto(pasta).para_dict()

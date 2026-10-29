@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tests.e2e.load.agent_cases import (
+    REASON_WRITES,
     CaseSelection,
     case_group,
     case_is_heavy,
@@ -55,13 +56,14 @@ class TestExclusions:
     def test_read_only_case_with_its_source_present_runs(self) -> None:
         assert exclusion_reason(DOCS) is None
 
-    def test_writing_case_runs_and_is_marked_for_the_per_session_copy(self) -> None:
-        assert exclusion_reason(EDIT) is None
+    def test_writing_case_is_excluded_because_the_container_denies_the_tool(self) -> None:
+        assert exclusion_reason(EDIT) == REASON_WRITES
+        assert "negada" in REASON_WRITES
         assert case_writes(EDIT) and not case_writes(DOCS)
 
     def test_bridge_case_runs_and_is_marked_heavy(self) -> None:
         assert exclusion_reason(BRIDGE) is None
-        assert case_is_heavy(BRIDGE) and not case_is_heavy(EDIT)
+        assert case_is_heavy(BRIDGE) and not case_is_heavy(DOCS)
 
     def test_network_tool_is_excluded_with_the_reason(self) -> None:
         assert "usa a rede" in exclusion_reason(INFO)
@@ -74,9 +76,9 @@ class TestExclusions:
     def test_tools_that_need_a_run_are_excluded_with_the_reason(self) -> None:
         assert "depende de um run iniciado por run_start" in exclusion_reason(RUN_STATUS)
 
-    def test_a_writing_tool_announced_as_writing_by_the_server_still_runs(self) -> None:
-        hints = {"deck_edit_json": ToolHints(read_only=False, open_world=False)}
-        assert exclusion_reason(EDIT, hints) is None
+    def test_a_tool_announced_as_writing_by_the_server_is_excluded(self) -> None:
+        hints = {"docs_list": ToolHints(read_only=False, open_world=False)}
+        assert exclusion_reason(DOCS, hints) == REASON_WRITES
 
     def test_case_without_mcp_is_excluded(self) -> None:
         assert "não usa o MCP" in exclusion_reason(NO_MCP)
@@ -93,7 +95,7 @@ class TestExclusions:
         ("hints", "reason"),
         [
             ({}, "ausente no servidor"),
-            ({"docs_list": ToolHints(read_only=False, open_world=False)}, "somente leitura"),
+            ({"docs_list": ToolHints(read_only=False, open_world=False)}, "tool que grava"),
             ({"docs_list": ToolHints(read_only=True, open_world=True)}, "rede"),
         ],
     )
@@ -110,11 +112,15 @@ class TestSelection:
         assert [c.id for c in result.cases] == [
             "docs-list-all",
             "schema-list-all",
-            "deck-edit-json",
             "bridge-check",
             "case-vs-docs",
         ]
-        assert {e.id for e in result.excluded} == {"server-info-get", "run-start", "general"}
+        assert {e.id for e in result.excluded} == {
+            "deck-edit-json",
+            "server-info-get",
+            "run-start",
+            "general",
+        }
 
     def test_group_filters_by_the_expected_tool_group(self) -> None:
         result = select_cases(ALL, CaseSelection(group="case"))
@@ -169,16 +175,12 @@ class TestRealCatalog:
             tools = case.expected.tools or [case.expected.tool]
             assert not any(is_forbidden_tool(t) for t in tools), case.id
 
-    def test_writing_cases_name_a_destination_under_the_container_folder(
-        self, tmp_path: Path
-    ) -> None:
-        from tests.e2e.executor.container import PASTA_ESTUDOS
-
+    def test_no_writing_case_is_eligible_and_each_says_why(self, tmp_path: Path) -> None:
         writing = [c for c in load_cases(tmp_path) if case_writes(c)]
         assert writing
-        for case in writing:
-            assert exclusion_reason(case) is None, case.id
-            assert f"{PASTA_ESTUDOS}/" in case.query or "{caso:" in case.query, case.id
+        assert all(exclusion_reason(c) == REASON_WRITES for c in writing)
+        eligible = select_cases(load_cases(tmp_path), CaseSelection()).cases
+        assert not any(case_writes(c) for c in eligible)
 
     def test_every_tool_the_server_announces_as_writing_is_copied_or_barred(self) -> None:
         from novomodelo_mcp.server import build_server
@@ -203,9 +205,9 @@ class TestRealCatalog:
         excluded = select_cases(load_cases(tmp_path), CaseSelection()).excluded
         for item in excluded:
             tools = item.tool.split("/")
-            assert item.reason.startswith(("fonte ausente", "não usa o MCP")) or any(
-                is_forbidden_tool(t) for t in tools
-            ), item
+            assert item.reason.startswith(
+                ("fonte ausente", "não usa o MCP", "tool que grava")
+            ) or any(is_forbidden_tool(t) for t in tools), item
 
 
 class TestSandboxPlan:

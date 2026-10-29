@@ -3,11 +3,10 @@
 A carga roda os mesmos casos da esteira, só que em N sessões ao mesmo tempo. Fica de
 fora, com o motivo (``mix.barred_reason``), o caso cuja tool esperada (``tool`` ou
 qualquer uma de ``tools``) é barrada por ``mix.is_forbidden_tool``: o solver e os jobs
-dele, e a rede. Um caso que grava (``mix.writes_files``) entra, e a seleção que o contém
-roda cada sessão na sua cópia das fixtures (``sandbox.py``). Também ficam de fora o caso
+dele, e a rede. Um caso cuja tool grava (``mix.writes_files``) também fica de fora (``REASON_WRITES``): no
+container da carga a tool fica negada, e a carga mediria a negação. Também ficam de fora o caso
 que não usa o MCP (não exercita o servidor) e o caso cuja fonte (``requires``) falta. Com
-as dicas do servidor (pré-voo), sai ainda a tool que ele anuncia com rede, ou como escrita
-sem ser das que rodam na cópia.
+as dicas do servidor (pré-voo), sai ainda a tool que ele anuncia com rede ou como escrita.
 """
 
 from __future__ import annotations
@@ -50,6 +49,7 @@ __all__ = [
 CASES_PATH = Path(__file__).resolve().parent.parent / "queries" / "cases.yaml"
 
 OTHER_GROUP = "other"
+REASON_WRITES = "tool que grava: no container ela fica negada; a carga mediria a negação"
 
 
 def expected_tools(case: QueryTestCase) -> tuple[str, ...]:
@@ -91,13 +91,15 @@ def exclusion_reason(
     for tool in expected_tools(case):
         if is_forbidden_tool(tool):
             return barred_reason(tool)
+    if any(writes_files(tool) for tool in expected_tools(case)):
+        return REASON_WRITES
     if server_tools is not None:
         for tool in expected_tools(case):
             hint = server_tools.get(tool)
             if hint is None:
                 return f"{tool} ausente no servidor"
-            if not hint.read_only and not writes_files(tool):
-                return f"o servidor não anuncia {tool} como somente leitura"
+            if not hint.read_only:
+                return REASON_WRITES
             if hint.open_world:
                 return f"o servidor anuncia {tool} com acesso à rede"
     missing = missing_sources(case)

@@ -25,7 +25,7 @@ def test_preview_mostra_o_comando_do_rodar_sem_caminho_do_host() -> None:
     preview = command_preview(req)
     assert preview["comando"] == (
         f"python -m tests.e2e rodar --mcp sem {WHEEL} --conjuntos tools "
-        "--filtro 'docs-*' --repeticoes 2".replace("'docs-*'", "docs-*")
+        "--filtro=docs-* --repeticoes 2"
     )
     assert "/" not in preview["comando"]
 

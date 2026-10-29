@@ -346,7 +346,8 @@ class TestPreflight:
 
         fixtures, cases, lister = self._setup(tmp_path)
         result = make_preflight(_config(), fixtures, lister, cases)()
-        assert [c.id for c in result.selection.cases] == ["deck-edit-json", "docs-list-all"]
+        assert [c.id for c in result.selection.cases] == ["docs-list-all"]
+        assert [e.id for e in result.selection.excluded] == ["deck-edit-json"]
         assert result.sandbox_plan is None
 
     def test_a_selection_without_runnable_cases_fails_the_preflight(self, tmp_path) -> None:

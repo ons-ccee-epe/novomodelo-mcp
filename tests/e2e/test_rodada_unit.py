@@ -991,3 +991,54 @@ def test_excecao_inesperada_sem_achado_sobe_depois_de_varrer(tmp_path):
         )
     assert f.varridas == [cfg.resultados / "r1"]
     assert not (cfg.resultados / "r1" / rodada.ARQUIVO_BLOQUEIO).exists()
+
+
+def _trava(cfg: Config, pid: int) -> Path:
+    pasta = cfg.resultados / "r1"
+    pasta.mkdir(parents=True)
+    trava = pasta / rodada.ARQUIVO_TRAVA
+    trava.write_text(f"{pid} 2026-01-01T00:00:00+00:00\n", encoding="utf-8")
+    return trava
+
+
+def test_trava_viva_recusa_com_codigo_2_e_nao_a_remove(tmp_path):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    trava = _trava(cfg, 4242)
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "pid_vivo": lambda pid: pid == 4242})
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        rodada.rodar("r1", [_wheel(tmp_path)], ["usuario"], ["claude"], 1, cfg, dep=dep)
+    assert erro.value.codigo == rodada.CODIGO_RECUSA
+    assert "já está em andamento" in str(erro.value) and "4242" in str(erro.value)
+    assert trava.is_file()
+
+
+def test_trava_velha_e_substituida_e_registrada(tmp_path):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    _trava(cfg, 4242)
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "pid_vivo": lambda pid: False})
+    pasta = rodada.rodar(
+        "r1", [_wheel(tmp_path)], ["usuario"], ["claude"], 1, cfg, filtro="i01*", dep=dep
+    )
+    eventos = [json.loads(linha) for linha in (pasta / rodada.ARQUIVO_LOG).read_text().splitlines()]
+    assert {"evento": "trava_velha_substituida", "pid": 4242}.items() <= next(
+        e for e in eventos if e["evento"] == "trava_velha_substituida"
+    ).items()
+    assert not (pasta / rodada.ARQUIVO_TRAVA).exists()
+
+
+def test_trava_e_liberada_no_fim_e_em_excecao(tmp_path):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    pasta = _rodar(f, cfg, [_wheel(tmp_path)])
+    assert not (pasta / rodada.ARQUIVO_TRAVA).exists()
+
+    def estoura(c, agente, cfg):
+        raise RuntimeError("falha")
+
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "construir": estoura})
+    with pytest.raises(RuntimeError):
+        rodada.rodar("r2", [_wheel(tmp_path)], ["usuario"], ["claude"], 1, cfg, dep=dep)
+    assert not (cfg.resultados / "r2" / rodada.ARQUIVO_TRAVA).exists()
+    assert rodada.trava_viva(cfg.resultados / "r2") is None

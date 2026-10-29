@@ -19,9 +19,9 @@ from tests.e2e.config import Config
 from tests.e2e.conjuntos.tools.adaptador import (
     CONJUNTO,
     TIMEOUT_PADRAO,
-    _pedido,
     caso_logico,
     para_query_result,
+    pedido_do_caso,
 )
 from tests.e2e.executor.casos import pasta_preparados
 from tests.e2e.executor.container import Execucao, executar
@@ -79,7 +79,7 @@ class ExecutorSessionRunner:
             agente=cast("Literal['claude', 'kiro']", self._agente),
             config=self._config_mcp.nome,
             repeticao=self._execucoes,
-            pedido=_pedido(caso),
+            pedido=pedido_do_caso(caso),
             caso_origem=base / nome if nome else None,
             somente_leitura=False,
             timeout_s=int(self._timeout_s or caso.timeout_s or TIMEOUT_PADRAO),

@@ -198,11 +198,14 @@ Fica de fora da carga, com o motivo no resultado (`cases.excluded`) e na tela, o
   rede; ver [O mix de chamadas](#o-mix-de-chamadas));
 - que não usa o MCP (não exercita o servidor);
 - cuja fonte (`requires`) falta;
-- cuja tool o servidor deste checkout anuncia com rede, ou como escrita sem ser das que
-  gravam arquivos (pré-voo, `executor.container.tools_do_servidor`).
+- cuja tool grava (`mix.writes_files`, ou anunciada pelo servidor como escrita no pré-voo,
+  `executor.container.tools_do_servidor`): `agent_cases.REASON_WRITES`, "tool que grava:
+  no container ela fica negada; a carga mediria a negação";
+- cuja tool o servidor deste checkout anuncia com rede.
 
 O marcador `{caso:<nome lógico>}` do pedido vira `/estudos/<nome lógico>` e a cópia do caso
-público vem de `executor.casos.pasta_preparados`, como no conjunto de tools. Os casos
+público vem de `executor.casos.pasta_preparados`, como no conjunto de tools
+(`adaptador.pedido_do_caso`). Os casos
 pesados (`bridge_*`, `run_plan`) também entram.
 
 `GET /api/load-cases` lista cada caso com `available`, `reason`, `writes` e `heavy`. O
@@ -211,7 +214,8 @@ servidor do checkout, que toda tool que grava está na lista das que gravam ou b
 que toda tool de rede está barrada.
 
 A carga não libera nenhuma tool: uma tool que pede aprovação fica negada no container,
-nos dois agentes, e o resultado traz as tools negadas (`agent.denied_tools`).
+nos dois agentes, e o resultado traz as tools negadas (`agent.denied_tools`). Por isso os
+casos de tools que gravam não entram na carga.
 
 ### Isolamento entre sessões
 

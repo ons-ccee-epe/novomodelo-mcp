@@ -146,7 +146,8 @@ class TestCatalogRoutes:
         by_id = {c["id"]: c for c in data["cases"]}
         assert by_id["docs-list-all"]["available"] is True
         assert by_id["docs-list-all"]["group"] == "docs"
-        assert by_id["deck-edit-json"]["available"] is True
+        assert by_id["deck-edit-json"]["available"] is False
+        assert "negada" in by_id["deck-edit-json"]["reason"]
         assert by_id["deck-edit-json"]["writes"] is True
         assert by_id["bridge-check"]["heavy"] is True and by_id["bridge-check"]["available"] is True
         assert by_id["run-start"]["available"] is False
@@ -167,9 +168,8 @@ class TestCatalogRoutes:
         ("params", "heavy", "writes"),
         [
             ({"mode": "agent", "case_id": "bridge-check"}, True, False),
-            ({"mode": "agent", "group": "deck"}, False, True),
             ({"mode": "agent", "group": "docs"}, False, False),
-            ({"mode": "agent"}, True, True),
+            ({"mode": "agent"}, True, False),
             ({"mode": "tools", "tools": "deck_edit_json,run_plan"}, True, True),
             ({"mode": "tools"}, False, False),
         ],
@@ -207,16 +207,12 @@ class TestCatalogRoutes:
     ) -> None:
         assert client.get("/api/load-capacity", params=params).status_code == 422
 
-    def test_capacity_shows_the_disk_for_a_writing_selection(
-        self, client: TestClient, tmp_path
+    def test_capacity_of_a_group_with_only_writing_cases_has_no_copy_cost(
+        self, client: TestClient
     ) -> None:
-        with patch.object(app_mod, "_RESULTS_DIR", tmp_path):
-            data = client.get(
-                "/api/load-capacity", params={"mode": "agent", "case_id": "deck-edit-json"}
-            ).json()
-        assert data["selection"]["writes"] is True
-        assert data["limits"]["disk"] is not None
-        assert data["disk"]["free_mb"] > 0
+        resp = client.get("/api/load-capacity", params={"mode": "agent", "group": "deck"})
+        assert resp.status_code == 200
+        assert resp.json()["selection"]["writes"] is False
 
     def test_capacity_answers_without_history(self, client: TestClient, tmp_path) -> None:
         with patch.object(app_mod, "_RESULTS_DIR", tmp_path):

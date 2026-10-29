@@ -71,7 +71,8 @@ def tools_a_liberar(caso: QueryTestCase) -> tuple[str, ...]:
     )
 
 
-def _pedido(caso: QueryTestCase) -> str:
+def pedido_do_caso(caso: QueryTestCase) -> str:
+    """O pedido do caso com o marcador `{caso:<nome>}` resolvido para a pasta do container."""
     return MARCADOR_CASO.sub(lambda m: f"{PASTA_ESTUDOS}/{m.group(1)}", caso.query)
 
 
@@ -107,7 +108,7 @@ def para_execucoes(
                             agente=agente,
                             config=config.nome,
                             repeticao=repeticao,
-                            pedido=_pedido(caso),
+                            pedido=pedido_do_caso(caso),
                             caso_origem=base / nome if nome else None,
                             somente_leitura=False,
                             timeout_s=int(caso.timeout_s or TIMEOUT_PADRAO),

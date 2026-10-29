@@ -7,9 +7,11 @@ retomada refazê-la. No fim, o gitleaks varre a pasta inteira.
 
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 import hashlib
 import json
+import os
 import re
 import shutil
 import signal
@@ -75,6 +77,8 @@ TEMPO_DETERMINISTICA = 3600
 TEMPO_LEITURA = 300
 TEMPO_GITLEAKS = 900
 ARQUIVO_LOG = "rodada.jsonl"
+ARQUIVO_TRAVA = ".trava"
+IDADE_MINIMA_TRAVA_ILEGIVEL_S = 5
 ARQUIVO_BLOQUEIO = "BLOQUEADO-SEGREDO.txt"
 MARCA_DETERMINISTICA = "concluida"
 CONFIG_GITLEAKS = RAIZ / ".gitleaks.toml"
@@ -379,6 +383,83 @@ class Dependencias:
     relogio: Callable[[], float] = time.monotonic
     esperar: Callable[[float], None] = time.sleep
     encerrar_em_voo: Callable[[Config, Sequence[str]], list[str]] = encerrar_em_voo
+    pid_vivo: Callable[[int], bool] = lambda pid: pid_vivo(pid)
+
+
+def pid_vivo(pid: int) -> bool:
+    """Se há processo com esse PID; `os.kill(pid, 0)` no Windows mandaria Ctrl-C, então lá é a API."""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        codigo = ctypes.c_ulong()
+        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(codigo))
+        kernel32.CloseHandle(handle)
+        return bool(ok) and codigo.value == 259
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _pid_da_trava(trava: Path) -> int | None:
+    try:
+        return int(trava.read_text(encoding="utf-8").split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def trava_viva(pasta: Path, vivo: Callable[[int], bool] = pid_vivo) -> int | None:
+    """O PID de quem segura a trava da pasta, se ele ainda existe; `None` sem trava ou velha."""
+    trava = pasta / ARQUIVO_TRAVA
+    pid = _pid_da_trava(trava)
+    if pid is None:
+        try:
+            recente = time.time() - trava.stat().st_mtime < IDADE_MINIMA_TRAVA_ILEGIVEL_S
+        except OSError:
+            return None
+        return 0 if recente else None
+    return pid if vivo(pid) else None
+
+
+def _adquirir_trava(pasta: Path, rodada: str, vivo: Callable[[int], bool]) -> int | None:
+    """Cria a trava exclusiva da rodada; devolve o PID da trava velha que substituiu, se houve.
+
+    A criação é `O_CREAT|O_EXCL`: duas rodadas com o mesmo nome nunca passam juntas.
+
+    Raises:
+        RodadaInterrompida: `CODIGO_RECUSA`, com a trava segurada por um processo vivo.
+    """
+    pasta.mkdir(parents=True, exist_ok=True)
+    trava = pasta / ARQUIVO_TRAVA
+    velha: int | None = None
+    for _ in range(3):
+        try:
+            fd = os.open(trava, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            dono = trava_viva(pasta, vivo)
+            if dono is not None:
+                quem = f"PID {dono}" if dono else "outro processo"
+                raise RodadaInterrompida(
+                    CODIGO_RECUSA, f"a rodada {rodada} já está em andamento ({quem})"
+                ) from None
+            velha = _pid_da_trava(trava) or velha
+            trava.unlink(missing_ok=True)
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(f"{os.getpid()} {datetime.now(UTC).isoformat(timespec='seconds')}\n")
+        return velha
+    raise RodadaInterrompida(
+        CODIGO_RECUSA, f"a rodada {rodada} está sendo iniciada por outro processo"
+    )
 
 
 def _config_do_juiz(configs: Sequence[ConfigMCP]) -> ConfigMCP:
@@ -581,6 +662,7 @@ class _Controle:
     concluidas_na_passada: int = 0
     em_voo: dict[str, Execucao] = field(default_factory=dict)
     pasta: Path | None = None
+    trava_velha: int | None = None
     erro: BaseException | None = None
     trava: threading.Lock = field(default_factory=threading.Lock)
 
@@ -623,7 +705,51 @@ def rodar(
         raise RodadaInterrompida(CODIGO_RECUSA, f"nome de rodada inválido: {rodada!r}")
     if not configs:
         raise RodadaInterrompida(CODIGO_RECUSA, "nenhuma configuração do MCP")
+    pasta_da_rodada = cfg.resultados / rodada
+    velha = _adquirir_trava(pasta_da_rodada, rodada, dep.pid_vivo)
+    try:
+        return _rodar_com_trava(
+            rodada,
+            velha,
+            configs,
+            conjuntos,
+            agentes,
+            repeticoes,
+            cfg,
+            orcamento,
+            paralelo_por_agente,
+            filtro,
+            completa,
+            origens,
+            esperar_limite_min,
+            juiz,
+            dep,
+        )
+    finally:
+        (pasta_da_rodada / ARQUIVO_TRAVA).unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            pasta_da_rodada.rmdir()
+
+
+def _rodar_com_trava(
+    rodada: str,
+    velha: int | None,
+    configs: Sequence[ConfigMCP],
+    conjuntos: Sequence[Conjunto],
+    agentes: Sequence[str],
+    repeticoes: int,
+    cfg: Config,
+    orcamento: Orcamento,
+    paralelo_por_agente: int,
+    filtro: str | None,
+    completa: bool,
+    origens: Mapping[str, str],
+    esperar_limite_min: int | None,
+    juiz: Juiz,
+    dep: Dependencias,
+) -> Path:
     ctl = _Controle(t0=dep.relogio())
+    ctl.trava_velha = velha
     try:
         pasta, log, codigo, motivo = _preparar_e_rodar(
             rodada,
@@ -749,6 +875,8 @@ def _preparar_e_rodar(
         gravar_manifesto(pasta, manifesto)
     ctl.pasta = pasta
     log = _Log(pasta)
+    if ctl.trava_velha is not None:
+        log("trava_velha_substituida", pid=ctl.trava_velha)
     log("inicio", execucoes_planejadas=len(planejadas))
 
     codigo, motivo = _rodar_tudo(
