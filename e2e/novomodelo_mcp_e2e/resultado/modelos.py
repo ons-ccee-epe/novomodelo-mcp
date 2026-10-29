@@ -81,7 +81,7 @@ class Registro:
 
     @classmethod
     def de_dict(cls, dados: dict[str, Any]) -> Registro:
-        campos = {
+        campos: dict[str, Any] = {
             **dados,
             "tools": tuple(ChamadaTool(**t) for t in dados["tools"]),
             "metricas": Metricas(**dados["metricas"]),

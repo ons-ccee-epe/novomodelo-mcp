@@ -23,11 +23,12 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from collections import deque
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal, cast
 
 from novomodelo_mcp_e2e.config import Config
 from novomodelo_mcp_e2e.conjuntos.tools.adaptador import (
@@ -484,7 +485,7 @@ def _execucao_usuario(
     e = Execucao(
         conjunto="usuario",
         caso=c.id,
-        agente=agente,
+        agente=cast("Literal['claude', 'kiro']", agente),
         config=config.nome,
         repeticao=rep,
         pedido=c.pedido,
@@ -534,7 +535,7 @@ def planejar(
                 for agente in agentes:
                     for rep in range(1, repeticoes + 1):
                         planejadas.append(_execucao_usuario(c, config, agente, rep, cfg))
-    ordem_conjunto = {c: i for i, c in enumerate(CONJUNTOS_COM_AGENTE)}
+    ordem_conjunto: dict[str, int] = {c: i for i, c in enumerate(CONJUNTOS_COM_AGENTE)}
     return sorted(
         planejadas,
         key=lambda p: (
@@ -660,7 +661,7 @@ class _Log:
 def _pasta_da_execucao(pasta: Path, e: Execucao) -> Path:
     marca = Registro(
         rodada=pasta.name,
-        conjunto=e.conjunto,
+        conjunto=cast("Conjunto", e.conjunto),
         caso=e.caso,
         agente=e.agente,
         config=e.config,
@@ -1075,7 +1076,7 @@ def _registro_pulado(rodada: str, p: Planejada) -> Registro:
     e = p.execucao
     return Registro(
         rodada=rodada,
-        conjunto=e.conjunto,
+        conjunto=cast("Conjunto", e.conjunto),
         caso=e.caso,
         agente=e.agente,
         config=e.config,
@@ -1217,7 +1218,7 @@ def _contar_suspeitas(ctl: _Controle, log: _Log) -> None:
 
 
 @contextmanager
-def _sem_ctrl_c() -> Iterator[None]:
+def _sem_ctrl_c() -> Generator[None]:
     """Ignora um novo Ctrl-C até a limpeza terminar (só a thread principal recebe sinais)."""
     if threading.current_thread() is not threading.main_thread():
         yield
