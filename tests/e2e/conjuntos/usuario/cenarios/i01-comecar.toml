@@ -1,0 +1,11 @@
+id = "i01-comecar"
+persona = "iniciante"
+caso = "exemplo_1dtoy"
+pedido = """
+acabei de instalar isso. tenho esse caso aqui na pasta, como eu começo? quero saber se ele está certo antes de rodar
+"""
+tools_esperadas = ["case_validate"]
+contorno = ["cat .*\\.json", "\\.parquet"]
+gabarito = """
+Fatos: o 1dtoy é válido (0 erros e 0 avisos) e está pronto para rodar: 1 barra (SIN), 1 hidrelétrica (UHE1), 2 térmicas, 4 estágios. Boa resposta valida e explica os próximos passos (planejar e rodar).
+"""

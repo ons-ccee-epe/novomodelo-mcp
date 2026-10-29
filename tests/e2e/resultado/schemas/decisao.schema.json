@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decisao.schema.json",
+  "title": "Decisao",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_versao",
+    "alvo",
+    "base",
+    "veredito",
+    "bloqueios",
+    "inconclusivos",
+    "pulados",
+    "sem_base",
+    "ausentes"
+  ],
+  "properties": {
+    "schema_versao": {
+      "const": 1
+    },
+    "alvo": {
+      "type": "string"
+    },
+    "base": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "veredito": {
+      "enum": [
+        "go",
+        "no-go",
+        "inconclusivo"
+      ]
+    },
+    "bloqueios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "regra",
+          "conjunto",
+          "caso",
+          "agente",
+          "evidencia"
+        ],
+        "properties": {
+          "regra": {
+            "enum": [
+              "deterministica",
+              "regressao_tool",
+              "regressao_maioria"
+            ]
+          },
+          "conjunto": {
+            "type": "string"
+          },
+          "caso": {
+            "type": "string"
+          },
+          "agente": {
+            "type": "string"
+          },
+          "evidencia": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "inconclusivos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pulados": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sem_base": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ausentes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "incompleto": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

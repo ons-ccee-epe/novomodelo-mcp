@@ -1,0 +1,13 @@
+id = "c16-reduzir-teste"
+persona = "consultoria"
+caso = "exemplo_1dtoy_rodado"
+sem_output = true
+pedido = """
+Esse caso é grande. Quero só testar a mecânica rapidinho aqui antes de mandar pro cluster: ajusta pra rodar em poucos minutos e me diz o que mudou.
+"""
+tools_esperadas = ["run_apply"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Precisa: planejar (run_plan) e reduzir knobs de execução no config (forward_passes, limite de iterações, cenários de simulação) para caber em minutos, dizer o antes e o depois e avisar que o resultado reduzido não serve como política convergida. Rodar é opcional. Errado: mexer em dados do sistema ou não dizer o que mudou.
+"""

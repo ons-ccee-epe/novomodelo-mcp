@@ -26,5 +26,11 @@ REVISAO_NOVOMODELO_MCP.md
 # scratch local
 _scratch_ignore/
 
+# Testes E2E - fixtures pesadas e relatórios gerados
+tests/e2e/fixtures/
+tests/e2e/metrics/
+# Resultados de execuções de carga (saída local; os de query ficam versionados)
+tests/e2e/results/load/
+
 # Planos de trabalho (specs, intake, épicos): locais, fora do git
 plans/

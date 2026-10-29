@@ -1,0 +1,12 @@
+id = "c14-sensibilidade-cvar"
+persona = "consultoria"
+caso = "exemplo_1dtoy_rodado"
+pedido = """
+Quero ver o efeito de usar CVaR nesse caso: alfa 0,5 e lambda 0,5 em todos os estágios. Faz a sensibilidade e me compara o custo com a rodada que já existe, sem perder a rodada original.
+"""
+tools_esperadas = ["run_start"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Precisa: configurar stages[].risk_measure = {"cvar": {"alpha": 0.5, "lambda": 0.5}} em todos os estágios (docs math/risk-measures), rodar a sensibilidade SEM sobrescrever a rodada existente (outra pasta de saída ou cópia do caso) e comparar custos/limites com a base. Medido (1dtoy, 128 iterações, sem convergir nas duas): o custo simulado de operação (custo imediato descontado, média dos cenários) é 9,68 mi NAS DUAS rodadas, porque neste caso pequeno o CVaR não muda o despacho; o que muda é a função de custo futuro: limite inferior 15,6 mi → 43,0 mi (custo futuro no estágio 0: 13,8 → 29,5 mi); limite superior 0,58 mi nas duas. Boa resposta mostra as duas coisas. Errado: sobrescrever o output original ou não comparar.
+"""

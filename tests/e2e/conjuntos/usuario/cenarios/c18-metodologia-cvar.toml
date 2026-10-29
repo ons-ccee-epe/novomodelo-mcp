@@ -1,0 +1,11 @@
+id = "c18-metodologia-cvar"
+persona = "consultoria"
+pedido = """
+Como o novomodelo trata a aversão a risco (CVaR)? O alfa significa a mesma coisa que no NEWAVE? Cite a fonte.
+"""
+tools_esperadas = ["docs_search"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Fatos (docs embutidas): medida de risco por estágio em stages[].risk_measure; "expectation" ou {"cvar": {"alpha": α, "lambda": λ}}; ρ = (1−λ)E[Z] + λ·CVaR_α[Z]; alpha é a FRAÇÃO DA CAUDA (0,05 = pior 5%; 0,95 é quase neutro); uma ferramenta que usa nível de confiança c corresponde a alpha = 1 − c. Fonte: math/risk-measures (seção stages[].risk_measure / convex combination). Boa resposta cita pagina#secao e aponta a convenção do alfa.
+"""

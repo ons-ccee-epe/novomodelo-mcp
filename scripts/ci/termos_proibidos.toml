@@ -1,0 +1,68 @@
+# Padrões genéricos do repositório público. Nomes de casos internos não ficam aqui:
+# vêm do arquivo apontado por NOVOMODELO_TERMOS_INTERNOS (uma expressão por linha).
+# `escopo` restringe o padrão a prefixos de caminho; sem ele vale para o repositório todo.
+
+[[padroes]]
+nome = "ons\u0074ec"
+regex = "\\bons\\u0074ec\\b"
+
+[[padroes]]
+nome = "homologado ONS"
+regex = 'homologad[oa] ONS'
+
+[[padroes]]
+nome = "caminho de maquina"
+regex = '/home/[a-z]'
+
+[[padroes]]
+nome = "caminho de maquina"
+regex = 'C:\\Users\\'
+
+[[padroes]]
+nome = "hostname"
+regex = 'ip-\d+-\d+-\d+-\d+'
+
+[[padroes]]
+nome = "diretorio kiro"
+regex = '[.]kiro/'
+
+[[padroes]]
+nome = "hots\u0069te"
+regex = "hots\u0069te"
+
+[[padroes]]
+nome = "nome antigo"
+hex = "636f627265"
+
+[[padroes]]
+nome = "marca ONS"
+regex = '\bONS\b(?!,? (?:e )?CCEE)'
+escopo = ["tests/e2e/"]
+sensivel_a_caixa = true
+
+[[padroes]]
+nome = "referencia de spec"
+regex = '\bReq \d+\.\d+'
+escopo = ["tests/e2e/"]
+
+# Com --historico (e só nele) a checagem ignora os padrões listados; a árvore e --desde
+# continuam acusando todos, e a lista interna nunca é ignorada.
+[historico]
+ignora = ["nome antigo", "referencia de spec", "diretorio kiro"]
+
+# Exceções por caminho e por padrão: cada entrada libera só os padrões listados.
+# Um caminho que termina em "/" vale para tudo abaixo dele. A lista interna nunca é liberada.
+[permitidos]
+"scripts/ci/termos_proibidos.toml" = { padroes = ["ons\u0074ec", "homologado ONS", "hots\u0069te", "diretorio kiro"], motivo = "a própria lista de padrões" }
+"src/novomodelo_mcp/_bundled/" = { padroes = ["nome antigo"], motivo = "docs oficiais do upstream, copiadas sem edição" }
+"scripts/rebrand/map.toml" = { padroes = ["nome antigo"], motivo = "mapa do verificador de nome: precisa citar o nome antigo" }
+"LICENSE" = { padroes = ["nome antigo"], motivo = "aviso de copyright do texto da licença upstream" }
+".kiro/steering/" = { padroes = ["diretorio kiro"], motivo = "regras do time versionadas para o Kiro" }
+"scripts/gen/sync-kiro-steering.py" = { padroes = ["diretorio kiro"], motivo = "gera .kiro/steering/" }
+"CLAUDE.md" = { padroes = ["diretorio kiro"], motivo = "regras do time: citam .kiro/steering/ e o gerador" }
+"CONTRIBUTING.md" = { padroes = ["diretorio kiro"], motivo = "descreve .kiro/steering/" }
+"README.md" = { padroes = ["diretorio kiro"], motivo = "caminhos de configuração do Kiro CLI (~/.kiro/settings/)" }
+"src/novomodelo_mcp/client_config.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
+"tests/e2e/load/" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
+"tests/e2e/queries/mcp_workspace.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI" }
+"tests/e2e/executor/container.py" = { padroes = ["caminho de maquina"], motivo = "home do usuário dentro da imagem do container dos agentes" }

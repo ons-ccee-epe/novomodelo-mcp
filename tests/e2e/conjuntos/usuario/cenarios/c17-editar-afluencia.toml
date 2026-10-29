@@ -1,0 +1,12 @@
+id = "c17-editar-afluencia"
+persona = "consultoria"
+caso = "exemplo_1dtoy"
+pedido = """
+Aumenta em 10% a afluência média da usina 0 no estágio 0 e confirma o valor novo.
+"""
+tools_esperadas = ["deck_edit_parquet"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Fatos: scenarios/inflow_seasonal_stats.parquet, usina 0 estágio 0, mean_m3s 40,0 → 44,0 (std 10,0 inalterado; os outros estágios continuam 40,0). Boa resposta edita só essa célula, preserva o schema e confirma 44.
+"""

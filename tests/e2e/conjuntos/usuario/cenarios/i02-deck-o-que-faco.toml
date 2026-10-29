@@ -1,0 +1,11 @@
+id = "i02-deck-o-que-faco"
+persona = "iniciante"
+caso = "exemplo_1dtoy"
+pedido = """
+me passaram esse deck e eu nunca usei o novomodelo. o que tem nele? quantas usinas, quantos estágios?
+"""
+tools_esperadas = ["case_summary"]
+contorno = ["cat .*\\.json", "\\.parquet", "find "]
+gabarito = """
+Fatos (1dtoy): 1 barra, 1 hidrelétrica, 2 térmicas, 4 estágios, sem linhas; 10 aberturas por estágio.
+"""

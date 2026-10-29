@@ -1,0 +1,7 @@
+# Commit esperado de cada tag, por repositório público: quem baixa confere o `HEAD`
+# do clone contra estes valores antes de copiar qualquer arquivo.
+[novomodelo-bridge]
+"0.19.1" = "a4bd34b6a1a4b48700c59b517e1ebf3cfeaffce3"
+
+[novomodelo]
+"0.19.1" = "9399601386c89eb594e14cdf519eaff2a4bfaf3c"

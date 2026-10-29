@@ -596,6 +596,82 @@ def test_bridge_compare_decomp_tolerancia(cliente, caso_bridge, rodada):
     _tem_status(cliente.chamar("bridge_compare_decomp", argumentos))
 
 
+# ---------- caminho inexistente e variações de parâmetro ----------
+
+
+def _inexistente(rascunho: Path, nome: str) -> str:
+    return str(rascunho / "nao-existe" / nome)
+
+
+@pytest.mark.parametrize(
+    ("tool", "montar", "cita_o_caminho"),
+    [
+        ("bridge_check_newave", lambda c: {"src": c}, True),
+        ("bridge_check_decomp", lambda c: {"src": c}, True),
+        ("bridge_convert_decomp", lambda c: {"src": c, "dst": c + "-dst", "dry_run": True}, True),
+        ("bridge_compare_decomp", lambda c: {"decomp_dir": c, "output_dir": c + "-out"}, True),
+        ("deck_list", lambda c: {"case_dir": c}, True),
+        ("deck_read_parquet", lambda c: {"path": c + ".parquet"}, True),
+        ("deck_describe_parquet", lambda c: {"path": c + ".parquet"}, True),
+        (
+            "deck_edit_parquet",
+            lambda c: {
+                "path": c + ".parquet",
+                "where": {"id": 1},
+                "set_values": {"value": 0},
+                "dry_run": True,
+            },
+            True,
+        ),
+        ("results_convergence", lambda c: {"output_dir": c}, True),
+        ("results_query", lambda c: {"output_dir": c, "entity": "hydros"}, False),
+    ],
+)
+def test_caminho_inexistente_devolve_envelope_de_erro(
+    cliente, rascunho, tool, montar, cita_o_caminho
+):
+    caminho = _inexistente(rascunho, tool)
+    env = cliente.chamar(tool, montar(caminho))
+    assert env.get("status") != "ok", env
+    assert env.get("exit_code") not in (0, 127), env
+    assert env.get("diagnostics"), env
+    if cita_o_caminho:
+        assert any(tool in str(d) for d in env["diagnostics"]), env["diagnostics"]
+
+
+def test_deck_read_parquet_columns(cliente, parquet):
+    e = cliente.chamar(
+        "deck_read_parquet", {"path": parquet, "columns": ["hydro_id", "stage_id"], "limit": 3}
+    )
+    _ok(e)
+    assert e["head"] and all(set(linha) == {"hydro_id", "stage_id"} for linha in e["head"]), e
+
+
+def test_results_query_entity_costs(cliente, rodada):
+    e = cliente.chamar("results_query", {"output_dir": rodada["output"], "entity": "costs"})
+    _ok(e)
+    assert e["entity"] == "costs" and e["row_count"] > 0 and e["rows"], e
+
+
+def test_results_query_scenario(cliente, rodada):
+    consulta = {
+        "output_dir": rodada["output"],
+        "entity": "hydros",
+        "scenario": 1,
+        "columns": ["scenario_id", "stage_id"],
+    }
+    e = cliente.chamar("results_query", consulta)
+    _ok(e)
+    assert e["rows"] and all(linha["scenario_id"] == 1 for linha in e["rows"]), e
+
+
+@pytest.mark.parametrize("pagina", ["index", "reference/error-codes", "reference/glossary"])
+def test_docs_read_paginas(cliente, pagina):
+    e = cliente.chamar("docs_read", {"page": pagina})
+    _ok(e)
+    assert e["page"] == pagina and str(e.get("content", "")).strip(), e
+
+
 # ---------- Claude Code: aprovação das tools (modo não interativo) ----------
 
 _LEITURA = "Chame a tool mcp__novomodelo__server_info uma vez e responda apenas OK."

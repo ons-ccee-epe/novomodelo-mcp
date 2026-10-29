@@ -1,0 +1,13 @@
+id = "c13-politica"
+persona = "consultoria"
+caso = "exemplo_1dtoy_rodado"
+somente_leitura = true
+pedido = """
+Quantos cortes a política treinada tem em cada estágio e quantos estão ativos?
+"""
+tools_esperadas = ["results_policy"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Fatos (1dtoy rodado, 128 iterações): 4 estágios; estágios 0, 1 e 2 com 128 cortes cada (capacidade 129), todos ativos; o estágio 3 (o último) tem 0 cortes, porque não tem custo futuro a aproximar. Boa resposta dá esses números.
+"""

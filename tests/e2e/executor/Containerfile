@@ -1,0 +1,107 @@
+# Imagem de uma execução da bateria: um agente (Claude Code ou Kiro), com ou sem o MCP.
+# Construída por tests.e2e.executor.imagens.construir, que passa todos os ARG; nenhuma
+# credencial entra na imagem (o token do Claude entra como secret do motor na execução,
+# o login do Kiro num volume).
+# Base Debian 13 (glibc 2.41): o executável do novomodelo exige a glibc do Ubuntu 24.04/RHEL 9.
+
+# python:3.12-slim-trixie e uv 0.13.1, fixadas pelo digest do índice multiarquitetura.
+ARG BASE=docker.io/library/python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
+ARG UV_IMAGE=ghcr.io/astral-sh/uv@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336
+ARG AGENTE
+ARG CONFIG
+
+FROM ${UV_IMAGE} AS uv
+
+FROM ${BASE} AS base
+ARG HOME_AGENTE
+ARG PASTA_ESTUDOS
+ARG UID_AGENTE
+ARG GID_AGENTE
+ARG NOVOMODELO_VERSAO
+RUN test -n "$HOME_AGENTE" && test -n "$PASTA_ESTUDOS" && test -n "$NOVOMODELO_VERSAO" \
+    && test -n "$UID_AGENTE" && test -n "$GID_AGENTE"
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils unzip \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=uv /uv /uvx /usr/local/bin/
+RUN groupadd --gid "$GID_AGENTE" agente \
+    && useradd --create-home --home-dir "$HOME_AGENTE" --uid "$UID_AGENTE" --gid "$GID_AGENTE" \
+       --shell /bin/bash agente \
+    && mkdir "$PASTA_ESTUDOS" && chown agente "$PASTA_ESTUDOS"
+USER agente
+WORKDIR $HOME_AGENTE
+ENV PATH=$HOME_AGENTE/.local/bin:$PATH
+# O executável vem do artefato do release, conferido pelo .sha256 que o próprio release publica.
+RUN set -eu; \
+    alvo="novomodelo-cli-$(uname -m)-unknown-linux-gnu"; \
+    release="https://github.com/ons-ccee-epe/novomodelo/releases/download/v${NOVOMODELO_VERSAO}"; \
+    baixa="$(mktemp -d)"; cd "$baixa"; \
+    curl --proto '=https' --tlsv1.2 -fsSLO "$release/$alvo.tar.xz"; \
+    curl --proto '=https' --tlsv1.2 -fsSLO "$release/$alvo.tar.xz.sha256"; \
+    sha256sum -c "$alvo.tar.xz.sha256"; \
+    mkdir -p "$HOME_AGENTE/.local/bin"; \
+    tar -xJf "$alvo.tar.xz" --strip-components=1 -C "$HOME_AGENTE/.local/bin" "$alvo/novomodelo"; \
+    cd /; rm -rf "$baixa"; \
+    novomodelo version
+
+# O pacote npm do Claude Code exige Node 22, e o Debian 13 traz o 20: fica o instalador
+# oficial, que baixa a versão fixada e confere o sha256 do manifesto dessa versão.
+FROM base AS agente-claude
+ARG CLAUDE_CODE_VERSAO
+RUN test -n "$CLAUDE_CODE_VERSAO" \
+    && curl -fsSL https://claude.ai/install.sh | bash -s "$CLAUDE_CODE_VERSAO" \
+    && claude --version
+
+# O instalador oficial do Kiro só instala a última versão e não publica checksum (risco
+# aceito): com KIRO_CLI_VERSAO vazio a versão encontrada é registrada como não fixada;
+# preenchido, o build confere a instalada.
+FROM base AS agente-kiro
+ARG KIRO_CLI_VERSAO
+RUN curl -fsSL https://cli.kiro.dev/install | bash \
+    && kiro-cli --version \
+    && { [ -z "$KIRO_CLI_VERSAO" ] || kiro-cli --version | grep -qF "$KIRO_CLI_VERSAO"; }
+
+FROM agente-${AGENTE} AS agente
+
+FROM agente AS mcp
+ARG CLIENTE
+ARG PASTA_ESTUDOS
+COPY --chown=agente wheel/ /tmp/wheel/
+RUN uv tool install --compile-bytecode /tmp/wheel/*.whl && rm -rf /tmp/wheel
+RUN novomodelo-mcp configurar --cliente "$CLIENTE" --workspace "$PASTA_ESTUDOS" \
+    && if [ "$CLIENTE" = claude-code ]; then \
+         python3 -c "import json,pathlib; h=pathlib.Path.home(); d=json.loads((h/'.claude.json').read_text()); (h/'mcp-do-configurar.json').write_text(json.dumps({'mcpServers': d['mcpServers']}))"; \
+       fi
+
+# Sem MCP: o executável, o bridge (CLI) e um Python com a biblioteca do novomodelo e as libs
+# de análise; o agente usa o terminal.
+FROM agente AS sem-mcp
+ARG HOME_AGENTE
+ARG NOVOMODELO_VERSAO
+ARG BRIDGE_VERSAO
+RUN test -n "$BRIDGE_VERSAO" \
+    && uv tool install --compile-bytecode "novomodelo-bridge==${BRIDGE_VERSAO}" && novomodelo-bridge --version
+RUN uv venv "$HOME_AGENTE/py" && VIRTUAL_ENV="$HOME_AGENTE/py" uv pip install \
+      "novomodelo-python==${NOVOMODELO_VERSAO}" polars duckdb pyarrow pandas
+ENV PATH=$HOME_AGENTE/py/bin:$PATH
+RUN python -c "import novomodelo, polars, duckdb" && echo '{"mcpServers": {}}' > "$HOME_AGENTE/mcp-do-configurar.json"
+
+# versoes.json: as versões como a imagem pronta as relata, lidas pelo executor no preparo.
+FROM ${CONFIG} AS final
+ARG HOME_AGENTE
+RUN set -eu; \
+    versao() { grep -Eo '[0-9]+\.[0-9]+\.[0-9]+[^ ]*' | head -n 1; }; \
+    dist() { "$1" -c "import importlib.metadata as m, sys; print(m.version(sys.argv[1]))" "$2"; }; \
+    ferramentas="$(uv tool dir)"; \
+    export V_NOVOMODELO="$(novomodelo version 2>&1 | versao)"; \
+    export V_CLAUDE="$(command -v claude >/dev/null && claude --version | versao || true)"; \
+    export V_KIRO="$(command -v kiro-cli >/dev/null && kiro-cli --version | versao || true)"; \
+    if [ -x "$ferramentas/novomodelo-mcp/bin/python" ]; then \
+      export V_MCP="$(dist "$ferramentas/novomodelo-mcp/bin/python" novomodelo-mcp)"; \
+      export V_BRIDGE="$(dist "$ferramentas/novomodelo-mcp/bin/python" novomodelo-bridge)"; \
+    else \
+      export V_MCP=""; \
+      export V_BRIDGE="$(dist "$ferramentas/novomodelo-bridge/bin/python" novomodelo-bridge)"; \
+    fi; \
+    python3 -c "import json,os,sys; v={'novomodelo':'V_NOVOMODELO','novomodelo-bridge':'V_BRIDGE','claude-code':'V_CLAUDE','kiro-cli':'V_KIRO','novomodelo-mcp':'V_MCP'}; json.dump({k:os.environ[e] for k,e in v.items() if os.environ[e]}, open(sys.argv[1],'w'), indent=2)" \
+      "$HOME_AGENTE/versoes.json"; \
+    cat "$HOME_AGENTE/versoes.json"

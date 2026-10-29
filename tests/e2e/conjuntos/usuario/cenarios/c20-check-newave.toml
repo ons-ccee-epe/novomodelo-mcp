@@ -1,0 +1,12 @@
+id = "c20-check-newave"
+persona = "consultoria"
+caso = "bridge_newave_mini"
+pedido = """
+Me passaram esse deck NEWAVE. Antes de converter, ele tem algum problema?
+"""
+tools_esperadas = ["bridge_check_newave"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Fatos (bridge check newave no deck NEWAVE mínimo do bridge, medido): status ok, sem avisos; arquivos obrigatórios presentes, todos os arquivos LIBS declarados no índice, chaves do dger.dat coerentes com os opcionais presentes; vários arquivos opcionais ausentes (modif, ghmin, penalid, vazpast…), o que é só informativo. Pode converter. Boa resposta diz que o deck não tem problema e que dá para converter. Errado: inventar problema ou aviso que o check não deu.
+"""

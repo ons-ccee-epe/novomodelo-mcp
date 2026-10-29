@@ -1,0 +1,11 @@
+id = "c10-busca-web-newave"
+persona = "consultoria"
+# Pedido explícito de fonte externa (NEWAVE/CEPEL): o MCP não deve impedir a busca do próprio agente.
+pedido = """
+procura na internet a documentação oficial do NEWAVE (CEPEL) sobre o CVaR e me resume em 5 linhas, com o link da fonte
+"""
+tools_esperadas = []
+nativas_esperadas = ["WebSearch"]
+gabarito = """
+Precisa: resumo em ~5 linhas do CVaR no NEWAVE com base em fonte oficial do CEPEL encontrada na web (com link real): combinação convexa de valor esperado e CVaR com parâmetros alfa e lambda (aversão a risco). Errado: responder de memória sem fonte ou com link inventado.
+"""
