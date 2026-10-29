@@ -157,12 +157,29 @@ def test_disparo_recusa_wheel_fora_da_pasta_configurada(
     pasta.mkdir()
     fora = tmp_path / WHEEL
     fora.write_bytes(b"")
-    (pasta / "link.whl").symlink_to(fora)
     monkeypatch.setenv(PASTA_WHEELS_ENV, str(pasta))
     with patch.object(service_mod.subprocess, "Popen") as popen:
-        for valor in (str(fora), "../" + WHEEL, WHEEL, "link.whl"):
+        for valor in (str(fora), "../" + WHEEL, WHEEL):
             resp = client.post("/api/rodadas", json={"mcp": [valor]}, headers=HEADER)
             assert resp.status_code == 422, valor
+    popen.assert_not_called()
+
+
+def test_disparo_recusa_link_na_pasta_que_aponta_para_fora(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pasta = tmp_path / "wheels"
+    pasta.mkdir()
+    fora = tmp_path / WHEEL
+    fora.write_bytes(b"")
+    try:
+        (pasta / "link.whl").symlink_to(fora)
+    except OSError:
+        pytest.skip("o sistema não deixa criar link simbólico")
+    monkeypatch.setenv(PASTA_WHEELS_ENV, str(pasta))
+    with patch.object(service_mod.subprocess, "Popen") as popen:
+        resp = client.post("/api/rodadas", json={"mcp": ["link.whl"]}, headers=HEADER)
+        assert resp.status_code == 422
     popen.assert_not_called()
 
 
@@ -270,6 +287,41 @@ def test_rodada_bloqueada_por_segredo_nao_expoe_registros(
     assert corpo["registros"] == [] and corpo["decisoes"] == {}
 
 
+@pytest.mark.parametrize("raiz", ["[]", '"texto"', "1"])
+def test_manifesto_com_raiz_que_nao_e_objeto_vira_erro_tratado(
+    client: TestClient, resultados: Path, raiz: str
+) -> None:
+    _gravar(resultados, "r1")
+    pasta = resultados / "ruim"
+    pasta.mkdir()
+    (pasta / "manifesto.json").write_text(raiz, encoding="utf-8")
+
+    resp = client.get("/api/rodadas")
+
+    assert resp.status_code == 200
+    itens = {r["rodada"]: r for r in resp.json()["rodadas"]}
+    assert "erro" in itens["ruim"] and "erro" not in itens["r1"]
+    assert client.get("/api/rodadas/ruim").status_code == 200
+
+
+def test_rodada_que_quebra_a_leitura_e_pulada_na_lista(
+    client: TestClient, resultados: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _gravar(resultados, "r1")
+    _gravar(resultados, "r2")
+    original = service_mod.RodadaService._resumo
+
+    def resumo(self, pasta):
+        if pasta.name == "r2":
+            raise RuntimeError("leitura quebrou")
+        return original(self, pasta)
+
+    monkeypatch.setattr(service_mod.RodadaService, "_resumo", resumo)
+    resp = client.get("/api/rodadas")
+    assert resp.status_code == 200
+    assert [r["rodada"] for r in resp.json()["rodadas"]] == ["r1"]
+
+
 def test_manifesto_ilegivel_nao_derruba_a_lista(client: TestClient, resultados: Path) -> None:
     pasta = resultados / "ruim"
     pasta.mkdir()
@@ -346,20 +398,53 @@ def test_subprocesso_recebe_so_o_ambiente_da_lista_branca(
     }
 
 
-def test_vaga_e_liberada_mesmo_se_a_espera_do_processo_falha(resultados: Path) -> None:
+def test_espera_que_falha_encerra_a_arvore_varre_o_log_e_so_entao_libera_a_vaga(
+    resultados: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     class Quebra:
         def wait(self) -> int:
             raise OSError("falhou")
 
+    ordem: list[str] = []
     service = service_mod.RodadaService(config=lambda: replace_resultados(resultados))
+
+    def varrer(_pasta):
+        ordem.append("varrido" if service._gate.owner == "r9" else "varrido sem vaga")
+        return service_mod.Varredura()
+
+    monkeypatch.setattr(service_mod, "_encerrar_arvore", lambda p: ordem.append("encerrado"))
+    monkeypatch.setattr(service_mod, "varrer_segredos", varrer)
     with patch.object(service_mod.subprocess, "Popen", return_value=Quebra()):
         service.disparar(service_mod.RodadaRequest(mcp=["sem"], rodada="r9"))
         for _ in range(100):
             if service._gate.owner is None:
                 break
             time.sleep(0.02)
+    assert ordem == ["encerrado", "varrido"]
     assert service._gate.owner is None
     assert service._disparo("r9")["codigo_saida"] is None
+    assert service._disparo("r9")["log_bloqueado"] is False
+
+
+def test_varredura_do_log_que_quebra_bloqueia_o_log_e_libera_a_vaga(
+    resultados: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def quebra(_pasta):
+        raise RuntimeError("gitleaks quebrou")
+
+    monkeypatch.setattr(service_mod, "varrer_segredos", quebra)
+    service = service_mod.RodadaService(config=lambda: replace_resultados(resultados))
+    with patch.object(service_mod.subprocess, "Popen", return_value=_processo()):
+        service.disparar(service_mod.RodadaRequest(mcp=["sem"], rodada="r9"))
+        for _ in range(100):
+            if service._gate.owner is None:
+                break
+            time.sleep(0.02)
+    assert service._gate.owner is None
+    assert service._disparo("r9")["log_bloqueado"] is True
+    assert (
+        (resultados / PASTA_LOGS / "r9.log").read_text(encoding="utf-8").startswith("log removido")
+    )
 
 
 def test_log_com_achado_do_gitleaks_e_apagado(resultados: Path, monkeypatch) -> None:

@@ -153,6 +153,13 @@ describe("limparCaminhos", () => {
     expect(limparCaminhos("mcp/x e tools/caso")).toBe("mcp/x e tools/caso");
   });
 
+  it("troca URL de arquivo (file://) como a bateria", () => {
+    for (const url of ["file:///dados/pessoa/a.json", "FILE://servidor/pasta/a.json", "file:/C:/x/a.json"]) {
+      expect(limparCaminhos(`abriu ${url} e parou`)).toBe("abriu <caminho> e parou");
+    }
+    expect(limparCaminhos("veja https://exemplo.invalid/a")).toBe("veja https://exemplo.invalid/a");
+  });
+
   it("tira o prefixo do juiz e limpa a justificativa", () => {
     expect(justificativaDoJuiz("nota 1 abaixo de 2; juiz: ruim em /tmp/a b/c.txt")).toBe("ruim em <caminho>");
     expect(justificativaDoJuiz("falha na execução")).toBe("falha na execução");

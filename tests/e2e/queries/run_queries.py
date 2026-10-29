@@ -1,7 +1,7 @@
 """CLI de execução da bateria de queries.
 
-A execução do agente passa pelo executor em container: o CLI aceita os mesmos
-argumentos e recusa com erro explícito. Este módulo também guarda
+A execução do agente passa pelo executor em container: o CLI não tem opções e
+recusa com erro explícito. Este módulo também guarda
 ``_build_test_result``, que converte (caso, resultado, validação) em ``TestResult``.
 """
 
@@ -120,62 +120,20 @@ def _build_test_result(
     )
 
 
-def main() -> int:
-    """Entry point principal do CLI.
+def main(argv: list[str] | None = None) -> int:
+    """Recusa a execução: o agente só roda na rodada da bateria, no executor em container.
 
     Returns:
-        1: a execução passa pelo executor em container.
+        1, sempre.
     """
     parser = argparse.ArgumentParser(
         prog="run_queries",
-        description="Executa a bateria de queries (só pelo executor em container)",
-    )
-    parser.add_argument(
-        "--tags",
-        nargs="+",
-        metavar="TAG",
-        help="Filtrar testes por tags (OR logic)",
-    )
-    parser.add_argument(
-        "--case",
-        metavar="ID",
-        help="Executar um caso específico por ID",
-    )
-    parser.add_argument(
-        "--parallel",
-        type=int,
-        default=1,
-        metavar="N",
-        help="Número de testes em paralelo (default: 1)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=None,
-        metavar="SECONDS",
-        help=(
-            "Força o mesmo timeout (s) em todos os casos. Sem ele, cada caso usa o "
-            "timeout_s do cases.yaml (por caso/grupo); QUERY_TIMEOUT_S também força."
+        description=(
+            "Recusa a execução no host; o conjunto tools roda pela rodada "
+            "(python -m tests.e2e rodar --conjuntos tools)."
         ),
     )
-    parser.add_argument(
-        "--report",
-        action="store_true",
-        help="Gerar dashboard após execução",
-    )
-    parser.add_argument(
-        "--set-baseline",
-        action="store_true",
-        dest="set_baseline",
-        help="Marcar esta bateria como baseline",
-    )
-    parser.add_argument(
-        "--compare",
-        metavar="BATCH_ID",
-        help="Comparar com bateria específica",
-    )
-
-    parser.parse_args()
+    parser.parse_args(argv)
 
     print(f"Erro: {EXECUCAO_SO_NO_EXECUTOR}.", file=sys.stderr)
     return 1

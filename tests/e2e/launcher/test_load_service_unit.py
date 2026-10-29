@@ -55,6 +55,17 @@ _WRITES_IN_WORK_DIR_AND_SAVES = _WRITES_IN_WORK_DIR_AND_WAITS.replace(
 )
 
 
+# Motor falso que conta o que herdou do ambiente e cita um caminho absoluto do host.
+_REPORTS_ENV_AND_PATH = """
+import json, os, sys
+nomes = ("CHAVE_FALSA_DO_HOST", "NOVOMODELO_BATERIA_X")
+print("herdou=" + ",".join(k for k in nomes if k in os.environ), flush=True)
+print("lendo /dados/pessoa/caso/a.json", flush=True)
+print(json.dumps({"event": "error", "message": "falhou em /dados/pessoa/caso"}), flush=True)
+sys.exit(1)
+"""
+
+
 def _service(script: str, gate: RunGate | None = None) -> LoadRunService:
     return LoadRunService(
         gate or RunGate(), command_builder=lambda _config: [sys.executable, "-c", script]
@@ -125,6 +136,18 @@ class TestLifecycle:
         assert _wait_until(lambda: state.status == "error")
         assert state.error == "o servidor MCP não iniciou: x"
         assert state.load_id is None
+
+    def test_engine_gets_only_the_allowed_environment_and_the_log_hides_host_paths(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CHAVE_FALSA_DO_HOST", "valor-falso")
+        monkeypatch.setenv("NOVOMODELO_BATERIA_X", "1")
+        state = _service(_REPORTS_ENV_AND_PATH).start_run(CONFIG)
+        assert _wait_until(lambda: state.status == "error")
+        view = state.to_dict()
+        assert "herdou=NOVOMODELO_BATERIA_X" in view["log"]
+        assert "lendo <caminho>" in view["log"]
+        assert "/dados/pessoa" not in " ".join(view["log"]) + str(view["error"])
 
     def test_a_silent_crash_reports_the_exit_code(self) -> None:
         svc = _service(_CRASHES_SILENTLY)

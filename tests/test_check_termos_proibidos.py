@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -298,3 +299,18 @@ def test_toml_nao_contem_literalmente_os_termos_da_receita():
     texto = TOML_PADRAO.read_text(encoding="utf-8").lower()
     for termo in ("ons" + "tec", "hots" + "ite"):
         assert termo not in texto
+
+
+def test_historico_ainda_acusa_padrao_fora_da_secao(repo):
+    _commit(repo, {"tests/e2e/a.md": TRES_PADROES + f"veja {CAMINHO_PESSOAL}\n"})
+    res = _rodar(repo, "--historico", "--mensagens")
+    assert res.returncode == 1
+    assert "tests/e2e/a.md:4: caminho de maquina" in res.stdout
+    for nome in ("nome antigo", "referencia de spec", "diretorio kiro"):
+        assert nome not in res.stdout
+
+
+def test_toda_excecao_por_caminho_aponta_para_algo_que_existe():
+    permitidos = tomllib.loads(TOML_PADRAO.read_text(encoding="utf-8"))["permitidos"]
+    faltam = [caminho for caminho in permitidos if not (RAIZ / caminho).exists()]
+    assert faltam == []

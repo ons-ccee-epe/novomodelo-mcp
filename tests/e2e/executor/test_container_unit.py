@@ -843,6 +843,18 @@ def test_sem_caminhos_trata_espaco_e_dois_pontos(texto, vazado):
     assert not any(v in limpo for v in vazado)
 
 
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "abriu file:///dados/pessoa/caso/a.json e parou",
+        "abriu FILE://servidor/pasta/a.json e parou",
+        "abriu file:/C:/dados/a.json e parou",
+    ],
+)
+def test_sem_caminhos_limpa_url_de_arquivo(texto):
+    assert sem_caminhos(texto) == "abriu <caminho> e parou"
+
+
 def test_sem_caminhos_preserva_url_e_texto_comum():
     texto = "erro 429 em https://exemplo.invalid/api: tente de novo"
     assert sem_caminhos(texto) == texto

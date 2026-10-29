@@ -247,3 +247,13 @@ class TestExecute:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_cli_run_queries_so_recusa_e_nao_tem_opcoes(capsys):
+    from tests.e2e.queries import run_queries
+
+    assert run_queries.main([]) == 1
+    assert EXECUCAO_SO_NO_EXECUTOR in capsys.readouterr().err
+    with pytest.raises(SystemExit) as saida:
+        run_queries.main(["--tags", "docs"])
+    assert saida.value.code == 2

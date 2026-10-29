@@ -11,6 +11,7 @@ decisão do critério sem base de comparação.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import os
 import re
@@ -27,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tests.e2e.config import Config, carregar_config
 from tests.e2e.go_no_go.criterio import decidir
+from tests.e2e.launcher.process_tree import ProcessTree
 from tests.e2e.launcher.run_gate import RunAlreadyActiveError, RunGate
 from tests.e2e.queries.loader import CasesLoader
 from tests.e2e.queries.models import QueryTestCase
@@ -224,6 +226,11 @@ def ambiente_do_subprocesso(env: Mapping[str, str] | None = None) -> dict[str, s
     return ambiente
 
 
+def _encerrar_arvore(processo: subprocess.Popen) -> None:
+    with contextlib.suppress(OSError):
+        ProcessTree(processo).kill()
+
+
 def _agora() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -305,11 +312,20 @@ class RodadaService:
         return os.fdopen(fd, "ab")
 
     def _esperar(self, nome: str, processo: subprocess.Popen, pasta_logs: Path) -> None:
+        """Espera a rodada sair, varre o log e só então libera a vaga.
+
+        Se a espera falhar, a árvore do processo é encerrada antes da varredura: liberar a
+        vaga com a rodada ainda viva deixaria duas rodadas disputando o motor.
+        """
         codigo = None
-        bloqueado = False
+        bloqueado = True
         try:
-            codigo = processo.wait()
-            bloqueado = self._varrer_log(nome, pasta_logs)
+            try:
+                codigo = processo.wait()
+            except Exception:  # noqa: BLE001 - sem código de saída, o disparo fica finalizado com None
+                _encerrar_arvore(processo)
+            finally:
+                bloqueado = self._varrer_log(nome, pasta_logs)
         finally:
             try:
                 with self._lock:
@@ -323,12 +339,17 @@ class RodadaService:
 
     def _varrer_log(self, nome: str, pasta_logs: Path) -> bool:
         """Varre a pasta de logs com o gitleaks; achado ou varredura que não rodou apaga o log."""
-        varredura = (self._varrer or varrer_segredos)(pasta_logs)
+        try:
+            varredura = (self._varrer or varrer_segredos)(pasta_logs)
+        except Exception as erro:  # noqa: BLE001 - varredura que quebra bloqueia o log, como a que não roda
+            varredura = Varredura(erro=type(erro).__name__)
         if not (varredura.erro or varredura.arquivos):
             return False
-        (pasta_logs / f"{nome}.log").write_text(
-            "log removido: a varredura de segredos acusou achado ou não rodou\n", encoding="utf-8"
-        )
+        with contextlib.suppress(OSError):
+            (pasta_logs / f"{nome}.log").write_text(
+                "log removido: a varredura de segredos acusou achado ou não rodou\n",
+                encoding="utf-8",
+            )
         return True
 
     # ---- leitura -----------------------------------------------------------
@@ -344,7 +365,10 @@ class RodadaService:
                 continue
             if not (filha / "manifesto.json").is_file():
                 continue
-            resumos.append(self._resumo(filha))
+            try:
+                resumos.append(self._resumo(filha))
+            except Exception:  # noqa: BLE001 - uma rodada que não se lê não derruba a lista das outras
+                continue
         return resumos
 
     def detalhe(self, rodada: str) -> dict[str, Any] | None:

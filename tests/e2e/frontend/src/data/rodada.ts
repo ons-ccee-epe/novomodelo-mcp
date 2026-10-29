@@ -405,6 +405,7 @@ export const ROTULO_CONJUNTO: Record<Conjunto, string> = {
 };
 
 const INICIO_CAMINHO = String.raw`(?:[A-Za-z]:[\\/]|\\\\|/(?!/))`;
+const URL_DE_ARQUIVO = /\bfile:\/[^\s'"]*/gi;
 const CAMINHO_ENTRE_ASPAS = new RegExp(`'${INICIO_CAMINHO}[^']*'|"${INICIO_CAMINHO}[^"]*"`, "g");
 // Como `tests/e2e/textos.py`: o caminho segue por palavras separadas por espaço até o último
 // trecho que tem barra, para um nome de pasta com espaço sair inteiro.
@@ -416,7 +417,10 @@ const CAMINHO_ABSOLUTO = new RegExp(
 
 /** Troca caminhos absolutos (POSIX, Windows e UNC) por `<caminho>`, como a bateria faz nos relatórios. */
 export function limparCaminhos(texto: string): string {
-  return texto.replace(CAMINHO_ENTRE_ASPAS, "<caminho>").replace(CAMINHO_ABSOLUTO, "<caminho>");
+  return texto
+    .replace(URL_DE_ARQUIVO, "<caminho>")
+    .replace(CAMINHO_ENTRE_ASPAS, "<caminho>")
+    .replace(CAMINHO_ABSOLUTO, "<caminho>");
 }
 
 /** A justificativa do juiz, que o `motivo` carrega depois do prefixo `juiz: `; sem prefixo, o motivo inteiro. */

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import xml.etree.ElementTree as ET
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
+from typing import get_args
 
 import jsonschema
 import pytest
@@ -23,6 +24,8 @@ from tests.e2e.resultado.junit import escrever_junit
 from tests.e2e.resultado.modelos import (
     SCHEMA_VERSAO,
     ChamadaTool,
+    Conjunto,
+    Estado,
     Manifesto,
     Metricas,
     Registro,
@@ -296,3 +299,57 @@ def test_decisao_recusa_schema_invalido_e_versao_desconhecida(tmp_path: Path) ->
     )
     with pytest.raises(VersaoDesconhecida):
         ler_decisao(tmp_path)
+
+
+def _schema(nome: str) -> dict:
+    return json.loads(
+        (Path(armazenamento.__file__).parent / "schemas" / f"{nome}.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+def _campos(classe) -> list[str]:
+    return sorted(f.name for f in fields(classe))
+
+
+@pytest.mark.parametrize(
+    "classe, caminho",
+    [
+        (Registro, ("registro",)),
+        (ChamadaTool, ("registro", "tools", "items")),
+        (Metricas, ("registro", "metricas")),
+        (Manifesto, ("manifesto",)),
+    ],
+)
+def test_campos_das_dataclasses_sao_os_do_schema(classe, caminho):
+    no = _schema(caminho[0])
+    for chave in caminho[1:]:
+        no = no["properties"][chave] if chave != "items" else no["items"]
+    assert _campos(classe) == sorted(no["properties"])
+    assert _campos(classe) == sorted(no["required"])
+    assert no["additionalProperties"] is False
+
+
+def test_enums_dos_modelos_sao_os_do_schema():
+    registro = _schema("registro")["properties"]
+    assert list(get_args(Estado)) == registro["estado"]["enum"]
+    assert list(get_args(Conjunto)) == registro["conjunto"]["enum"]
+    assert (
+        list(get_args(Conjunto)) == _schema("manifesto")["properties"]["conjuntos"]["items"]["enum"]
+    )
+
+
+@pytest.mark.parametrize("raiz", ["[]", '"texto"', "1", "null"])
+def test_json_com_raiz_que_nao_e_objeto_vira_value_error(tmp_path, raiz):
+    gravar_registro(tmp_path, _registro())
+    (tmp_path / "manifesto.json").write_text(raiz, encoding="utf-8")
+    with pytest.raises(ValueError, match="raiz do JSON"):
+        ler_manifesto(tmp_path)
+    [registro] = tmp_path.glob("execucoes/*/*/*/*/*/registro.json")
+    registro.write_text(raiz, encoding="utf-8")
+    with pytest.raises(ValueError, match="raiz do JSON"):
+        ler_registros(tmp_path)
+    (tmp_path / armazenamento.NOME_DECISAO).write_text(raiz, encoding="utf-8")
+    with pytest.raises(ValueError, match="raiz do JSON"):
+        armazenamento.ler_decisao(tmp_path)

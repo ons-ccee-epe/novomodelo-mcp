@@ -51,16 +51,15 @@ O dashboard é o frontend React em `tests/e2e/frontend`, que lê `results/` e `m
 
 ### Argumentos
 
-O CLI `python -m tests.e2e.queries.run_queries` aceita `--tags`, `--case`, `--parallel`,
-`--timeout`, `--report`, `--set-baseline` e `--compare` para o executor em container; no
-host nenhuma delas tem efeito além da recusa.
+O CLI `python -m tests.e2e.queries.run_queries` não tem opções: só recusa. O conjunto tools
+roda pela rodada da bateria (`python -m tests.e2e rodar --conjuntos tools`, ver
+`tests/e2e/README.md`), com filtro por id de caso em `--filtro`.
 
 ## Variáveis de Ambiente
 
 | Variável | Descrição | Default |
 |----------|-----------|---------|
-| `QUERY_TIMEOUT_S` | **Força** o mesmo timeout (s) em todos os casos, ignorando o `timeout_s` do `cases.yaml`. Use só para depurar | — (cada caso usa o seu) |
-| `QUERY_FIXTURES_DIR` | Caminho para o diretório de fixtures | `tests/e2e/fixtures` |
+| `QUERY_TIMEOUT_S` | **Força** o mesmo timeout (s) em todos os casos no `QueryRunner`, ignorando o `timeout_s` do `cases.yaml`. Não vale para a rodada | — (cada caso usa o seu) |
 
 ## Formato de Caso de Teste
 
@@ -163,8 +162,8 @@ O framework abrange as tools MCP do novomodelo:
 
 ## Saída e Exit Codes
 
-Fora do executor em container, `run_queries` não carrega casos nem executa: escreve
-"a execução passa pelo executor em container" no stderr e sai com código `1`.
+`run_queries` não carrega casos nem executa: escreve "a execução passa pelo executor em
+container" no stderr e sai com código `1`.
 
 O que funciona no host: o carregamento e a validação dos casos (`CasesLoader`), o
 `QueryValidator`, os parsers de saída de agente e o `ResultStore`, todos cobertos pelos

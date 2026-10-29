@@ -58,7 +58,15 @@ def _gravar_json(destino: Path, dados: dict[str, Any]) -> Path:
 
 
 def _ler_json(arquivo: Path) -> dict[str, Any]:
-    return json.loads(arquivo.read_text(encoding="utf-8"))
+    """O objeto JSON do arquivo.
+
+    Raises:
+        ValueError: JSON inválido ou com raiz que não é objeto.
+    """
+    dados = json.loads(arquivo.read_text(encoding="utf-8"))
+    if not isinstance(dados, dict):
+        raise ValueError(f"{arquivo.name}: a raiz do JSON não é um objeto")
+    return dados
 
 
 def gravar_manifesto(pasta: Path, m: Manifesto) -> Path:

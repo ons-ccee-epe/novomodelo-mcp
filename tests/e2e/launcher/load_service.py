@@ -31,10 +31,11 @@ from typing import Any, Literal
 
 from tests.e2e.launcher.process_tree import ProcessTree
 from tests.e2e.launcher.run_gate import RunGate
-from tests.e2e.launcher.service import resolver_wheel
+from tests.e2e.launcher.service import ambiente_do_subprocesso, resolver_wheel
 from tests.e2e.load.agent_engine import AgentLoadConfig
 from tests.e2e.load.engine import LoadConfig
 from tests.e2e.load.sandbox import remove_tree
+from tests.e2e.textos import sem_caminhos
 
 __all__ = ["LoadRunService", "LoadRunState", "build_command"]
 
@@ -204,7 +205,7 @@ class LoadRunService:
             self._close_streams(process, reader)
             self._finish(state, code)
         except Exception as exc:  # noqa: BLE001 - qualquer falha do supervisor vira estado "error"
-            self._fail(state, f"Falha ao supervisionar a carga: {exc}")
+            self._fail(state, sem_caminhos(f"Falha ao supervisionar a carga: {exc}"))
         finally:
             with self._lock:
                 tree = self._trees.pop(state.run_id, None)
@@ -212,7 +213,7 @@ class LoadRunService:
                 tree.close()
             if not remove_tree(work_dir):
                 with self._lock:
-                    state.log.append(f"Pasta temporária não apagada: {work_dir}")
+                    state.log.append(f"Pasta temporária não apagada: {sem_caminhos(str(work_dir))}")
             self._gate.release(state.run_id)
 
     @staticmethod
@@ -239,7 +240,7 @@ class LoadRunService:
                 encoding="utf-8",
                 errors="replace",
                 cwd=self._cwd,
-                env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"},
+                env={**ambiente_do_subprocesso(), "PYTHONIOENCODING": "utf-8"},
                 start_new_session=os.name != "nt",
             )
             self._trees[state.run_id] = ProcessTree(process)
@@ -256,7 +257,7 @@ class LoadRunService:
             event = self._parse_event(line)
             with self._lock:
                 if event is None:
-                    state.log.append(line[:300])
+                    state.log.append(sem_caminhos(line)[:300])
                 else:
                     self._apply_event(state, event)
 
@@ -279,7 +280,7 @@ class LoadRunService:
             state.load_id = event.get("load_id")
             state.log.append(f"Carga gravada: {state.load_id}")
         elif kind == "error":
-            state.error = str(event.get("message", "erro desconhecido"))
+            state.error = sem_caminhos(str(event.get("message", "erro desconhecido")))
             state.log.append(f"ERRO: {state.error}")
 
     def _finish(self, state: LoadRunState, code: int) -> None:
