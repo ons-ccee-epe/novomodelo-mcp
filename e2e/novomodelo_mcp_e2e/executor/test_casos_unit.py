@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -30,6 +31,10 @@ RAIZ = Path(__file__).resolve().parents[3]
 COMMIT = "a" * 40
 OUTRO = "b" * 40
 VERSAO = "9.8.7"
+
+
+def _motor_que_nao_roda(*args: object, **kwargs: object) -> NoReturn:
+    raise AssertionError("o motor não devia rodar")
 
 
 def _cfg(tmp_path: Path, casos_: Path | None = None) -> Config:
@@ -223,7 +228,7 @@ def test_1dtoy_rodado_falha_do_motor_nao_deixa_destino(tmp_path):
 
 def test_1dtoy_rodado_exige_o_exemplo_preparado(tmp_path):
     with pytest.raises(FalhaPreparo, match="não preparado"):
-        preparar_1dtoy_rodado("imagem:x", _cfg(tmp_path), rodar=lambda *a, **k: None)
+        preparar_1dtoy_rodado("imagem:x", _cfg(tmp_path), rodar=_motor_que_nao_roda)
 
 
 def test_fontes_tem_o_commit_da_versao_esperada_do_bridge():
@@ -359,7 +364,7 @@ def test_1dtoy_rodado_recusa_caminho_com_virgula(tmp_path):
     cfg = _cfg(tmp_path / "a,b")
     (pasta_preparados(cfg) / "exemplo_1dtoy").mkdir(parents=True)
     with pytest.raises(FalhaPreparo, match="vírgula"):
-        preparar_1dtoy_rodado("imagem:x", cfg, rodar=lambda *a, **k: None)
+        preparar_1dtoy_rodado("imagem:x", cfg, rodar=_motor_que_nao_roda)
 
 
 @pytest.mark.parametrize("nome", ["../x", "caso/x", "caso_grande_rodado/..", "a\\b", ""])

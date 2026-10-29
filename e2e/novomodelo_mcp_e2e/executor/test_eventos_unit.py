@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -165,8 +166,11 @@ def test_kiro_atual_le_o_resultado_de_rawoutput_com_o_id_da_chamada():
 
 
 def test_kiro_junta_os_itens_de_texto_e_ignora_os_de_outro_tipo():
-    saida = {"items": [{"Json": {"content": [{"type": "text", "text": "a"}, {"type": "image"}]}}]}
-    saida["items"].append({"Json": {"content": [{"type": "text", "text": "b"}], "isError": False}})
+    itens: list[dict[str, Any]] = [
+        {"Json": {"content": [{"type": "text", "text": "a"}, {"type": "image"}]}}
+    ]
+    itens.append({"Json": {"content": [{"type": "text", "text": "b"}], "isError": False}})
+    saida = {"items": itens}
     update = {"sessionUpdate": "tool_call_update", "toolCallId": "x", "status": "completed"}
     linha = {"type": "sessionUpdate", "data": {"update": {**update, "rawOutput": saida}}}
     [resultado] = ler_kiro(_wrap([linha])).eventos

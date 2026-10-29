@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from novomodelo_mcp_e2e.load.agent_cases import (
 )
 from novomodelo_mcp_e2e.load.fakes import make_case
 from novomodelo_mcp_e2e.load.mix import ToolHints, is_forbidden_tool, is_heavy_tool
+from novomodelo_mcp_e2e.queries.models import QueryTestCase
 
 READ_ONLY = ToolHints(read_only=True, open_world=False)
 
@@ -38,6 +40,12 @@ DISAMBIGUATION = make_case(
     "case-vs-docs", tool=None, tools=["case_summary", "docs_list"], tags=("disambiguation",)
 )
 ALL = [DOCS, SCHEMA, EDIT, INFO, BRIDGE, RUN_START, NO_MCP, DISAMBIGUATION]
+
+
+def _reason(case: QueryTestCase, hints: Mapping[str, ToolHints] | None = None) -> str:
+    reason = exclusion_reason(case, hints)
+    assert reason is not None
+    return reason
 
 
 class TestGroups:
@@ -66,30 +74,30 @@ class TestExclusions:
         assert case_is_heavy(BRIDGE) and not case_is_heavy(DOCS)
 
     def test_network_tool_is_excluded_with_the_reason(self) -> None:
-        assert "usa a rede" in exclusion_reason(INFO)
+        assert "usa a rede" in _reason(INFO)
 
     def test_run_start_is_excluded_because_it_starts_the_solver(self) -> None:
-        reason = exclusion_reason(RUN_START)
+        reason = _reason(RUN_START)
         assert "dispara o solver" in reason
         assert "NOVOMODELO_MCP_MAX_JOBS=0" in reason
 
     def test_tools_that_need_a_run_are_excluded_with_the_reason(self) -> None:
-        assert "depende de um run iniciado por run_start" in exclusion_reason(RUN_STATUS)
+        assert "depende de um run iniciado por run_start" in _reason(RUN_STATUS)
 
     def test_a_tool_announced_as_writing_by_the_server_is_excluded(self) -> None:
         hints = {"docs_list": ToolHints(read_only=False, open_world=False)}
         assert exclusion_reason(DOCS, hints) == REASON_WRITES
 
     def test_case_without_mcp_is_excluded(self) -> None:
-        assert "não usa o MCP" in exclusion_reason(NO_MCP)
+        assert "não usa o MCP" in _reason(NO_MCP)
 
     def test_any_forbidden_tool_among_the_accepted_ones_excludes_the_case(self) -> None:
         mixed = make_case("mixed", tool=None, tools=["docs_list", "run_cancel"])
-        assert "run_cancel" in exclusion_reason(mixed)
+        assert "run_cancel" in _reason(mixed)
 
     def test_missing_source_excludes_the_case(self, tmp_path: Path) -> None:
         case = make_case("deck-list", tool="deck_list", requires=(str(tmp_path / "ausente"),))
-        assert exclusion_reason(case).startswith("fonte ausente ou vazia")
+        assert _reason(case).startswith("fonte ausente ou vazia")
 
     @pytest.mark.parametrize(
         ("hints", "reason"),
@@ -100,7 +108,7 @@ class TestExclusions:
         ],
     )
     def test_server_hints_are_a_second_barrier(self, hints: dict, reason: str) -> None:
-        assert reason in exclusion_reason(DOCS, hints)
+        assert reason in _reason(DOCS, hints)
 
     def test_with_matching_server_hints_the_case_runs(self) -> None:
         assert exclusion_reason(DOCS, {"docs_list": READ_ONLY}) is None
@@ -173,7 +181,8 @@ class TestRealCatalog:
     def test_no_eligible_case_expects_a_forbidden_tool(self, tmp_path: Path) -> None:
         for case in select_cases(load_cases(tmp_path), CaseSelection()).cases:
             tools = case.expected.tools or [case.expected.tool]
-            assert not any(is_forbidden_tool(t) for t in tools), case.id
+            assert all(tools), case.id
+            assert not any(is_forbidden_tool(t) for t in tools if t), case.id
 
     def test_no_writing_case_is_eligible_and_each_says_why(self, tmp_path: Path) -> None:
         writing = [c for c in load_cases(tmp_path) if case_writes(c)]
@@ -187,6 +196,7 @@ class TestRealCatalog:
 
         for tool in build_server()._tool_manager.list_tools():
             hints = tool.annotations
+            assert hints is not None, tool.name
             if hints.readOnlyHint is False:
                 assert writes_files(tool.name) or is_forbidden_tool(tool.name), tool.name
             if hints.openWorldHint is True:

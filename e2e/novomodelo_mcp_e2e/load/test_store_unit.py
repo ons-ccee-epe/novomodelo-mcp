@@ -205,6 +205,7 @@ def test_git_sha_does_not_hang_when_the_inherited_stdin_is_a_pipe_being_read() -
         stdout=subprocess.PIPE,
         text=True,
     )
+    assert child.stdin is not None and child.stdout is not None
     try:
         output = child.stdout.read()
     finally:

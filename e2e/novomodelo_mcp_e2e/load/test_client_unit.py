@@ -38,6 +38,7 @@ class TestClassifyResult:
     def test_protocol_level_is_error(self) -> None:
         outcome, message = classify_result(_result("Tool nope not found", is_error=True))
         assert outcome == "error"
+        assert message is not None
         assert "not found" in message
 
     def test_non_json_text_is_ok(self) -> None:
@@ -51,6 +52,7 @@ class TestClassifyResult:
 
     def test_long_error_text_is_truncated(self) -> None:
         _outcome, message = classify_result(_result("x" * 1000, is_error=True))
+        assert message is not None
         assert len(message) <= 200
 
 
@@ -119,6 +121,7 @@ class TestMcpStdioClient:
         outcome = asyncio.run(McpStdioClient(_Session(behavior)).call("docs_list", {}, 5))
         assert outcome.outcome == "error"
         assert outcome.broken is True
+        assert outcome.error is not None
         assert "BrokenPipeError" in outcome.error
 
     def test_list_tools_returns_the_read_only_hints(self) -> None:

@@ -16,7 +16,9 @@ import subprocess
 import sys
 import threading
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -53,7 +55,7 @@ def _server_processes(marker: str) -> list[str]:
 
 
 def _runner(marker: str, hang_after: int, **config) -> LoadRunner:
-    values = {"concurrency": 2, "duration_s": 3, "tools": TOOLS, "timeout_s": 2.0}
+    values: dict[str, Any] = {"concurrency": 2, "duration_s": 3, "tools": TOOLS, "timeout_s": 2.0}
     values.update(config)
     factory = stdio_client_factory(
         sys.executable,
@@ -65,7 +67,7 @@ def _runner(marker: str, hang_after: int, **config) -> LoadRunner:
 
 
 @pytest.fixture
-def marker() -> str:
+def marker() -> Iterator[str]:
     value = f"load-it-{uuid.uuid4().hex}"
     yield value
     assert _server_processes(value) == [], "processos do servidor sobraram após a carga"
@@ -148,6 +150,7 @@ def test_cli_json_mode_end_to_end_writes_the_run_and_reports_events(
     marker: str, tmp_path: Path
 ) -> None:
     proc = _cli(marker, tmp_path, ["--duration", "2"])
+    assert proc.stdin is not None and proc.stdout is not None
     events = [json.loads(line) for line in proc.stdout if line.startswith("{")]
     assert proc.wait(timeout=120) == 0
     proc.stdin.close()
@@ -168,6 +171,7 @@ def test_cli_stops_without_saving_when_the_launcher_closes_its_stdin(
     marker: str, tmp_path: Path
 ) -> None:
     proc = _cli(marker, tmp_path, ["--duration", "60"])
+    assert proc.stdin is not None and proc.stdout is not None
     for line in proc.stdout:
         if line.startswith("{") and json.loads(line).get("phase") == "running":
             break

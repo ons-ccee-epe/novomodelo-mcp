@@ -245,6 +245,7 @@ class TestProfilesFromTheSelection:
         profile = tools_profile(tmp_path, ["deck_edit_json", "run_plan", "docs_list"])
         assert profile.heavy_tools == ("run_plan",)
         assert profile.write_tools == ("deck_edit_json",)
+        assert profile.sandbox is not None
         assert profile.sandbox.subtrees == ("newave/novomodelo-mini",)
         assert profile.sandbox.copy_bytes == 2
 

@@ -179,10 +179,14 @@ class TestFormatReport:
 class TestCtrlC:
     def test_first_ctrl_c_asks_for_a_graceful_stop_and_the_second_aborts(self) -> None:
         import signal
-        from types import SimpleNamespace
 
         stops: list[str] = []
-        runner = SimpleNamespace(request_stop=lambda: stops.append("stop"))
+
+        class Runner:
+            def request_stop(self) -> None:
+                stops.append("stop")
+
+        runner = Runner()
         previous = signal.getsignal(signal.SIGINT)
         try:
             run_mod._install_stop_handlers(runner, json_mode=False)

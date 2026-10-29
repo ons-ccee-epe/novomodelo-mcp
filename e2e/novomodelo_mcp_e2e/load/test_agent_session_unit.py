@@ -11,11 +11,12 @@ from novomodelo_mcp_e2e.config import Config
 from novomodelo_mcp_e2e.executor.container import Execucao
 from novomodelo_mcp_e2e.executor.eventos import Evento, Leitura
 from novomodelo_mcp_e2e.executor.imagens import ConfigMCP
+from novomodelo_mcp_e2e.load.agent_cases import AgentSelection
 from novomodelo_mcp_e2e.load.agent_engine import PreflightResult
 from novomodelo_mcp_e2e.load.agent_session import AGENTE_DO_PROVEDOR, ExecutorSessionRunner
 from novomodelo_mcp_e2e.load.agent_setup import session_factory
 from novomodelo_mcp_e2e.load.fakes import make_case
-from novomodelo_mcp_e2e.resultado.modelos import Registro
+from novomodelo_mcp_e2e.resultado.modelos import Estado, Registro
 
 CONFIG_MCP = ConfigMCP("mcp-0.19.0", Path("/nao/usado.whl"))
 
@@ -64,7 +65,7 @@ def _leitura() -> Leitura:
 
 
 class _Executor:
-    def __init__(self, estado: str = "passou", motivo: str = "") -> None:
+    def __init__(self, estado: Estado = "passou", motivo: str = "") -> None:
         self.estado, self.motivo = estado, motivo
         self.chamadas: list[tuple[Execucao, Path]] = []
 
@@ -79,7 +80,7 @@ class _Executor:
             agente=e.agente,
             config=e.config,
             repeticao=e.repeticao,
-            estado=self.estado,  # type: ignore[arg-type]
+            estado=self.estado,
             motivo=self.motivo,
             tools=(),
             duracao_s=4.0,
@@ -149,7 +150,9 @@ def test_marcador_de_caso_nao_publico_e_recusado(tmp_path: Path) -> None:
 
 def test_fabrica_cria_uma_sessao_com_pasta_propria(tmp_path: Path) -> None:
     factory = session_factory("kiro-cli", CONFIG_MCP, _cfg(tmp_path), tmp_path / "run", None)
-    primeira = factory(0, PreflightResult(selection=None))  # type: ignore[arg-type]
-    segunda = factory(1, PreflightResult(selection=None))  # type: ignore[arg-type]
+    primeira = factory(0, PreflightResult(selection=AgentSelection()))
+    segunda = factory(1, PreflightResult(selection=AgentSelection()))
+    assert isinstance(primeira, ExecutorSessionRunner)
+    assert isinstance(segunda, ExecutorSessionRunner)
     assert primeira._pasta != segunda._pasta
     assert primeira._agente == AGENTE_DO_PROVEDOR["kiro-cli"] == "kiro"

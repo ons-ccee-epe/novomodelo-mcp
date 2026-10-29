@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -43,7 +44,7 @@ NOME = "bateria-teste-1"
 
 
 def _exec(**k) -> Execucao:
-    base = dict(
+    base: dict[str, Any] = dict(
         conjunto="usuario",
         caso="caso-exemplo",
         agente="claude",

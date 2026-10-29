@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from typing import Any
 
 import pytest
 
@@ -36,7 +37,12 @@ def fast_ticks(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _config(**overrides) -> AgentLoadConfig:
-    values = {"concurrency": 2, "duration_s": 5.0, "iterations": 2, "provider": "claude"}
+    values: dict[str, Any] = {
+        "concurrency": 2,
+        "duration_s": 5.0,
+        "iterations": 2,
+        "provider": "claude",
+    }
     values.update(overrides)
     return AgentLoadConfig(**values)
 
@@ -283,7 +289,9 @@ class TestAgentFailure:
             "mcp_servers": [{"name": "novomodelo", "status": status}],
         }
         result = make_query_result(CASE_A, tools=("Glob", "Bash"), stdout=json.dumps(init))
-        assert f"não conectou no agente (status: {status})" in agent_failure(result)
+        failure = agent_failure(result)
+        assert failure is not None
+        assert f"não conectou no agente (status: {status})" in failure
 
     def test_connected_mcp_server_is_not_a_failure(self) -> None:
         init = {
@@ -295,7 +303,9 @@ class TestAgentFailure:
 
     def test_stderr_tail_is_kept_in_the_message(self) -> None:
         result = make_query_result(CASE_A, tools=(), response="", stderr="erro de login\n")
-        assert "erro de login" in agent_failure(result)
+        failure = agent_failure(result)
+        assert failure is not None
+        assert "erro de login" in failure
 
 
 class TestCopyPerSession:

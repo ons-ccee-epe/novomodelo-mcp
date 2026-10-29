@@ -6,6 +6,7 @@ import json
 from dataclasses import fields
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -55,7 +56,9 @@ FIX = Path(__file__).resolve().parents[2] / "executor" / "fixtures"
 
 
 def _cen(**k) -> Cenario:
-    base = dict(id="x", persona="iniciante", pedido="p", tools_esperadas=("server_info",))
+    base: dict[str, Any] = dict(
+        id="x", persona="iniciante", pedido="p", tools_esperadas=("server_info",)
+    )
     return Cenario(**{**base, **k})
 
 

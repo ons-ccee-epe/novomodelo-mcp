@@ -6,6 +6,7 @@ import asyncio
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -23,7 +24,12 @@ def short_windows(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _config(**overrides) -> LoadConfig:
-    values = {"concurrency": 2, "duration_s": 0.4, "tools": NO_FIXTURE_TOOLS, "timeout_s": 5.0}
+    values: dict[str, Any] = {
+        "concurrency": 2,
+        "duration_s": 0.4,
+        "tools": NO_FIXTURE_TOOLS,
+        "timeout_s": 5.0,
+    }
     values.update(overrides)
     return LoadConfig(**values)
 

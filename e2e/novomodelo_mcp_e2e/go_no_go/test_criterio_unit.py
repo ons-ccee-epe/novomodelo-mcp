@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 
 import pytest
 
@@ -229,7 +230,7 @@ def test_no_go_tem_precedencia_sobre_ausente():
 
 @pytest.mark.parametrize("base", ["nenhuma", "vazia", "com_grupo"])
 def test_conjunto_desconhecido_levanta(base):
-    estranho = Registro(**{**reg("tools", "t", "passou").__dict__, "conjunto": "outro"})
+    estranho = replace(reg("tools", "t", "passou"), conjunto="outro")
     bases = {"nenhuma": None, "vazia": [], "com_grupo": [estranho]}
     with pytest.raises(ValueError, match="conjunto desconhecido"):
         decidir([estranho], bases[base])

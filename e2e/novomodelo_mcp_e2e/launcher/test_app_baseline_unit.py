@@ -20,7 +20,7 @@ def _case(case_id: str, tags: list[str] | None = None) -> QueryTestCase:
         id=case_id,
         query="q",
         expected=ExpectedResult(uses_mcp=True, tool="server_info"),
-        tags=tags or [],
+        tags=tuple(tags or ()),
     )
 
 

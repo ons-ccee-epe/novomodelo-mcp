@@ -51,6 +51,7 @@ def test_a_process_that_vanishes_is_skipped() -> None:
     mb = 1024 * 1024
     psutil = _fake_psutil([_Process(1, 10.0, mb), _Process(2, 0.0, mb, dies=True)])
     sample = ResourceSampler(psutil, root_pid=99).sample()
+    assert sample is not None
     assert sample["processes"] == 1
 
 
@@ -72,7 +73,9 @@ def test_process_objects_are_reused_between_samples_to_keep_cpu_deltas() -> None
             "children": lambda self, recursive: [psutil_replacement],
         },
     )
-    assert sampler.sample()["cpu_percent"] == 10.0
+    sample = sampler.sample()
+    assert sample is not None
+    assert sample["cpu_percent"] == 10.0
 
 
 class TestSummarize:

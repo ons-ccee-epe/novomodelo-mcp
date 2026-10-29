@@ -153,6 +153,7 @@ class TestLifecycle:
         svc = _service(_CRASHES_SILENTLY)
         state = svc.start_run(CONFIG)
         assert _wait_until(lambda: state.status == "error")
+        assert state.error is not None
         assert "código 4" in state.error
 
     def test_the_run_is_listed_and_retrievable(self) -> None:
@@ -170,6 +171,7 @@ class TestCancel:
         svc = _service(_SPAWNS_CHILD_AND_WAITS, gate)
         state = svc.start_run(CONFIG)
         assert _wait_until(lambda: (state.progress or {}).get("child_pid"))
+        assert state.progress is not None
         child_pid = state.progress["child_pid"]
         assert _pid_alive(child_pid)
 
@@ -187,6 +189,7 @@ class TestCancel:
         svc = _service(_WRITES_IN_WORK_DIR_AND_WAITS)
         state = svc.start_run(CONFIG)
         assert _wait_until(lambda: (state.progress or {}).get("work_dir"))
+        assert state.progress is not None
         work_dir = Path(state.progress["work_dir"])
         assert (work_dir / "s0" / "fixtures" / "config.json").is_file()
 
@@ -198,6 +201,7 @@ class TestCancel:
         svc = _service(_WRITES_IN_WORK_DIR_AND_SAVES)
         state = svc.start_run(CONFIG)
         assert _wait_until(lambda: state.status == "done")
+        assert state.progress is not None
         work_dir = Path(state.progress["work_dir"])
         assert _wait_until(lambda: not work_dir.exists(), timeout=15), "a pasta do run sobrou"
 

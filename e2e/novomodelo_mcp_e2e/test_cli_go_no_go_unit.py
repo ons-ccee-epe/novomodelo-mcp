@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -30,6 +31,12 @@ VERSOES = {
         "juiz-temperatura",
     )
 }
+
+
+def _decisao(pasta: Path) -> dict[str, Any]:
+    decisao = ler_decisao(pasta)
+    assert decisao is not None
+    return decisao
 
 
 def _cfg(tmp_path: Path) -> Config:
@@ -353,13 +360,13 @@ def test_decisao_sem_base_grava_base_nula(tmp_path):
 def test_decisao_gravada_valida_contra_o_schema(tmp_path):
     pasta = _rodada(tmp_path, "r1", {"antiga": {"c": "passou"}, "nova": {"c": "falhou"}})
     assert _go("r1", "--alvo", "nova", "--baseline-config", "antiga") == 1
-    assert ler_decisao(pasta)["veredito"] == "no-go"
+    assert _decisao(pasta)["veredito"] == "no-go"
 
 
 def test_repeticoes_faltando_dao_inconclusivo_com_a_lista(tmp_path):
     pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, repeticoes=3)
     assert _go("r1", "--alvo", "mcp") == 2
-    dados = ler_decisao(pasta)
+    dados = _decisao(pasta)
     assert dados["veredito"] == "inconclusivo"
     assert dados["incompleto"] == ["tools/c/claude/mcp/2", "tools/c/claude/mcp/3"]
     relatorio = (pasta / "relatorio-go-no-go.md").read_text(encoding="utf-8")
@@ -370,7 +377,7 @@ def test_base_incompleta_tambem_da_inconclusivo(tmp_path):
     _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, repeticoes=2)
     _rodada(tmp_path, "r2", {"mcp": {"c": "passou"}})
     assert _go("r2", "--alvo", "mcp", "--baseline", "r1") == 2
-    assert ler_decisao(tmp_path / "res" / "r2")["incompleto"] == ["base: tools/c/claude/mcp/2"]
+    assert _decisao(tmp_path / "res" / "r2")["incompleto"] == ["base: tools/c/claude/mcp/2"]
 
 
 def test_so_a_config_do_alvo_precisa_estar_completa(tmp_path):
@@ -384,7 +391,7 @@ def test_so_a_config_do_alvo_precisa_estar_completa(tmp_path):
 def test_fim_com_codigo_nao_zero_ou_sem_fim_da_inconclusivo(tmp_path, codigo_fim):
     pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, codigo_fim=codigo_fim)
     assert _go("r1", "--alvo", "mcp") == 2
-    [item] = ler_decisao(pasta)["incompleto"]
+    [item] = _decisao(pasta)["incompleto"]
     assert "rodada.jsonl" in item
 
 
@@ -399,13 +406,13 @@ def test_vale_o_ultimo_fim_da_rodada_retomada(tmp_path):
 def test_falha_comprovada_continua_no_go_mesmo_incompleta(tmp_path):
     _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, det="falhou", codigo_fim=1)
     assert _go("r1", "--alvo", "mcp") == 1
-    assert ler_decisao(tmp_path / "res" / "r1")["incompleto"]
+    assert _decisao(tmp_path / "res" / "r1")["incompleto"]
 
 
 def test_rodada_completa_decide_normal_com_incompleto_vazio(tmp_path):
     pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}}, repeticoes=1)
     assert _go("r1", "--alvo", "mcp") == 0
-    assert ler_decisao(pasta)["incompleto"] == []
+    assert _decisao(pasta)["incompleto"] == []
     assert "Rodada completa." in (pasta / "relatorio-go-no-go.md").read_text(encoding="utf-8")
 
 

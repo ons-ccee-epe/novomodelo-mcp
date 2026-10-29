@@ -394,6 +394,7 @@ class TestValidateIntegration:
 
         assert not validation.valid
         assert validation.status == "fail"
+        assert validation.failure_reason is not None
         assert "MCP NÃO foi usado" in validation.failure_reason
 
     def test_validate_fail_wrong_tool(self):
@@ -422,6 +423,7 @@ class TestValidateIntegration:
 
         assert not validation.valid
         assert validation.status == "timeout"
+        assert validation.failure_reason is not None
         assert "timed out" in validation.failure_reason.lower()
 
 

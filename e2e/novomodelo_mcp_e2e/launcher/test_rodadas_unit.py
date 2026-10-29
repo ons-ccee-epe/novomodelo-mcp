@@ -9,6 +9,7 @@ import time
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -24,7 +25,7 @@ from novomodelo_mcp_e2e.launcher.service import (
     ambiente_do_subprocesso,
 )
 from novomodelo_mcp_e2e.resultado.armazenamento import gravar_manifesto, gravar_registro
-from novomodelo_mcp_e2e.resultado.modelos import Manifesto, Registro
+from novomodelo_mcp_e2e.resultado.modelos import Estado, Manifesto, Registro
 from novomodelo_mcp_e2e.rodada import ARQUIVO_BLOQUEIO
 
 LOCAL = "http://127.0.0.1:5175"
@@ -76,7 +77,7 @@ def _manifesto(nome: str) -> Manifesto:
     )
 
 
-def _registro(nome: str, estado: str = "passou") -> Registro:
+def _registro(nome: str, estado: Estado = "passou") -> Registro:
     return Registro(
         rodada=nome,
         conjunto="tools",
@@ -84,11 +85,17 @@ def _registro(nome: str, estado: str = "passou") -> Registro:
         agente="claude",
         config="sem-mcp",
         repeticao=1,
-        estado=estado,  # type: ignore[arg-type]
+        estado=estado,
         motivo="",
         tools=(),
         duracao_s=1.0,
     )
+
+
+def _disparo(service: service_mod.RodadaService, nome: str) -> dict[str, Any]:
+    disparo = service._disparo(nome)
+    assert disparo is not None
+    return disparo
 
 
 def _gravar(pasta: Path, nome: str) -> Path:
@@ -422,8 +429,9 @@ def test_espera_que_falha_encerra_a_arvore_varre_o_log_e_so_entao_libera_a_vaga(
             time.sleep(0.02)
     assert ordem == ["encerrado", "varrido"]
     assert service._gate.owner is None
-    assert service._disparo("r9")["codigo_saida"] is None
-    assert service._disparo("r9")["log_bloqueado"] is False
+    disparo = _disparo(service, "r9")
+    assert disparo["codigo_saida"] is None
+    assert disparo["log_bloqueado"] is False
 
 
 def test_varredura_do_log_que_quebra_bloqueia_o_log_e_libera_a_vaga(
@@ -441,7 +449,7 @@ def test_varredura_do_log_que_quebra_bloqueia_o_log_e_libera_a_vaga(
                 break
             time.sleep(0.02)
     assert service._gate.owner is None
-    assert service._disparo("r9")["log_bloqueado"] is True
+    assert _disparo(service, "r9")["log_bloqueado"] is True
     assert (
         (resultados / PASTA_LOGS / "r9.log").read_text(encoding="utf-8").startswith("log removido")
     )
@@ -460,4 +468,4 @@ def test_log_com_achado_do_gitleaks_e_apagado(resultados: Path, monkeypatch) -> 
             time.sleep(0.02)
     log = (resultados / PASTA_LOGS / "r9.log").read_text(encoding="utf-8")
     assert log.startswith("log removido")
-    assert service._disparo("r9")["log_bloqueado"] is True
+    assert _disparo(service, "r9")["log_bloqueado"] is True

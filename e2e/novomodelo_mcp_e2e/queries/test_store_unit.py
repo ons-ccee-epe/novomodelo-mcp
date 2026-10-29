@@ -29,6 +29,12 @@ from novomodelo_mcp_e2e.queries.store import (
 )
 
 
+def _baseline_id(store: ResultStore, conjunto: str | None = None) -> str:
+    baseline = store.get_baseline(conjunto)
+    assert baseline is not None
+    return baseline.batch_id
+
+
 @pytest.fixture
 def temp_dirs(tmp_path: Path) -> tuple[Path, Path]:
     """Cria diretórios temporários para testes."""
@@ -431,8 +437,8 @@ def test_set_baseline_per_conjunto_keeps_other_conjuntos(store: ResultStore):
     assert store.set_baseline(docs.batch_id) == "grupo:docs"
 
     assert store.get_baselines() == {"todos": "b_todos", "grupo:docs": "b_docs"}
-    assert store.get_baseline("grupo:docs").batch_id == "b_docs"
-    assert store.get_baseline("todos").batch_id == "b_todos"
+    assert _baseline_id(store, "grupo:docs") == "b_docs"
+    assert _baseline_id(store, "todos") == "b_todos"
     assert store.get_baseline("grupo:deck") is None
 
 
@@ -441,7 +447,7 @@ def test_legacy_baseline_file_maps_to_batch_conjunto(store: ResultStore):
     store.baseline_path.write_text(json.dumps({"batch_id": batch.batch_id}), encoding="utf-8")
 
     assert store.get_baselines() == {"grupo:docs": "b_docs"}
-    assert store.get_baseline().batch_id == "b_docs"
+    assert _baseline_id(store) == "b_docs"
 
 
 def test_baseline_to_missing_batch_is_ignored(store: ResultStore):
