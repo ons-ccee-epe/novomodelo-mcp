@@ -283,7 +283,10 @@ def test_nenhum_nome_interno_no_codigo(tmp_path):
     assert _checar(raiz, termos).returncode == 1
 
 
-@pytest.mark.parametrize("sujeira", [" M tests/decks/newave_mini/arquivo.txt\n", "?? novo.txt\n"])
+@pytest.mark.parametrize(
+    "sujeira",
+    [" M tests/decks/newave_mini/arquivo.txt\n", "?? novo.txt\n", "!! examples/1dtoy/output/\n"],
+)
 def test_cache_com_alteracao_ou_arquivo_novo_e_refeito(tmp_path, sujeira):
     cfg = _cfg(tmp_path)
     preparar_decks(VERSAO, COMMIT, cfg, rodar=GitFalso(COMMIT, _decks()))
@@ -310,7 +313,7 @@ def test_cache_intacto_e_reutilizado_com_a_conferencia_de_status(tmp_path):
     preparar_decks(VERSAO, COMMIT, cfg, rodar=git)
     assert not any(c[1] == "clone" for c in git.chamadas)
     status = next(c for c in git.chamadas if c[1] == "status")
-    assert status[2:] == ["--porcelain", "--untracked-files=all"]
+    assert status[2:] == ["--porcelain", "--untracked-files=all", "--ignored"]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="link simbólico exige privilégio")
@@ -363,3 +366,13 @@ def test_1dtoy_rodado_recusa_caminho_com_virgula(tmp_path):
 def test_resolver_recusa_separador_e_pai_no_nome(tmp_path, nome):
     with pytest.raises(ValueError):
         resolver(nome, _cfg(tmp_path), tmp_path)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="link simbólico exige privilégio")
+def test_laco_de_links_e_recusado(tmp_path):
+    fonte = tmp_path / "fonte"
+    fonte.mkdir()
+    (fonte / "a").symlink_to("b")
+    (fonte / "b").symlink_to("a")
+    with pytest.raises(FalhaPreparo, match="link simbólico"):
+        casos._publicar(fonte, tmp_path / "saida")

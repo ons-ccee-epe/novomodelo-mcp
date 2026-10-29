@@ -117,7 +117,9 @@ def _clone_esparso(
             intacto = (
                 _git(["rev-parse", "HEAD"], rodar, cwd=destino).strip() == commit
                 and not _git(
-                    ["status", "--porcelain", "--untracked-files=all"], rodar, cwd=destino
+                    ["status", "--porcelain", "--untracked-files=all", "--ignored"],
+                    rodar,
+                    cwd=destino,
                 ).strip()
             )
             if intacto:
@@ -141,8 +143,14 @@ def _clone_esparso(
 def _recusar_links_para_fora(origem: Path) -> None:
     raiz = origem.resolve()
     for caminho in origem.rglob("*"):
-        if caminho.is_symlink() and not caminho.resolve().is_relative_to(raiz):
-            raise FalhaPreparo(f"link simbólico para fora da pasta copiada: {caminho.name}")
+        try:
+            fora = caminho.is_symlink() and not caminho.resolve().is_relative_to(raiz)
+        except (OSError, RuntimeError):
+            fora = True
+        if fora:
+            raise FalhaPreparo(
+                f"link simbólico inválido ou para fora da pasta copiada: {caminho.name}"
+            )
 
 
 def _publicar(origem: Path, destino: Path) -> None:
