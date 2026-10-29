@@ -234,7 +234,7 @@ def fake_build_result(status_by_case: dict[str, str] | None = None):
 class AlwaysValid:
     """Validador falso: o status sai do ``fake_build_result``."""
 
-    def validate(self, _case: QueryTestCase, _result: QueryResult) -> None:
+    def validate(self, test_case: QueryTestCase, result: QueryResult) -> None:
         return None
 
 
@@ -261,15 +261,16 @@ class FakeCaseRunner:
         self.log = log if log is not None else []
         self.cancelled = False
         self.closed = False
+        self.copy_ms: float | None = None
 
-    def execute(self, case: QueryTestCase) -> QueryResult:
-        self.log.append(("execute", self.index, case.id))
+    def execute(self, test_case: QueryTestCase) -> QueryResult:
+        self.log.append(("execute", self.index, test_case.id))
         if self._block:
             self._cancel.wait(30)
-            return make_query_result(case, status="cancelled")
+            return make_query_result(test_case, status="cancelled")
         if self._cancel.wait(self._delay_s):
-            return make_query_result(case, status="cancelled")
-        return self._respond(case)
+            return make_query_result(test_case, status="cancelled")
+        return self._respond(test_case)
 
     def cancel(self) -> None:
         self.cancelled = True

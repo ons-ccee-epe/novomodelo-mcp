@@ -36,7 +36,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, Protocol, TextIO
 
 from novomodelo_mcp_e2e.config import carregar_config, verificar
 from novomodelo_mcp_e2e.executor.imagens import ler_config_mcp, tag_imagem
@@ -376,7 +376,11 @@ def format_report(record: dict[str, Any]) -> str:
 _PARENT_GONE = threading.Event()
 
 
-def _watch_stdin(runner: LoadRunner | AgentLoadRunner) -> None:
+class _StopRequester(Protocol):
+    def request_stop(self) -> None: ...
+
+
+def _watch_stdin(runner: _StopRequester) -> None:
     """EOF no stdin = o launcher saiu ou cancelou: interrompe sem gravar."""
 
     def watch() -> None:
@@ -528,7 +532,7 @@ def stderr_tail(path: Path, max_lines: int = 3) -> str:
     return " / ".join(filled[-max_lines:])[:_STDERR_TAIL_CHARS]
 
 
-def _install_stop_handlers(runner: LoadRunner | AgentLoadRunner, json_mode: bool) -> None:
+def _install_stop_handlers(runner: _StopRequester, json_mode: bool) -> None:
     interrupts = 0
 
     def on_sigint(_signum: int, _frame: Any) -> None:

@@ -175,6 +175,10 @@ class CaseRunner(Protocol):
     def close(self) -> None: ...
 
 
+class Validator(Protocol):
+    def validate(self, test_case: QueryTestCase, result: QueryResult) -> Any: ...
+
+
 RunnerFactory = Callable[[int, PreflightResult], CaseRunner]
 Preflight = Callable[[], PreflightResult]
 
@@ -270,7 +274,7 @@ class AgentLoadRunner:
         preflight: Preflight,
         runner_factory: RunnerFactory,
         build_result: Callable[[QueryTestCase, QueryResult, Any], TestResult],
-        validator: QueryValidator | None = None,
+        validator: Validator | None = None,
         on_progress: Callable[[dict[str, Any]], None] | None = None,
         resource_sampler: ResourceSampler | None = None,
         clock: Callable[[], float] = time.perf_counter,
