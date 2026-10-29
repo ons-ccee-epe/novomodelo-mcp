@@ -75,6 +75,23 @@ jobs:
       - name: Segredos no histórico inteiro (gitleaks)
         run: gitleaks git --redact --no-banner .
 
+      # As regras padrão do gitleaks não reconhecem o token OAuth do Claude: a regra do
+      # .gitleaks.toml tem de acusar os três formatos, ou o job falha.
+      - name: A config do gitleaks acusa os tokens falsos da Anthropic
+        run: |
+          pasta="$(mktemp -d)"
+          mkdir "$pasta/tokens"
+          for formato in oat api admin; do
+            printf 'eco sk-ant-%s01-%s\n' "$formato" "FalsoDeTesteDaCi00000000" > "$pasta/tokens/$formato.txt"
+          done
+          set +e
+          gitleaks dir --redact --no-banner --config .gitleaks.toml --exit-code 1 \
+            --report-format json --report-path "$pasta/achados.json" "$pasta/tokens"
+          codigo=$?
+          set -e
+          test "$codigo" -eq 1
+          python3 -c 'import json, sys; n = len(json.load(open(sys.argv[1]))); sys.exit(0 if n == 3 else f"esperados 3 achados, vieram {n}")' "$pasta/achados.json"
+
       # O histórico antigo ainda tem termos até a limpeza; até lá a CI olha só a árvore.
       - name: Termos proibidos na árvore
         run: python3 scripts/ci/check_termos_proibidos.py

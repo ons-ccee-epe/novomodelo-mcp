@@ -12,6 +12,7 @@ import hashlib
 import json
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,8 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from collections import deque
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,7 +30,13 @@ from pathlib import Path
 from tests.e2e.config import Config
 from tests.e2e.conjuntos.tools.adaptador import avaliar_tools, carregar_casos, para_execucoes
 from tests.e2e.conjuntos.usuario.cenario import Cenario, cenarios_da_rodada
-from tests.e2e.conjuntos.usuario.juiz import JUIZ_PADRAO, MOTIVO_LIMITE, Juiz, no_manifesto
+from tests.e2e.conjuntos.usuario.juiz import (
+    JUIZ_PADRAO,
+    MOTIVO_LIMITE,
+    Juiz,
+    no_manifesto,
+    prefixo_do_juiz,
+)
 from tests.e2e.conjuntos.usuario.pontuar import avaliar_usuario
 from tests.e2e.executor.casos import CASOS_GRANDES, pasta_preparados, resolver
 from tests.e2e.executor.container import (
@@ -70,7 +78,7 @@ ARQUIVO_LOG = "rodada.jsonl"
 ARQUIVO_BLOQUEIO = "BLOQUEADO-SEGREDO.txt"
 MARCA_DETERMINISTICA = "concluida"
 CONFIG_GITLEAKS = RAIZ / ".gitleaks.toml"
-LIMITES_SEGUIDOS = 3
+SUSPEITAS_DE_LIMITE = 3
 TEMPO_FIM_THREADS = 120
 ORIGEM_NAO_INFORMADA = "não informada"
 NAO_USADO = "não usado nesta rodada"
@@ -90,7 +98,7 @@ CODIGOS_DE_SAIDA = {
     ),
     CODIGO_RECUSA: "argumentos inválidos ou retomada recusada (outro plano, filtro ou commit)",
     CODIGO_SEGREDO: "segredo na pasta da rodada, ou varredura do gitleaks que não rodou",
-    CODIGO_LIMITE: "limite de uso do agente ou do juiz (ou o mesmo limite 3 vezes seguidas)",
+    CODIGO_LIMITE: "limite de uso do agente ou do juiz, ou provável falso positivo do detector",
     CODIGO_ORCAMENTO: "orçamento de execuções ou de minutos estourado",
     CODIGO_INTERROMPIDA: "interrompida pelo Ctrl-C",
 }
@@ -292,7 +300,10 @@ def varrer_segredos(pasta: Path, config: Path = CONFIG_GITLEAKS) -> Varredura:
 
 
 def encerrar_em_voo(cfg: Config, prefixos: Sequence[str]) -> list[str]:
-    """Remove os containers da bateria cujo nome começa por um dos prefixos; devolve os nomes."""
+    """Remove os containers da bateria cujo nome é `<prefixo>-…`; devolve os nomes.
+
+    O separador entra na comparação: sem ele, o prefixo da repetição 1 casaria a 10.
+    """
     if not prefixos:
         return []
     try:
@@ -313,7 +324,7 @@ def encerrar_em_voo(cfg: Config, prefixos: Sequence[str]) -> list[str]:
         )
     except (OSError, subprocess.SubprocessError):
         return []
-    nomes = [n for n in feito.stdout.split() if n.startswith(tuple(prefixos))]
+    nomes = [n for n in feito.stdout.split() if n.startswith(tuple(f"{p}-" for p in prefixos))]
     for nome in nomes:
         encerrar_container(cfg.motor, nome)
     return nomes
@@ -565,8 +576,11 @@ class _Controle:
     iniciadas: int = 0
     esperado_s: float = 0.0
     parada: str | None = None
-    limites_seguidos: dict[str, int] = field(default_factory=dict)
+    suspeitas: dict[str, int] = field(default_factory=dict)
+    limites_na_passada: list[str] = field(default_factory=list)
+    concluidas_na_passada: int = 0
     em_voo: dict[str, Execucao] = field(default_factory=dict)
+    pasta: Path | None = None
     trava: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -609,6 +623,72 @@ def rodar(
     if not configs:
         raise RodadaInterrompida(CODIGO_RECUSA, "nenhuma configuração do MCP")
     ctl = _Controle(t0=dep.relogio())
+    pasta: Path | None = None
+    log: _Log | None = None
+    try:
+        pasta, log, codigo, motivo = _preparar_e_rodar(
+            rodada,
+            configs,
+            conjuntos,
+            agentes,
+            repeticoes,
+            cfg,
+            orcamento,
+            paralelo_por_agente,
+            filtro,
+            completa,
+            origens,
+            esperar_limite_min,
+            juiz,
+            dep,
+            ctl,
+        )
+    except KeyboardInterrupt:
+        codigo, motivo = (
+            CODIGO_INTERROMPIDA,
+            "rodada interrompida (Ctrl-C); retome com o mesmo --rodada",
+        )
+        pasta = ctl.pasta
+        log = _Log(pasta) if pasta is not None else None
+        if log is not None:
+            log("interrompida", em_voo=[])
+    if pasta is None or log is None:
+        raise RodadaInterrompida(codigo, motivo)
+    with _sem_ctrl_c():
+        varredura = dep.varrer(pasta)
+        if varredura.erro or varredura.arquivos:
+            linhas = [varredura.erro] if varredura.erro else []
+            linhas += [f"segredo encontrado em: {a}" for a in varredura.arquivos]
+            (pasta / ARQUIVO_BLOQUEIO).write_text("\n".join(linhas) + "\n", encoding="utf-8")
+            log("segredo", arquivos=list(varredura.arquivos), erro=varredura.erro)
+            raise RodadaInterrompida(
+                CODIGO_SEGREDO,
+                f"varredura de segredos bloqueou a rodada: {ARQUIVO_BLOQUEIO}",
+                pasta,
+            )
+        log("fim", codigo=codigo, motivo=motivo)
+    if codigo:
+        raise RodadaInterrompida(codigo, motivo, pasta)
+    return pasta
+
+
+def _preparar_e_rodar(
+    rodada: str,
+    configs: Sequence[ConfigMCP],
+    conjuntos: Sequence[Conjunto],
+    agentes: Sequence[str],
+    repeticoes: int,
+    cfg: Config,
+    orcamento: Orcamento,
+    paralelo_por_agente: int,
+    filtro: str | None,
+    completa: bool,
+    origens: Mapping[str, str],
+    esperar_limite_min: int | None,
+    juiz: Juiz,
+    dep: Dependencias,
+    ctl: _Controle,
+) -> tuple[Path, _Log, int, str]:
     com_juiz = "usuario" in conjuntos
     imagem_juiz = tag_imagem(_config_do_juiz(configs), "claude")
     imagens: dict[str, dict[str, str]] = {}
@@ -651,39 +731,26 @@ def rodar(
     else:
         pasta.mkdir(parents=True, exist_ok=True)
         gravar_manifesto(pasta, manifesto)
+    ctl.pasta = pasta
     log = _Log(pasta)
     log("inicio", execucoes_planejadas=len(planejadas))
 
-    try:
-        codigo, motivo = _rodar_tudo(
-            pasta,
-            planejadas,
-            cfg,
-            orcamento,
-            paralelo_por_agente,
-            agentes,
-            leituras,
-            imagem_juiz,
-            juiz,
-            esperar_limite_min,
-            dep,
-            ctl,
-            log,
-        )
-    finally:
-        varredura = dep.varrer(pasta)
-    if varredura.erro or varredura.arquivos:
-        linhas = [varredura.erro] if varredura.erro else []
-        linhas += [f"segredo encontrado em: {a}" for a in varredura.arquivos]
-        (pasta / ARQUIVO_BLOQUEIO).write_text("\n".join(linhas) + "\n", encoding="utf-8")
-        log("segredo", arquivos=list(varredura.arquivos), erro=varredura.erro)
-        raise RodadaInterrompida(
-            CODIGO_SEGREDO, f"varredura de segredos bloqueou a rodada: {ARQUIVO_BLOQUEIO}", pasta
-        )
-    log("fim", codigo=codigo, motivo=motivo)
-    if codigo:
-        raise RodadaInterrompida(codigo, motivo, pasta)
-    return pasta
+    codigo, motivo = _rodar_tudo(
+        pasta,
+        planejadas,
+        cfg,
+        orcamento,
+        paralelo_por_agente,
+        agentes,
+        leituras,
+        imagem_juiz,
+        juiz,
+        esperar_limite_min,
+        dep,
+        ctl,
+        log,
+    )
+    return pasta, log, codigo, motivo
 
 
 def _rodar_tudo(
@@ -748,8 +815,8 @@ def _rodar_tudo(
         if ctl.parada == "limite_repetido":
             return (
                 CODIGO_LIMITE,
-                f"limite de uso {LIMITES_SEGUIDOS} vezes seguidas na mesma execução; "
-                "confira a conta antes de retomar",
+                f"a mesma execução bateu o limite {SUSPEITAS_DE_LIMITE} vezes enquanto outras "
+                "concluíam: provável falso positivo do detector; confira antes de retomar",
             )
         if ctl.parada == "orcamento":
             log("orcamento", iniciadas=ctl.iniciadas)
@@ -862,15 +929,10 @@ def _rodar_pendentes(
         shutil.rmtree(_pasta_da_execucao(pasta, e), ignore_errors=True)
         with ctl.trava:
             ctl.iniciadas -= 1
-            seguidos = ctl.limites_seguidos.get(rotulo, 0) + 1
-            ctl.limites_seguidos[rotulo] = seguidos
-            if seguidos >= LIMITES_SEGUIDOS:
-                ctl.parada = "limite_repetido"
-            elif ctl.parada is None:
+            ctl.limites_na_passada.append(rotulo)
+            if ctl.parada is None:
                 ctl.parada = "limite"
-        log("limite", execucao=rotulo, motivo=motivo, seguidos=seguidos)
-        if seguidos >= LIMITES_SEGUIDOS:
-            log("limite_repetido", execucao=rotulo, seguidos=seguidos)
+        log("limite", execucao=rotulo, motivo=motivo)
         print(f"limite     {rotulo}: {motivo}", flush=True)
 
     def trabalhador(fila: deque[Planejada]) -> None:
@@ -898,9 +960,11 @@ def _rodar_pendentes(
                 limite(e, r.motivo)
                 continue
             with ctl.trava:
-                ctl.limites_seguidos.clear()
+                ctl.concluidas_na_passada += 1
             print(f"{r.estado:<10} {_rotulo(e)} ({r.duracao_s:.0f} s)", flush=True)
 
+    ctl.limites_na_passada.clear()
+    ctl.concluidas_na_passada = 0
     threads = [
         threading.Thread(target=trabalhador, args=(fila,), daemon=True)
         for fila in filas.values()
@@ -913,12 +977,50 @@ def _rodar_pendentes(
             while t.is_alive():
                 t.join(timeout=0.5)
     except KeyboardInterrupt:
-        with ctl.trava:
-            ctl.parada = "interrompida"
-            em_voo = list(ctl.em_voo.values())
-        log("interrompida", em_voo=[_rotulo(e) for e in em_voo])
-        print("interrompida: encerrando os containers em voo", flush=True)
-        dep.encerrar_em_voo(cfg, [prefixo_do_container(e, pasta.name) for e in em_voo])
-        prazo = time.monotonic() + TEMPO_FIM_THREADS
-        for t in threads:
-            t.join(timeout=max(0.0, prazo - time.monotonic()))
+        with _sem_ctrl_c():
+            with ctl.trava:
+                ctl.parada = "interrompida"
+                em_voo = list(ctl.em_voo.values())
+            log("interrompida", em_voo=[_rotulo(e) for e in em_voo])
+            print("interrompida: encerrando os containers em voo", flush=True)
+            prefixos = [prefixo_do_container(e, pasta.name) for e in em_voo]
+            prefixos += [
+                prefixo_do_juiz(_pasta_da_execucao(pasta, e))
+                for e in em_voo
+                if e.conjunto == "usuario"
+            ]
+            dep.encerrar_em_voo(cfg, prefixos)
+            prazo = time.monotonic() + TEMPO_FIM_THREADS
+            for t in threads:
+                t.join(timeout=max(0.0, prazo - time.monotonic()))
+        return
+    _contar_suspeitas(ctl, log)
+
+
+def _contar_suspeitas(ctl: _Controle, log: _Log) -> None:
+    """Separa a janela real de limite de um falso positivo do detector.
+
+    Se todas as execuções tentadas bateram o limite, é a janela real: espera de novo, sem
+    teto. Se outra concluiu na mesma passada, a que bateu o limite fica mais suspeita; com
+    `SUSPEITAS_DE_LIMITE`, a rodada para em vez de gastar a conta esperando à toa.
+    """
+    if not ctl.limites_na_passada or not ctl.concluidas_na_passada:
+        return
+    for rotulo in ctl.limites_na_passada:
+        ctl.suspeitas[rotulo] = ctl.suspeitas.get(rotulo, 0) + 1
+        if ctl.suspeitas[rotulo] >= SUSPEITAS_DE_LIMITE:
+            ctl.parada = "limite_repetido"
+            log("limite_repetido", execucao=rotulo, suspeitas=ctl.suspeitas[rotulo])
+
+
+@contextmanager
+def _sem_ctrl_c() -> Iterator[None]:
+    """Ignora um novo Ctrl-C até a limpeza terminar (só a thread principal recebe sinais)."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    anterior = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, anterior)

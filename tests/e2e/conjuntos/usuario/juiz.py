@@ -9,6 +9,7 @@ então a pedida vai só para o manifesto, marcada como não aplicada.
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import subprocess
 from dataclasses import dataclass
@@ -38,6 +39,9 @@ NOTAS = (0, 1, 2)
 ARQUIVO_LOG = "juiz.jsonl"
 MOTIVO_LIMITE = "limite de uso do juiz atingido"
 NEUTRALIZADO = "[delimitador removido]"
+PREFIXO_JUIZ = "novomodelo-bateria-juiz"
+_FORA_DO_NOME = re.compile(r"[^A-Za-z0-9_.-]+")
+_PARTES_DA_EXECUCAO = 5
 
 CRITERIO = """Você é avaliador de respostas de um assistente de IA para estudos de planejamento \
 da operação do sistema elétrico (modelo novomodelo, sucessor do NEWAVE). Avalie SÓ a resposta \
@@ -89,6 +93,24 @@ def no_manifesto(j: Juiz) -> dict[str, str]:
             f"padrão do CLI (pedida {j.temperatura}; o CLI do Claude não tem opção de temperatura)"
         ),
     }
+
+
+def prefixo_do_juiz(destino_log: Path) -> str:
+    """O nome do container do juiz sem tentativa nem sufixo: a rodada e a execução.
+
+    `destino_log` é a pasta da execução (`caminho_execucao`): a rodada fica cinco níveis
+    acima de `<conjunto>/<caso>/<agente>/<config>/<rep>`.
+    """
+    partes = destino_log.parts[-_PARTES_DA_EXECUCAO:]
+    rodada = destino_log.parents[_PARTES_DA_EXECUCAO].name
+    base = "-".join((PREFIXO_JUIZ, rodada, *partes))
+    return _FORA_DO_NOME.sub("-", base)[:150]
+
+
+def nome_do_juiz(destino_log: Path | None, imagem: str, tentativa: int) -> str:
+    if destino_log is None or len(destino_log.parts) <= _PARTES_DA_EXECUCAO + 1:
+        return nome_container(_execucao(imagem, tentativa), "juiz")
+    return f"{prefixo_do_juiz(destino_log)}-t{tentativa}-{secrets.token_hex(4)}"
 
 
 def delimitadores(nonce: str) -> tuple[str, str]:
@@ -244,7 +266,7 @@ def julgar(
     segredos = _segredos(cfg)
     motivos = []
     for tentativa in range(1, TENTATIVAS + 1):
-        nome = nome_container(_execucao(imagem, tentativa), "juiz")
+        nome = nome_do_juiz(destino_log, imagem, tentativa)
         cmd = comando_juiz(j, cfg, imagem, nome)
         try:
             saida = rodar_juiz(cmd, texto)

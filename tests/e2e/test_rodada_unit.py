@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,7 @@ import pytest
 from tests.e2e import __main__ as cli
 from tests.e2e import rodada
 from tests.e2e.config import Config
-from tests.e2e.conjuntos.usuario.juiz import JUIZ_PADRAO, LimiteDeUsoJuiz
+from tests.e2e.conjuntos.usuario.juiz import JUIZ_PADRAO, LimiteDeUsoJuiz, prefixo_do_juiz
 from tests.e2e.executor import container
 from tests.e2e.executor.container import Execucao, Saida
 from tests.e2e.executor.eventos import Leitura
@@ -61,6 +62,7 @@ class Falsos:
         self.passo = 0.0
         self.log_com_token = False
         self.det_chamadas = 0
+        self.duracao = 0.0
         self.antes_de_executar = None
         self.encerrados: list[list[str]] = []
 
@@ -73,6 +75,8 @@ class Falsos:
         if self.limites.get(chave, 0) > 0:
             self.limites[chave] -= 1
             motivo = rodada.MOTIVO_LIMITE_AGENTE
+        else:
+            time.sleep(self.duracao)
         r = Registro(
             rodada=pasta.name,
             conjunto=e.conjunto,
@@ -657,22 +661,49 @@ def test_execucao_apagada_por_limite_nao_conta_no_orcamento(tmp_path):
     assert [r.estado for r in _agentes(pasta)] == ["passou"]
 
 
-def test_tres_limites_seguidos_na_mesma_execucao_saem_com_4(tmp_path):
-    f = Falsos(limites={"usuario/i01-comecar/claude/mcp-1.2.3/1": 99})
-    with pytest.raises(rodada.RodadaInterrompida) as erro:
-        _rodar(f, _cfg(tmp_path), [_wheel(tmp_path)], esperar_limite_min=1)
-    assert erro.value.codigo == rodada.CODIGO_LIMITE
-    assert len(f.execucoes) == rodada.LIMITES_SEGUIDOS
-    assert len(f.esperas) == rodada.LIMITES_SEGUIDOS - 1
-    eventos = [json.loads(linha)["evento"] for linha in _log(erro.value.pasta)]
-    assert "limite_repetido" in eventos
-
-
-def test_limite_que_alterna_com_execucao_concluida_nao_atinge_o_teto(tmp_path):
+def test_janela_real_longa_espera_quantas_vezes_for_preciso(tmp_path):
     rotulo = "usuario/i01-comecar/claude/mcp-1.2.3/{}"
-    f = Falsos(limites={rotulo.format(1): 2, rotulo.format(2): 2})
-    pasta = _rodar(f, _cfg(tmp_path), [_wheel(tmp_path)], repeticoes=2, esperar_limite_min=1)
-    assert [r.estado for r in _agentes(pasta)] == ["passou", "passou"]
+    f = Falsos(limites={rotulo.format(r): 6 for r in (1, 2, 3)})
+    pasta = _rodar(
+        f, _cfg(tmp_path), [_wheel(tmp_path)], repeticoes=3, esperar_limite_min=1,
+        paralelo_por_agente=3,
+    )  # fmt: skip
+    assert len(f.esperas) >= 6
+    assert [r.estado for r in _agentes(pasta)] == ["passou"] * 3
+    eventos = [json.loads(linha)["evento"] for linha in _log(pasta)]
+    assert "limite_repetido" not in eventos
+
+
+def test_falso_positivo_de_limite_para_com_4(tmp_path):
+    sempre = "usuario/i01-comecar/claude/mcp-1.2.3/1"
+    f = Falsos(limites={sempre: 99})
+    f.duracao = 0.2
+    outras = {"desde_a": 0}
+
+    def a_espera_outras_comecarem(e):
+        if rodada._rotulo(e) != sempre:
+            outras["desde_a"] += 1
+            return
+        prazo = time.monotonic() + 2
+        while outras["desde_a"] < 2 and time.monotonic() < prazo:
+            time.sleep(0.005)
+        outras["desde_a"] = 0
+
+    f.antes_de_executar = a_espera_outras_comecarem
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        _rodar(
+            f, _cfg(tmp_path), [_wheel(tmp_path)], repeticoes=9, esperar_limite_min=1,
+            paralelo_por_agente=3,
+        )  # fmt: skip
+    assert erro.value.codigo == rodada.CODIGO_LIMITE
+    assert "falso positivo" in str(erro.value)
+    tentativas = [e for e in f.execucoes if rodada._rotulo(e) == sempre]
+    assert len(tentativas) == rodada.SUSPEITAS_DE_LIMITE
+    assert not rodada._pasta_da_execucao(erro.value.pasta, tentativas[0]).exists()
+    assert len(_agentes(erro.value.pasta)) >= rodada.SUSPEITAS_DE_LIMITE
+    linhas = [json.loads(linha) for linha in _log(erro.value.pasta)]
+    [repetido] = [e for e in linhas if e["evento"] == "limite_repetido"]
+    assert repetido["execucao"] == sempre
 
 
 def test_registro_com_motivo_de_limite_mas_sem_erro_infra_e_resultado(tmp_path):
@@ -736,7 +767,11 @@ def test_ctrl_c_encerra_containers_em_voo_varre_e_retoma(tmp_path):
         )
     assert erro.value.codigo == rodada.CODIGO_INTERROMPIDA
     [prefixos] = f.encerrados
-    assert prefixos == [rodada.prefixo_do_container(f.execucoes[0], "r1")]
+    destino = rodada._pasta_da_execucao(erro.value.pasta, f.execucoes[0])
+    assert prefixos == [
+        rodada.prefixo_do_container(f.execucoes[0], "r1"),
+        prefixo_do_juiz(destino),
+    ]
     assert f.varridas == [erro.value.pasta]
     assert _agentes(erro.value.pasta) == []
     assert "interrompida" in [json.loads(linha)["evento"] for linha in _log(erro.value.pasta)]
@@ -807,3 +842,114 @@ def test_ajuda_da_cli_documenta_os_codigos_de_saida(capsys):
     for codigo in (0, 1, 2, 3, 4, 5):
         assert f"{codigo} " in ajuda
     assert "pulado" in ajuda
+
+
+def test_ctrl_c_na_espera_do_limite_ainda_varre_e_bloqueia_segredo(tmp_path):
+    f = Falsos(limites={"usuario/i01-comecar/claude/mcp-1.2.3/1": 1})
+    vazado = _cfg(tmp_path).resultados / "r1" / "deterministica" / "saida.txt"
+
+    def vazar(e):
+        vazado.parent.mkdir(parents=True, exist_ok=True)
+        vazado.write_text(TOKEN_FALSO, encoding="utf-8")
+
+    f.antes_de_executar = vazar
+
+    def esperar(segundos):
+        raise KeyboardInterrupt
+
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "esperar": esperar})
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        rodada.rodar(
+            "r1",
+            [_wheel(tmp_path)],
+            ["usuario"],
+            ["claude"],
+            1,
+            _cfg(tmp_path),
+            filtro="i01*",
+            esperar_limite_min=1,
+            dep=dep,
+        )
+    assert erro.value.codigo == rodada.CODIGO_SEGREDO
+    bloqueio = (erro.value.pasta / rodada.ARQUIVO_BLOQUEIO).read_text(encoding="utf-8")
+    assert "deterministica/saida.txt" in bloqueio and TOKEN_FALSO not in bloqueio
+    assert f.varridas == [erro.value.pasta]
+
+
+def test_ctrl_c_na_espera_sem_segredo_sai_com_130(tmp_path):
+    f = Falsos(limites={"usuario/i01-comecar/claude/mcp-1.2.3/1": 1})
+
+    def esperar(segundos):
+        raise KeyboardInterrupt
+
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "esperar": esperar})
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        rodada.rodar(
+            "r1",
+            [_wheel(tmp_path)],
+            ["usuario"],
+            ["claude"],
+            1,
+            _cfg(tmp_path),
+            filtro="i01*",
+            esperar_limite_min=1,
+            dep=dep,
+        )
+    assert erro.value.codigo == rodada.CODIGO_INTERROMPIDA
+    assert f.varridas == [erro.value.pasta]
+    assert not (erro.value.pasta / rodada.ARQUIVO_BLOQUEIO).exists()
+
+
+def test_ctrl_c_na_construcao_sai_com_130_sem_pasta(tmp_path):
+    f = Falsos()
+
+    def construir(c, agente, cfg):
+        raise KeyboardInterrupt
+
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "construir": construir})
+    cfg = _cfg(tmp_path)
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        rodada.rodar("r1", [_wheel(tmp_path)], ["usuario"], ["claude"], 1, cfg, dep=dep)
+    assert erro.value.codigo == rodada.CODIGO_INTERROMPIDA
+    assert erro.value.pasta is None and f.varridas == []
+    assert not (cfg.resultados / "r1").exists()
+
+
+def test_segundo_ctrl_c_durante_a_limpeza_e_ignorado(tmp_path):
+    f = Falsos()
+    liberado = threading.Event()
+
+    def interromper(e):
+        _thread.interrupt_main()
+        assert liberado.wait(10)
+
+    def encerrar(cfg_, prefixos):
+        _thread.interrupt_main()
+        time.sleep(0.1)
+        liberado.set()
+        return list(prefixos)
+
+    f.antes_de_executar = interromper
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "encerrar_em_voo": encerrar})
+    with pytest.raises(rodada.RodadaInterrompida) as erro:
+        rodada.rodar(
+            "r1", [_wheel(tmp_path)], ["usuario"], ["claude"], 1, _cfg(tmp_path), filtro="i01*",
+            dep=dep,
+        )  # fmt: skip
+    assert erro.value.codigo == rodada.CODIGO_INTERROMPIDA
+    assert f.varridas == [erro.value.pasta]
+
+
+def test_encerrar_em_voo_usa_separador_no_prefixo(tmp_path, monkeypatch):
+    removidos = []
+    nomes = "novomodelo-bateria-r1-x-1-abcd1234\nnovomodelo-bateria-r1-x-10-abcd1234\n"
+    monkeypatch.setattr(
+        rodada.subprocess,
+        "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, nomes, ""),
+    )
+    monkeypatch.setattr(rodada, "encerrar_container", lambda m, n: removidos.append(n) or True)
+    assert rodada.encerrar_em_voo(_cfg(tmp_path), ["novomodelo-bateria-r1-x-1"]) == [
+        "novomodelo-bateria-r1-x-1-abcd1234"
+    ]
+    assert removidos == ["novomodelo-bateria-r1-x-1-abcd1234"]

@@ -27,6 +27,7 @@ from tests.e2e.conjuntos.usuario.juiz import (
     LimiteDeUsoJuiz,
     julgar,
     no_manifesto,
+    prefixo_do_juiz,
 )
 from tests.e2e.conjuntos.usuario.pontuar import (
     NOTA_MINIMA,
@@ -498,3 +499,14 @@ def test_fim_sem_tokens_fica_none():
     r = pontuar(_cen(), [Evento("fim", None, {}, 3.0, dados={"resposta": "ok"})])
     assert r.tokens_entrada is None and r.tokens_saida is None
     assert pontuar(_cen(), []).tokens_entrada is None
+
+
+def test_nome_do_container_do_juiz_leva_a_rodada_e_a_execucao(tmp_path, juiz_falso):
+    juiz_falso.saidas = [_saida_do_juiz('{"nota": 2, "justificativa": "ok"}')]
+    destino = tmp_path / "r7" / "execucoes" / "usuario" / "i01-comecar" / "claude" / "mcp-1.0" / "1"
+    julgar(JUIZ_PADRAO, _cen(), "resposta", _cfg(tmp_path), imagem=IMAGEM, destino_log=destino)
+    [cmd] = juiz_falso.cmds
+    nome = next(c.split("=", 1)[1] for c in cmd if c.startswith("--name="))
+    assert nome.startswith("novomodelo-bateria-juiz-r7-usuario-i01-comecar-claude-mcp-1.0-1-t1-")
+    assert nome.startswith(prefixo_do_juiz(destino) + "-")
+    assert juiz_falso.removidos == [nome]
