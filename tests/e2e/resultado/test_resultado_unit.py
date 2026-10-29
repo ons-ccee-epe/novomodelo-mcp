@@ -20,6 +20,7 @@ from tests.e2e.resultado.armazenamento import (
 )
 from tests.e2e.resultado.junit import escrever_junit
 from tests.e2e.resultado.modelos import (
+    SCHEMA_VERSAO,
     ChamadaTool,
     Manifesto,
     Registro,
@@ -147,3 +148,44 @@ def test_junit_mapeia_os_quatro_estados(tmp_path: Path) -> None:
     filhos = [[f.tag for f in c] for c in casos]
     assert filhos == [[], ["failure"], ["error"], ["skipped"]]
     assert casos[1].find("failure").get("message") == "resposta errada"
+
+
+@pytest.mark.parametrize("nome", ["../x", "/etc", "a/b", "a\\b", "..", ".", ""])
+@pytest.mark.parametrize("campo", ["caso", "agente", "config"])
+def test_caminho_execucao_recusa_nome_que_escapa(tmp_path: Path, campo: str, nome: str) -> None:
+    with pytest.raises(ValueError, match=campo):
+        caminho_execucao(tmp_path, _registro(**{campo: nome}))
+    assert not list(tmp_path.iterdir())
+
+
+def test_deterministica_com_hifen_passa(tmp_path: Path) -> None:
+    r = _registro(conjunto="deterministica", agente="-", config="-")
+    gravar_registro(tmp_path, r)
+    assert ler_registros(tmp_path) == [r]
+
+
+@pytest.mark.parametrize("campo", ["caso", "agente", "config"])
+@pytest.mark.parametrize("nome", ["a/b", "..", "", "a\\b"])
+def test_schema_recusa_nome_invalido(campo: str, nome: str) -> None:
+    dados = _registro().para_dict()
+    dados[campo] = nome
+    schema = json.loads(
+        (Path(__file__).parent / "schemas" / "registro.schema.json").read_text(encoding="utf-8")
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft202012Validator(schema).validate(dados)
+
+
+def test_junit_motivo_com_caractere_de_controle_gera_xml_valido(tmp_path: Path) -> None:
+    r = _registro(estado="falhou", motivo="saida\x00ruim\x1b[0m fim")
+    destino = escrever_junit([r], tmp_path / "junit.xml")
+    falha = ET.parse(destino).getroot().find(".//failure")
+    assert falha is not None
+    assert "\x00" not in falha.get("message")
+
+
+def test_schema_versao_bate_com_os_schemas() -> None:
+    pasta = Path(__file__).parent / "schemas"
+    for nome in ("registro", "manifesto"):
+        schema = json.loads((pasta / f"{nome}.schema.json").read_text(encoding="utf-8"))
+        assert schema["properties"]["schema_versao"]["const"] == SCHEMA_VERSAO

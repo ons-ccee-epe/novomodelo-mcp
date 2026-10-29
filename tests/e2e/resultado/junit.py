@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from pathlib import Path
 
 from tests.e2e.resultado.modelos import Registro
 
+_INVALIDOS_XML = re.compile("[^\t\n\r\u0020-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 _TAG_POR_ESTADO = {"falhou": "failure", "erro_infra": "error", "pulado": "skipped"}
 
 
@@ -32,7 +34,7 @@ def escrever_junit(registros: Iterable[Registro], destino: Path) -> Path:
         )
         tag = _TAG_POR_ESTADO.get(r.estado)
         if tag:
-            ET.SubElement(caso, tag, message=r.motivo)
+            ET.SubElement(caso, tag, message=_INVALIDOS_XML.sub("\ufffd", r.motivo))
     destino.parent.mkdir(parents=True, exist_ok=True)
     ET.ElementTree(suite).write(destino, encoding="utf-8", xml_declaration=True)
     return destino

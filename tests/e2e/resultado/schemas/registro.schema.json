@@ -32,13 +32,16 @@
       ]
     },
     "caso": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
     },
     "agente": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
     },
     "config": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
     },
     "repeticao": {
       "type": "integer",

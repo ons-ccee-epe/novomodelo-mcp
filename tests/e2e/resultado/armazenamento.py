@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from importlib import resources
 from pathlib import Path
@@ -15,6 +16,7 @@ from tests.e2e.resultado.modelos import SCHEMA_VERSAO, Manifesto, Registro, Vers
 
 NOME_MANIFESTO = "manifesto.json"
 NOME_REGISTRO = "registro.json"
+PADRAO_NOME = r"^(?!\.{1,2}$)[A-Za-z0-9._-]+$"
 
 
 def _schema(nome: str) -> dict[str, Any]:
@@ -73,6 +75,9 @@ def ler_manifesto(pasta: Path) -> Manifesto:
 
 
 def caminho_execucao(pasta: Path, r: Registro) -> Path:
+    for rotulo, valor in (("caso", r.caso), ("agente", r.agente), ("config", r.config)):
+        if not re.fullmatch(PADRAO_NOME, valor):
+            raise ValueError(f"{rotulo} {valor!r} não casa com {PADRAO_NOME}")
     return pasta / "execucoes" / r.conjunto / r.caso / r.agente / r.config / str(r.repeticao)
 
 
