@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -40,7 +42,12 @@ _TEMPO_LEITOR_ERRO = 30
 _TEMPO_REMOCAO = 30
 _MEMORIA_VALIDA = re.compile(r"[0-9]+[bkmgBKMG]?")
 _FORA_DO_NOME = re.compile(r"[^A-Za-z0-9_.-]+")
-_CAMINHO_ABSOLUTO = re.compile(r"(?<![\w.~:/-])(?:[A-Za-z]:[\\/]|\\\\|/)[^\s'\"]*")
+_INICIO_CAMINHO = r"(?:[A-Za-z]:[\\/]|\\\\|/(?!/))"
+_CAMINHO_ENTRE_ASPAS = re.compile(rf"'{_INICIO_CAMINHO}[^']*'|\"{_INICIO_CAMINHO}[^\"]*\"")
+_CAMINHO_ABSOLUTO = re.compile(
+    rf"(?<![\w.~/\\-]){_INICIO_CAMINHO}[^\s'\"]*"
+    r"(?:(?: [^\s'\"/\\]+)* [^\s'\"]*[/\\][^\s'\"]*)*"
+)
 
 
 class ComandoRecusado(ValueError):
@@ -80,15 +87,29 @@ def nome_container(e: Execucao, rodada: str) -> str:
     return f"{_FORA_DO_NOME.sub('-', base)[:160]}-{uuid.uuid4().hex[:8]}"
 
 
-def _conferir_caso_origem(origem: Path) -> None:
-    # Montar a home (ou a raiz, que a contém) entrega ao agente as credenciais de quem roda:
-    # a checagem vale depois de `resolve()`, que desfaz `..` e links simbólicos.
+def _homes() -> set[Path]:
+    homes = {Path.home().resolve()}
+    if sys.platform != "win32":
+        import pwd
+
+        homes.add(Path(pwd.getpwuid(os.getuid()).pw_dir).resolve())
+    return homes
+
+
+def _conferir_caso_origem(origem: Path) -> Path:
+    """Devolve o caminho resolvido do caso; só ele é montado e copiado.
+
+    Montar a home (ou a raiz, que a contém) entrega ao agente as credenciais de quem roda.
+    `HOME` vem do ambiente, então a home da conta (`pwd`) também é protegida. Conferir
+    um caminho e montar outro reabre a corrida entre a checagem e o uso.
+    """
     real = origem.resolve()
-    casa = Path.home().resolve()
-    if real == Path(real.anchor) or real == casa or real in casa.parents:
-        raise ComandoRecusado(
-            "caso de origem recusado: é a raiz, a home de quem roda ou um ancestral dela"
-        )
+    for casa in _homes():
+        if real == Path(real.anchor) or real == casa or real in casa.parents:
+            raise ComandoRecusado(
+                "caso de origem recusado: é a raiz, a home de quem roda ou um ancestral dela"
+            )
+    return real
 
 
 def _montagem(tipo: str, fonte: str, destino: str, *opcoes: str) -> list[str]:
@@ -105,6 +126,13 @@ def comando(e: Execucao, cfg: Config, trabalho: Path, nome: str) -> list[str]:
         ComandoRecusado: motor que não é o podman, memória inválida, caso na raiz ou na
             home de quem roda, ou caminho que não pode ser montado.
     """
+    real = _conferir_caso_origem(e.caso_origem) if e.caso_origem is not None else None
+    return _comando(e, cfg, trabalho, nome, real)
+
+
+def _comando(
+    e: Execucao, cfg: Config, trabalho: Path, nome: str, caso_real: Path | None
+) -> list[str]:
     if not motor_suportado(cfg.motor):
         raise ComandoRecusado(MOTIVO_MOTOR)
     if not _MEMORIA_VALIDA.fullmatch(cfg.memoria):
@@ -125,11 +153,11 @@ def comando(e: Execucao, cfg: Config, trabalho: Path, nome: str) -> list[str]:
         cmd += ["--secret", f"{SEGREDO_CLAUDE},type=env,target=CLAUDE_CODE_OAUTH_TOKEN"]
     else:
         cmd += _montagem("volume", cfg.volume_kiro, f"{HOME_AGENTE}/.local/share/kiro-cli")
-    if e.caso_origem is not None:
-        _conferir_caso_origem(e.caso_origem)
+    if e.caso_origem is not None and caso_real is not None:
         destino = f"{PASTA_ESTUDOS}/{e.caso_origem.name}"
         if e.somente_leitura:
-            cmd += _montagem("bind", str(e.caso_origem), destino, "readonly", "relabel=shared")
+            # Sem relabel: a pasta de casos é de quem roda e não pode ser reetiquetada.
+            cmd += _montagem("bind", str(caso_real), destino, "readonly")
         else:
             cmd += _montagem("bind", str(trabalho / e.caso_origem.name), destino, "relabel=private")
     cmd += ["-w", PASTA_ESTUDOS, e.imagem]
@@ -215,14 +243,22 @@ def rodar_container(cmd: list[str], timeout_s: int) -> Saida:
     return Saida(linhas, "".join(erros), proc.returncode, estouro.is_set())
 
 
-def encerrar_container(motor: str, nome: str) -> None:
-    """Remove o container pelo nome; matar só o cliente do motor deixaria o container vivo."""
+def encerrar_container(motor: str, nome: str) -> bool:
+    """Remove o container pelo nome e diz se a remoção foi confirmada.
+
+    Matar só o cliente do motor deixaria o container vivo; `--ignore` torna a remoção
+    inofensiva quando o `--rm` já o removeu.
+    """
     try:
-        subprocess.run(
-            [motor, "rm", "-f", nome], capture_output=True, timeout=_TEMPO_REMOCAO, check=False
+        feito = subprocess.run(
+            [motor, "rm", "-f", "--ignore", nome],
+            capture_output=True,
+            timeout=_TEMPO_REMOCAO,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        pass
+        return False
+    return feito.returncode == 0
 
 
 def limite_atingido(linhas: list[str], erro: str) -> bool:
@@ -296,7 +332,10 @@ def _segredos(cfg: Config) -> tuple[str, ...]:
     return (valor,) if valor else ()
 
 
-def _sem_caminhos(texto: str) -> str:
+def _sem_caminhos(texto: str, conhecidos: tuple[Path, ...] = ()) -> str:
+    for caminho in sorted({str(c) for c in conhecidos if str(c) not in ("", ".")}, key=len)[::-1]:
+        texto = texto.replace(caminho, "<caminho>")
+    texto = _CAMINHO_ENTRE_ASPAS.sub("<caminho>", texto)
     return _CAMINHO_ABSOLUTO.sub("<caminho>", texto)
 
 
@@ -348,7 +387,10 @@ def executar(
         destino = caminho_execucao(pasta_rodada, registro("erro_infra", ""))
         destino.mkdir(parents=True, exist_ok=True)
     except (OSError, ValueError) as erro:
-        return registro("erro_infra", _sem_caminhos(f"pasta da execução indisponível: {erro}"))
+        return registro(
+            "erro_infra",
+            _sem_caminhos(f"pasta da execução indisponível: {erro}", (pasta_rodada,)),
+        )
 
     segredos = _segredos(cfg)
     saida = Saida([], "", -1, False)
@@ -357,20 +399,26 @@ def executar(
     motivo = ""
     trabalho: Path | None = None
     nome = nome_container(e, pasta_rodada.name)
-    pode_estar_vivo = False
+    avisos: list[str] = []
+    caso_real: Path | None = None
+    popen_chamado = False
     try:
         if not motor_suportado(cfg.motor):
             motivo = MOTIVO_MOTOR
-        elif e.caso_origem is not None and not e.caso_origem.exists():
+        elif (
+            e.caso_origem is not None
+            and not (caso_real := _conferir_caso_origem(e.caso_origem)).exists()
+        ):
             motivo = f"caso indisponível: {e.caso}"
         else:
             trabalho = Path(tempfile.mkdtemp(prefix=".trabalho-", dir=pasta_rodada))
-            cmd = comando(e, cfg, trabalho, nome)
-            if e.caso_origem is not None and not e.somente_leitura:
-                shutil.copytree(e.caso_origem, trabalho / e.caso_origem.name)
-            pode_estar_vivo = True
+            cmd = _comando(e, cfg, trabalho, nome, caso_real)
+            if e.caso_origem is not None and caso_real is not None and not e.somente_leitura:
+                # Links copiados como links: seguir um link do caso copiaria arquivos do host
+                # de fora dele para dentro do container.
+                shutil.copytree(caso_real, trabalho / e.caso_origem.name, symlinks=True)
+            popen_chamado = True
             saida = rodar_container(cmd, e.timeout_s)
-            pode_estar_vivo = saida.estourou
             leitura = (ler_claude if e.agente == "claude" else ler_kiro)(saida.linhas)
             motivo_infra = _motivo_de_infra(saida, leitura)
             if motivo_infra is not None:
@@ -380,26 +428,31 @@ def executar(
     except ComandoRecusado as erro:
         motivo = str(erro)
     except MotorAusente as erro:
-        pode_estar_vivo = False
+        popen_chamado = False
         motivo = f"motor de container ausente: {erro}"
     # Nunca levanta: qualquer falha da execução ou de `avaliar` vira `erro_infra` no registro,
     # em vez de derrubar a rodada inteira.
     except Exception as erro:
         motivo = f"falha na execução: {_descrever(erro)}"
     finally:
-        if pode_estar_vivo:
-            encerrar_container(cfg.motor, nome)
+        if popen_chamado and not encerrar_container(cfg.motor, nome):
+            avisos.append(f"container {nome} não confirmado como removido")
         if trabalho is not None:
             shutil.rmtree(trabalho, ignore_errors=True)
 
     resposta = next(
         (ev.dados.get("resposta", "") for ev in reversed(leitura.eventos) if ev.tipo == "fim"), ""
     )
-    final = registro(estado, mascarar(_sem_caminhos(motivo), segredos), _chamadas_mcp(leitura))
+    conhecidos = tuple(
+        c for c in (e.caso_origem, caso_real, trabalho, pasta_rodada, cfg.casos) if c is not None
+    )
+    motivo = _sem_caminhos(motivo, conhecidos)
+    final = registro(estado, mascarar(motivo, segredos), _chamadas_mcp(leitura))
+    stderr = "\n".join([saida.stderr, *avisos]) if avisos else saida.stderr
     try:
         for arquivo, texto in (
             ("log.jsonl", "\n".join(saida.linhas) + "\n"),
-            ("stderr.txt", saida.stderr),
+            ("stderr.txt", stderr),
             ("resposta.md", resposta),
         ):
             (destino / arquivo).write_text(mascarar(texto, segredos), encoding="utf-8")

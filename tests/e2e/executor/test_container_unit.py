@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -159,8 +162,8 @@ def test_comando_do_kiro_usa_o_volume_da_config_e_nao_o_segredo_do_claude(tmp_pa
     assert "--trust-tools=" in cmd[-4] and "autoApprove" in cmd[-2]
 
 
-def test_comando_monta_caso_somente_leitura(tmp_path):
-    origem = tmp_path / "casos" / "caso grande"
+def test_comando_monta_caso_somente_leitura_sem_reetiquetar(tmp_path):
+    origem = (tmp_path / "casos" / "caso grande").resolve()
     cmd = _cmd(_exec(caso_origem=origem, somente_leitura=True), _cfg(tmp_path), tmp_path)
     assert _montagens(cmd) == [
         {
@@ -168,7 +171,6 @@ def test_comando_monta_caso_somente_leitura(tmp_path):
             "src": str(origem),
             "dst": "/estudos/caso grande",
             "readonly": "",
-            "relabel": "shared",
         }
     ]
 
@@ -288,7 +290,7 @@ def remocoes(monkeypatch):
 
     def run(cmd, **kwargs):
         feitas.append(list(cmd))
-        return None
+        return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(container.subprocess, "run", run)
     return feitas
@@ -314,6 +316,10 @@ def _nome_usado(cmd: list[str]) -> str:
     return next(a for a in cmd if a.startswith("--name=")).removeprefix("--name=")
 
 
+def _remocao(cmd: list[str]) -> list[str]:
+    return ["podman", "rm", "-f", "--ignore", _nome_usado(cmd)]
+
+
 def test_estouro_vira_erro_infra_e_remove_o_container(tmp_path, monkeypatch, remocoes):
     chamadas = _falso(
         monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl")[:3], "", -9, True)
@@ -321,19 +327,50 @@ def test_estouro_vira_erro_infra_e_remove_o_container(tmp_path, monkeypatch, rem
     r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
     assert r.estado == "erro_infra" and "tempo" in r.motivo
     assert ler_registros(_pasta(tmp_path)) == [r]
-    assert remocoes == [["podman", "rm", "-f", _nome_usado(chamadas[0])]]
+    assert remocoes == [_remocao(chamadas[0])]
 
 
 def test_falha_no_meio_da_leitura_remove_o_container(tmp_path, monkeypatch, remocoes):
     chamadas = _falso(monkeypatch, RuntimeError("leitura interrompida"))
     r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
     assert r.estado == "erro_infra" and "leitura interrompida" in r.motivo
-    assert remocoes == [["podman", "rm", "-f", _nome_usado(chamadas[0])]]
+    assert remocoes == [_remocao(chamadas[0])]
 
 
-def test_execucao_normal_nao_chama_remocao(tmp_path, monkeypatch, remocoes):
-    _falso(monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False))
+def test_execucao_normal_tambem_remove_o_container(tmp_path, monkeypatch, remocoes):
+    chamadas = _falso(monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False))
     assert executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou).estado == "passou"
+    assert remocoes == [_remocao(chamadas[0])]
+    stderr = (_destino(tmp_path, _exec()) / "stderr.txt").read_text(encoding="utf-8")
+    assert "não confirmado" not in stderr
+
+
+def _remocao_falha(monkeypatch, modo: str) -> None:
+    def run(cmd, **kwargs):
+        if modo == "estouro":
+            raise subprocess.TimeoutExpired(cmd, 30)
+        if modo == "sem_motor":
+            raise FileNotFoundError(cmd[0])
+        return SimpleNamespace(returncode=125)
+
+    monkeypatch.setattr(container.subprocess, "run", run)
+
+
+@pytest.mark.parametrize("modo", ["codigo", "estouro", "sem_motor"])
+def test_remocao_nao_confirmada_vai_para_o_stderr(tmp_path, monkeypatch, modo):
+    chamadas = _falso(
+        monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl"), f"x {TOKEN_FALSO}", 0, False)
+    )
+    _remocao_falha(monkeypatch, modo)
+    r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
+    stderr = (_destino(tmp_path, _exec()) / "stderr.txt").read_text(encoding="utf-8")
+    assert f"container {_nome_usado(chamadas[0])} não confirmado como removido" in stderr
+    assert TOKEN_FALSO not in stderr and r.estado == "passou"
+
+
+def test_comando_recusado_nao_chama_remocao(tmp_path, monkeypatch, remocoes):
+    _falso(monkeypatch, Saida([], "", 0, False))
+    executar(_exec(caso_origem=Path.home()), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
     assert remocoes == []
 
 
@@ -407,7 +444,7 @@ def test_motivo_nunca_grava_caminho_do_host(tmp_path, monkeypatch, onde):
         def avaliar(leitura):
             raise erro
 
-    monkeypatch.setattr(container.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(container.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
     r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), avaliar)
     gravado = (_destino(tmp_path, _exec()) / "registro.json").read_text(encoding="utf-8")
     for texto in (r.motivo, gravado):
@@ -578,3 +615,103 @@ def test_caso_copiado_para_o_trabalho_e_apagado_no_fim(tmp_path, monkeypatch):
     assert vistos == [True] and r.estado == "passou"
     assert not list(_pasta(tmp_path).glob(".trabalho-*"))
     assert (origem / "config.json").is_file()
+
+
+def _link_ou_pula(link: Path, alvo: Path) -> None:
+    try:
+        link.symlink_to(alvo, target_is_directory=alvo.is_dir())
+    except (OSError, NotImplementedError):
+        pytest.skip("o sistema não deixa criar link simbólico")
+
+
+def test_copia_do_caso_mantem_links_sem_seguir(tmp_path, monkeypatch):
+    fora = tmp_path / "fora-do-caso"
+    fora.mkdir()
+    (fora / "segredo.txt").write_text("conteudo de fora", encoding="utf-8")
+    origem = tmp_path / "casos" / "caso-exemplo"
+    origem.mkdir(parents=True)
+    (origem / "config.json").write_text("{}", encoding="utf-8")
+    _link_ou_pula(origem / "atalho.txt", fora / "segredo.txt")
+    vistos: list[tuple[bool, bool]] = []
+
+    def rodar(cmd, timeout_s):
+        copia = Path(_montagens(cmd)[0]["src"])
+        vistos.append(((copia / "atalho.txt").is_symlink(), (copia / "config.json").is_file()))
+        return Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False)
+
+    monkeypatch.setattr(container, "rodar_container", rodar)
+    monkeypatch.setattr(container.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
+    executar(_exec(caso_origem=origem), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
+    assert vistos == [(True, True)]
+
+
+def test_comando_monta_o_caminho_resolvido_de_um_caso_que_e_link(tmp_path):
+    real = tmp_path / "casos-reais" / "caso-real"
+    real.mkdir(parents=True)
+    link = tmp_path / "caso-link"
+    _link_ou_pula(link, real)
+    cmd = _cmd(_exec(caso_origem=link, somente_leitura=True), _cfg(tmp_path), tmp_path)
+    [montagem] = _montagens(cmd)
+    assert montagem["src"] == str(real.resolve()) and montagem["dst"] == "/estudos/caso-link"
+
+
+def test_executar_copia_e_monta_pelo_mesmo_caminho_resolvido(tmp_path, monkeypatch):
+    real = tmp_path / "casos-reais" / "caso-real"
+    real.mkdir(parents=True)
+    (real / "config.json").write_text("{}", encoding="utf-8")
+    link = tmp_path / "caso-link"
+    _link_ou_pula(link, real)
+    copiados: list[Path] = []
+    original = container.shutil.copytree
+
+    def copiar(fonte, destino, **k):
+        copiados.append(Path(fonte))
+        assert k.get("symlinks") is True
+        return original(fonte, destino, **k)
+
+    monkeypatch.setattr(container.shutil, "copytree", copiar)
+    monkeypatch.setattr(container.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
+    _falso(monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False))
+    executar(_exec(caso_origem=link), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
+    assert copiados == [real.resolve()]
+
+
+def test_guard_protege_a_home_do_ambiente(tmp_path, monkeypatch):
+    outra = tmp_path / "outra-home"
+    outra.mkdir()
+    monkeypatch.setenv("HOME", str(outra))
+    monkeypatch.setenv("USERPROFILE", str(outra))
+    assert Path.home() == outra
+    with pytest.raises(ComandoRecusado, match="home"):
+        _cmd(_exec(caso_origem=outra, somente_leitura=True), _cfg(tmp_path), tmp_path)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="pwd só existe fora do Windows")
+def test_guard_protege_a_home_da_conta_mesmo_com_home_trocado(tmp_path, monkeypatch):
+    import pwd
+
+    da_conta = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    monkeypatch.setenv("HOME", str(tmp_path / "outra-home"))
+    assert Path.home() != da_conta
+    with pytest.raises(ComandoRecusado, match="home"):
+        _cmd(_exec(caso_origem=da_conta, somente_leitura=True), _cfg(tmp_path), tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("texto", "vazado"),
+    [
+        ("falhou em /dados/pasta com espaço/arquivo.json final", ("pasta", "espaço", "arquivo")),
+        ("PATH=a:/opt/ferramenta/bin:/usr/local/bin", ("/opt/ferramenta", "/usr/local")),
+        (r"falhou em C:\dados\outra pasta\x.json final", ("dados", "outra", "x.json")),
+        ("falhou em '/dados/nome com espaço' e mais", ("dados", "espaço")),
+    ],
+)
+def test_sem_caminhos_trata_espaco_e_dois_pontos(texto, vazado):
+    limpo = container._sem_caminhos(texto)
+    assert "<caminho>" in limpo
+    assert not any(v in limpo for v in vazado)
+
+
+def test_sem_caminhos_preserva_url_e_texto_comum():
+    texto = "erro 429 em https://exemplo.invalid/api: tente de novo"
+    assert container._sem_caminhos(texto) == texto
