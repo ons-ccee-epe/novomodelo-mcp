@@ -44,6 +44,7 @@ NOME_JUNIT = "junit.xml"
 CODIGOS_DO_VEREDITO = {"go": 0, "no-go": 1, "inconclusivo": 2}
 CODIGO_SEGREDO = rodada.CODIGO_SEGREDO
 CODIGO_USO = 64
+SUBCOMANDOS_DE_USO_64 = ("go-no-go", "marcar-lancamento")
 ITENS_DO_AGENTE = {"claude": "token_claude", "kiro": "volume_kiro"}
 
 
@@ -96,6 +97,17 @@ def _origem(valor: str) -> tuple[str, str]:
     if not sep or not nome.strip() or not texto.strip():
         raise argparse.ArgumentTypeError(f"formato <config>=<texto>: {valor!r}")
     return nome.strip(), texto.strip()
+
+
+def _uso_sai_64(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Faz o erro de uso do subparser sair com o código de recusa, e não com o 2 do argparse."""
+
+    def erro(mensagem: str):
+        parser.print_usage(sys.stderr)
+        parser.exit(CODIGO_USO, f"{parser.prog}: erro: {mensagem}\n")
+
+    parser.error = erro  # type: ignore[method-assign]
+    return parser
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -176,10 +188,12 @@ def _parser() -> argparse.ArgumentParser:
             "Base de comparação, na ordem: --baseline-config (na mesma rodada, ou na de "
             "--baseline quando as duas vêm juntas); --baseline (a configuração de mesmo nome "
             "do --alvo); o último lançamento marcado (a configuração dele, procurada primeiro "
-            "nesta rodada); sem base, só a determinística bloqueia."
+            "nesta rodada); sem base, só a determinística bloqueia. Base cuja rodada está "
+            'bloqueada por segredo é recusada com 64 ("base indisponível").'
         ),
         epilog=_codigos_do_go_no_go(),
     )
+    _uso_sai_64(gng)
     gng.add_argument("rodada", metavar="RODADA")
     gng.add_argument("--alvo", required=True, metavar="CONFIG", help="configuração avaliada")
     gng.add_argument("--baseline", metavar="RODADA", help="rodada da base")
@@ -189,7 +203,13 @@ def _parser() -> argparse.ArgumentParser:
     marcar = sub.add_parser(
         "marcar-lancamento",
         help="torna uma configuração da rodada a base do próximo go/no-go",
+        epilog=(
+            "códigos de saída do marcar-lancamento: 0 marcado; 3 rodada bloqueada por segredo; "
+            "64 recusa de uso (argumentos inválidos, rodada ou configuração inexistente, "
+            "manifesto ou lancamentos.json ilegível)"
+        ),
     )
+    _uso_sai_64(marcar)
     marcar.add_argument("rodada", metavar="RODADA")
     marcar.add_argument("versao", metavar="VERSAO")
     marcar.add_argument("--config", required=True, metavar="CONFIG")
@@ -199,8 +219,8 @@ def _parser() -> argparse.ArgumentParser:
 def _codigos_do_go_no_go() -> str:
     return (
         "códigos de saída do go-no-go (não são os do rodar): 0 go; 1 no-go; "
-        "2 inconclusivo; 3 segredo bloqueado na rodada; 64 recusa de uso (rodada, alvo ou "
-        "configuração inexistente, manifesto ilegível, --baseline igual à própria rodada sem "
+        "2 inconclusivo; 3 segredo bloqueado na rodada; 64 recusa de uso (argumentos inválidos, "
+        "rodada, alvo ou configuração inexistente, manifesto ilegível, --baseline igual à própria rodada sem "
         "--baseline-config, lançamento marcado cuja rodada ou configuração não existe mais)"
     )
 
@@ -392,6 +412,9 @@ def _atomico(destino: Path, escrever: Callable[[Path], object]) -> None:
     temporario = Path(nome)
     try:
         escrever(temporario)
+        umask = os.umask(0)
+        os.umask(umask)
+        os.chmod(temporario, 0o666 & ~umask)
         os.replace(temporario, destino)
     except BaseException:
         temporario.unlink(missing_ok=True)
@@ -441,7 +464,15 @@ def _marcar_lancamento(cfg, args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
-    args = parser.parse_args(argv)
+    args, extras = parser.parse_known_args(argv)
+    if extras:
+        if args.subcomando in SUBCOMANDOS_DE_USO_64:
+            print(
+                f"{parser.prog}: erro: argumentos desconhecidos: {' '.join(extras)}",
+                file=sys.stderr,
+            )
+            return CODIGO_USO
+        parser.error(f"unrecognized arguments: {' '.join(extras)}")
     cfg = carregar_config(os.environ)
     if args.subcomando == "verificar":
         return _verificar(cfg)

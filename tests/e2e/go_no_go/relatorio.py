@@ -8,10 +8,10 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from statistics import mean
 
-from tests.e2e.executor.container import _sem_caminhos
 from tests.e2e.go_no_go.criterio import Decisao
 from tests.e2e.go_no_go.estatistica import wilson
 from tests.e2e.resultado.modelos import Manifesto, Registro
+from tests.e2e.textos import sem_caminhos
 
 LIMITE_TOOLS = 10
 SEM_DADO = "—"
@@ -239,7 +239,7 @@ def _configuracoes(m: Manifesto) -> list[str]:
                 config,
                 m.versoes.get(f"mcp:{config}", SEM_DADO),
                 f"`{wheel['sha256']}`" if wheel.get("sha256") else SEM_DADO,
-                _sem_caminhos(wheel.get("origem", SEM_DADO)),
+                sem_caminhos(wheel.get("origem", SEM_DADO)),
             ]
         )
     achadas = {chave for versoes in m.imagens.values() for chave in versoes}

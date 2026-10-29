@@ -72,7 +72,11 @@ Variáveis de ambiente da `Config` (todas opcionais):
 
 Códigos de saída do `rodar`: 0 rodada completa; 1 determinística com falha, imagem não pronta ou execução sem registro; 2 argumentos inválidos ou retomada recusada; 3 segredo na pasta da rodada; 4 limite de uso do agente ou do juiz; 5 orçamento estourado; 130 Ctrl-C.
 
-Códigos de saída do `go-no-go` (outro subcomando, outra tabela): 0 go; 1 no-go; 2 inconclusivo; 3 segredo bloqueado na rodada; 64 recusa de uso (rodada, alvo ou configuração inexistente, manifesto ilegível, `--baseline` igual à própria rodada sem `--baseline-config`, lançamento marcado cuja rodada ou configuração não existe mais).
+Códigos de saída do `go-no-go` (outro subcomando, outra tabela): 0 go; 1 no-go; 2 inconclusivo; 3 segredo bloqueado na rodada; 64 recusa de uso (argumentos inválidos, rodada, alvo ou configuração inexistente, manifesto ilegível, `--baseline` igual à própria rodada sem `--baseline-config`, lançamento marcado cuja rodada ou configuração não existe mais).
+
+Base de um lançamento cuja rodada está bloqueada por segredo, ausente ou sem a configuração sai com 64 e a mensagem "base indisponível". Erros de uso do `argparse` nesses dois subcomandos também saem com 64.
+
+Códigos de saída do `marcar-lancamento`: 0 marcado; 3 rodada bloqueada por segredo; 64 recusa de uso (argumentos inválidos, rodada ou configuração inexistente, manifesto ou `lancamentos.json` ilegível).
 
 ## Configuração
 

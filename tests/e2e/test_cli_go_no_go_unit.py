@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -242,7 +243,8 @@ def test_falha_ao_escrever_mantem_o_relatorio_anterior(tmp_path, monkeypatch):
     pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}})
     (pasta / "relatorio-go-no-go.md").write_text("velho", encoding="utf-8")
 
-    def quebra(*args, **kwargs):
+    def quebra(m, registros, decisao, alvo, base, destino, config_alvo=None):
+        destino.write_text("parcial", encoding="utf-8")
         raise OSError("disco cheio")
 
     monkeypatch.setattr(cli, "escrever_relatorio", quebra)
@@ -258,3 +260,33 @@ def test_deterministica_da_base_nao_influencia_o_veredito(tmp_path):
     assert _go("r2", "--alvo", "mcp", "--baseline", "r1") == 0
     _rodada(tmp_path, "r3", {"mcp": {"c": "passou"}, "base": {"c": "passou"}}, det="passou")
     assert _go("r3", "--alvo", "mcp", "--baseline-config", "base") == 0
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["go-no-go", "r1"],
+        ["go-no-go", "r1", "--alvo", "mcp", "--inexistente"],
+        ["marcar-lancamento", "r1", "1.0.0"],
+        ["marcar-lancamento", "r1"],
+    ],
+)
+def test_erro_de_uso_do_argparse_sai_64(argv, capsys):
+    try:
+        codigo = cli.main(argv)
+    except SystemExit as saida:
+        codigo = saida.code
+    assert codigo == 64
+    assert "erro:" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(os.name == "nt", reason="modos POSIX")
+def test_arquivos_gravados_seguem_o_umask(tmp_path):
+    pasta = _rodada(tmp_path, "r1", {"mcp": {"c": "passou"}})
+    antigo = os.umask(0o022)
+    try:
+        assert _go("r1", "--alvo", "mcp") == 0
+    finally:
+        os.umask(antigo)
+    for nome in ("relatorio-go-no-go.md", "junit.xml"):
+        assert (pasta / nome).stat().st_mode & 0o777 == 0o644

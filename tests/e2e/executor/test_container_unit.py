@@ -34,6 +34,7 @@ from tests.e2e.executor.container import (
 from tests.e2e.executor.eventos import Leitura
 from tests.e2e.resultado.armazenamento import ler_registros
 from tests.e2e.resultado.modelos import Avaliacao, Metricas
+from tests.e2e.textos import sem_caminhos
 
 FIX = Path(__file__).parent / "fixtures"
 TOKEN_FALSO = "sk-ant-teste-000000000000"
@@ -837,14 +838,14 @@ def test_guard_protege_a_home_da_conta_mesmo_com_home_trocado(tmp_path, monkeypa
     ],
 )
 def test_sem_caminhos_trata_espaco_e_dois_pontos(texto, vazado):
-    limpo = container._sem_caminhos(texto)
+    limpo = sem_caminhos(texto)
     assert "<caminho>" in limpo
     assert not any(v in limpo for v in vazado)
 
 
 def test_sem_caminhos_preserva_url_e_texto_comum():
     texto = "erro 429 em https://exemplo.invalid/api: tente de novo"
-    assert container._sem_caminhos(texto) == texto
+    assert sem_caminhos(texto) == texto
 
 
 def _gravado(tmp_path: Path, e: Execucao) -> dict:

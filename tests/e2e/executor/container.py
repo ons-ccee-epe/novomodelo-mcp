@@ -23,6 +23,7 @@ from tests.e2e.executor.eventos import Evento, Leitura, ler_claude, ler_kiro
 from tests.e2e.executor.mascara import mascarar
 from tests.e2e.resultado.armazenamento import caminho_execucao, gravar_registro
 from tests.e2e.resultado.modelos import Avaliacao, ChamadaTool, Estado, Metricas, Registro
+from tests.e2e.textos import sem_caminhos
 
 HOME_AGENTE = "/home/agente"
 PASTA_ESTUDOS = "/estudos"
@@ -59,12 +60,6 @@ _MEMORIA_VALIDA = re.compile(r"[0-9]+[bkmgBKMG]?")
 _FORA_DO_NOME = re.compile(r"[^A-Za-z0-9_.-]+")
 _DESTINO_VALIDO = re.compile(r"/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*")
 SEM_OUTPUT = ("output", "output-*")
-_INICIO_CAMINHO = r"(?:[A-Za-z]:[\\/]|\\\\|/(?!/))"
-_CAMINHO_ENTRE_ASPAS = re.compile(rf"'{_INICIO_CAMINHO}[^']*'|\"{_INICIO_CAMINHO}[^\"]*\"")
-_CAMINHO_ABSOLUTO = re.compile(
-    rf"(?<![\w.~/\\-]){_INICIO_CAMINHO}[^\s'\"]*"
-    r"(?:(?: [^\s'\"/\\]+)* [^\s'\"]*[/\\][^\s'\"]*)*"
-)
 
 
 class ComandoRecusado(ValueError):
@@ -445,13 +440,6 @@ def _segredos(cfg: Config) -> tuple[str, ...]:
     return (valor,) if valor else ()
 
 
-def _sem_caminhos(texto: str, conhecidos: tuple[Path, ...] = ()) -> str:
-    for caminho in sorted({str(c) for c in conhecidos if str(c) not in ("", ".")}, key=len)[::-1]:
-        texto = texto.replace(caminho, "<caminho>")
-    texto = _CAMINHO_ENTRE_ASPAS.sub("<caminho>", texto)
-    return _CAMINHO_ABSOLUTO.sub("<caminho>", texto)
-
-
 def _descrever(erro: BaseException) -> str:
     if isinstance(erro, OSError) and erro.strerror:
         return f"{type(erro).__name__}: {erro.strerror}"
@@ -509,7 +497,7 @@ def executar(
     except (OSError, ValueError) as erro:
         return registro(
             "erro_infra",
-            _sem_caminhos(f"pasta da execução indisponível: {erro}", (pasta_rodada,)),
+            sem_caminhos(f"pasta da execução indisponível: {erro}", (pasta_rodada,)),
         )
 
     segredos = _segredos(cfg)
@@ -577,7 +565,7 @@ def executar(
     conhecidos = tuple(
         c for c in (e.caso_origem, caso_real, trabalho, pasta_rodada, cfg.casos) if c is not None
     )
-    motivo = _sem_caminhos(motivo, conhecidos)
+    motivo = sem_caminhos(motivo, conhecidos)
     final = registro(
         estado,
         mascarar(motivo, segredos),
