@@ -168,8 +168,7 @@ Fora do executor em container, `run_queries` não carrega casos nem executa: esc
 
 O que funciona no host: o carregamento e a validação dos casos (`CasesLoader`), o
 `QueryValidator`, os parsers de saída de agente e o `ResultStore`, todos cobertos pelos
-testes unitários desta pasta, e `python -m tests.e2e.eval.run --check`, que verifica os
-pré-requisitos da bateria de tools.
+testes unitários desta pasta.
 
 ## Desenvolvimento
 

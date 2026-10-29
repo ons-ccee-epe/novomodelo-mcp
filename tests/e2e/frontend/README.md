@@ -97,7 +97,6 @@ transporte. A raiz e qualquer rota desconhecida levam a `/#/funcionais`.
 Os runners gravam JSON, que o painel lê:
 
 - `tests/e2e/queries/run_queries.py` → fora do executor em container recusa a execução.
-- `tests/e2e/eval/run.py` → grava `reports/latest.json`, sem `latest.html`.
 
 Este frontend é o único dashboard.
 

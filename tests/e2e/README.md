@@ -8,12 +8,10 @@ Autores originais da bateria: Raquel Grillo e João Weydt.
 
 ```
 tests/e2e/
-├── eval/        # Execução determinística das tools: registro de casos, validação, métricas e relatório
 ├── queries/     # Perguntas em linguagem natural a um agente; valida quais tools ele chamou (queries/README.md)
 ├── launcher/    # Servidor local (FastAPI, só em 127.0.0.1) que dispara as baterias pelo painel (launcher/README.md)
 ├── load/        # Teste de carga: N clientes, um servidor MCP por cliente (load/README.md)
-├── frontend/    # Painel React/Vite com histórico, comparação e carga (frontend/README.md)
-└── reports/     # Relatórios gerados pelo `eval`
+└── frontend/    # Painel React/Vite com histórico, comparação e carga (frontend/README.md)
 ```
 
 ## Pré-requisitos
@@ -40,8 +38,6 @@ O `pytest` padrão do repositório deixa `tests/e2e/` de fora (`addopts` com `--
 Cada parte também roda sozinha:
 
 ```bash
-uv run --group e2e python -m tests.e2e.eval.run --check          # verifica os pré-requisitos
-uv run --group e2e python -m tests.e2e.eval.run --tool deck_list # uma tool; também --tag e --quiet
 uv run --group e2e python -m tests.e2e.queries.run_queries       # recusa fora do executor em container
 uv run --group e2e python -m tests.e2e.load.run --concurrency 4 --duration 30
 ```
@@ -52,8 +48,6 @@ Tudo vem de variável de ambiente ou de argumento. A bateria lê:
 
 | Variável | O que faz | Default |
 |---|---|---|
-| `NOVOMODELO_MCP_TARGET` | Alvo do `eval`: `local` ou a URL de um servidor MCP | `local` |
-| `NOVOMODELO_MCP_METRICS_PATH` | Arquivo JSONL do histórico de métricas do `eval` | pasta `metrics` da bateria |
 | `QUERY_FIXTURES_DIR` | Pasta com os decks usados pelas perguntas | pasta `fixtures` da bateria |
 | `QUERY_TIMEOUT_S` | Força um timeout único, em segundos, para todas as perguntas ao agente | não definida: cada caso usa o seu `timeout_s` de `queries/cases.yaml` (por caso ou grupo) |
 | `KIRO_API_KEY` | Credencial do `kiro-cli`; sem ela, vale o login já feito no próprio `kiro-cli` | não definida |
