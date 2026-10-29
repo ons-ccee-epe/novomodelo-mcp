@@ -22,6 +22,8 @@ _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
 
 
 def _create_kill_on_close_job():  # pragma: no cover - só no Windows
+    if sys.platform != "win32":
+        return None
     import ctypes
     from ctypes import wintypes
 
@@ -61,7 +63,7 @@ def _create_kill_on_close_job():  # pragma: no cover - só no Windows
             ("PeakJobMemoryUsed", ctypes.c_size_t),
         ]
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # ty: ignore[unresolved-attribute] - só no Windows
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateJobObjectW.restype = wintypes.HANDLE
     kernel32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
     kernel32.SetInformationJobObject.argtypes = [
@@ -102,7 +104,8 @@ class ProcessTree:
         if created is None:
             return None
         kernel32, job = created
-        if not kernel32.AssignProcessToJobObject(job, int(process._handle)):  # ty: ignore[unresolved-attribute] - só no Windows
+        handle = process._handle  # ty: ignore[unresolved-attribute] - privado, fora do typeshed
+        if not kernel32.AssignProcessToJobObject(job, int(handle)):
             kernel32.CloseHandle(job)
             return None
         return kernel32, job

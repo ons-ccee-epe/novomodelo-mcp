@@ -9,6 +9,7 @@ SCHEMA_VERSAO = 1
 
 Estado = Literal["passou", "falhou", "pulado", "erro_infra"]
 Conjunto = Literal["deterministica", "tools", "usuario"]
+Agente = Literal["claude", "kiro"]
 
 
 class VersaoDesconhecida(ValueError):
@@ -95,7 +96,7 @@ class Manifesto:
     criado_em: str
     configs: tuple[str, ...]
     conjuntos: tuple[Conjunto, ...]
-    agentes: tuple[str, ...]
+    agentes: tuple[Agente, ...]
     repeticoes: int
     flags: dict[str, bool]
     versoes: dict[str, str]

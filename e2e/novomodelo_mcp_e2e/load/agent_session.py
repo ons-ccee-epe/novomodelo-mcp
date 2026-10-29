@@ -13,7 +13,6 @@ import threading
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
-from typing import Literal, cast
 
 from novomodelo_mcp_e2e.config import Config
 from novomodelo_mcp_e2e.conjuntos.tools.adaptador import (
@@ -29,12 +28,12 @@ from novomodelo_mcp_e2e.executor.eventos import Leitura
 from novomodelo_mcp_e2e.executor.imagens import ConfigMCP, tag_imagem
 from novomodelo_mcp_e2e.load.sandbox import make_run_root
 from novomodelo_mcp_e2e.queries.models import QueryResult, QueryTestCase
-from novomodelo_mcp_e2e.resultado.modelos import Avaliacao, Metricas, Registro
+from novomodelo_mcp_e2e.resultado.modelos import Agente, Avaliacao, Metricas, Registro
 from novomodelo_mcp_e2e.rodada import encerrar_em_voo, prefixo_do_container
 
 __all__ = ["AGENTE_DO_PROVEDOR", "ExecutorSessionRunner", "default_run_root"]
 
-AGENTE_DO_PROVEDOR = {"claude": "claude", "kiro-cli": "kiro"}
+AGENTE_DO_PROVEDOR: dict[str, Agente] = {"claude": "claude", "kiro-cli": "kiro"}
 PREFIXO_TEMPO_ESGOTADO = "tempo esgotado"
 Executor = Callable[[Execucao, Config, Path, Callable[[Leitura], Avaliacao]], Registro]
 
@@ -49,7 +48,7 @@ class ExecutorSessionRunner:
 
     def __init__(
         self,
-        agente: str,
+        agente: Agente,
         config_mcp: ConfigMCP,
         cfg: Config,
         pasta: Path,
@@ -76,7 +75,7 @@ class ExecutorSessionRunner:
         return Execucao(
             conjunto=CONJUNTO,
             caso=caso.id,
-            agente=cast("Literal['claude', 'kiro']", self._agente),
+            agente=self._agente,
             config=self._config_mcp.nome,
             repeticao=self._execucoes,
             pedido=pedido_do_caso(caso),

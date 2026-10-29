@@ -11,7 +11,7 @@ import threading
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
@@ -30,7 +30,7 @@ from novomodelo_mcp_e2e.executor.imagens import (
 )
 from novomodelo_mcp_e2e.executor.mascara import MASCARA, mascarar
 from novomodelo_mcp_e2e.resultado.armazenamento import gravar_registro, ler_manifesto, ler_registros
-from novomodelo_mcp_e2e.resultado.modelos import Conjunto, Estado, Registro
+from novomodelo_mcp_e2e.resultado.modelos import Estado, Registro
 
 TOKEN_FALSO = "sk-ant-oat01-FALSO-FALSO-FALSO"
 LEITURA = ("deck_list", "server_info")
@@ -86,7 +86,7 @@ class Falsos:
             time.sleep(self.duracao)
         r = Registro(
             rodada=pasta.name,
-            conjunto=cast("Conjunto", e.conjunto),
+            conjunto=e.conjunto,
             caso=e.caso,
             agente=e.agente,
             config=e.config,

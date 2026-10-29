@@ -16,13 +16,13 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import cache
 from pathlib import Path
-from typing import Literal
 
 from novomodelo_mcp_e2e.config import MOTIVO_MOTOR, Config, motor_suportado
 from novomodelo_mcp_e2e.executor.eventos import Evento, Leitura, ler_claude, ler_kiro
 from novomodelo_mcp_e2e.executor.mascara import mascarar
 from novomodelo_mcp_e2e.resultado.armazenamento import caminho_execucao, gravar_registro
 from novomodelo_mcp_e2e.resultado.modelos import (
+    Agente,
     Avaliacao,
     ChamadaTool,
     Conjunto,
@@ -67,8 +67,6 @@ _MEMORIA_VALIDA = re.compile(r"[0-9]+[bkmgBKMG]?")
 _FORA_DO_NOME = re.compile(r"[^A-Za-z0-9_.-]+")
 _DESTINO_VALIDO = re.compile(r"/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*")
 SEM_OUTPUT = ("output", "output-*")
-
-Agente = Literal["claude", "kiro"]
 
 
 class ComandoRecusado(ValueError):

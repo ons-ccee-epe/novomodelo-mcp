@@ -46,7 +46,7 @@ def _checar_versao(dados: dict[str, Any], arquivo: Path) -> None:
         )
 
 
-def _gravar_json(destino: Path, dados: dict[str, Any]) -> Path:
+def _gravar_json(destino: Path, dados: dict[str, Any] | list[Any]) -> Path:
     destino.parent.mkdir(parents=True, exist_ok=True)
     fd, temporario = tempfile.mkstemp(dir=destino.parent, prefix=f".{destino.name}.", suffix=".tmp")
     try:

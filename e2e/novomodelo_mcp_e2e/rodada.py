@@ -28,7 +28,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, cast
 
 from novomodelo_mcp_e2e.config import Config
 from novomodelo_mcp_e2e.conjuntos.tools.adaptador import (
@@ -70,7 +69,14 @@ from novomodelo_mcp_e2e.resultado.armazenamento import (
     gravar_registro,
     ler_manifesto,
 )
-from novomodelo_mcp_e2e.resultado.modelos import Avaliacao, Conjunto, Estado, Manifesto, Registro
+from novomodelo_mcp_e2e.resultado.modelos import (
+    Agente,
+    Avaliacao,
+    Conjunto,
+    Estado,
+    Manifesto,
+    Registro,
+)
 
 RAIZ = Path(__file__).resolve().parents[2]
 TESTE_DETERMINISTICA = "tests/test_executaveis_reais.py"
@@ -472,7 +478,7 @@ def _config_do_juiz(configs: Sequence[ConfigMCP]) -> ConfigMCP:
 
 
 def _execucao_usuario(
-    c: Cenario, config: ConfigMCP, agente: str, rep: int, cfg: Config
+    c: Cenario, config: ConfigMCP, agente: Agente, rep: int, cfg: Config
 ) -> Planejada:
     origem = None
     pulado = None
@@ -485,7 +491,7 @@ def _execucao_usuario(
     e = Execucao(
         conjunto="usuario",
         caso=c.id,
-        agente=cast("Literal['claude', 'kiro']", agente),
+        agente=agente,
         config=config.nome,
         repeticao=rep,
         pedido=c.pedido,
@@ -502,7 +508,7 @@ def _execucao_usuario(
 def planejar(
     configs: Sequence[ConfigMCP],
     conjuntos: Sequence[Conjunto],
-    agentes: Sequence[str],
+    agentes: Sequence[Agente],
     repeticoes: int,
     cfg: Config,
     filtro: str | None = None,
@@ -585,8 +591,8 @@ def ultimo_fim(pasta: Path) -> tuple[int, str] | None:
 
 
 def _imagens_da_rodada(
-    configs: Sequence[ConfigMCP], agentes: Sequence[str], com_juiz: bool
-) -> list[tuple[ConfigMCP, str]]:
+    configs: Sequence[ConfigMCP], agentes: Sequence[Agente], com_juiz: bool
+) -> list[tuple[ConfigMCP, Agente]]:
     pares = [(c, a) for c in configs for a in agentes]
     juiz = (_config_do_juiz(configs), "claude")
     if com_juiz and juiz not in pares:
@@ -595,7 +601,7 @@ def _imagens_da_rodada(
 
 
 def _versoes(
-    imagens: Mapping[str, dict[str, str]], agentes: Sequence[str], juiz: Juiz, imagem_juiz: str
+    imagens: Mapping[str, dict[str, str]], agentes: Sequence[Agente], juiz: Juiz, imagem_juiz: str
 ) -> dict[str, str]:
     juntas: dict[str, set[str]] = {}
     for versoes in imagens.values():
@@ -661,7 +667,7 @@ class _Log:
 def _pasta_da_execucao(pasta: Path, e: Execucao) -> Path:
     marca = Registro(
         rodada=pasta.name,
-        conjunto=cast("Conjunto", e.conjunto),
+        conjunto=e.conjunto,
         caso=e.caso,
         agente=e.agente,
         config=e.config,
@@ -720,7 +726,7 @@ def rodar(
     rodada: str | None,
     configs: Sequence[ConfigMCP],
     conjuntos: Sequence[Conjunto],
-    agentes: Sequence[str],
+    agentes: Sequence[Agente],
     repeticoes: int,
     cfg: Config,
     orcamento: Orcamento = ORCAMENTO_PADRAO,
@@ -777,7 +783,7 @@ def _rodar_com_trava(
     velha: int | None,
     configs: Sequence[ConfigMCP],
     conjuntos: Sequence[Conjunto],
-    agentes: Sequence[str],
+    agentes: Sequence[Agente],
     repeticoes: int,
     cfg: Config,
     orcamento: Orcamento,
@@ -865,7 +871,7 @@ def _preparar_e_rodar(
     rodada: str,
     configs: Sequence[ConfigMCP],
     conjuntos: Sequence[Conjunto],
-    agentes: Sequence[str],
+    agentes: Sequence[Agente],
     repeticoes: int,
     cfg: Config,
     orcamento: Orcamento,
@@ -950,7 +956,7 @@ def _rodar_tudo(
     cfg: Config,
     orcamento: Orcamento,
     paralelo_por_agente: int,
-    agentes: Sequence[str],
+    agentes: Sequence[Agente],
     leituras: Mapping[str, tuple[str, ...]],
     imagem_juiz: str,
     juiz: Juiz,
@@ -1076,7 +1082,7 @@ def _registro_pulado(rodada: str, p: Planejada) -> Registro:
     e = p.execucao
     return Registro(
         rodada=rodada,
-        conjunto=cast("Conjunto", e.conjunto),
+        conjunto=e.conjunto,
         caso=e.caso,
         agente=e.agente,
         config=e.config,
@@ -1094,7 +1100,7 @@ def _rodar_pendentes(
     cfg: Config,
     orcamento: Orcamento,
     paralelo_por_agente: int,
-    agentes: Sequence[str],
+    agentes: Sequence[Agente],
     avaliar_de: Callable[[Planejada], Callable[..., Avaliacao]],
     dep: Dependencias,
     ctl: _Controle,
