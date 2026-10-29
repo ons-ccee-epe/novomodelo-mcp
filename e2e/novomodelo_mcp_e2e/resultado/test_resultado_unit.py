@@ -152,7 +152,9 @@ def test_junit_mapeia_os_quatro_estados(tmp_path: Path) -> None:
     assert {c.get("classname") for c in casos} == {"tools.claude.padrao"}
     filhos = [[f.tag for f in c] for c in casos]
     assert filhos == [[], ["failure"], ["error"], ["skipped"]]
-    assert casos[1].find("failure").get("message") == "resposta errada"
+    falha = casos[1].find("failure")
+    assert falha is not None
+    assert falha.get("message") == "resposta errada"
 
 
 @pytest.mark.parametrize("nome", ["../x", "/etc", "a/b", "a\\b", "..", ".", "", "a\n"])
@@ -186,7 +188,9 @@ def test_junit_motivo_com_caractere_de_controle_gera_xml_valido(tmp_path: Path) 
     destino = escrever_junit([r], tmp_path / "junit.xml")
     falha = ET.parse(destino).getroot().find(".//failure")
     assert falha is not None
-    assert "\x00" not in falha.get("message")
+    mensagem = falha.get("message")
+    assert mensagem is not None
+    assert "\x00" not in mensagem
 
 
 def test_schema_versao_bate_com_os_schemas() -> None:
