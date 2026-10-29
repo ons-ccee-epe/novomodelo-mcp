@@ -247,7 +247,7 @@ def test_instalar_novomodelo_instala(request, cliente):
     if not request.config.getoption("--instalar-executavel"):
         pytest.skip("só com --instalar-executavel")
     e = cliente.instalacao
-    assert e.get("executado") is True and e.get("versao_instalada"), e.get("diagnostics", e)
+    assert e.get("executed") is True and e.get("installed_version"), e.get("diagnostics", e)
 
 
 def test_server_info_binarios_e_versoes(info):
@@ -258,8 +258,8 @@ def test_server_info_binarios_e_versoes(info):
 @pytest.mark.rede
 def test_instalar_novomodelo_so_o_plano(cliente):
     e = cliente.chamar("instalar_novomodelo")
-    assert e.get("executado") is False, e
-    assert (e.get("plano") or {}).get("sha256"), e.get("aviso_rede") or e
+    assert e.get("executed") is False, e
+    assert (e.get("plan") or {}).get("sha256"), e.get("network_warning") or e
 
 
 def test_solver_version(cliente):
@@ -288,7 +288,7 @@ def test_docs_read_cli_reference(cliente):
 
 
 def test_docs_read_changelog_pela_versao(cliente, info):
-    esperada = (info.get("versoes") or {}).get("esperada")
+    esperada = (info.get("versions") or {}).get("expected")
     e = cliente.chamar("docs_read", {"page": "changelog/novomodelo", "secao": esperada or ""})
     assert str(e.get("content", "")).startswith(f"## {esperada}"), e.get("diagnostics")
 
@@ -303,15 +303,15 @@ def test_docs_read_changelog_pela_versao(cliente, info):
 )
 def test_docs_search_no_top_5(cliente, consulta, alvo):
     achados = [
-        f"{r['pagina']}#{r['secao']}"
-        for r in cliente.chamar("docs_search", {"consulta": consulta}).get("resultados") or []
+        f"{r['page']}#{r['section']}"
+        for r in cliente.chamar("docs_search", {"consulta": consulta}).get("results") or []
     ]
     assert any(a.startswith(alvo) for a in achados), achados[:3]
 
 
 def test_docs_search_termo_em_portugues(cliente):
     e = cliente.chamar("docs_search", {"consulta": "afluência"})
-    assert "Inflow" in (e.get("termos_do_glossario") or []), e.get("termos_do_glossario")
+    assert "Inflow" in (e.get("glossary_terms") or []), e.get("glossary_terms")
 
 
 def test_docs_read_recusa_traversal(cliente):
@@ -348,7 +348,7 @@ def test_incluir_pastas_recusa_a_raiz_do_disco(cliente, ws):
 
 def test_incluir_pastas_ja_incluida_nao_grava(cliente, rascunho):
     e = cliente.chamar("incluir_pastas", {"pastas": [str(rascunho)]})
-    assert e.get("status") == "ok" and not e.get("incluidas") and e.get("ja_incluidas"), e
+    assert e.get("status") == "ok" and not e.get("included") and e.get("already_included"), e
 
 
 def test_deck_read_parquet(cliente, parquet):
@@ -377,12 +377,12 @@ def test_case_validate_1dtoy(cliente, toy):
 
 
 def test_case_summary_1dtoy(cliente, toy):
-    contagens = cliente.chamar("case_summary", {"case_dir": str(toy)}).get("contagens") or {}
-    assert {k: contagens.get(k) for k in ("barras", "hidros", "termicas", "estagios")} == {
-        "barras": 1,
-        "hidros": 1,
-        "termicas": 2,
-        "estagios": 4,
+    contagens = cliente.chamar("case_summary", {"case_dir": str(toy)}).get("counts") or {}
+    assert {k: contagens.get(k) for k in ("buses", "hydros", "thermals", "stages")} == {
+        "buses": 1,
+        "hydros": 1,
+        "thermals": 2,
+        "stages": 4,
     }, contagens
 
 
@@ -467,8 +467,8 @@ def test_results_convergence(cliente, rodada):
 
 
 def test_results_policy(cliente, rodada):
-    estagios = cliente.chamar("results_policy", {"output_dir": rodada["output"]}).get("estagios")
-    assert any(s["n_cortes"] > 0 for s in estagios or []), estagios
+    estagios = cliente.chamar("results_policy", {"output_dir": rodada["output"]}).get("stages")
+    assert any(s["n_cuts"] > 0 for s in estagios or []), estagios
 
 
 def test_results_list_entities(cliente, rodada):
@@ -524,7 +524,7 @@ def test_results_stochastic(cliente, toy, rodada, rascunho):
         "results_stochastic", {"output_dir": str(caso / "output"), "aberturas_do_estagio": 0}
     )
     assert (e.get("par") or {}).get("total") == 0, e.get("par")
-    assert (e.get("aberturas") or {}).get("n_aberturas") == 10, e.get("aberturas")
+    assert (e.get("openings") or {}).get("n_openings") == 10, e.get("openings")
 
 
 def test_run_cancel_interrompe_run_longo(cliente, toy, rodada, rascunho):

@@ -24,9 +24,9 @@ def register_results(mcp, settings: Settings) -> None:
         Lê `training/metadata.json` e, se houver, `simulation/metadata.json`.
         Devolve run_status, bounds (lower/upper), gap final, iterações, duração,
         dimensões do problema e o custo esperado da simulação (quando rodou).
-        `_SUCCESS` só indica que a saída foi gravada; veja `treino.termination_reason`
-        e `treino.converged_at` para saber se convergiu. Se o run falhou,
-        `escalonamento` e, se for o caso, `diagnostico_heuristico` (ver run_status).
+        `_SUCCESS` só indica que a saída foi gravada; veja `training.termination_reason`
+        e `training.converged_at` para saber se convergiu. Se o run falhou,
+        `scaling` e, se for o caso, `heuristic_diagnosis` (ver run_status).
         """
         if err := ensure_in_workspace(output_dir, settings=settings):
             return err
@@ -51,7 +51,7 @@ def register_results(mcp, settings: Settings) -> None:
         }
         if env.get("warnings"):
             out["warnings"] = env["warnings"]
-        if out["treino"].get("termination_reason") == "error":
+        if out["training"].get("termination_reason") == "error":
             out.update(R.numeric_diagnosis(output_dir))
         return cap_envelope(out, settings)
 
@@ -80,7 +80,7 @@ def register_results(mcp, settings: Settings) -> None:
 
         Lê pela biblioteca (`novomodelo.results.load_stochastic`) a pasta
         `stochastic/` da saída, que o run só grava com `exports.stochastic: true`
-        no config.json. `par.linhas`: {hydro_id, stage_id, lag, coefficient}
+        no config.json. `par.rows`: {hydro_id, stage_id, lag, coefficient}
         (lag a partir de 1), filtráveis por `hydro_id` e `stage`.
         `aberturas_do_estagio`: devolve também a árvore desse estágio (linha k =
         vetor de ruído da abertura k). Com teto de linhas.

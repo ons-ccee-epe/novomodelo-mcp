@@ -171,7 +171,7 @@ def _mostra_o_caso(caso: QueryTestCase, envelope: dict) -> bool:
 def _escolher_envelope(caso: QueryTestCase, leitura: Leitura) -> tuple[str, dict, dict] | None:
     """A primeira chamada da tool esperada com o status e o content do caso, senão a última.
 
-    O agente pode receber uma recusa guiada (`output_sugerido`) e acertar na segunda
+    O agente pode receber uma recusa guiada (`suggested_output`) e acertar na segunda
     chamada, listar antes de agir, ou provocar o erro pedido e seguir com outra chamada:
     vale a chamada que mostra o comportamento do caso, não sempre a primeira do MCP.
     """

@@ -247,7 +247,7 @@ def job_logs(
         return None
     d = _job_dir(settings, job_id)
     if (d / "saida.log").exists():
-        return {"saida": _tail(d / "saida.log", lines, max_chars)}
+        return {"log": _tail(d / "saida.log", lines, max_chars)}
     return {
         "stdout": _tail(d / "stdout.log", lines, max_chars),
         "stderr": _tail(d / "stderr.log", lines, max_chars),

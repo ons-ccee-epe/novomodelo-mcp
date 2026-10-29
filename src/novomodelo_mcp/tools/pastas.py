@@ -19,7 +19,7 @@ def register_pastas(mcp, settings: Settings) -> None:
         """Inclui pastas de estudo na pasta de trabalho; vale na hora, sem reabrir o cliente.
 
         Use só depois de o usuário aceitar, com todas as pastas de uma vez (a
-        `pasta_sugerida` de cada recusa). Recusa, com motivo, o que não é pasta, a
+        `suggested_folder` de cada recusa). Recusa, com motivo, o que não é pasta, a
         pasta pessoal inteira, a raiz do disco e pastas de configuração de programas.
         A inclusão fica gravada para as próximas conversas.
         """
@@ -27,5 +27,5 @@ def register_pastas(mcp, settings: Settings) -> None:
             result = include_folders(pastas, settings)
         except Exception as exc:  # noqa: BLE001 - never-raise: falha de lock/escrita vira envelope
             return as_error(exc)
-        log(settings, "incluir_pastas", pastas=pastas, incluidas=result.get("incluidas"))
+        log(settings, "incluir_pastas", pastas=pastas, included=result.get("included"))
         return result

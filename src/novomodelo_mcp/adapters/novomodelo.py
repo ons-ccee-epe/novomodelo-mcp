@@ -124,15 +124,15 @@ def validate_deck_binding(
     return {"status": "ok", "exit_code": 0, **fields}
 
 
-#: Nome na resposta → (atributo de contagem do `model.System`, lista de itens).
+#: Lista do `model.System` (o nome na resposta) → atributo de contagem, se houver.
 _SYSTEM_KINDS = {
-    "barras": ("n_buses", "buses"),
-    "linhas": ("n_lines", "lines"),
-    "hidros": ("n_hydros", "hydros"),
-    "termicas": ("n_thermals", "thermals"),
-    "contratos": (None, "contracts"),
-    "bombeamento": (None, "pumping_stations"),
-    "fontes_nao_controlaveis": (None, "non_controllable_sources"),
+    "buses": "n_buses",
+    "lines": "n_lines",
+    "hydros": "n_hydros",
+    "thermals": "n_thermals",
+    "contracts": None,
+    "pumping_stations": None,
+    "non_controllable_sources": None,
 }
 
 
@@ -155,15 +155,15 @@ def case_summary_binding(
         return _error(1, "o novomodelo não conseguiu ler o caso", f"{type(exc).__name__}: {exc}")
     counts: dict[str, Any] = {}
     items: dict[str, Any] = {}
-    for kind, (count_attr, list_attr) in _SYSTEM_KINDS.items():
-        entries = list(getattr(system, list_attr, None) or [])
+    for kind, count_attr in _SYSTEM_KINDS.items():
+        entries = list(getattr(system, kind, None) or [])
         counts[kind] = getattr(system, count_attr) if count_attr else len(entries)
         items[kind] = {
-            "lista": [{"id": e.id, "name": e.name} for e in entries[:max_items]],
-            "truncado": len(entries) > max_items,
+            "entries": [{"id": e.id, "name": e.name} for e in entries[:max_items]],
+            "truncated": len(entries) > max_items,
         }
-    counts["estagios"] = getattr(system, "n_stages", None)
-    return {"status": "ok", "exit_code": 0, "contagens": counts, "itens": items}
+    counts["stages"] = getattr(system, "n_stages", None)
+    return {"status": "ok", "exit_code": 0, "counts": counts, "items": items}
 
 
 def validate_deck_cli(

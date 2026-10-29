@@ -29,7 +29,7 @@ from .state import atomic_write_text, default_state_dir, file_lock
 NAO_CONTORNE = (
     "Caminho fora da pasta de trabalho: não leia esse caminho por outras ferramentas "
     "(leitura de arquivo, terminal, outro MCP). Pergunte ao usuário se pode incluir a "
-    "pasta (`pasta_sugerida` da recusa); com o sim, chame `incluir_pastas` com todas as "
+    "pasta (`suggested_folder` da recusa); com o sim, chame `incluir_pastas` com todas as "
     "pastas de uma vez e tente de novo. Não peça ao usuário para rodar comandos."
 )
 
@@ -124,7 +124,7 @@ def refuse_outside(text: str, resolved: Path, roots: list[Path]) -> dict[str, An
     env = error(
         13,
         f"caminho fora do workspace permitido: {text}",
-        pasta_sugerida=str(suggested_folder(resolved)),
+        suggested_folder=str(suggested_folder(resolved)),
     )
     env["diagnostics"] += [NAO_CONTORNE, f"raizes: {[str(r) for r in roots]}"]
     return env
@@ -189,8 +189,8 @@ def include_folders(pastas: list[str], settings: Settings) -> dict[str, Any]:
     if not configured_roots(settings):
         return {
             "status": "ok",
-            "incluidas": [],
-            "aviso": "sem pasta de trabalho definida "
+            "included": [],
+            "note": "sem pasta de trabalho definida "
             "(NOVOMODELO_MCP_WORKSPACE): todas as pastas já são aceitas; nada foi gravado",
         }
     roots = allowed_roots(settings)
@@ -199,12 +199,12 @@ def include_folders(pastas: list[str], settings: Settings) -> dict[str, Any]:
         try:
             folder = Path(texto).expanduser().resolve()
         except OSError as exc:
-            recusadas.append({"pasta": texto, "motivo": f"caminho inválido ({exc})"})
+            recusadas.append({"folder": texto, "reason": f"caminho inválido ({exc})"})
             continue
         if any(_within(folder, r) for r in roots):
             ja.append(str(folder))
         elif motivo := forbidden_reason(folder, settings):
-            recusadas.append({"pasta": texto, "motivo": motivo})
+            recusadas.append({"folder": texto, "reason": motivo})
         elif str(folder) not in incluidas:
             incluidas.append(str(folder))
     if incluidas:
@@ -216,13 +216,13 @@ def include_folders(pastas: list[str], settings: Settings) -> dict[str, Any]:
             atomic_write_text(path, json.dumps({"pastas": novas}, indent=2, ensure_ascii=False))
     raizes = [str(r) for r in allowed_roots(settings)]
     if not incluidas and not ja:
-        return error(22, "nenhuma pasta foi incluída", recusadas=recusadas, raizes=raizes)
+        return error(22, "nenhuma pasta foi incluída", refused=recusadas, roots=raizes)
     return {
         "status": "ok",
-        "incluidas": incluidas,
-        "ja_incluidas": ja,
-        "recusadas": recusadas,
-        "raizes": raizes,
+        "included": incluidas,
+        "already_included": ja,
+        "refused": recusadas,
+        "roots": raizes,
     }
 
 

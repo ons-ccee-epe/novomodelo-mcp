@@ -101,10 +101,10 @@ def register_pre_run(mcp, settings: Settings) -> None:
         warnings = env.get("warnings")
         if isinstance(warnings, list):
             grouped = group_diagnostics(warnings, settings.max_diagnostics)
-            env["warnings"] = grouped["grupos"]
+            env["warnings"] = grouped["groups"]
             env["warnings_total"] = grouped["total"]
-            env["warnings_grupos_total"] = grouped["grupos_total"]
-            env["warnings_agrupados"] = True
+            env["warnings_groups_total"] = grouped["groups_total"]
+            env["warnings_grouped"] = True
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
@@ -112,9 +112,9 @@ def register_pre_run(mcp, settings: Settings) -> None:
         """O caso como o novomodelo o lê e interpreta (`novomodelo.io.load_case`).
 
         Diferente do `deck_list` (os arquivos), mostra o caso já validado:
-        `contagens` por tipo (barras, linhas, hidros, térmicas, contratos,
-        bombeamento, fontes não controláveis, estágios) e `itens` com
-        `{id, name}` de cada tipo, com teto. Caso inválido → erro com a mensagem
+        `counts` por tipo (buses, lines, hydros, thermals, contracts,
+        pumping_stations, non_controllable_sources, stages) e `items` com
+        `{id, name}` de cada tipo em `entries`, com teto. Caso inválido → erro com a mensagem
         do novomodelo. Não grava nada.
         """
         if err := ensure_in_workspace(case_dir, settings=settings):

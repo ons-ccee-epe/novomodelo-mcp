@@ -49,8 +49,8 @@ def test_describe_de_pasta_recusa_sem_ler_e_aponta_o_summarize(ws, monkeypatch):
     tools, res, _, _ = ws
     _sem_leitura_inteira(monkeypatch)
     r = tools["deck_describe_parquet"](str(res))
-    assert r["status"] == "error" and "SUMMARIZE" in r["proximo_passo"], r
-    assert "/**/*.parquet" in r["proximo_passo"] and "d''água" in r["proximo_passo"], r
+    assert r["status"] == "error" and "SUMMARIZE" in r["next"], r
+    assert "/**/*.parquet" in r["next"] and "d''água" in r["next"], r
 
 
 def test_describe_de_arquivo_acima_do_teto_recusa_sem_ler(ws, monkeypatch):

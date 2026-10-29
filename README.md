@@ -115,7 +115,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `bridge_convert_newave(src, dst, validate, force, dry_run)`: converte NEWAVE → novomodelo
 - `bridge_check_decomp(src)` / `bridge_convert_decomp(src, dst, validate, force, dry_run)`: o mesmo para DECOMP
 - `case_validate(case_dir, output_dir)`: valida o deck (binding `novomodelo.io.validate`, estruturado; fallback para o texto do CLI); com `output_dir`, confere também a saída de uma rodada anterior (retomada)
-- `case_summary(case_dir)`: o caso como o novomodelo o lê (`novomodelo.io.load_case`): contagens por tipo e `{id, name}` de cada item, com teto
+- `case_summary(case_dir)`: o caso como o novomodelo o lê (`novomodelo.io.load_case`): contagens por tipo (`counts`) e `{id, name}` de cada item (`items`), com teto
 
 **Pós-rodada**
 - `bridge_compare_newave(newave_dir, output_dir, tolerance, fmt, out_dir)` / `bridge_compare_decomp(decomp_dir, output_dir, ...)`: compara resultados. `output_dir` é a pasta de **saída** do `novomodelo run` do caso convertido, não a pasta do caso. O `compare` sai com código 0 mesmo com divergência: o veredito está no envelope
@@ -123,7 +123,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 
 **Resultados**
 
-`output_dir` é a pasta de uma rodada: a que tem `training/metadata.json`, com qualquer nome. Uma pasta acima dela (a do caso, a do estudo) é recusada, e a recusa traz as rodadas encontradas abaixo: com uma só, em `output_sugerido`; com várias, só a lista em `rodadas`, para o usuário escolher.
+`output_dir` é a pasta de uma rodada: a que tem `training/metadata.json`, com qualquer nome. Uma pasta acima dela (a do caso, a do estudo) é recusada, e a recusa traz as rodadas encontradas abaixo: com uma só, em `suggested_output`; com várias, só a lista em `runs`, para o usuário escolher.
 
 - `results_status(output_dir)`: status, bounds, gap, iterações, custo e `software_version` (lê os `metadata.json`)
 - `results_convergence(output_dir, tail)`: trajetória de convergência (`convergence.parquet`)
@@ -165,18 +165,18 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
   `iteration_limit`, `simulation_scenarios`, `simulation_enabled`) com schema + backup + escrita atômica
 - `run_start(case_dir, threads, output, time_budget_s, override, overwrite)`: dispara `novomodelo run … --comm-backend local
   --quiet` em background e devolve `job_id` na hora; recusa se o plano disser `nao_cabe` (salvo `override=True`)
-  e recusa um `output` com rodada concluída, sugerindo outro (`output_sugerido`), salvo `overwrite=True`
+  e recusa um `output` com rodada concluída, sugerindo outro (`suggested_output`), salvo `overwrite=True`
 - `run_status(job_id)` · `run_logs(job_id, lines)` · `run_cancel(job_id)`
 
 **Diagnóstico**
-- `server_info()`: a versão do MCP (`versao_mcp`), binários, versões das peças (`versoes`), se há versão nova (`versao_nova`), workspace, pastas incluídas (`pastas_incluidas`), docs, state dir e settings
+- `server_info()`: a versão do MCP (`mcp_version`), binários, versões das peças (`versions`), se há versão nova (`new_version`), workspace, pastas incluídas (`included_folders`), docs, state dir e settings
 - `incluir_pastas(pastas)`: acrescenta pastas de estudo às raízes do guard, depois de o usuário aceitar; vale na hora e fica gravado em `pastas.json` no state dir
 
 ### Prompt `metodologia`
 
 O servidor oferece o prompt MCP `metodologia(tema)`: uma conversa sobre a metodologia do
 novomodelo ancorada nas docs embutidas (busca em inglês com `docs_search`, leitura da
-seção com `docs_read` e resposta em português citando `pagina#secao`; quando as docs não
+seção com `docs_read` e resposta em português citando `page#section`; quando as docs não
 tratam do assunto, a resposta diz isso). `tema` é opcional e de uma palavra; sem ele, a
 pergunta vem na mensagem seguinte.
 
@@ -195,7 +195,7 @@ symlinks e `..`). Sem essa variável o servidor opera **irrestrito**, e o `serve
 sinaliza o estado.
 
 A recusa (`exit_code` 13) diz ao agente para não ler o caminho por outras ferramentas,
-traz a pasta do caminho em `pasta_sugerida` e pede que o agente pergunte ao usuário se
+traz a pasta do caminho em `suggested_folder` e pede que o agente pergunte ao usuário se
 pode incluí-la. Com o sim, o agente chama `incluir_pastas` com todas as pastas de uma
 vez: a inclusão vale na hora, sem reabrir o cliente, e fica em `pastas.json` no state
 dir, somada às raízes de `NOVOMODELO_MCP_WORKSPACE`. `incluir_pastas` nunca entra na
@@ -213,7 +213,7 @@ Edições com `force=True` (gravar violando o schema), `case_init(force=True)`
 
 O MCP conversa com o executável, a biblioteca (`novomodelo-python`) e o bridge da
 mesma versão. Se alguma peça estiver em outra versão, ou faltar, **toda** resposta traz
-`avisos_de_versao` com os comandos para alinhar; a chamada continua, e a instrução do
+`version_warnings` com os comandos para alinhar; a chamada continua, e a instrução do
 servidor pede ao agente que ofereça rodar os comandos, com o ok da pessoa. A peça mais
 velha que o MCP sobe até a versão dele. Para a mais nova há dois caminhos: atualizar o
 MCP para a versão dela, ou voltar a peça para a versão do MCP.
@@ -249,14 +249,14 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | `NOVOMODELO_MCP_SOLVER_BIN` | (PATH) | caminho do `novomodelo` |
 | `NOVOMODELO_MCP_BRIDGE_BIN` | (o do pacote, senão PATH) | opcional: outro `novomodelo-bridge`; tem prioridade sobre o do pacote |
 | `NOVOMODELO_MCP_WORKSPACE` | — | raiz(es) permitida(s) para caminhos (fail-closed quando definida) |
-| `NOVOMODELO_MCP_DOCS_DIR` | — | só desenvolvimento: pasta de páginas de um clone das docs, no lugar das embutidas (gera aviso em `avisos_de_versao`) |
+| `NOVOMODELO_MCP_DOCS_DIR` | — | só desenvolvimento: pasta de páginas de um clone das docs, no lugar das embutidas (gera aviso em `version_warnings`) |
 | `NOVOMODELO_MCP_SCHEMAS_DIR` | — | pasta com `*.schema.json` (ver [Documentação e schemas](#documentação-e-schemas)) |
 | `NOVOMODELO_MCP_ALLOW_FORCE` | `0` | habilita `deck_edit_json(force=True)`, `case_init(force=True)` e `bridge_convert_*(force=True)`, que apaga o deck de destino |
 | `NOVOMODELO_MCP_LOG` | `0` | loga cada chamada no stderr (debug/teste) |
 | `NOVOMODELO_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
 | `NOVOMODELO_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
 | `NOVOMODELO_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |
-| `NOVOMODELO_MCP_MAX_RESPONSE_KB` | `50` | teto de tamanho de uma resposta com linhas ou listas (`results_query`, `deck_sql`, `deck_read_parquet`, `results_convergence`, `results_policy`, `results_stochastic`, `case_summary`); acima dele as linhas são cortadas, com `cortado_por_tamanho` |
+| `NOVOMODELO_MCP_MAX_RESPONSE_KB` | `50` | teto de tamanho de uma resposta com linhas ou listas (`results_query`, `deck_sql`, `deck_read_parquet`, `results_convergence`, `results_policy`, `results_stochastic`, `case_summary`); acima dele as linhas são cortadas, com `size_truncation` |
 | `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes do que é carregado inteiro na memória: leitura de JSON e `deck_describe_parquet`/`deck_edit_parquet` (pasta ou parquet maior é recusado e aponta o `deck_sql`) |
 | `NOVOMODELO_MCP_STATE_DIR` | por SO (ver abaixo) | estado persistente: runs assíncronos (`jobs/`) e calibração (`calibration.json`) |
 | `NOVOMODELO_MCP_MAX_JOBS` | `1` | runs simultâneos permitidos pelo `run_start` |

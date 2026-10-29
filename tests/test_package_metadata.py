@@ -31,7 +31,7 @@ def test_initialize_mostra_a_versao_do_mcp_e_nao_a_do_sdk():
 def test_server_info_mostra_a_versao_do_mcp(monkeypatch):
     monkeypatch.setattr(versions, "update_check", lambda settings: {"mcp": {"status": "atual"}})
     tools = {t.name: t.fn for t in build_server()._tool_manager.list_tools()}
-    assert tools["server_info"]()["versao_mcp"] == PYPROJECT["version"]
+    assert tools["server_info"]()["mcp_version"] == PYPROJECT["version"]
 
 
 def test_versao_do_mcp_acompanha_a_do_novomodelo():

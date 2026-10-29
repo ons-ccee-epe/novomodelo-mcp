@@ -31,8 +31,8 @@ def _tools():
 def test_sem_pagina_devolve_a_lista_de_paginas():
     t = _tools()
     sem = t["docs_read"]()
-    assert sem["status"] == "ok" and sem["itens"] == t["docs_list"]()["itens"], sem
-    assert "page" in sem["aviso"], sem
+    assert sem["status"] == "ok" and sem["items"] == t["docs_list"]()["items"], sem
+    assert "page" in sem["note"], sem
 
 
 def test_no_servidor_page_nao_e_obrigatorio():

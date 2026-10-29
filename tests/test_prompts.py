@@ -26,7 +26,7 @@ def test_texto_do_prompt_ancorado_nas_docs():
         "em inglês",
         "glossário",
         "docs_read",
-        "pagina#secao",
+        "page#section",
         "não complete de memória",
         "o código pode divergir",
     ):

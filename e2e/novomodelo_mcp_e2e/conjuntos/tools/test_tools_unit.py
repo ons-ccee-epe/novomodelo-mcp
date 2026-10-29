@@ -134,7 +134,7 @@ def test_envelope_vem_do_stream() -> None:
     caso = _caso(tool="deck_list", status="ok", content={"count": "__gt__:0"})
     envelope = {"status": "ok", "count": 11, "files": []}
     leitura = _claude(
-        (f"{PREFIXO}server_info", {"versao_mcp": "1"}),
+        (f"{PREFIXO}server_info", {"mcp_version": "1"}),
         (f"{PREFIXO}deck_list", envelope),
     )
 

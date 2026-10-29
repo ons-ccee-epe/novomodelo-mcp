@@ -104,24 +104,24 @@ def test_resumo_sem_os_coeficientes_dos_cortes(tool):
     env = fn(out)
     assert env["status"] == "ok"
     assert env["metadata"]["software_version"] == "0.18.0"
-    assert [e["n_cortes"] for e in env["estagios"]] == [8, 8, 8]
-    assert env["estagios"][0]["n_ativos"] == 4
+    assert [e["n_cuts"] for e in env["stages"]] == [8, 8, 8]
+    assert env["stages"][0]["n_active"] == 4
     assert "coefficients" not in str(env) and "stage_bases" not in env
 
 
 def test_estagio_devolve_cortes_com_teto_e_sem_coeficientes(tool):
     fn, out, _ = tool
     env = fn(out, stage=1)
-    cortes = env["cortes"]
-    assert cortes["estagio"] == 1 and cortes["total"] == 8 and cortes["truncado"] is True
-    assert len(cortes["linhas"]) == 5
-    assert cortes["linhas"][0] == {
+    cortes = env["cuts"]
+    assert cortes["stage"] == 1 and cortes["total"] == 8 and cortes["truncated"] is True
+    assert len(cortes["rows"]) == 5
+    assert cortes["rows"][0] == {
         "cut_id": 0,
         "iteration": 1,
         "forward_pass_index": 0,
         "intercept": 0.0,
         "is_active": True,
-        "n_coeficientes": 4,
+        "n_coefficients": 4,
     }
 
 

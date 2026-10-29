@@ -485,7 +485,7 @@ def test_run_async_lifecycle():
         assert st["state"] == "succeeded" and st["exit_code"] == 0, st
         assert st["milestones"]["training"] is True, st
         logs = t["run_logs"](r["job_id"])
-        assert "fake run: done" in logs["saida"], logs
+        assert "fake run: done" in logs["log"], logs
         assert t["run_status"]("../../etc")["status"] == "error"
 
 
@@ -498,7 +498,7 @@ def test_run_logs_mostra_os_dois_canais_em_ordem_sem_duplicar():
             assert _wait(t, r["job_id"])["state"] == "succeeded"
             logs = t["run_logs"](r["job_id"])
             assert "stdout" not in logs and "stderr" not in logs, logs
-            linhas = [x for x in logs["saida"].splitlines() if "relatorio" in x or "aviso" in x]
+            linhas = [x for x in logs["log"].splitlines() if "relatorio" in x or "aviso" in x]
             marca = "[stderr] " if canal == "stderr" else ""
             assert linhas == [
                 f"{marca}relatorio: banner",
@@ -547,8 +547,8 @@ def test_run_start_nao_sobrescreve_rodada_concluida():
         de_novo = t["run_start"](str(case), override=True)
         assert de_novo["status"] == "error" and de_novo["exit_code"] == 17, de_novo
         assert any("overwrite=True" in x for x in de_novo["diagnostics"]), de_novo
-        assert de_novo["output_sugerido"] != str((case / "output").resolve()), de_novo
-        outro = t["run_start"](str(case), output=de_novo["output_sugerido"], override=True)
+        assert de_novo["suggested_output"] != str((case / "output").resolve()), de_novo
+        outro = t["run_start"](str(case), output=de_novo["suggested_output"], override=True)
         assert outro["status"] == "ok", outro
         _wait(t, outro["job_id"])
         assert t["run_start"](str(case), override=True, overwrite=True)["status"] == "ok"

@@ -86,7 +86,7 @@ down, never fetched ad hoc at a call site.
 `api.github.com/repos/ons-ccee-epe/*`, `pypi.org/pypi/novomodelo-bridge/*`, and
 `release-assets.githubusercontent.com` only as a redirect target), uses a short
 timeout and a local `truststore.SSLContext` (falling back to the default
-context), and never raises: a failure becomes `aviso_rede`. The wrong-but-
+context), and never raises: a failure becomes `network_warning`. The wrong-but-
 running alternatives are calling `urllib`/`subprocess curl` from a tool, which
 bypasses the allow-list, and `truststore.inject_into_ssl()`, which swaps TLS for
 the whole process. A tool that uses the network is added to

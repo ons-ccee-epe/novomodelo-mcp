@@ -57,14 +57,14 @@ def settings(tmp_path):
 
 
 def _top(env):
-    return [f"{r['pagina']}#{r['secao']}" for r in env["resultados"]]
+    return [f"{r['page']}#{r['section']}" for r in env["results"]]
 
 
 def test_acha_a_secao_certa_no_top_3(settings):
     env = REF.search_docs(settings, "CVaR", k=5)
     assert env["status"] == "ok"
     assert "math/risk-measures#2-conditional-value-at-risk-cvar" in _top(env)[:3]
-    assert {"pagina", "secao", "titulo", "trecho", "score"} <= set(env["resultados"][0])
+    assert {"page", "section", "title", "snippet", "score"} <= set(env["results"][0])
 
 
 def test_acento_e_caixa_nao_importam(settings):
@@ -79,7 +79,7 @@ def test_acento_e_caixa_nao_importam(settings):
 
 def test_termo_do_glossario_e_traduzido(settings):
     env = REF.search_docs(settings, "afluência negativa", k=5)
-    assert env["termos_do_glossario"] == ["Inflow"]
+    assert env["glossary_terms"] == ["Inflow"]
     assert any(t.startswith("math/inflow-nonnegativity") for t in _top(env)[:3])
 
 
@@ -100,15 +100,15 @@ def test_consulta_vazia_e_erro_22(settings):
 def test_resposta_dentro_do_teto(settings):
     env = REF.search_docs(settings, "CVaR inflow threads", k=20)
     assert len(json.dumps(env, ensure_ascii=False)) <= settings.max_summary_chars
-    assert all(len(r["trecho"]) <= 300 for r in env["resultados"])
+    assert all(len(r["snippet"]) <= 300 for r in env["results"])
 
 
 def test_k_limitado(settings):
-    assert len(REF.search_docs(settings, "the", k=999)["resultados"]) <= 20
+    assert len(REF.search_docs(settings, "the", k=999)["results"]) <= 20
 
 
 def test_indice_embutido_real_responde(monkeypatch):
     monkeypatch.delenv("NOVOMODELO_MCP_DOCS_DIR", raising=False)
     env = REF.search_docs(dataclasses.replace(load_settings(), docs_dir=None), "FPHA", k=5)
-    assert env["status"] == "ok" and env["resultados"]
-    assert any(r["pagina"] == "math/hydro-production-models" for r in env["resultados"])
+    assert env["status"] == "ok" and env["results"]
+    assert any(r["page"] == "math/hydro-production-models" for r in env["results"])

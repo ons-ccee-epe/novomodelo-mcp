@@ -73,10 +73,10 @@ def _expected_sha256(version: str) -> str | dict[str, str]:
     try:
         assets = json.loads(body).get("assets") or []
     except (ValueError, AttributeError):
-        return {"aviso_rede": "resposta da API do GitHub ilegível"}
+        return {"network_warning": "resposta da API do GitHub ilegível"}
     digest = next((a.get("digest") for a in assets if a.get("name") == _installer_name()), None)
     if not (digest or "").startswith("sha256:"):
-        return {"erro": f"o release v{version} não publica o SHA-256 de {_installer_name()}"}
+        return {"error": f"o release v{version} não publica o SHA-256 de {_installer_name()}"}
     return digest.split(":", 1)[1]
 
 
@@ -102,7 +102,7 @@ def _installer_env(pasta: str | None) -> dict[str, str]:
 
 
 def _fail(code: int, message: str, manual: str, detail: str = "", **extra) -> dict[str, Any]:
-    return error(code, message, detail, comando_manual=manual, **extra)
+    return error(code, message, detail, manual_command=manual, **extra)
 
 
 def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, Any]:
@@ -115,27 +115,27 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
     url, dest = installer_url(version), _binary_dir(pasta)
     sha = _expected_sha256(version)
     if isinstance(sha, dict):
-        if "aviso_rede" in sha:
+        if "network_warning" in sha:
             return _fail(
                 2,
                 "não foi possível consultar o release oficial",
                 manual,
-                aviso_rede=sha["aviso_rede"],
+                network_warning=sha["network_warning"],
             )
-        return _fail(2, sha["erro"], manual)
+        return _fail(2, sha["error"], manual)
     plan = {
-        "versao": version,
+        "version": version,
         "url": url,
         "sha256": sha,
-        "destino": str(dest),
-        "altera_path": _changes_path(),
+        "destination": str(dest),
+        "modifies_path": _changes_path(),
     }
     if not confirmar:
         return {
             "status": "ok",
-            "executado": False,
-            "plano": plan,
-            "comando_manual": manual,
+            "executed": False,
+            "plan": plan,
+            "manual_command": manual,
             "diagnostics": ["nada foi baixado; chame com confirmar=True para instalar"],
         }
 
@@ -145,8 +145,8 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             2,
             "não foi possível baixar o instalador",
             manual,
-            plano=plan,
-            aviso_rede=body["aviso_rede"],
+            plan=plan,
+            network_warning=body["network_warning"],
         )
     got = hashlib.sha256(body).hexdigest()
     if got != sha:
@@ -155,7 +155,7 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             "hash do instalador não confere; nada foi executado",
             manual,
             f"esperado {sha}, obtido {got}",
-            plano=plan,
+            plan=plan,
         )
 
     workdir = tempfile.mkdtemp(prefix="novomodelo-installer-")
@@ -170,11 +170,9 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
         try:
             proc = _run_installer(cmd, env=_installer_env(pasta), timeout=_INSTALL_TIMEOUT_S)
         except subprocess.TimeoutExpired:
-            return _fail(-1, f"o instalador passou de {_INSTALL_TIMEOUT_S} s", manual, plano=plan)
+            return _fail(-1, f"o instalador passou de {_INSTALL_TIMEOUT_S} s", manual, plan=plan)
         except OSError as exc:
-            return _fail(
-                127, "não foi possível executar o instalador", manual, str(exc), plano=plan
-            )
+            return _fail(127, "não foi possível executar o instalador", manual, str(exc), plan=plan)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
     if proc.returncode != 0:
@@ -183,7 +181,7 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             "o instalador oficial terminou com erro",
             manual,
             (proc.stderr or proc.stdout or "")[-MAX_DETAIL_CHARS:],
-            plano=plan,
+            plan=plan,
         )
 
     binary = dest / ("novomodelo.exe" if sys.platform == "win32" else "novomodelo")
@@ -194,15 +192,15 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             1,
             f"depois da instalação, {binary} responde {installed!r}, não {version}",
             manual,
-            plano=plan,
+            plan=plan,
         )
     versions.reset_caches()
     return {
         "status": "ok",
-        "executado": True,
-        "versao_instalada": installed,
-        "caminho": str(binary),
-        "plano": plan,
-        "configuracao": f'"NOVOMODELO_MCP_SOLVER_BIN": "{binary}"',
+        "executed": True,
+        "installed_version": installed,
+        "path": str(binary),
+        "plan": plan,
+        "configuration": f'"NOVOMODELO_MCP_SOLVER_BIN": "{binary}"',
         "diagnostics": [(proc.stdout or "").strip()[-MAX_DETAIL_CHARS:]],
     }

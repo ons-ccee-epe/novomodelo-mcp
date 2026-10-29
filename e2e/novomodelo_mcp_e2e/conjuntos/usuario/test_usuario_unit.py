@@ -527,7 +527,7 @@ def test_erros_de_envelope_do_kiro_atual_contam_pelo_rawoutput():
     assert resultado.erros_envelope == 2
 
 
-_SERVER_INFO = '{"versao_nova": {"mcp": {"status": "atual"}, "bridge": {"status": "atual"}}}'
+_SERVER_INFO = '{"new_version": {"mcp": {"status": "atual"}, "bridge": {"status": "atual"}}}'
 
 
 def _eventos_com_tools(*resultados: tuple[str, str]) -> list[Evento]:

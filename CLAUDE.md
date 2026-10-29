@@ -62,7 +62,7 @@ These are non-negotiable. Fix them before any commit.
   (`fetch_bytes`/`fetch_json`, the single exit point), only to the allow-listed
   official domains, with a short timeout and a local `truststore` context (never
   `truststore.inject_into_ssl()`). Docs and schemas stay bundled. Without
-  network the tool still answers, with `aviso_rede` and the manual command.
+  network the tool still answers, with `network_warning` and the manual command.
   Every network tool is listed in `tools/annotations.py::NETWORK_TOOLS` and
   carries `openWorldHint=True`. Tests never touch the network.
 - **Never raise to the caller.** Every tool and adapter returns an error

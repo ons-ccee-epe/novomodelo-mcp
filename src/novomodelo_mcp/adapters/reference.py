@@ -116,7 +116,7 @@ def read_schema(settings: Settings, tipo: str) -> dict:
         return error(
             2, f"schema inexistente: {tipo}", f"disponiveis: {list_schema_types(settings)}"
         )
-    return {"status": "ok", "tipo": tipo, "schema": json.loads(f.read_text(encoding="utf-8"))}
+    return {"status": "ok", "type": tipo, "schema": json.loads(f.read_text(encoding="utf-8"))}
 
 
 def _within(path: Path, root: Path) -> bool:
@@ -147,11 +147,11 @@ def docs_root(settings: Settings) -> str | None:
 def docs_origin(settings: Settings) -> dict:
     """De onde vêm as docs: `embutidas` (versão e commit) ou `pasta_de_desenvolvimento`."""
     if dev := _dev_docs_dir(settings):
-        return {"origem": "pasta_de_desenvolvimento", "caminho": dev}
+        return {"origin": "pasta_de_desenvolvimento", "path": dev}
     manifest = bundled_manifest() or {}
     return {
-        "origem": "embutidas",
-        "versao": manifest.get("docs_versao"),
+        "origin": "embutidas",
+        "version": manifest.get("docs_versao"),
         "commit": manifest.get("docs_commit"),
     }
 
@@ -179,13 +179,13 @@ def list_docs(settings: Settings, section: str | None = None) -> dict:
         if section and not rel.startswith(section):
             continue
         fields = frontmatter_fields(path.read_text(encoding="utf-8", errors="replace"))
-        items.append({"pagina": rel, "titulo": fields["title"], "descricao": fields["description"]})
+        items.append({"page": rel, "title": fields["title"], "description": fields["description"]})
     return {
         "status": "ok",
         "docs_dir": str(base),
         "count": len(items),
-        "pages": [i["pagina"] for i in items],
-        "itens": items,
+        "pages": [i["page"] for i in items],
+        "items": items,
     }
 
 
@@ -210,10 +210,10 @@ def read_doc(settings: Settings, page: str, max_chars: int, section: str | None 
             return error(
                 2,
                 f"seção inexistente em {page}: {section!r}",
-                "use uma das `secoes` (âncora ou título)",
-                secoes=section_list(text)[:200],
+                "use uma das `sections` (âncora ou título)",
+                sections=section_list(text)[:200],
             )
-        text, extra = found["texto"], {"secao": found["ancora"], "titulo": found["titulo"]}
+        text, extra = found["text"], {"section": found["anchor"], "title": found["title"]}
     truncated = len(text) > max_chars
     return {
         "status": "ok",
@@ -401,13 +401,13 @@ def find_section(text: str, wanted: str) -> dict | None:
     for pos, (i, level, title, anchor) in enumerate(heads):
         if anchor == wanted.strip() or normalize_text(title.replace("`", "")) == key:
             stop = next((j for j, lv, *_ in heads[pos + 1 :] if lv <= level), len(lines))
-            return {"titulo": title, "ancora": anchor, "texto": "\n".join(lines[i:stop]).strip()}
+            return {"title": title, "anchor": anchor, "text": "\n".join(lines[i:stop]).strip()}
     return None
 
 
 def section_list(text: str) -> list[dict[str, str]]:
     _, body = split_frontmatter(text)
-    return [{"titulo": t, "ancora": a} for _, _, t, a in _headings(body.split("\n"))]
+    return [{"title": t, "anchor": a} for _, _, t, a in _headings(body.split("\n"))]
 
 
 def normalize_text(text: str) -> str:
@@ -576,14 +576,14 @@ def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
         return error(2, "falha na busca do índice de docs", str(exc))
     return {
         "status": "ok",
-        "consulta_usada": match,
-        "termos_do_glossario": glossary,
-        "resultados": [
+        "query_used": match,
+        "glossary_terms": glossary,
+        "results": [
             {
-                "pagina": p,
-                "secao": a,
-                "titulo": t,
-                "trecho": (snip or "")[:_SNIPPET_CHARS],
+                "page": p,
+                "section": a,
+                "title": t,
+                "snippet": (snip or "")[:_SNIPPET_CHARS],
                 "score": round(-r, 3),
             }
             for p, t, a, snip, r in rows

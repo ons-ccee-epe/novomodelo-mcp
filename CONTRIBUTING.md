@@ -139,7 +139,7 @@ roda essa checagem no commit gravado no manifesto.
 
 Para testar mudanças nas docs antes de um release, `NOVOMODELO_MCP_DOCS_DIR` aponta para
 a pasta de páginas de um clone do novomodelo-docs. É uma opção de desenvolvimento: com
-ela, toda resposta traz um aviso em `avisos_de_versao`.
+ela, toda resposta traz um aviso em `version_warnings`.
 
 ## Organização do código
 

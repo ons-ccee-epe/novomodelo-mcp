@@ -15,12 +15,12 @@ def _s(kb=50):
 def test_politica_com_milhares_de_cortes_cabe_e_marca_truncado():
     env = {
         "status": "ok",
-        "estagios": [{"stage_id": i, "n_cortes": 9000} for i in range(60)],
-        "cortes": {
-            "estagio": 3,
+        "stages": [{"stage_id": i, "n_cuts": 9000} for i in range(60)],
+        "cuts": {
+            "stage": 3,
             "total": 9000,
-            "truncado": False,
-            "linhas": [
+            "truncated": False,
+            "rows": [
                 {"id": i, "iteracao": i, "intercepto": 1.0e6 + i, "ativo": True}
                 for i in range(3200)
             ],
@@ -28,29 +28,29 @@ def test_politica_com_milhares_de_cortes_cabe_e_marca_truncado():
     }
     out = budget.shrink_to_budget(env, _s())
     assert response_bytes(out) <= 50 * 1024
-    assert out["cortes"]["truncado"] is True and 0 < len(out["cortes"]["linhas"]) < 3200
-    assert len(out["estagios"]) == 60 and out["cortado_por_tamanho"]["teto_kb"] == 50
+    assert out["cuts"]["truncated"] is True and 0 < len(out["cuts"]["rows"]) < 3200
+    assert len(out["stages"]) == 60 and out["size_truncation"]["limit_kb"] == 50
 
 
 def test_varias_listas_encolhem_a_maior_primeiro():
     env = {
         "status": "ok",
-        "itens": {
-            "hidros": {
-                "lista": [{"id": i, "name": f"usina {i}" * 3} for i in range(3000)],
-                "truncado": False,
+        "items": {
+            "hydros": {
+                "entries": [{"id": i, "name": f"usina {i}" * 3} for i in range(3000)],
+                "truncated": False,
             },
-            "barras": {"lista": [{"id": i, "name": "b"} for i in range(5)], "truncado": False},
+            "buses": {"entries": [{"id": i, "name": "b"} for i in range(5)], "truncated": False},
         },
     }
     out = budget.shrink_to_budget(env, _s(10))
     assert response_bytes(out) <= 10 * 1024
-    assert out["itens"]["barras"]["lista"] == env["itens"]["barras"]["lista"]
-    assert out["itens"]["hidros"]["truncado"] is True
+    assert out["items"]["buses"]["entries"] == env["items"]["buses"]["entries"]
+    assert out["items"]["hydros"]["truncated"] is True
 
 
 def test_resposta_pequena_fica_igual():
-    env = {"status": "ok", "par": {"linhas": [{"lag": 1}], "truncado": False}}
+    env = {"status": "ok", "par": {"rows": [{"lag": 1}], "truncated": False}}
     assert budget.shrink_to_budget(dict(env), _s()) == env
 
 

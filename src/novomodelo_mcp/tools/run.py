@@ -260,7 +260,7 @@ def register_run(mcp, settings: Settings) -> None:
         CPU híbrida, ou o nº medido mais rápido); `output` default =
         `<case_dir>/output`. Antes de lançar roda o run_plan: se o veredito
         for `nao_cabe`, RECUSA (salvo `override=True`). Um `output` com rodada
-        concluída também é RECUSADO, com `output_sugerido`: rodar de novo nele
+        concluída também é RECUSADO, com `suggested_output`: rodar de novo nele
         apaga a rodada anterior. `overwrite=True` só quando a pessoa pediu para
         substituir (ou para `resume`/`warm_start`/simulação da política salva nele).
         Acompanhe com run_status / run_logs; interrompa com run_cancel.
@@ -272,9 +272,9 @@ def register_run(mcp, settings: Settings) -> None:
             return error(
                 17,
                 f"já há uma rodada concluída em {output}",
-                "rodar de novo nela apaga a rodada anterior: use output_sugerido, ou "
+                "rodar de novo nela apaga a rodada anterior: use suggested_output, ou "
                 "overwrite=True se a pessoa pediu para substituir",
-                output_sugerido=str(_free_output(Path(output))),
+                suggested_output=str(_free_output(Path(output))),
             )
         binpath = find_novomodelo(settings)
         if binpath is None:
@@ -349,9 +349,9 @@ def register_run(mcp, settings: Settings) -> None:
 
         Inclui tempo decorrido, estimativa do plano e marcos de saída
         (`training/_SUCCESS`, `simulation/_SUCCESS`). `_SUCCESS` só indica que a
-        saída foi gravada; veja `treino.termination_reason` e `treino.converged_at`
-        para saber se convergiu. Se o run falhou, `escalonamento` repassa a razão de
-        coeficientes do executável e, se for extrema, `diagnostico_heuristico`
+        saída foi gravada; veja `training.termination_reason` e `training.converged_at`
+        para saber se convergiu. Se o run falhou, `scaling` repassa a razão de
+        coeficientes do executável e, se for extrema, `heuristic_diagnosis`
         sugere a causa provável (heurística). Com o run concluído, use results_status /
         results_convergence no `output`.
         """
@@ -369,7 +369,10 @@ def register_run(mcp, settings: Settings) -> None:
                 meta = {}
             if meta.get("status") == "ok":
                 st.update(termination_fields(meta["training"], meta.get("simulation")))
-        if st["state"] == "failed" or (st.get("treino") or {}).get("termination_reason") == "error":
+        if (
+            st["state"] == "failed"
+            or (st.get("training") or {}).get("termination_reason") == "error"
+        ):
             st.update(numeric_diagnosis(str(out)))
         if st["state"] in ("failed", "lost"):
             st["stderr_tail"] = jobs.job_stderr(settings, job_id, lines=20)
@@ -381,7 +384,7 @@ def register_run(mcp, settings: Settings) -> None:
     def run_logs(job_id: str, lines: int = 100) -> dict:
         """Últimas `lines` linhas da saída do run (com teto de caracteres).
 
-        `saida` junta o stdout e o stderr do novomodelo na ordem de chegada, com as
+        `log` junta o stdout e o stderr do novomodelo na ordem de chegada, com as
         linhas do stderr marcadas `[stderr] `: o relatório do run (banner, progresso,
         resumos) sai no stderr até a 0.18.0 e no stdout a partir da 0.18.1; avisos e
         erros saem no stderr. Jobs de antes dessa junção trazem `stdout` e `stderr`.

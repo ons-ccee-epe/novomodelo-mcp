@@ -525,7 +525,7 @@ cases:
     uses_mcp: true
     tool: server_info
     content:
-      versao_mcp: "__any__"
+      mcp_version: "__any__"
   tags: [meta, info]
 
 - id: solver-version-get
@@ -550,7 +550,7 @@ cases:
     tool: incluir_pastas
     status: ok
     content:
-      incluidas: "__nonempty__"
+      included: "__nonempty__"
   tags: [meta, workspace]
 
 # ============================================================================

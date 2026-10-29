@@ -27,8 +27,8 @@ def fit_to_budget(
 
     O teto é de tamanho, não de linhas: o cliente recusa a resposta grande inteira (o
     Claude Code acima de ~25 mil tokens), e uma linha larga pesa dezenas de vezes uma
-    estreita. `cortado_por_tamanho` diz quanto veio; `truncated` passa a true.
-    `reserve`: bytes que o chamador ainda vai acrescentar (ex.: o `proximo_passo`).
+    estreita. `size_truncation` diz quanto veio; `truncated` passa a true.
+    `reserve`: bytes que o chamador ainda vai acrescentar (ex.: o `next`).
     """
     rows = envelope.get(key)
     budget = settings.max_response_kb * 1024 - reserve
@@ -40,10 +40,10 @@ def fit_to_budget(
             **envelope,
             key: rows[:n],
             "truncated": True,
-            "cortado_por_tamanho": {
-                "teto_kb": settings.max_response_kb,
-                "linhas_devolvidas": n,
-                "linhas_antes_do_corte": len(rows),
+            "size_truncation": {
+                "limit_kb": settings.max_response_kb,
+                "rows_returned": n,
+                "rows_total": len(rows),
             },
         }
         if "row_count" in out:
@@ -76,21 +76,19 @@ def shrink_to_budget(envelope: dict[str, Any], settings: Settings) -> dict[str, 
     """Encolhe a maior lista aninhada até a resposta caber em `max_response_kb`.
 
     Para as respostas com várias listas (cortes da política, PAR(p), itens do resumo do
-    caso): cada lista cortada ganha `truncado: true` no dict que a contém.
+    caso): cada lista cortada ganha `truncated: true` no dict que a contém.
     """
     budget = settings.max_response_kb * 1024
     if response_bytes(envelope) <= budget:
         return envelope
     out = copy.deepcopy(envelope)
-    out["cortado_por_tamanho"] = {"teto_kb": settings.max_response_kb}
+    out["size_truncation"] = {"limit_kb": settings.max_response_kb}
     cortadas: set[int] = set()
     while response_bytes(out) > budget:
         candidatas = [
             (dono, k)
             for dono, k in _lists(out)
-            if out.get("cortado_por_tamanho") is not dono
-            and dono[k]
-            and id(dono[k]) not in cortadas
+            if out.get("size_truncation") is not dono and dono[k] and id(dono[k]) not in cortadas
         ]
         if not candidatas:
             break
@@ -105,6 +103,6 @@ def shrink_to_budget(envelope: dict[str, Any], settings: Settings) -> dict[str, 
             else:
                 hi = mid - 1
         dono[k] = rows[:lo]
-        dono["truncado"] = True
+        dono["truncated"] = True
         cortadas.add(id(dono[k]))
     return out

@@ -56,8 +56,10 @@ def test_incluir_pastas_pelo_servidor_vale_na_hora(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "casa"))
     monkeypatch.setenv("HOME", str(tmp_path / "casa"))
     tools = _tools()
-    assert tools["deck_list"].fn(case_dir=str(estudos))["pasta_sugerida"] == str(estudos.resolve())
+    assert tools["deck_list"].fn(case_dir=str(estudos))["suggested_folder"] == str(
+        estudos.resolve()
+    )
     out = tools["incluir_pastas"].fn(pastas=[str(estudos), str(outra)])
-    assert out["incluidas"] == [str(estudos.resolve()), str(outra.resolve())]
+    assert out["included"] == [str(estudos.resolve()), str(outra.resolve())]
     assert tools["deck_list"].fn(case_dir=str(estudos))["status"] == "ok"
-    assert str(estudos.resolve()) in tools["server_info"].fn()["pastas_incluidas"]
+    assert str(estudos.resolve()) in tools["server_info"].fn()["included_folders"]

@@ -116,7 +116,7 @@ def _sync(tmp_path: Path, *extra: str) -> subprocess.CompletedProcess:
 
 def test_pagina_so_da_0_18_em_diante():
     pagina = SB.changelog_page("novomodelo", CHANGELOG)
-    assert [s["titulo"] for s in REF.section_list(pagina)] == [
+    assert [s["title"] for s in REF.section_list(pagina)] == [
         "0.19.0",
         "Changed",
         "Fixed",
@@ -127,12 +127,12 @@ def test_pagina_so_da_0_18_em_diante():
 
 def test_secao_pela_versao():
     sec = REF.find_section(SB.changelog_page("novomodelo", CHANGELOG), "0.19.0")
-    assert sec["texto"].startswith("## 0.19.0\n\nReleased 2026-10-20.")
-    assert "0.18.0" not in sec["texto"]
+    assert sec["text"].startswith("## 0.19.0\n\nReleased 2026-10-20.")
+    assert "0.18.0" not in sec["text"]
 
 
 def test_corpo_preservado():
-    sec = REF.find_section(SB.changelog_page("novomodelo", CHANGELOG), "0.19.0")["texto"]
+    sec = REF.find_section(SB.changelog_page("novomodelo", CHANGELOG), "0.19.0")["text"]
     assert "### Changed\n\n- **BREAKING:** the default cut selection is `level1`." in sec
     assert "### Fixed\n\n- A resumed run places its cuts at their slot." in sec
 
@@ -185,7 +185,7 @@ def test_instrucoes_apontam_o_changelog():
 def _busca(consulta: str, k: int = 10) -> list[str]:
     from novomodelo_mcp.config import load_settings
 
-    return [h["pagina"] for h in REF.search_docs(load_settings(), consulta, k)["resultados"]]
+    return [h["page"] for h in REF.search_docs(load_settings(), consulta, k)["results"]]
 
 
 @pytest.mark.parametrize(

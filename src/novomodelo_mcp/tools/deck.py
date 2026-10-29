@@ -45,7 +45,7 @@ def register_deck(mcp, settings: Settings) -> None:
             f"grande demais para carregar na memória ({size} bytes"
             f"{', pasta' if p.is_dir() else ''})",
             f"teto: {settings.max_read_bytes} (NOVOMODELO_MCP_MAX_READ_BYTES)",
-            proximo_passo=(
+            next=(
                 "use o deck_sql, que lê sob demanda: SUMMARIZE SELECT * FROM "
                 f"read_parquet('{alvo}') para as estatísticas, ou SELECT com "
                 "WHERE/GROUP BY para um recorte"

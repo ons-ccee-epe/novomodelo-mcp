@@ -42,7 +42,7 @@ def register_novomodelo_meta(mcp, settings: Settings) -> None:
         executa e confirma com `novomodelo version`. `pasta` (absoluta, opcional):
         raiz da instalação (o binário fica em `<pasta>/bin`); padrão `~/.cargo`.
         O instalador oficial acrescenta a pasta ao PATH do perfil do shell. Sem
-        rede, devolve `aviso_rede` com o comando manual.
+        rede, devolve `network_warning` com o comando manual.
         """
         try:
             return cap_envelope(installer.install(confirmar=confirmar, pasta=pasta), settings)

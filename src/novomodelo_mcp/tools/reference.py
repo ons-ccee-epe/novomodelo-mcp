@@ -44,7 +44,7 @@ def register_reference(mcp, settings: Settings) -> None:
         árvore de aberturas, valor da água, EARM. Busque em inglês: as docs estão em
         inglês, e os termos em português que estão no glossário das docs são traduzidos
         (ex.: afluência → inflow). Devolve as `k` seções mais relevantes (até 20):
-        `pagina`, `secao` (âncora), `titulo`, `trecho` e `score`. Abra a seção com
+        `page`, `section` (âncora), `title`, `snippet` e `score`. Abra a seção com
         `docs_read(page, secao)`.
         """
         return cap_envelope(REF.search_docs(settings, consulta, k), settings)
@@ -53,14 +53,14 @@ def register_reference(mcp, settings: Settings) -> None:
     def docs_read(page: str | None = None, secao: str | None = None) -> dict:
         """Lê uma página das docs embutidas (ex.: 'reference/cli-reference').
 
-        `secao`: âncora (a `secao` que o docs_search devolve) ou título; devolve só a
+        `secao`: âncora (a `section` que o docs_search devolve) ou título; devolve só a
         seção, com as subseções. Seção inexistente → erro com a lista de seções.
         Sem `page`: a lista de páginas, como o docs_list.
         """
         if not page:
             return {
                 **cap_envelope(REF.list_docs(settings, None), settings),
-                "aviso": "faltou `page`: escolha uma das páginas abaixo e chame docs_read(page, secao)",
+                "note": "faltou `page`: escolha uma das páginas abaixo e chame docs_read(page, secao)",
             }
         return cap_envelope(
             REF.read_doc(settings, page, settings.max_summary_chars, secao), settings

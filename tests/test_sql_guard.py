@@ -27,7 +27,7 @@ def test_guard_refusal_brings_no_bypass_and_suggested_folder():
 
     err = S.guard_sql("SELECT * FROM read_parquet('/estudos/x.parquet')", WS)
     assert err["exit_code"] == 13 and NAO_CONTORNE in err["diagnostics"], err
-    assert err["pasta_sugerida"] == str(Path("/estudos").resolve()), err
+    assert err["suggested_folder"] == str(Path("/estudos").resolve()), err
 
 
 def test_guard_dotdot_escape_is_resolved_and_blocked():

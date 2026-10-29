@@ -122,5 +122,5 @@ def test_server_info_mostra_a_origem_do_bridge(tmp_path, monkeypatch):
     versions.reset_caches()
     info = {t.name: t.fn for t in build_server()._tool_manager.list_tools()}["server_info"]()
     versions.reset_caches()
-    assert info["bridge"]["origem"] == "pacote"
-    assert info["versoes"]["bridge"]["origem"] == "pacote"
+    assert info["bridge"]["origin"] == "pacote"
+    assert info["versions"]["bridge"]["origin"] == "pacote"

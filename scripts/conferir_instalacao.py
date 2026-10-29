@@ -78,18 +78,20 @@ def conferir(cmd: list[str], versao: str, server_info: bool) -> list[str]:
         if server_info:
             res = pedir("tools/call", {"name": "server_info", "arguments": {}})
             info = json.loads(res["content"][0]["text"])
-            if info.get("versao_mcp") != versao:
-                raise Falha(f"server_info.versao_mcp = {info.get('versao_mcp')}, esperada {versao}")
-            if info.get("docs", {}).get("origem") != "embutidas":
+            if info.get("mcp_version") != versao:
+                raise Falha(
+                    f"server_info.mcp_version = {info.get('mcp_version')}, esperada {versao}"
+                )
+            if info.get("docs", {}).get("origin") != "embutidas":
                 raise Falha(f"docs não são as embutidas: {info.get('docs')}")
-            pecas = info.get("versoes", {})
+            pecas = info.get("versions", {})
             linhas.append(
                 "server_info: "
                 + ", ".join(
-                    f"{k} {v.get('versao')}" for k, v in pecas.items() if isinstance(v, dict)
+                    f"{k} {v.get('version')}" for k, v in pecas.items() if isinstance(v, dict)
                 )
             )
-            linhas += [f"aviso: {a}" for a in info.get("avisos_de_versao", [])]
+            linhas += [f"aviso: {a}" for a in info.get("version_warnings", [])]
     finally:
         proc.stdin.close()
         try:

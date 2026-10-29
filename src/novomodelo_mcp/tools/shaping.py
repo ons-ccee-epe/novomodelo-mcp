@@ -17,9 +17,9 @@ def attach_artifact(envelope: dict[str, Any], key: str, path: str) -> dict[str, 
 
 
 def attach_version_warnings(result: Any, warnings: list[str]) -> Any:
-    """Acrescenta `avisos_de_versao` a uma resposta dict quando há peça divergente."""
+    """Acrescenta `version_warnings` a uma resposta dict quando há peça divergente."""
     if warnings and isinstance(result, dict):
-        result["avisos_de_versao"] = warnings
+        result["version_warnings"] = warnings
     return result
 
 
@@ -68,15 +68,15 @@ def group_diagnostics(items: list[Any], max_groups: int, max_examples: int = 3) 
         template = _VARIABLE_PARTS.sub("…", message)
         group = groups.setdefault(
             (kind, template),
-            {"kind": kind, "mensagem_modelo": template, "count": 0, "exemplos": []},
+            {"kind": kind, "message_template": template, "count": 0, "examples": []},
         )
         group["count"] += 1
-        if len(group["exemplos"]) < max_examples:
-            group["exemplos"].append(item)
+        if len(group["examples"]) < max_examples:
+            group["examples"].append(item)
     ordered = sorted(groups.values(), key=lambda g: (-g["count"], str(g["kind"])))
     return {
-        "grupos": ordered[:max_groups],
+        "groups": ordered[:max_groups],
         "total": len(items),
-        "grupos_total": len(ordered),
-        "grupos_truncados": len(ordered) > max_groups,
+        "groups_total": len(ordered),
+        "groups_truncated": len(ordered) > max_groups,
     }
