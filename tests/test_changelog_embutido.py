@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -15,6 +16,7 @@ SCRIPT = ROOT / "scripts" / "sync_bundled.py"
 BUNDLED = ROOT / "src" / "novomodelo_mcp" / "_bundled"
 
 _spec = importlib.util.spec_from_file_location("sync_bundled", SCRIPT)
+assert _spec is not None and _spec.loader is not None
 SB = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SB)
 
@@ -125,14 +127,20 @@ def test_pagina_so_da_0_18_em_diante():
     assert ANTIGO not in pagina and "Unreleased" not in pagina and "0.17.0" not in pagina
 
 
-def test_secao_pela_versao():
+def _secao_0_19_0() -> dict[str, Any]:
     sec = REF.find_section(SB.changelog_page("novomodelo", CHANGELOG), "0.19.0")
+    assert sec is not None
+    return sec
+
+
+def test_secao_pela_versao():
+    sec = _secao_0_19_0()
     assert sec["text"].startswith("## 0.19.0\n\nReleased 2026-10-20.")
     assert "0.18.0" not in sec["text"]
 
 
 def test_corpo_preservado():
-    sec = REF.find_section(SB.changelog_page("novomodelo", CHANGELOG), "0.19.0")["text"]
+    sec = _secao_0_19_0()["text"]
     assert "### Changed\n\n- **BREAKING:** the default cut selection is `level1`." in sec
     assert "### Fixed\n\n- A resumed run places its cuts at their slot." in sec
 
