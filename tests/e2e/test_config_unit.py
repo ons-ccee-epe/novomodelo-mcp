@@ -9,7 +9,17 @@ from pathlib import Path, PureWindowsPath
 import platformdirs
 import pytest
 
-from tests.e2e.config import APP, Config, Problema, carregar_config, verificar
+from tests.e2e import config as modulo
+from tests.e2e.config import (
+    APP,
+    ITENS,
+    Config,
+    Problema,
+    avisos,
+    carregar_config,
+    verificar,
+    volume_existe_no_motor,
+)
 
 TOKEN_FALSO = "segredo-de-teste-123"
 
@@ -159,3 +169,71 @@ def test_caminhos_windows_e_espacos():
     assert p.parts[2] == "Fulano de Tal"
     assert PureWindowsPath(str(p) + "\\resultados").parent == p
     assert PureWindowsPath(*p.parts) == p
+
+
+def test_avisos_no_windows_sobre_permissao_do_token(tmp_path):
+    cfg = cfg_em(tmp_path)
+    saida = avisos(cfg, plataforma="win32")
+    assert len(saida) == 1
+    assert "permissão do token não verificada neste sistema" in saida[0]
+
+
+def test_avisos_vazios_fora_do_windows(tmp_path):
+    cfg = cfg_em(tmp_path)
+    assert avisos(cfg, plataforma="linux") == []
+    assert avisos(cfg, plataforma="darwin") == []
+
+
+def falso_run(monkeypatch, *, retorno=None, erro=None):
+    chamadas = []
+
+    def run(args, **kw):
+        chamadas.append(args)
+        if erro:
+            raise erro
+        return retorno
+
+    monkeypatch.setattr(modulo.subprocess, "run", run)
+    return chamadas
+
+
+class Feito:
+    def __init__(self, returncode):
+        self.returncode = returncode
+
+
+def test_volume_existe_codigo_zero_e_diferente(monkeypatch):
+    falso_run(monkeypatch, retorno=Feito(0))
+    assert volume_existe_no_motor("podman", "v") is True
+    falso_run(monkeypatch, retorno=Feito(1))
+    assert volume_existe_no_motor("podman", "v") is False
+
+
+@pytest.mark.parametrize(
+    "erro", [OSError("x"), modulo.subprocess.TimeoutExpired(cmd="x", timeout=1)]
+)
+def test_volume_existe_erro_vira_falso(monkeypatch, erro):
+    falso_run(monkeypatch, erro=erro)
+    assert volume_existe_no_motor("podman", "v") is False
+
+
+def test_volume_com_hifen_vem_depois_de_separador(monkeypatch):
+    chamadas = falso_run(monkeypatch, retorno=Feito(0))
+    volume_existe_no_motor("podman", "-x")
+    args = chamadas[0]
+    assert args.index("--") < args.index("-x")
+
+
+def test_itens_dos_problemas_sao_os_estaveis(tmp_path):
+    cfg = Config(
+        motor="podman",
+        resultados=tmp_path / "arq" / "r",
+        casos=tmp_path / "c",
+        cenarios_extra=tmp_path / "e",
+        token_claude=tmp_path / "t",
+        volume_kiro="v",
+        cache=tmp_path / "arq" / "c",
+    )
+    (tmp_path / "arq").write_text("x")
+    problemas = verificar(cfg, quem=so(), volume_existe=lambda m, v: False)
+    assert itens(problemas) == set(ITENS)

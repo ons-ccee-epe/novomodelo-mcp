@@ -17,6 +17,9 @@ VOLUME_KIRO_PADRAO = "novomodelo-bateria-kiro"
 TEMPO_MAXIMO_VOLUME = 15
 
 
+ITENS = ("motor", "token_claude", "volume_kiro", "resultados", "cache", "casos", "cenarios_extra")
+
+
 @dataclass(frozen=True)
 class Config:
     motor: str
@@ -70,7 +73,7 @@ def carregar_config(
 def volume_existe_no_motor(motor: str, nome: str) -> bool:
     try:
         done = subprocess.run(
-            [motor, "volume", "inspect", nome],
+            [motor, "volume", "inspect", "--", nome],
             capture_output=True,
             timeout=TEMPO_MAXIMO_VOLUME,
             check=False,
@@ -96,7 +99,8 @@ def _problema_do_token(token: Path) -> Problema | None:
             return Problema("token_claude", f"arquivo de token não encontrado: {token}")
         if sys.platform != "win32" and token.stat().st_mode & 0o777 != 0o600:
             return Problema(
-                "token_claude", f"o arquivo de token precisa ter permissão 600: {token}"
+                "token_claude",
+                f"o arquivo de token precisa ter exatamente a permissão 600: {token}",
             )
     except OSError:
         return Problema("token_claude", f"arquivo de token inacessível: {token}")
@@ -108,6 +112,7 @@ def verificar(
     quem: Callable[[str], str | None] = shutil.which,
     volume_existe: Callable[[str, str], bool] = volume_existe_no_motor,
 ) -> list[Problema]:
+    """Devolve os problemas do ambiente; `Problema.item` é sempre um valor de `ITENS`."""
     problemas: list[Problema] = []
     motor_ok = quem(cfg.motor) is not None
     if not motor_ok:
@@ -115,13 +120,13 @@ def verificar(
     problema_token = _problema_do_token(cfg.token_claude)
     if problema_token:
         problemas.append(problema_token)
-    if motor_ok and not volume_existe(cfg.motor, cfg.volume_kiro):
-        problemas.append(
-            Problema("volume_kiro", f"volume do login do Kiro '{cfg.volume_kiro}' não existe")
-        )
-    elif not motor_ok:
+    if not motor_ok:
         problemas.append(
             Problema("volume_kiro", "volume do Kiro não conferido: motor indisponível")
+        )
+    elif not volume_existe(cfg.motor, cfg.volume_kiro):
+        problemas.append(
+            Problema("volume_kiro", f"volume do login do Kiro '{cfg.volume_kiro}' não existe")
         )
     for item, pasta in (("resultados", cfg.resultados), ("cache", cfg.cache)):
         if not _pasta_gravavel(pasta):
@@ -130,3 +135,9 @@ def verificar(
         if pasta is not None and not pasta.is_dir():
             problemas.append(Problema(item, f"pasta não encontrada: {pasta}"))
     return problemas
+
+
+def avisos(cfg: Config, plataforma: str = sys.platform) -> list[str]:
+    if plataforma == "win32":
+        return [f"permissão do token não verificada neste sistema: {cfg.token_claude}"]
+    return []
