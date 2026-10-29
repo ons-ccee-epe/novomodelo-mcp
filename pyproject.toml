@@ -96,10 +96,12 @@ target-version = "py312"
 extend-exclude = [".claude", ".kiro"]
 
 [tool.ruff.lint]
-# PGH proíbe supressão em branco: todo `# noqa` e `# type: ignore` nomeia o código.
+# PGH proíbe supressão em branco: todo `# noqa` e `# type: ignore` nomeia o código, e o
+# RUF100 recusa o `# noqa` que não suprime nada. BLE: o never-raise pega `Exception` só
+# onde a falha vira envelope, cada vez com o motivo ao lado.
 # PLW1514 (open/read_text/write_text sem `encoding`) só existe em preview; o
 # `explicit-preview-rules` liga essa e nenhuma outra regra de preview.
-select = ["E", "F", "I", "B", "UP", "PGH", "PLW1514"]
+select = ["E", "F", "I", "B", "BLE", "UP", "PGH", "RUF100", "PLW1514"]
 preview = true
 explicit-preview-rules = true
 

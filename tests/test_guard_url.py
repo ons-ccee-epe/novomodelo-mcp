@@ -54,7 +54,7 @@ def test_deck_read_parquet_com_url_nao_sai_para_a_rede(tmp_path, monkeypatch):
     hits = []
 
     class _H(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):  # noqa: N802
+        def do_GET(self):
             hits.append(self.path)
             self.send_response(404)
             self.end_headers()

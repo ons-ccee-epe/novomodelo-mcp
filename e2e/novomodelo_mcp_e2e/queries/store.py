@@ -15,6 +15,7 @@ import dataclasses
 import json
 import subprocess
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -361,7 +362,7 @@ class ResultStore:
                     self._git_sha = result.stdout.strip()
                 else:
                     self._git_sha = "unknown"
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 self._git_sha = "unknown"
         return self._git_sha
 
@@ -373,10 +374,8 @@ class ResultStore:
         """
         if self._version is None:
             try:
-                from importlib.metadata import version
-
                 self._version = version("novomodelo-mcp")
-            except Exception:
+            except PackageNotFoundError:
                 self._version = "unknown"
         return self._version
 

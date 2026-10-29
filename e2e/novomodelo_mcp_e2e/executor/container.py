@@ -551,7 +551,7 @@ def executar(
         motivo = f"motor de container ausente: {erro}"
     # Nunca levanta: qualquer falha da execução ou de `avaliar` vira `erro_infra` no registro,
     # em vez de derrubar a rodada inteira.
-    except Exception as erro:
+    except Exception as erro:  # noqa: BLE001
         motivo = f"falha na execução: {_descrever(erro)}"
     finally:
         if popen_chamado and not encerrar_container(cfg.motor, nome):
@@ -581,6 +581,6 @@ def executar(
         ):
             (destino / arquivo).write_text(mascarar(texto, segredos), encoding="utf-8")
         gravar_registro(pasta_rodada, final)
-    except Exception as erro:
+    except Exception as erro:  # noqa: BLE001 - falha ao gravar vira erro_infra, não derruba a rodada
         return registro("erro_infra", f"falha ao gravar a execução: {type(erro).__name__}")
     return final

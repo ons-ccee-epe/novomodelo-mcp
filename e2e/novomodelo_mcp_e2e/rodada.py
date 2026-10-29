@@ -1130,7 +1130,7 @@ def _rodar_pendentes(
             _trabalhar(fila)
         # Uma exceção numa thread morreria em silêncio: ela volta para a thread principal,
         # que varre a pasta e a repropaga.
-        except Exception as erro:
+        except Exception as erro:  # noqa: BLE001
             with ctl.trava:
                 ctl.erro = ctl.erro or erro
                 ctl.parada = "erro"

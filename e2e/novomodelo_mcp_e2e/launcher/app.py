@@ -333,7 +333,7 @@ def create_app() -> FastAPI:
         """Biblioteca de prompts: casos de teste disponiveis."""
         try:
             return {"cases": service.list_cases_meta()}
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     # ---- rodadas ---------------------------------------------------------

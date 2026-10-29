@@ -22,9 +22,9 @@ import pytest
 
 pytest.importorskip("mcp")
 
-from novomodelo_mcp_e2e.load import engine  # noqa: E402 - depois do importorskip
-from novomodelo_mcp_e2e.load.client import stdio_client_factory  # noqa: E402
-from novomodelo_mcp_e2e.load.engine import LoadConfig, LoadRunner  # noqa: E402
+from novomodelo_mcp_e2e.load import engine
+from novomodelo_mcp_e2e.load.client import stdio_client_factory
+from novomodelo_mcp_e2e.load.engine import LoadConfig, LoadRunner
 
 FAKE_SERVER = Path(__file__).with_name("fake_mcp_server.py")
 TOOLS = ("docs_list", "docs_search", "schema_list")

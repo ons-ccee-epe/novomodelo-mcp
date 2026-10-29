@@ -156,7 +156,7 @@ def register_run(mcp, settings: Settings) -> None:
         template: str | None = None,
         list: bool = False,
         force: bool = False,
-    ) -> dict:  # noqa: A002
+    ) -> dict:
         """Cria um caso a partir de um template embutido (`novomodelo init`).
 
         `list=True` lista os templates disponíveis (ex.: `1dtoy`) e sai.

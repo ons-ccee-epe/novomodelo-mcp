@@ -316,7 +316,7 @@ class QueryRunner:
                             result[key] = value
             if result:
                 return result
-        except Exception:
+        except ValueError:
             pass
 
         # Return empty dict if all parsing fails

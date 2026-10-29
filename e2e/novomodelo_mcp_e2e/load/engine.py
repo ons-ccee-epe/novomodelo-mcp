@@ -341,7 +341,7 @@ class LoadRunner:
                 started = self._clock()
                 try:
                     client = await stack.enter_async_context(self._factory(-1))
-                except Exception as exc:  # noqa: BLE001 - reportado como LoadError
+                except Exception as exc:
                     raise LoadError(f"o servidor MCP não iniciou: {_describe(exc)}") from exc
                 self._record_startup(-1, "preflight", self._clock() - started, True, copy_s=copy_s)
                 copy_s = None
@@ -406,7 +406,7 @@ class LoadRunner:
     async def _select(self, client: LoadClient) -> Selection:
         try:
             hints = await client.list_tools()
-        except Exception as exc:  # noqa: BLE001 - reportado como LoadError
+        except Exception as exc:
             raise LoadError(f"list_tools falhou: {_describe(exc)}") from exc
         return select_specs(self._fixtures, self._cfg.tools, hints)
 
