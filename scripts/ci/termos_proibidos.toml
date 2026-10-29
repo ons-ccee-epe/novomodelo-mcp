@@ -66,3 +66,4 @@ ignora = ["nome antigo", "referencia de spec", "diretorio kiro"]
 "tests/e2e/launcher/providers.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI" }
 "tests/e2e/load/" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
 "tests/e2e/queries/mcp_workspace.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI" }
+"tests/e2e/executor/" = { padroes = ["caminho de maquina"], motivo = "home do usuário dentro da imagem do container dos agentes" }

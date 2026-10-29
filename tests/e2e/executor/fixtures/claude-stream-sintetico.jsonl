@@ -1,0 +1,9 @@
+{"t": 0.5, "evento": {"type": "system", "subtype": "init", "session_id": "sessao-sintetica-1", "tools": ["Bash", "mcp__novomodelo__server_info"]}}
+{"t": 1.0, "evento": {"type": "assistant", "message": {"content": [{"type": "text", "text": "Vou consultar o servidor."}]}}}
+{"t": 1.5, "evento": {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "uso-1", "name": "mcp__novomodelo__server_info", "input": {}}]}}}
+{"t": 2.0, "evento": {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "uso-1", "content": [{"type": "text", "text": "{\"status\": \"ok\"}"}]}]}}}
+{"t": 2.5, "evento": {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "uso-2", "name": "Bash", "input": {"command": "ls /estudos"}}]}}}
+{"t": 3.0, "evento": {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "uso-2", "content": "caso-exemplo"}]}}}
+{"t": 3.5, "evento": {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "uso-3", "name": "mcp__novomodelo__case_validate", "input": {"case_dir": "/estudos/caso-exemplo"}}]}}}
+{"t": 4.0, "evento": {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "uso-3", "is_error": true, "content": "{\"status\": \"error\"}"}]}}}
+{"t": 4.2, "evento": {"type": "result", "subtype": "success", "is_error": false, "result": "O servidor respondeu e o caso tem erros.", "duration_ms": 4200, "usage": {"input_tokens": 10, "cache_creation_input_tokens": 20, "cache_read_input_tokens": 30, "output_tokens": 42}}}
