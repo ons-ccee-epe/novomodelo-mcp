@@ -36,7 +36,7 @@ def _hand_built_errors(source: str) -> list[int]:
                 for t in node.targets
             )
         else:
-            hit = False
+            continue
         if hit:
             lines.append(node.lineno)
     return lines

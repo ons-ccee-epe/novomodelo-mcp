@@ -4,12 +4,15 @@ import dataclasses
 import hashlib
 import sys
 import types
+from typing import Any
 
 import pytest
 
 import novomodelo_mcp.tools.pre_run as pre_run
 from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
+
+from ._fakes import install_fake_novomodelo
 
 
 def _item(i, prefixo):
@@ -47,7 +50,7 @@ class _CaptureMCP:
 
 @pytest.fixture
 def tool(monkeypatch, tmp_path):
-    estado = {"erro": None, "chamadas": []}
+    estado: dict[str, Any] = {"erro": None, "chamadas": []}
 
     def load_case(path):
         estado["chamadas"].append(path)
@@ -56,10 +59,7 @@ def tool(monkeypatch, tmp_path):
         return _system()
 
     monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
-    pkg = types.ModuleType("novomodelo")
-    pkg.io = types.SimpleNamespace(load_case=load_case)
-    monkeypatch.setitem(sys.modules, "novomodelo", pkg)
-    monkeypatch.setitem(sys.modules, "novomodelo.io", pkg.io)
+    install_fake_novomodelo(monkeypatch, io=types.SimpleNamespace(load_case=load_case))
     case = tmp_path / "ws" / "caso"
     case.mkdir(parents=True)
     (case / "config.json").write_text("{}", encoding="utf-8")

@@ -3,12 +3,15 @@
 import dataclasses
 import sys
 import types
+from typing import Any
 
 import pytest
 
 from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
+
+from ._fakes import install_fake_novomodelo
 
 np = pytest.importorskip("numpy")
 
@@ -49,7 +52,7 @@ class _Stochastic:
 
 @pytest.fixture
 def tool(monkeypatch, tmp_path):
-    estado = {"erro": None, "chamadas": []}
+    estado: dict[str, Any] = {"erro": None, "chamadas": []}
 
     def load_stochastic(output_dir):
         estado["chamadas"].append(output_dir)
@@ -58,10 +61,9 @@ def tool(monkeypatch, tmp_path):
         return _Stochastic()
 
     monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
-    pkg = types.ModuleType("novomodelo")
-    pkg.results = types.SimpleNamespace(load_stochastic=load_stochastic)
-    monkeypatch.setitem(sys.modules, "novomodelo", pkg)
-    monkeypatch.setitem(sys.modules, "novomodelo.results", pkg.results)
+    install_fake_novomodelo(
+        monkeypatch, results=types.SimpleNamespace(load_stochastic=load_stochastic)
+    )
     ws = tmp_path / "ws"
     (ws / "output").mkdir(parents=True)
     mcp = _CaptureMCP()

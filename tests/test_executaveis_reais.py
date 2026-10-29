@@ -18,8 +18,9 @@ import time
 from pathlib import Path
 
 import pytest
-from _cliente_mcp import ClienteMCP
 from mcp import StdioServerParameters
+
+from ._cliente_mcp import ClienteMCP
 
 pytestmark = pytest.mark.executaveis_reais
 
@@ -135,7 +136,6 @@ def rascunho(ws) -> Path:
 @pytest.fixture(scope="module")
 def cliente(request, ws):
     c = ClienteMCP(_parametros(request.config, ws))
-    c.instalacao = None
     if request.config.getoption("--instalar-executavel"):
         c.instalacao = c.chamar("install_novomodelo", {"confirm": True})
     yield c

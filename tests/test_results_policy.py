@@ -5,14 +5,16 @@ tool recusa sem chamá-la.
 """
 
 import dataclasses
-import sys
 import types
+from typing import Any
 
 import pytest
 
 from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
+
+from ._fakes import install_fake_novomodelo
 
 
 def _policy(n_stages=3, n_cuts=8, dim=4):
@@ -75,7 +77,7 @@ class OutputError(Exception):
 
 @pytest.fixture
 def tool(monkeypatch, tmp_path):
-    estado = {"erro": None, "chamadas": []}
+    estado: dict[str, Any] = {"erro": None, "chamadas": []}
 
     def load_policy(output_dir, policy_subdir="policy"):
         estado["chamadas"].append((output_dir, policy_subdir))
@@ -84,10 +86,7 @@ def tool(monkeypatch, tmp_path):
         return _policy()
 
     monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
-    pkg = types.ModuleType("novomodelo")
-    pkg.results = types.SimpleNamespace(load_policy=load_policy)
-    monkeypatch.setitem(sys.modules, "novomodelo", pkg)
-    monkeypatch.setitem(sys.modules, "novomodelo.results", pkg.results)
+    install_fake_novomodelo(monkeypatch, results=types.SimpleNamespace(load_policy=load_policy))
     out = tmp_path / "ws" / "output"
     (out / "policy" / "cuts").mkdir(parents=True)
     (out / "policy" / "cuts" / "000.bin").write_bytes(b"x" * 100)

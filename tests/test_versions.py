@@ -7,6 +7,7 @@ import sys
 import time
 import types
 import urllib.error
+from email.message import Message
 
 import pytest
 
@@ -438,7 +439,7 @@ def _respostas(
         url = req.full_url
         if "/pypi/novomodelo-mcp/" in url:
             if mcp is None:
-                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+                raise urllib.error.HTTPError(url, 404, "Not Found", Message(), None)
             corpo = {"info": {"version": mcp}}
         elif "novomodelo-bridge/releases" in url:
             t = tag_bridge or f"v{bridge}"

@@ -4,6 +4,8 @@ Registra as tools num ``FastMCP`` real e recupera a funcao via ToolManager,
 com ``run_bridge`` substituido por um espiao (nao depende de duckdb/polars).
 """
 
+from typing import Any
+
 import pytest
 from mcp.server.fastmcp import FastMCP
 
@@ -14,7 +16,7 @@ from novomodelo_mcp.tools.post_run import register_post_run
 
 def _build(monkeypatch):
     """Registra as tools com run_bridge espiao; sem workspace (irrestrito)."""
-    calls = {"n": 0, "argv": None}
+    calls: dict[str, Any] = {"n": 0, "argv": None}
 
     def _spy(argv, **kwargs):
         calls["n"] += 1
