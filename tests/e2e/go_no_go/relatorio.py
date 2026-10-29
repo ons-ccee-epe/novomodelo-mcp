@@ -32,6 +32,8 @@ INTRO_AMPLA = (
     "previstas (sem MCP é ~0 por construção). Tempo: o do agente, medido no stream. "
     f"{SEM_DADO} = o agente não informa a métrica."
 )
+CHAVES_DE_IMAGEM = ("novomodelo", "novomodelo-bridge", "claude-code", "kiro-cli")
+ROTULOS_DE_IMAGEM = ("novomodelo", "bridge", "Claude Code", "Kiro")
 _PARTE_VERSAO = re.compile(r"[._+-]")
 
 
@@ -220,6 +222,45 @@ def avaliacao_ampla(registros: Sequence[Registro]) -> list[str]:
     return saida
 
 
+def _configuracoes(m: Manifesto) -> list[str]:
+    linhas = []
+    for config in ordenar_configs(m.configs):
+        wheel = m.wheels.get(config, {})
+        if config == SEM_MCP:
+            linhas.append([config, "sem MCP", SEM_DADO, SEM_DADO])
+            continue
+        linhas.append(
+            [
+                config,
+                m.versoes.get(f"mcp:{config}", SEM_DADO),
+                f"`{wheel['sha256']}`" if wheel.get("sha256") else SEM_DADO,
+                wheel.get("origem", SEM_DADO),
+            ]
+        )
+    imagens = [
+        [
+            f"`{tag}`",
+            *(versoes.get(chave, SEM_DADO) for chave in CHAVES_DE_IMAGEM),
+        ]
+        for tag, versoes in sorted(m.imagens.items())
+    ]
+    do_juiz = [
+        f"Juiz: modelo {m.versoes.get('juiz-modelo', SEM_DADO)} · "
+        f"temperatura {m.versoes.get('juiz-temperatura', SEM_DADO)}.",
+        f"Filtro da rodada: {f'`{m.filtro}`' if m.filtro else 'nenhum'}.",
+    ]
+    return [
+        "## Configurações",
+        "",
+        *_tabela(["Configuração", "Versão do MCP", "SHA-256 do wheel", "Origem"], linhas),
+        "",
+        *_tabela(["Imagem", *ROTULOS_DE_IMAGEM], imagens),
+        "",
+        *do_juiz,
+        "",
+    ]
+
+
 def _versoes(m: Manifesto) -> list[str]:
     itens = [f"{nome} {valor}" for nome, valor in sorted(m.versoes.items())]
     itens.append(f"bateria {m.commit_bateria}")
@@ -233,12 +274,14 @@ def escrever_relatorio(
     alvo: str,
     base: str | None,
     destino: Path,
+    config_alvo: str | None = None,
 ) -> Path:
+    alvo_config = f"alvo: `{config_alvo}` · " if config_alvo else ""
     baseline = f"`{base}`" if base is not None else "sem baseline"
     linhas = [
         f"# Veredito: {decisao.veredito.upper()}",
         "",
-        f"Rodada `{alvo}` · baseline: {baseline} · criada em {m.criado_em}",
+        f"Rodada `{alvo}` · {alvo_config}baseline: {baseline} · criada em {m.criado_em}",
         "",
         *_bloqueios(decisao),
         *_lista("Inconclusivos", decisao.inconclusivos, "Nenhum."),
@@ -249,6 +292,7 @@ def escrever_relatorio(
         *_tempos(registros),
         *_mais_chamadas(registros),
         *avaliacao_ampla(registros),
+        *_configuracoes(m),
         *_versoes(m),
     ]
     destino.parent.mkdir(parents=True, exist_ok=True)

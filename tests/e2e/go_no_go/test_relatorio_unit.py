@@ -317,3 +317,48 @@ def test_lancamentos_corrompido_nao_e_sobrescrito(tmp_path: Path, conteudo: str)
     with pytest.raises(LancamentosCorrompido):
         ultimo_lancamento(tmp_path)
     assert arquivo.read_text(encoding="utf-8") == conteudo
+
+
+def test_relatorio_mostra_sha256_origem_e_versoes(tmp_path: Path) -> None:
+    sha = "ab" * 32
+    m = Manifesto(
+        rodada="r2",
+        criado_em="2026-01-02T03:04:05Z",
+        configs=("sem-mcp", "mcp-0.19.0"),
+        conjuntos=("tools",),
+        agentes=("claude", "kiro"),
+        repeticoes=1,
+        flags={"completa": True},
+        versoes={
+            "mcp:mcp-0.19.0": "0.19.0",
+            "juiz-modelo": "modelo-do-juiz",
+            "juiz-temperatura": "padrão do CLI (pedida 0.0)",
+        },
+        commit_bateria="abc1234",
+        wheels={"mcp-0.19.0": {"arquivo": "x.whl", "sha256": sha, "origem": "release v0.19.0"}},
+        imagens={
+            "img:claude-mcp-0.19.0": {
+                "novomodelo": "0.19.1",
+                "novomodelo-bridge": "0.19.0",
+                "claude-code": "2.1.310",
+            },
+            "img:kiro-mcp-0.19.0": {
+                "novomodelo": "0.19.1",
+                "novomodelo-bridge": "0.19.0",
+                "kiro-cli": "1.2.3 (não fixada)",
+            },
+        },
+        filtro="a01-x",
+    )
+    texto = gerar(tmp_path, [reg("a", "passou")], m=m)
+    secao = texto.split("\n## Configurações\n")[1].split("\n---")[0]
+    assert sha in secao
+    assert "release v0.19.0" in secao
+    assert "| mcp-0.19.0 | 0.19.0 |" in secao
+    assert "| sem-mcp | sem MCP |" in secao
+    assert "2.1.310" in secao
+    assert "1.2.3 (não fixada)" in secao
+    assert "modelo-do-juiz" in secao
+    assert "padrão do CLI (pedida 0.0)" in secao
+    assert "`a01-x`" in secao
+    assert "/home" not in texto

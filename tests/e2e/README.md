@@ -42,6 +42,38 @@ uv run --group e2e python -m tests.e2e.queries.run_queries       # recusa fora d
 uv run --group e2e python -m tests.e2e.load.run --concurrency 4 --duration 30
 ```
 
+## Rodada com agentes e veredito
+
+O fluxo roda no executor em container (podman), pela CLI `python -m tests.e2e`:
+
+```bash
+uv run --group e2e python -m tests.e2e verificar
+uv run --group e2e python -m tests.e2e preparar --mcp sem caminho/da/wheel.whl
+uv run --group e2e python -m tests.e2e rodar --mcp caminho/da/wheel.whl --rodada ID
+uv run --group e2e python -m tests.e2e go-no-go ID --alvo CONFIG [--baseline RODADA] [--baseline-config CONFIG]
+uv run --group e2e python -m tests.e2e marcar-lancamento ID VERSAO --config CONFIG
+```
+
+- `verificar` confere motor, pastas, token e volume do Kiro; `preparar` constrói as imagens e cria o secret do token; `rodar` grava o manifesto e um registro por execução e é retomável pelo `--rodada`.
+- `go-no-go` grava `relatorio-go-no-go.md` e `junit.xml` na pasta da rodada. A base de comparação é, nesta ordem: `--baseline-config` (na mesma rodada, ou na de `--baseline` quando vêm juntas), `--baseline`, o último lançamento marcado, ou nenhuma (só a determinística bloqueia). O relatório lista, por configuração, a versão, o SHA-256 e a origem do wheel, e as versões de cada imagem.
+- `marcar-lancamento` torna uma configuração da rodada a base do próximo `go-no-go`; só por decisão de quem libera a versão.
+
+Variáveis de ambiente da `Config` (todas opcionais):
+
+| Variável | O que faz | Default |
+|---|---|---|
+| `NOVOMODELO_BATERIA_MOTOR` | Motor de container; só o `podman` é aceito | `podman`, se estiver no `PATH` |
+| `NOVOMODELO_BATERIA_RESULTADOS` | Pasta das rodadas e do `lancamentos.json` | pasta de dados do usuário, `novomodelo-mcp-bateria/resultados` |
+| `NOVOMODELO_BATERIA_CASOS` | Pasta com um subdiretório por caso grande | não definida: esses casos ficam pulados |
+| `NOVOMODELO_BATERIA_CENARIOS_EXTRA` | Pasta de cenários extras, fora do repositório | não definida |
+| `NOVOMODELO_BATERIA_TOKEN_CLAUDE` | Arquivo (permissão `600`, fora do repositório) com o token do Claude | `token-claude` na pasta de configuração do usuário |
+| `NOVOMODELO_BATERIA_VOLUME_KIRO` | Volume do podman com o login do Kiro | `novomodelo-bateria-kiro` |
+| `NOVOMODELO_BATERIA_MEMORIA` | Limite de memória de cada container | `6g` |
+
+Códigos de saída do `rodar`: 0 rodada completa; 1 determinística com falha, imagem não pronta ou execução sem registro; 2 argumentos inválidos ou retomada recusada; 3 segredo na pasta da rodada; 4 limite de uso do agente ou do juiz; 5 orçamento estourado; 130 Ctrl-C.
+
+Códigos de saída do `go-no-go` (outro subcomando, outra tabela): 0 go; 1 no-go; 2 inconclusivo ou recusa (rodada ou configuração inexistente, segredo bloqueado).
+
 ## Configuração
 
 Tudo vem de variável de ambiente ou de argumento. A bateria lê:

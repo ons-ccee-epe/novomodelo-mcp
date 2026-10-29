@@ -5,7 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
+from pathlib import Path
+
+import jsonschema
 
 from novomodelo_mcp.adapters.versions import expected_version
 from tests.e2e import rodada
@@ -22,7 +26,21 @@ from tests.e2e.executor.imagens import (
     ler_config_mcp,
     tag_imagem,
 )
+from tests.e2e.go_no_go.criterio import Decisao, decidir
+from tests.e2e.go_no_go.lancamentos import (
+    LancamentosCorrompido,
+    marcar_lancamento,
+    ultimo_lancamento,
+)
+from tests.e2e.go_no_go.relatorio import escrever_relatorio
+from tests.e2e.resultado.armazenamento import PADRAO_NOME, ler_manifesto, ler_registros
+from tests.e2e.resultado.junit import escrever_junit
+from tests.e2e.resultado.modelos import Manifesto, Registro, VersaoDesconhecida
 
+NOME_RELATORIO = "relatorio-go-no-go.md"
+NOME_JUNIT = "junit.xml"
+CODIGOS_DO_VEREDITO = {"go": 0, "no-go": 1, "inconclusivo": 2}
+CODIGO_RECUSA = 2
 ITENS_DO_AGENTE = {"claude": "token_claude", "kiro": "volume_kiro"}
 
 
@@ -98,7 +116,7 @@ def _parser() -> argparse.ArgumentParser:
             "Retomável pelo --rodada: uma execução com registro gravado não roda de novo, "
             "e um caso pulado gravado não é reavaliado."
         ),
-        epilog="códigos de saída: "
+        epilog="códigos de saída do rodar (não são os do go-no-go): "
         + "; ".join(f"{c} {t}" for c, t in rodada.CODIGOS_DE_SAIDA.items()),
     )
     rod.add_argument("--rodada", metavar="ID", help="cria ou retoma esta rodada")
@@ -147,7 +165,39 @@ def _parser() -> argparse.ArgumentParser:
         help="no limite de uso, espera e retoma sozinha em vez de sair com 4",
     )
     rod.add_argument("--paralelo-por-agente", type=_positivo, default=3)
+    gng = sub.add_parser(
+        "go-no-go",
+        help="veredito de uma rodada, com relatório e JUnit",
+        description=(
+            f"Aplica o critério à rodada e grava {NOME_RELATORIO} e {NOME_JUNIT} na pasta dela. "
+            "Base de comparação, na ordem: --baseline-config (na mesma rodada, ou na de "
+            "--baseline quando as duas vêm juntas); --baseline (a configuração de mesmo nome "
+            "do --alvo); o último lançamento marcado (a configuração dele, procurada primeiro "
+            "nesta rodada); sem base, só a determinística bloqueia."
+        ),
+        epilog=_codigos_do_go_no_go(),
+    )
+    gng.add_argument("rodada", metavar="RODADA")
+    gng.add_argument("--alvo", required=True, metavar="CONFIG", help="configuração avaliada")
+    gng.add_argument("--baseline", metavar="RODADA", help="rodada da base")
+    gng.add_argument(
+        "--baseline-config", metavar="CONFIG", help="configuração da base (na rodada da base)"
+    )
+    marcar = sub.add_parser(
+        "marcar-lancamento",
+        help="torna uma configuração da rodada a base do próximo go/no-go",
+    )
+    marcar.add_argument("rodada", metavar="RODADA")
+    marcar.add_argument("versao", metavar="VERSAO")
+    marcar.add_argument("--config", required=True, metavar="CONFIG")
     return p
+
+
+def _codigos_do_go_no_go() -> str:
+    return (
+        "códigos de saída do go-no-go (não são os do rodar): 0 go; 1 no-go; "
+        "2 inconclusivo ou recusa (rodada ou configuração inexistente, segredo bloqueado)"
+    )
 
 
 def _verificar(cfg) -> int:
@@ -252,6 +302,116 @@ def _rodar(cfg, args, parser: argparse.ArgumentParser) -> int:
     return 0
 
 
+class _Recusa(Exception):
+    pass
+
+
+def _pasta_da_rodada(cfg, nome: str) -> Path:
+    if not re.search(PADRAO_NOME, nome):
+        raise _Recusa(f"nome de rodada inválido: {nome!r}")
+    pasta = cfg.resultados / nome
+    if not (pasta / "manifesto.json").is_file():
+        raise _Recusa(f"rodada {nome!r} não existe em {cfg.resultados.name}/")
+    if (pasta / rodada.ARQUIVO_BLOQUEIO).exists():
+        raise _Recusa(
+            f"rodada {nome!r} bloqueada por segredo ({rodada.ARQUIVO_BLOQUEIO}); "
+            "sem relatório nem veredito"
+        )
+    return pasta
+
+
+def _ler(pasta: Path) -> tuple[Manifesto, list[Registro]]:
+    try:
+        return ler_manifesto(pasta), ler_registros(pasta)
+    except (OSError, ValueError, VersaoDesconhecida, jsonschema.ValidationError) as erro:
+        detalhe = erro.message if isinstance(erro, jsonschema.ValidationError) else erro
+        raise _Recusa(f"resultado ilegível em {pasta.name}: {detalhe}") from erro
+
+
+def _config_no_manifesto(manifesto: Manifesto, config: str, flag: str) -> None:
+    if config not in manifesto.configs:
+        conhecidas = ", ".join(manifesto.configs)
+        raise _Recusa(
+            f"{flag} {config!r} não está no manifesto da rodada {manifesto.rodada!r} "
+            f"(configurações: {conhecidas})"
+        )
+
+
+def _base_de_outra_rodada(cfg, nome: str, config: str) -> tuple[list[Registro], str]:
+    manifesto, registros = _ler(_pasta_da_rodada(cfg, nome))
+    _config_no_manifesto(manifesto, config, "base")
+    return [r for r in registros if r.config == config], f"{config} · rodada {nome}"
+
+
+def _escolher_base(
+    cfg, args, manifesto: Manifesto, registros: list[Registro]
+) -> tuple[list[Registro] | None, str | None]:
+    """Devolve os registros da base e o rótulo dela, na ordem de escolha do `--help`."""
+    if args.baseline_config:
+        if args.baseline and args.baseline != manifesto.rodada:
+            return _base_de_outra_rodada(cfg, args.baseline, args.baseline_config)
+        _config_no_manifesto(manifesto, args.baseline_config, "--baseline-config")
+        base = [r for r in registros if r.config == args.baseline_config]
+        return base, f"{args.baseline_config} · rodada {manifesto.rodada}"
+    if args.baseline:
+        return _base_de_outra_rodada(cfg, args.baseline, args.alvo)
+    try:
+        ultimo = ultimo_lancamento(cfg.resultados)
+    except LancamentosCorrompido as erro:
+        raise _Recusa(str(erro)) from erro
+    if ultimo is None:
+        return None, None
+    config, de_rodada = ultimo["config"], ultimo["rodada"]
+    if config in manifesto.configs and config != args.alvo:
+        base = [r for r in registros if r.config == config]
+        return base, f"{config} · rodada {manifesto.rodada} (lançamento {ultimo['versao']})"
+    if de_rodada == manifesto.rodada and config == args.alvo:
+        return None, None
+    base, rotulo = _base_de_outra_rodada(cfg, de_rodada, config)
+    return base, f"{rotulo} (lançamento {ultimo['versao']})"
+
+
+def _go_no_go(cfg, args) -> int:
+    try:
+        pasta = _pasta_da_rodada(cfg, args.rodada)
+        manifesto, registros = _ler(pasta)
+        _config_no_manifesto(manifesto, args.alvo, "--alvo")
+        base, rotulo = _escolher_base(cfg, args, manifesto, registros)
+    except _Recusa as erro:
+        print(f"erro: {erro}", file=sys.stderr)
+        return CODIGO_RECUSA
+    alvo = [r for r in registros if r.config in (args.alvo, rodada.CONFIG_DETERMINISTICA)]
+    decisao: Decisao = decidir(alvo, base)
+    do_relatorio = alvo + [r for r in (base or []) if r not in alvo]
+    escrever_relatorio(
+        manifesto,
+        do_relatorio,
+        decisao,
+        args.rodada,
+        rotulo,
+        pasta / NOME_RELATORIO,
+        config_alvo=args.alvo,
+    )
+    escrever_junit(alvo, pasta / NOME_JUNIT)
+    print(f"veredito: {decisao.veredito}")
+    print(f"relatório: {NOME_RELATORIO}")
+    print(f"junit: {NOME_JUNIT}")
+    return CODIGOS_DO_VEREDITO[decisao.veredito]
+
+
+def _marcar_lancamento(cfg, args) -> int:
+    try:
+        pasta = _pasta_da_rodada(cfg, args.rodada)
+        manifesto, _ = _ler(pasta)
+        _config_no_manifesto(manifesto, args.config, "--config")
+        marcar_lancamento(cfg.resultados, args.rodada, args.versao, args.config)
+    except (_Recusa, LancamentosCorrompido) as erro:
+        print(f"erro: {erro}", file=sys.stderr)
+        return CODIGO_RECUSA
+    print(f"lançamento {args.versao}: {args.config} da rodada {args.rodada}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -260,6 +420,10 @@ def main(argv: list[str] | None = None) -> int:
         return _verificar(cfg)
     if args.subcomando == "rodar":
         return _rodar(cfg, args, parser)
+    if args.subcomando == "go-no-go":
+        return _go_no_go(cfg, args)
+    if args.subcomando == "marcar-lancamento":
+        return _marcar_lancamento(cfg, args)
     return _preparar(cfg, args.mcp, args.agentes)
 
 
