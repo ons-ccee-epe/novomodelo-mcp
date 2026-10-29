@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   lint:
-    name: ruff + gates
+    name: ruff + ty + gates
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -26,15 +26,19 @@ jobs:
         with:
           python-version: "3.13"
 
-      # --locked: falha se o uv.lock não corresponder ao pyproject.toml.
+      # --locked: falha se o uv.lock não corresponder ao pyproject.toml. --all-packages: o ty
+      # resolve os imports do membro e2e/, que tem dependências próprias.
       - name: Sincronizar dependências
-        run: uv sync --dev --locked
+        run: uv sync --all-packages --locked
 
       - name: Lint (ruff)
         run: uv run ruff check .
 
       - name: Formatação (ruff format)
         run: uv run ruff format --check .
+
+      - name: Tipos (ty)
+        run: uv run --all-packages ty check
 
       # Convenções em .claude/rules/; cada gate está descrito no CONTRIBUTING.md.
       - name: Sem vocabulário de plano

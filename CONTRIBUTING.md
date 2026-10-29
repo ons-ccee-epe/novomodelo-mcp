@@ -41,12 +41,13 @@ ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
 ```bash
 uv run pytest -q                                      # suíte offline, com binários falsos
 uv run ruff check . && uv run ruff format --check .   # lint e formatação, árvore inteira
+uv run --all-packages ty check                        # tipos: src, tests, scripts e e2e
 python3 scripts/ci/check_no_plan_leaks.py             # sem vocabulário de plano no que é publicado
 python3 scripts/ci/check_comment_refs.py              # sem referência que apodrece na prosa do código
 python3 scripts/ci/check_doc_paths.py                 # todo caminho citado nas docs existe
 ```
 
-A CI (`.github/workflows/ci.yml`) roda o ruff e os três gates uma vez, a suíte em cada
+A CI (`.github/workflows/ci.yml`) roda o ruff, o ty e os três gates uma vez, a suíte em cada
 sistema, arquitetura e versão do Python que o projeto suporta, os testes com os
 executáveis reais e a conferência das docs embutidas. `scripts/ci/check_comment_bloat.py`
 e `scripts/ci/quality_report.py` são relatórios: nunca falham.

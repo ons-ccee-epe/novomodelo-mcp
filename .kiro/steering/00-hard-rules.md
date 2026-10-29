@@ -31,6 +31,7 @@ uv run novomodelo-mcp                         # start the server on stdio
 uv run pytest -q                              # offline suite; real-binary and network tests skip
 uv run --package novomodelo-mcp-e2e pytest e2e -q   # e2e battery suite (its own uv workspace member)
 uv run ruff check . && uv run ruff format --check .   # whole tree, as CI and the pre-commit hook run it
+uv run --all-packages ty check                # type check, as CI runs it (the e2e member needs its deps)
 python3 scripts/ci/check_no_plan_leaks.py     # hard gates, also run by CI
 python3 scripts/ci/check_comment_refs.py
 python3 scripts/ci/check_doc_paths.py
