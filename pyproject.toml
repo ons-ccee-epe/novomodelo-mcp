@@ -74,7 +74,7 @@ artifacts = [
 exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md", "/e2e"]
 
 [dependency-groups]
-dev = ["pytest>=9.2.0", "ruff>=0.17.3", "hypothesis>=6.170.13"]
+dev = ["pytest>=9.2.0", "ruff>=0.17.3", "ty>=0.0.94", "hypothesis>=6.170.13"]
 
 [tool.uv.workspace]
 members = ["e2e"]
@@ -88,6 +88,16 @@ markers = [
     "executaveis_reais: precisa do novomodelo e do novomodelo-bridge instalados (--executaveis-reais)",
     "rede: acessa a rede, só os domínios oficiais (--com-rede)",
 ]
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src", "tests", "scripts", "e2e"]
+exclude = ["e2e/frontend"]
+
+[tool.ty.terminal]
+error-on-warning = true
 
 [tool.ruff]
 line-length = 100
