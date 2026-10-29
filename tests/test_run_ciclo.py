@@ -381,7 +381,7 @@ def test_plan_nao_cabe_and_indeterminado():
         plan = make_plan(str(case), load_settings(), machine=MOCK_MACHINE)
         assert plan["verdict"] == "indeterminado", plan
         assert plan["reference"] is None
-        assert any("calibração" in w for w in plan["warnings"]), plan["warnings"]
+        assert any("sem run anterior" in w for w in plan["warnings"]), plan["warnings"]
 
 
 def test_plan_memory_gate():

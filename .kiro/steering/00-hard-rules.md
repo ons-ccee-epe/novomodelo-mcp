@@ -64,7 +64,9 @@ These are non-negotiable. Fix them before any commit.
 - **Thin facade, no business logic.** A tool envelopes a CLI subcommand (with
   `--json`) or a `novomodelo-python` binding and relays the result. Never reimplement
   conversion, validation, comparison, or solving inside this server. New
-  behaviour belongs in `novomodelo` or `novomodelo-bridge`, not here.
+  behaviour belongs in `novomodelo` or `novomodelo-bridge`, not here. The one
+  sanctioned exception is the run-time estimate of `run_plan`
+  (`.claude/rules/mcp-facade.md` §1).
 - **Network: official domains, local first, warn when absent.** The server
   speaks stdio. A tool may use the network only through `adapters/versions.py`
   (`fetch_bytes`/`fetch_json`, the single exit point), only to the allow-listed

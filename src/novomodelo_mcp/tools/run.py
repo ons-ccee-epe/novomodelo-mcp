@@ -89,11 +89,8 @@ def make_plan(
         if installed.get("status") == "ok"
         else None
     )
-    ref = (
-        runtime.select_reference(
-            points, params["dimensions"], params["config_sig"], case_dir, version=version
-        )
-        or runtime.calibration_probe()
+    ref = runtime.select_reference(
+        points, params["dimensions"], params["config_sig"], case_dir, version=version
     )
     plan = build_plan(params, machine, ref, time_budget_s, threads)
     if ref and ref.get("version_mismatch"):

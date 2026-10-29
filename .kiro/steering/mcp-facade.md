@@ -24,6 +24,15 @@ CLI gap by computing the answer in Python: it works for one case and silently
 diverges from the tool the rest of the ecosystem trusts. If a capability is
 missing, it is added upstream, not reimplemented in the server.
 
+**Sanctioned exception: run planning.** `adapters/run_plan.py`,
+`adapters/runtime.py` and `adapters/machine.py` estimate how long and how much
+memory a run takes on this machine (`run_plan`) and record the timing of the
+server's own runs for later estimates. Neither CLI offers this, and the estimate
+is computational cost only: it reads the deck's knobs, the machine's CPUs and RAM,
+and the timing metadata earlier runs wrote, and never converts, validates,
+compares, or solves a case. The exception covers that estimate and nothing else:
+a new rule that interprets case content still goes upstream.
+
 ## 2. The error envelope is the single return contract
 
 `adapters/envelope.py` owns the envelope shape (`status`, `exit_code`,
@@ -87,8 +96,9 @@ down, never fetched ad hoc at a call site.
 
 `adapters/versions.py` owns the only outbound requests (`fetch_bytes`,
 `fetch_json`). It accepts `https` URLs on the allow-list (`github.com/ons-ccee-epe/*`,
-`api.github.com/repos/ons-ccee-epe/*`, `pypi.org/pypi/novomodelo-bridge/*`, and
-`release-assets.githubusercontent.com` only as a redirect target), uses a short
+`api.github.com/repos/ons-ccee-epe/*`, `pypi.org/pypi/novomodelo-bridge/*`,
+`pypi.org/pypi/novomodelo-mcp/*`, and `release-assets.githubusercontent.com` only as
+a redirect target; `versions._ALLOWED` is the owner), uses a short
 timeout and a local `truststore.SSLContext` (falling back to the default
 context), and never raises: a failure becomes `network_warning`. The wrong-but-
 running alternatives are calling `urllib`/`subprocess curl` from a tool, which

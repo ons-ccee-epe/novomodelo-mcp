@@ -276,8 +276,7 @@ def build_plan(
     if ref is None:
         plan.update(verdict="indeterminado", reference=None)
         warnings.append(
-            "sem run anterior nesta máquina para medir o tempo por solve; "
-            "probe de calibração (1dtoy, 1 iteração) ainda não implementado. "
+            "sem run anterior nesta máquina para medir o tempo por solve. "
             "Rode um caso uma vez nesta máquina (run_start) e replaneje."
         )
         return plan
