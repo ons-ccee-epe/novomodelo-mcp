@@ -103,6 +103,7 @@
         "rigidez",
         "erros_envelope",
         "t_primeira_tool",
+        "t_total",
         "tokens_entrada",
         "tokens_saida",
         "resposta_correta",
@@ -149,6 +150,13 @@
           "minimum": 0
         },
         "t_primeira_tool": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "t_total": {
           "type": [
             "number",
             "null"

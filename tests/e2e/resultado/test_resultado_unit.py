@@ -208,6 +208,7 @@ _METRICAS = Metricas(
     rigidez=0,
     erros_envelope=1,
     t_primeira_tool=3.5,
+    t_total=12.5,
     tokens_entrada=1200,
     tokens_saida=300,
     resposta_correta=False,
@@ -244,6 +245,7 @@ def test_registro_sem_metricas_e_valido_com_tudo_nulo(tmp_path: Path) -> None:
         {"nota_juiz": -1},
         {"indice_autonomia": 1.5},
         {"tokens_entrada": -1},
+        {"t_total": -0.5},
         {"campo_desconhecido": 1},
     ],
 )

@@ -188,7 +188,7 @@ def amplo(
     acerto: bool = True,
     nota: int | None = 2,
     interrupcoes: int = 1,
-    duracao_s: float = 10.0,
+    t_total: float = 10.0,
     tokens: int | None = 1000,
 ) -> Registro:
     return Registro(
@@ -201,12 +201,13 @@ def amplo(
         estado=estado,
         motivo="",
         tools=(),
-        duracao_s=duracao_s,
+        duracao_s=t_total + 500.0,
         metricas=Metricas(
             acerto_tool=acerto,
             contornos=0,
             interrupcoes=interrupcoes,
             indice_autonomia=0.5,
+            t_total=t_total,
             tokens_entrada=tokens,
             nota_juiz=nota,
         ),
@@ -255,8 +256,8 @@ def _registros_amplos() -> list[Registro]:
     return [
         amplo("c01-a", "mcp-0.19.1"),
         amplo("c01-a", "mcp-0.18.0.post1"),
-        amplo("c02-b", "mcp-0.18.0.post1", nota=1, duracao_s=290.0),
-        amplo("c01-a", "sem-mcp", acerto=False, nota=1, interrupcoes=3, duracao_s=20.0),
+        amplo("c02-b", "mcp-0.18.0.post1", nota=1, t_total=290.0),
+        amplo("c01-a", "sem-mcp", acerto=False, nota=1, interrupcoes=3, t_total=20.0),
         amplo("c01-a", "mcp-0.19.1", agente="kiro", tokens=None),
         amplo("c03-c", "mcp-0.19.1", estado="erro_infra"),
         reg("caso-de-tools", "passou", conjunto="tools"),

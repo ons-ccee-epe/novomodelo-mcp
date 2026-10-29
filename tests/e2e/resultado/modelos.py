@@ -40,6 +40,7 @@ class Metricas:
     rigidez: int | None = None
     erros_envelope: int | None = None
     t_primeira_tool: float | None = None
+    t_total: float | None = None
     tokens_entrada: int | None = None
     tokens_saida: int | None = None
     resposta_correta: bool | None = None

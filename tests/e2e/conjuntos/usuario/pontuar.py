@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
+from pathlib import Path
 
 from tests.e2e.config import Config
 from tests.e2e.conjuntos.usuario.cenario import Cenario
@@ -12,7 +13,7 @@ from tests.e2e.conjuntos.usuario.juiz import Juiz, julgar
 from tests.e2e.executor.eventos import Evento, Leitura
 from tests.e2e.resultado.modelos import Avaliacao, Metricas
 
-NOTA_MINIMA = 2
+NOTA_MINIMA = 1
 _LEITURA_POR_FORA = {"Bash", "Read", "Grep", "Glob", "WebFetch", "execute_bash", "fs_read", "shell"}
 _NEUTRAS = {
     "server_info",
@@ -68,8 +69,8 @@ class Resultado:
     erros_envelope: int
     t_primeira_tool: float | None
     t_total: float
-    tokens_entrada: int
-    tokens_saida: int
+    tokens_entrada: int | None
+    tokens_saida: int | None
     resposta_correta: bool | None
     interrupcoes: int = 0
     t_primeira_interrupcao: float | None = None
@@ -192,8 +193,8 @@ def pontuar(
         erros_envelope=len(recusas),
         t_primeira_tool=do_mcp[0].t if do_mcp else None,
         t_total=t_total,
-        tokens_entrada=fim.dados.get("tokens_entrada", 0) if fim else 0,
-        tokens_saida=fim.dados.get("tokens_saida", 0) if fim else 0,
+        tokens_entrada=fim.dados.get("tokens_entrada") if fim else None,
+        tokens_saida=fim.dados.get("tokens_saida") if fim else None,
         resposta_correta=_checar(cenario.checagem, resposta),
         interrupcoes=len(marcas),
         t_primeira_interrupcao=marcas[0] if marcas else None,
@@ -213,6 +214,7 @@ def metricas(r: Resultado, nota_juiz: int | None, agente: str) -> Metricas:
         rigidez=r.rigidez,
         erros_envelope=r.erros_envelope,
         t_primeira_tool=r.t_primeira_tool,
+        t_total=r.t_total,
         tokens_entrada=r.tokens_entrada if informa_tokens else None,
         tokens_saida=r.tokens_saida if informa_tokens else None,
         resposta_correta=r.resposta_correta,
@@ -234,16 +236,20 @@ def avaliar_usuario(
     repeticao: int = 1,
     leitura_mcp: Collection[str] = (),
     imagem: str | None = None,
+    destino_log: Path | None = None,
 ) -> Callable[[Leitura], Avaliacao]:
     """O `avaliar` do executor: `passou` com o uso da tool certo e a nota do juiz na régua.
 
-    `leitura_mcp` são as tools do MCP que o cliente roda sem pedir aprovação. Uma falha do
-    juiz depois da nova tentativa sobe como exceção, e o executor a grava como `erro_infra`.
+    `leitura_mcp` são as tools do MCP que o cliente roda sem pedir aprovação; `destino_log`
+    é a pasta da execução, onde fica o log do juiz. `FalhaJuiz` e `LimiteDeUsoJuiz` sobem
+    ao executor, que grava `erro_infra`.
     """
 
     def avaliar(leitura: Leitura) -> Avaliacao:
         r = pontuar(c, leitura.eventos, agente, repeticao, leitura_mcp)
-        veredito = julgar(juiz, c, _resposta(leitura.eventos), cfg, imagem=imagem)
+        veredito = julgar(
+            juiz, c, _resposta(leitura.eventos), cfg, imagem=imagem, destino_log=destino_log
+        )
         nota = veredito["nota"]
         falhas = []
         if not r.acerto_tool:

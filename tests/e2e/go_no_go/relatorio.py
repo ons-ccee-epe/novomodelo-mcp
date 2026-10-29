@@ -21,15 +21,15 @@ METRICAS_AMPLAS = (
     ("contornos", "contornos"),
     ("interrupcoes", "interrupções"),
     ("indice_autonomia", "autonomia"),
-    ("duracao_s", "tempo (s)"),
+    ("t_total", "tempo (s)"),
     ("tokens_entrada", "tokens entrada"),
 )
-POR_CENARIO = ("acerto_tool", "nota_juiz", "interrupcoes", "duracao_s")
+POR_CENARIO = ("acerto_tool", "nota_juiz", "interrupcoes", "t_total")
 INTRO_AMPLA = (
     "Médias por conversa. Autonomia = fração do tempo até a 1ª interrupção (1 = nenhuma). "
     "Interrupções = aprovações que a pessoa teria de dar. Nota do juiz: qualidade da resposta "
     "(0, 1 ou 2). Uso da tool esperada: fração das conversas que chamaram as tools do MCP "
-    "previstas (sem MCP é ~0 por construção). Tempo: duração da execução. "
+    "previstas (sem MCP é ~0 por construção). Tempo: o do agente, medido no stream. "
     f"{SEM_DADO} = o agente não informa a métrica."
 )
 _PARTE_VERSAO = re.compile(r"[._+-]")
@@ -171,7 +171,7 @@ def ordenar_configs(configs: Iterable[str]) -> list[str]:
 
 
 def _valor(r: Registro, metrica: str) -> float | None:
-    bruto = r.duracao_s if metrica == "duracao_s" else getattr(r.metricas, metrica)
+    bruto = getattr(r.metricas, metrica)
     return None if bruto is None else float(bruto)
 
 
