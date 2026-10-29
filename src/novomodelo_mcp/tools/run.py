@@ -293,15 +293,12 @@ def register_run(mcp, settings: Settings) -> None:
         if plan.get("status") != "ok":
             return plan
         if plan["verdict"] == "nao_cabe" and not override:
-            return {
-                "status": "error",
-                "exit_code": 28,
-                "plan": plan,
-                "diagnostics": [
-                    "plano diz 'nao_cabe' — run recusado",
-                    "ajuste com run_apply ou passe override=True",
-                ],
-            }
+            return error(
+                28,
+                "plano diz 'nao_cabe' — run recusado",
+                "ajuste com run_apply ou passe override=True",
+                plan=plan,
+            )
         n = threads or plan.get("target_threads") or 1
         cmd = [
             binpath,

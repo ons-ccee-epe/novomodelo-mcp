@@ -20,7 +20,7 @@ from typing import Any
 
 from . import versions
 from .discovery import tool_version
-from .envelope import error
+from .envelope import MAX_DETAIL_CHARS, error
 from .subproc import NO_WINDOW
 
 #: Variáveis que fazem o instalador oficial baixar de outro lugar: nunca repassadas.
@@ -102,7 +102,7 @@ def _installer_env(pasta: str | None) -> dict[str, str]:
 
 
 def _fail(code: int, message: str, manual: str, detail: str = "", **extra) -> dict[str, Any]:
-    return {**error(code, message, detail), "comando_manual": manual, **extra}
+    return error(code, message, detail, comando_manual=manual, **extra)
 
 
 def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, Any]:
@@ -182,7 +182,7 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             proc.returncode,
             "o instalador oficial terminou com erro",
             manual,
-            (proc.stderr or proc.stdout or "")[-2000:],
+            (proc.stderr or proc.stdout or "")[-MAX_DETAIL_CHARS:],
             plano=plan,
         )
 
@@ -204,5 +204,5 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
         "caminho": str(binary),
         "plano": plan,
         "configuracao": f'"NOVOMODELO_MCP_SOLVER_BIN": "{binary}"',
-        "diagnostics": [(proc.stdout or "").strip()[-2000:]],
+        "diagnostics": [(proc.stdout or "").strip()[-MAX_DETAIL_CHARS:]],
     }

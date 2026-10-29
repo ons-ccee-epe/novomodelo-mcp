@@ -195,14 +195,14 @@ def register_deck(mcp, settings: Settings) -> None:
                 return result
             if v.get("status") != "ok":
                 deck_io.restore_backup(path)
-                return {
-                    "status": "error",
-                    "reverted": True,
-                    "path": path,
-                    "changes": result.get("changes"),
-                    "validation": cap_envelope(v, settings),
-                    "diagnostics": ["validacao reprovou — edicao revertida"],
-                }
+                return error(
+                    1,
+                    "validacao reprovou — edicao revertida",
+                    reverted=True,
+                    path=path,
+                    changes=result.get("changes"),
+                    validation=cap_envelope(v, settings),
+                )
             result["case_validation"] = "ok"
         return result
 

@@ -27,6 +27,10 @@ missing, it is added upstream, not reimplemented in the server.
 `as_error(...)` are the only constructors — do not hand-build a dict with the
 same keys elsewhere, and do not duplicate `MAX_DETAIL_CHARS`. Detail strings are
 truncated through that owner so an agent is never flooded with raw stderr.
+Extra fields ride on the constructor's keyword arguments
+(`error(code, message, detail, plan=...)`), not on a dict merged around it.
+`tests/test_envelope_dono_unico.py` scans the AST of `src/novomodelo_mcp` and
+fails on any error `status` built outside `adapters/envelope.py`.
 
 ## 3. Never raise to the caller
 

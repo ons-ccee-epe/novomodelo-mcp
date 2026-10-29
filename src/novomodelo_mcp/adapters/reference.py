@@ -102,26 +102,20 @@ def list_schema_types(settings: Settings) -> list[str]:
 
 def read_schema(settings: Settings, tipo: str) -> dict:
     if not _SCHEMA_NAME.match(tipo or ""):
-        return {"status": "error", "diagnostics": [f"tipo invalido: {tipo!r}"]}
+        return error(22, f"tipo invalido: {tipo!r}")
     root = schemas_root(settings)
     if not root:
-        return {
-            "status": "error",
-            "diagnostics": [
-                "schemas indisponiveis; defina NOVOMODELO_MCP_SCHEMAS_DIR ou NOVOMODELO_MCP_SOLVER_BIN"
-            ],
-        }
+        return error(
+            2,
+            "schemas indisponiveis; defina NOVOMODELO_MCP_SCHEMAS_DIR ou NOVOMODELO_MCP_SOLVER_BIN",
+        )
     f = (Path(root) / f"{tipo}{_SUFFIX}").resolve()
     if not _within(f, Path(root).resolve()):
-        return {"status": "error", "diagnostics": [f"tipo invalido: {tipo!r}"]}
+        return error(22, f"tipo invalido: {tipo!r}")
     if not f.exists():
-        return {
-            "status": "error",
-            "diagnostics": [
-                f"schema inexistente: {tipo}",
-                f"disponiveis: {list_schema_types(settings)}",
-            ],
-        }
+        return error(
+            2, f"schema inexistente: {tipo}", f"disponiveis: {list_schema_types(settings)}"
+        )
     return {"status": "ok", "tipo": tipo, "schema": json.loads(f.read_text(encoding="utf-8"))}
 
 
@@ -204,23 +198,21 @@ def read_doc(settings: Settings, page: str, max_chars: int, section: str | None 
     # existe fora da raiz (respostas diferentes para "fora" e "inexistente").
     candidates = [c.resolve() for c in (base / page, base / f"{page}.md", base / f"{page}.mdx")]
     if not all(_within(c, base) for c in candidates):
-        return {"status": "error", "diagnostics": [f"pagina fora do docs root: {page}"]}
+        return error(13, f"pagina fora do docs root: {page}")
     tr = next((c for c in candidates if c.is_file()), None)
     if tr is None:
-        return {"status": "error", "diagnostics": [f"pagina inexistente: {page}"]}
+        return error(2, f"pagina inexistente: {page}")
     text = resolve_mdx(tr)
     extra = {}
     if section:
         found = find_section(text, section)
         if found is None:
-            return {
-                **error(
-                    2,
-                    f"seção inexistente em {page}: {section!r}",
-                    "use uma das `secoes` (âncora ou título)",
-                ),
-                "secoes": section_list(text)[:200],
-            }
+            return error(
+                2,
+                f"seção inexistente em {page}: {section!r}",
+                "use uma das `secoes` (âncora ou título)",
+                secoes=section_list(text)[:200],
+            )
         text, extra = found["texto"], {"secao": found["ancora"], "titulo": found["titulo"]}
     truncated = len(text) > max_chars
     return {

@@ -16,6 +16,12 @@ só do MCP vira `X.Y.Z.postN`.
   anteriores não instalavam um servidor funcional (o mcp antes da 1.11 nem importa com o
   pydantic atual).
 
+### Fixed
+
+- Toda resposta de erro traz `exit_code` e `diagnostics`. Alguns erros do `deck_edit_json`,
+  do `deck_edit_parquet`, do `schema_get` e do `docs_read` vinham sem `exit_code`, e a
+  validação reprovada do `case_validate` vinha sem `diagnostics`.
+
 ## [0.19.1] - 2026-10-28
 
 ### Changed
