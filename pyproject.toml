@@ -68,9 +68,10 @@ artifacts = [
 ]
 
 [tool.hatch.build.targets.sdist]
-# Fora do sdist: regras de agente, caches e os checkouts que a release faz na raiz
-# (_docs, _novomodelo, _bridge). O hatchling inclui o .gitignore de qualquer jeito.
-exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md"]
+# Fora do sdist: regras de agente, caches, os checkouts que a release faz na raiz
+# (_docs, _novomodelo, _bridge) e a bateria e2e, que não é publicada. O hatchling inclui
+# o .gitignore de qualquer jeito.
+exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md", "/e2e"]
 
 [dependency-groups]
 dev = ["pytest>=9.2.0", "ruff>=0.17.3", "hypothesis>=6.170.13"]
