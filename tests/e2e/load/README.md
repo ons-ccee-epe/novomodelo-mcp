@@ -31,7 +31,7 @@ python -m tests.e2e.load.run --concurrency 2 --duration 10 --tools deck_edit_jso
 | `--tools a,b` | Só tools. Tools do catálogo (`mix.ALLOWED_TOOLS`); sem a opção, o mix padrão (`mix.DEFAULT_TOOLS`: as leves e somente leitura). As que gravam e as pesadas entram só pelo nome. |
 | `--timeout T` | tools: segundos sem resposta até contar `timeout` e recriar a sessão. agent: timeout de cada caso (sem a opção, o `timeout_s` do próprio caso). |
 | `--no-warmup` | Só tools. Não aquece as sessões: as primeiras chamadas (frias) entram nas métricas. |
-| `--provider kiro-cli\|claude` | Só agent. Sem a opção, o primeiro instalado, como na esteira. |
+| `--provider kiro-cli\|claude` | Só agent, que no host recusa a execução. Sem a opção, o primeiro instalado, como na esteira. |
 | `--case ID`, `--group G`, `--tags a,b` | Só agent, no máximo uma: um caso, um grupo (o da tool esperada, como na tela) ou tags (qualquer uma). Sem nenhuma, todos os casos elegíveis. |
 | `--no-save` | Não grava em `results/load/` (pasta criada sob demanda). |
 | `--fixtures`, `--results-dir` | Raiz das fixtures (vira o workspace do servidor) e pasta de resultados. |

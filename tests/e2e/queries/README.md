@@ -20,7 +20,7 @@ O objetivo principal é garantir que o agente escolhe a ferramenta MCP correta p
 tests/e2e/
 ├── queries/                    # Módulo principal do framework
 │   ├── __init__.py            # Package exports
-│   ├── cases.yaml             # Definições de casos de teste (~60 casos)
+│   ├── cases.yaml             # Definições de casos de teste
 │   ├── loader.py              # CasesLoader - carrega e valida YAML
 │   ├── runner.py              # QueryRunner - parsers de saída de agente; execução só pelo executor em container
 │   ├── validator.py           # QueryValidator - valida resultados
@@ -52,9 +52,8 @@ O dashboard é o frontend React em `tests/e2e/frontend`, que lê `results/` e `m
 ### Argumentos
 
 O CLI `python -m tests.e2e.queries.run_queries` aceita `--tags`, `--case`, `--parallel`,
-`--timeout`, `--report`, `--set-baseline` e `--compare`. Fora do executor em container
-ele escreve "a execução passa pelo executor em container" no stderr e sai com código 1,
-sem gravar bateria.
+`--timeout`, `--report`, `--set-baseline` e `--compare` para o executor em container; no
+host nenhuma delas tem efeito além da recusa.
 
 ## Variáveis de Ambiente
 
@@ -146,7 +145,7 @@ Para validações flexíveis em `expected.content`:
 
 ## Cobertura de Tools
 
-O framework abrange todas as 37 tools MCP do novomodelo:
+O framework abrange as tools MCP do novomodelo:
 
 | Grupo | Tools |
 |-------|-------|
@@ -164,25 +163,13 @@ O framework abrange todas as 37 tools MCP do novomodelo:
 
 ## Saída e Exit Codes
 
-O CLI exibe progresso durante a execução:
+Fora do executor em container, `run_queries` não carrega casos nem executa: escreve
+"a execução passa pelo executor em container" no stderr e sai com código `1`.
 
-```
-Carregados 60 casos de teste
-[1/60] bridge-check-newave-valid... ✓ pass (1523ms)
-[2/60] bridge-check-newave-invalid-path... ✓ pass (892ms)
-[3/60] bridge-check-decomp-valid... ✗ fail (2341ms)
-...
-
-============================================================
-Batch: 20241215_143052_abc1234
-Total: 60 | Passed: 58 | Failed: 2 | Timeout: 0
-MCP Used: 98.3% | Correct Tool: 96.7%
-============================================================
-```
-
-**Exit codes:**
-- `0` - Todos os testes passaram
-- `1` - Pelo menos um teste falhou
+O que funciona no host: o carregamento e a validação dos casos (`CasesLoader`), o
+`QueryValidator`, os parsers de saída de agente e o `ResultStore`, todos cobertos pelos
+testes unitários desta pasta, e `python -m tests.e2e.eval.run --check`, que verifica os
+pré-requisitos da bateria de tools.
 
 ## Desenvolvimento
 

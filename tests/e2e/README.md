@@ -42,7 +42,7 @@ Cada parte também roda sozinha:
 ```bash
 uv run --group e2e python -m tests.e2e.eval.run --check          # verifica os pré-requisitos
 uv run --group e2e python -m tests.e2e.eval.run --tool deck_list # uma tool; também --tag e --quiet
-uv run --group e2e python -m tests.e2e.queries.run_queries       # perguntas ao agente; --tags, --case, --parallel
+uv run --group e2e python -m tests.e2e.queries.run_queries       # recusa fora do executor em container
 uv run --group e2e python -m tests.e2e.load.run --concurrency 4 --duration 30
 ```
 

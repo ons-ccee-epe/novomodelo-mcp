@@ -231,18 +231,6 @@ AGENT = ["--mode", "agent", "--concurrency", "2", "--duration", "60", "--provide
 _CLAUDE = SimpleNamespace(id="claude", label="Claude Code", binary="claude", path="C:/claude.exe")
 
 
-def _fake_execute_agent(outcome=None, sandbox=None):
-    def execute(_config, _args, _provider):
-        server = {"command": ["mcp.exe"], "workspace": []}
-        return (
-            None,
-            outcome or make_agent_outcome(),
-            {"server": server, "sandbox": sandbox or NO_SANDBOX},
-        )
-
-    return execute
-
-
 class TestAgentMode:
     @pytest.fixture(autouse=True)
     def installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
