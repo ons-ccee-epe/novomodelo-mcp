@@ -7,7 +7,9 @@ import json
 import os
 import sys
 
+from novomodelo_mcp.adapters.versions import expected_version
 from tests.e2e.config import avisos, carregar_config, verificar
+from tests.e2e.executor.casos import CASOS_GRANDES, pasta_preparados, preparar_publicos, resolver
 from tests.e2e.executor.container import SEGREDO_CLAUDE
 from tests.e2e.executor.imagens import (
     CLIENTES,
@@ -69,11 +71,18 @@ def _verificar(cfg) -> int:
 
 
 def _preparar(cfg, configs: list[ConfigMCP], agentes: list[str]) -> int:
-    relevantes = {"motor", *(ITENS_DO_AGENTE[a] for a in agentes)}
+    relevantes = {"motor", "cache", *(ITENS_DO_AGENTE[a] for a in agentes)}
     problemas = [p for p in verificar(cfg) if p.item in relevantes]
     for problema in problemas:
         print(f"problema [{problema.item}]: {problema.mensagem}")
     if problemas:
+        return 1
+    versao = expected_version()
+    if versao is None:
+        print(
+            "erro: pin do novomodelo-bridge ausente nos metadados do novomodelo-mcp",
+            file=sys.stderr,
+        )
         return 1
     try:
         if "claude" in agentes:
@@ -86,6 +95,14 @@ def _preparar(cfg, configs: list[ConfigMCP], agentes: list[str]) -> int:
                 versoes = construir(c, agente, cfg)
                 linha = {"imagem": tag_imagem(c, agente), "versoes": versoes}
                 print(json.dumps(linha, ensure_ascii=False), flush=True)
+        primeira = tag_imagem(configs[0], agentes[0])
+        preparados = preparar_publicos(versao, primeira, cfg)
+        print(json.dumps({"casos_publicos": preparados}, ensure_ascii=False), flush=True)
+        grandes = {
+            nome: "disponivel" if resolver(nome, cfg, pasta_preparados(cfg)) else "ausente"
+            for nome in sorted(CASOS_GRANDES)
+        }
+        print(json.dumps({"casos_grandes": grandes}, ensure_ascii=False), flush=True)
     except FalhaPreparo as erro:
         print(f"erro: {erro}", file=sys.stderr)
         return 1
