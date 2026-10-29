@@ -332,7 +332,7 @@ def test_caso_logico_fora_dos_publicos_nunca_vira_caminho(tmp_path: Path) -> Non
         ({"tool": "run_start"}, ("run_start",)),
         ({"tool": "deck_edit_json"}, ("deck_edit_json",)),
         ({"tool": "deck_list"}, ()),
-        ({"tool": "instalar_novomodelo"}, ()),
+        ({"tool": "install_novomodelo"}, ()),
         ({"tools": ["case_validate", "bridge_check_newave"]}, ()),
         ({"tools": ["bridge_dashboard", "deck_list"]}, ("bridge_dashboard",)),
     ],

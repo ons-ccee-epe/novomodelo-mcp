@@ -15,7 +15,7 @@ novomodelo, que são as da versão instalada.
 1. Busque com `docs_search`, em inglês (as docs estão em inglês). Para termos em
    português, use o equivalente do glossário das docs (`reference/glossary`); a busca
    também traduz os termos que estão nele.
-2. Leia as seções relevantes com `docs_read(page, secao)`.
+2. Leia as seções relevantes com `docs_read(page, section)`.
 3. Responda em português, citando página e seção de cada afirmação (`page#section`).
 4. Se as docs não tratam do assunto, diga isso claramente: não complete de memória.
 5. Avise que as docs descrevem a intenção do modelo e que o código pode divergir delas

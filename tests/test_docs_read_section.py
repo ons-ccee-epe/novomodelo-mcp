@@ -1,4 +1,4 @@
-"""`docs_read(page, secao)`: só a seção (por âncora ou título); `docs_list` com título e descrição."""
+"""`docs_read(page, section)`: só a seção (por âncora ou título); `docs_list` com título e descrição."""
 
 import dataclasses
 

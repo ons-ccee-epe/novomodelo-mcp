@@ -45,7 +45,7 @@ WRITES = {
     "bridge_compare_newave",
     "bridge_compare_decomp",
     "bridge_dashboard",
-    "incluir_pastas",
+    "include_folders",
 }
 DESTRUCTIVE = {
     "deck_edit_json",
@@ -53,7 +53,7 @@ DESTRUCTIVE = {
     "run_apply",
     "run_start",
     "run_cancel",
-    "instalar_novomodelo",
+    "install_novomodelo",
 }
 
 
@@ -68,7 +68,7 @@ def test_toda_tool_tem_anotacao():
 
 def test_tools_com_rede_sao_as_declaradas():
     com_rede = {name for name, t in _tools().items() if t.annotations.openWorldHint}
-    assert com_rede == NETWORK_TOOLS == {"server_info", "instalar_novomodelo"}
+    assert com_rede == NETWORK_TOOLS == {"server_info", "install_novomodelo"}
 
 
 def test_classificacao_abrange_todas_as_tools():

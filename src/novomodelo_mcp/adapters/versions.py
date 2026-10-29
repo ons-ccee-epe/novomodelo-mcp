@@ -132,7 +132,7 @@ def cli_install_command(version: str) -> str:
 
 
 ASK_AGENT_TO_INSTALL = (
-    "Peça ao agente: “instale o executável do novomodelo” (tool instalar_novomodelo)"
+    "Peça ao agente: “instale o executável do novomodelo” (tool install_novomodelo)"
 )
 
 

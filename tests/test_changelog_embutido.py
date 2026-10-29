@@ -179,7 +179,7 @@ def test_instrucoes_apontam_o_changelog():
 
     assert "`changelog/novomodelo`" in SERVER_INSTRUCTIONS
     assert "`changelog/novomodelo-bridge`" in SERVER_INSTRUCTIONS
-    assert 'docs_read(pagina, "<versão>")' in SERVER_INSTRUCTIONS
+    assert 'docs_read(page, "<versão>")' in SERVER_INSTRUCTIONS
 
 
 def _busca(consulta: str, k: int = 10) -> list[str]:

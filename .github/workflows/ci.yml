@@ -183,7 +183,7 @@ jobs:
   executaveis-reais:
     # Todas as tools contra o executável novomodelo, o novomodelo-bridge e o
     # novomodelo-python reais da versão esperada (o pin do bridge), em cada alvo.
-    # O executável vem pela própria tool instalar_novomodelo (instalador oficial, hash
+    # O executável vem pela própria tool install_novomodelo (instalador oficial, hash
     # conferido); os decks são os mínimos do bridge na tag da versão.
     strategy:
       fail-fast: false

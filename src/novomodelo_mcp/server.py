@@ -26,8 +26,8 @@ from .config import load_settings
 from .names import SERVER_NAME
 from .tools.annotations import READ_ONLY_NET
 from .tools.deck import register_deck
+from .tools.folders import register_folders
 from .tools.novomodelo_meta import register_novomodelo_meta
-from .tools.pastas import register_pastas
 from .tools.post_run import register_post_run
 from .tools.pre_run import register_pre_run
 from .tools.prompts import register_prompts
@@ -43,16 +43,16 @@ resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 - Comece por `server_info`: versões das peças, workspace e se há versão nova.
 - Se uma resposta trouxer `version_warnings`, avise a pessoa e ofereça rodar os comandos
   dele, com o ok dela; o MCP continua funcionando.
-- Se faltar o executável do novomodelo, ofereça a tool `instalar_novomodelo` (a pessoa
+- Se faltar o executável do novomodelo, ofereça a tool `install_novomodelo` (a pessoa
   pode pedir “instale o executável do novomodelo”); o comando manual é a alternativa.
 - As docs embutidas são as oficiais da versão instalada. Para a metodologia e o uso do
   novomodelo, use `docs_search` antes de responder, e não a web nem a memória: a
   definição do novomodelo pode diferir da literatura e do NEWAVE.
 - Busque em inglês (as docs estão em inglês); termos em português do glossário das
-  docs são traduzidos. Depois leia a seção com `docs_read(page, secao)`.
+  docs são traduzidos. Depois leia a seção com `docs_read(page, section)`.
 - O que mudou entre versões do novomodelo e do bridge está em `changelog/novomodelo` e
   `changelog/novomodelo-bridge`: leia a seção de cada versão com
-  `docs_read(pagina, "<versão>")`.
+  `docs_read(page, "<versão>")`.
 - Toda resposta sobre metodologia cita a página e a seção (`page#section`) de onde veio.
 - Se as docs não tratam do assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.
@@ -141,7 +141,7 @@ def build_server() -> FastMCP:
     register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
     register_run(mcp, settings)  # init / plano / apply / run assíncrono
     register_prompts(mcp, settings)  # prompts: metodologia
-    register_pastas(mcp, settings)  # inclusão de pastas de estudo no guard
+    register_folders(mcp, settings)  # inclusão de pastas de estudo no guard
 
     @mcp.tool(annotations=READ_ONLY_NET)
     def server_info() -> dict:

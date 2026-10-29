@@ -23,12 +23,12 @@ só do MCP vira `X.Y.Z.postN`.
   | toda resposta                                | `avisos_de_versao`                                                                                                                       | `version_warnings`                                                                                                                                |
   | respostas com teto de tamanho                | `cortado_por_tamanho` {`teto_kb`, `linhas_devolvidas`, `linhas_antes_do_corte`}; `truncado` na lista cortada                             | `size_truncation` {`limit_kb`, `rows_returned`, `rows_total`}; `truncated`                                                                        |
   | recusa do guard                              | `pasta_sugerida`                                                                                                                         | `suggested_folder`                                                                                                                                |
-  | `incluir_pastas`                             | `incluidas`, `ja_incluidas`, `recusadas` [{`pasta`, `motivo`}], `raizes`, `aviso`                                                        | `included`, `already_included`, `refused` [{`folder`, `reason`}], `roots`, `note`                                                                 |
+  | `include_folders`                            | `incluidas`, `ja_incluidas`, `recusadas` [{`pasta`, `motivo`}], `raizes`, `aviso`                                                        | `included`, `already_included`, `refused` [{`folder`, `reason`}], `roots`, `note`                                                                 |
   | `server_info`                                | `versao_mcp`, `pastas_incluidas`, `bridge.origem`, `erro`                                                                                | `mcp_version`, `included_folders`, `bridge.origin`, `error`                                                                                       |
   | `server_info.versoes` → `versions`           | `executavel`, `biblioteca`, `versao`, `motivo`, `origem`, `esperada`                                                                     | `executable`, `library`, `version`, `reason`, `origin`, `expected`                                                                                |
   | `server_info.versao_nova` → `new_version`    | `mais_recente`, `comando`, `nota`, `notas`, `mudancas`, `aviso_rede`, `verifique_em`                                                     | `latest`, `command`, `note`, `release_notes`, `release_changes`, `network_warning`, `check_at`                                                    |
   | `server_info.docs`                           | `origem`, `caminho`, `versao`                                                                                                            | `origin`, `path`, `version`                                                                                                                       |
-  | `instalar_novomodelo`                        | `executado`, `plano` {`versao`, `destino`, `altera_path`}, `comando_manual`, `versao_instalada`, `caminho`, `configuracao`, `aviso_rede` | `executed`, `plan` {`version`, `destination`, `modifies_path`}, `manual_command`, `installed_version`, `path`, `configuration`, `network_warning` |
+  | `install_novomodelo`                         | `executado`, `plano` {`versao`, `destino`, `altera_path`}, `comando_manual`, `versao_instalada`, `caminho`, `configuracao`, `aviso_rede` | `executed`, `plan` {`version`, `destination`, `modifies_path`}, `manual_command`, `installed_version`, `path`, `configuration`, `network_warning` |
   | `case_summary`                               | `contagens`, `itens` {`lista`, `truncado`}                                                                                               | `counts`, `items` {`entries`, `truncated`}                                                                                                        |
   | `case_summary`, tipos                        | `barras`, `linhas`, `hidros`, `termicas`, `contratos`, `bombeamento`, `fontes_nao_controlaveis`, `estagios`                              | `buses`, `lines`, `hydros`, `thermals`, `contracts`, `pumping_stations`, `non_controllable_sources`, `stages`                                     |
   | `case_validate`                              | `warnings_agrupados`, `warnings_grupos_total`; em cada grupo, `mensagem_modelo`, `exemplos`                                              | `warnings_grouped`, `warnings_groups_total`; `message_template`, `examples`                                                                       |
@@ -47,6 +47,24 @@ só do MCP vira `X.Y.Z.postN`.
   | `docs_list`                                  | `itens` [{`pagina`, `titulo`, `descricao`}]                                                                                              | `items` [{`page`, `title`, `description`}]                                                                                                        |
   | `docs_read`                                  | `secao`, `titulo`; sem `page`, `aviso`; seção inexistente, `secoes` [{`titulo`, `ancora`}]                                               | `section`, `title`; `note`; `sections` [{`title`, `anchor`}]                                                                                      |
   | `docs_search`                                | `consulta_usada`, `termos_do_glossario`, `resultados` [{`pagina`, `secao`, `titulo`, `trecho`}]                                          | `query_used`, `glossary_terms`, `results` [{`page`, `section`, `title`, `snippet`}]                                                               |
+
+- **BREAKING:** as tools `incluir_pastas` e `instalar_novomodelo` passam a se chamar
+  `include_folders` e `install_novomodelo`, e os parâmetros em português passam ao
+  inglês. Uma lista de liberação do cliente feita à mão com os nomes antigos precisa ser
+  refeita. O resource `novomodelo://schema/{tipo}` passa a `novomodelo://schema/{type}`
+  (a URI de cada schema não muda). As instruções do servidor, o prompt `metodologia` e a
+  linha que o `configurar` grava nas instruções do cliente pedem a citação como
+  `page#section`.
+
+  | Tool | Antes | Agora |
+  |---|---|---|
+  | `incluir_pastas` → `include_folders` | `pastas` | `folders` |
+  | `instalar_novomodelo` → `install_novomodelo` | `confirmar`, `pasta` | `confirm`, `install_dir` |
+  | `bridge_convert_decomp` | `importar_fcf` | `import_fcf` |
+  | `results_stochastic` | `aberturas_do_estagio` | `openings_stage` |
+  | `schema_get` | `tipo` | `type` |
+  | `docs_search` | `consulta` | `query` |
+  | `docs_read` | `secao` | `section` |
 
 - As versões mínimas das dependências passam a ser as que a CI testa: mcp 1.30.0,
   polars 2.1.0, jsonschema 4.26.0, duckdb 2.0.0 e truststore 0.10.5. As mínimas

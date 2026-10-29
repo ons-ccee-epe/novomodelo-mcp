@@ -90,7 +90,7 @@ def test_par_sem_filtro_respeita_o_teto(tool):
 
 def test_arvore_de_aberturas_do_estagio_com_teto(tool):
     fn, out, _ = tool
-    env = fn(out, aberturas_do_estagio=0)
+    env = fn(out, openings_stage=0)
     arv = env["openings"]
     assert arv["stage"] == 0 and arv["n_openings"] == 20 and arv["dim"] == 3
     assert len(arv["rows"]) == 5 and arv["truncated"] is True
@@ -99,7 +99,7 @@ def test_arvore_de_aberturas_do_estagio_com_teto(tool):
 
 def test_estagio_inexistente_na_arvore_e_erro_22(tool):
     fn, out, _ = tool
-    env = fn(out, aberturas_do_estagio=99)
+    env = fn(out, openings_stage=99)
     assert env["status"] == "error" and env["exit_code"] == 22
 
 

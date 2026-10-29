@@ -33,19 +33,21 @@ def register_novomodelo_meta(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=DESTRUCTIVE_NET)
-    def instalar_novomodelo(confirmar: bool = False, pasta: str | None = None) -> dict:
+    def install_novomodelo(confirm: bool = False, install_dir: str | None = None) -> dict:
         """Instala o executável `novomodelo` oficial, na versão que este MCP espera.
 
-        Sem `confirmar=True`, só mostra o plano: URL do instalador do release
+        Sem `confirm=True`, só mostra o plano: URL do instalador do release
         oficial, SHA-256 esperado, pasta de destino e o comando manual; nada é
-        baixado. Com `confirmar=True`, baixa o instalador, confere o SHA-256,
-        executa e confirma com `novomodelo version`. `pasta` (absoluta, opcional):
-        raiz da instalação (o binário fica em `<pasta>/bin`); padrão `~/.cargo`.
+        baixado. Com `confirm=True`, baixa o instalador, confere o SHA-256,
+        executa e confirma com `novomodelo version`. `install_dir` (absoluta, opcional):
+        raiz da instalação (o binário fica em `<install_dir>/bin`); padrão `~/.cargo`.
         O instalador oficial acrescenta a pasta ao PATH do perfil do shell. Sem
         rede, devolve `network_warning` com o comando manual.
         """
         try:
-            return cap_envelope(installer.install(confirmar=confirmar, pasta=pasta), settings)
+            return cap_envelope(
+                installer.install(confirm=confirm, install_dir=install_dir), settings
+            )
         except Exception as exc:  # noqa: BLE001 - never-raise: exceção vira Error_Envelope, não derruba o stdio
             return as_error(exc)
 

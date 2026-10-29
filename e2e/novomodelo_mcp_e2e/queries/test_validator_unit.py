@@ -34,7 +34,7 @@ class TestConstants:
 
     def test_mcp_tools_count(self):
         """Verifica que temos 37 MCP tools."""
-        # Note: We have 38 because 'instalar_novomodelo' was added
+        # Note: We have 38 because 'install_novomodelo' was added
         assert len(MCP_TOOLS) >= 37
 
     def test_mcp_tools_contains_expected(self):

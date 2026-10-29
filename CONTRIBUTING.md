@@ -128,7 +128,7 @@ uv run python scripts/sync_bundled.py --source /caminho/para/clone/do/novomodelo
 
 Os clones ficam na tag da versão. Os changelogs do novomodelo e do bridge viram as
 páginas `changelog/novomodelo` e `changelog/novomodelo-bridge`, com uma seção por versão
-a partir da 0.18.0, que o agente lê com `docs_read(pagina, "<versão>")`. O commit de cada
+a partir da 0.18.0, que o agente lê com `docs_read(page, "<versão>")`. O commit de cada
 clone fica no `manifest.json`.
 
 O script grava as páginas já resolvidas (os trechos `_impl` entram no lugar dos

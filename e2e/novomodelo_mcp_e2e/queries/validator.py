@@ -92,9 +92,9 @@ MCP_TOOLS: frozenset[str] = frozenset(
         # Meta
         "server_info",
         "solver_version",
-        "instalar_novomodelo",
+        "install_novomodelo",
         # Workspace
-        "incluir_pastas",
+        "include_folders",
     }
 )
 

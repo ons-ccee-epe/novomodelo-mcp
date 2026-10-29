@@ -228,7 +228,7 @@ class TestLoadTools:
             "run_logs",
             "run_cancel",
             "server_info",
-            "instalar_novomodelo",
+            "install_novomodelo",
         ):
             assert rows[barred]["barred"] is True and rows[barred]["available"] is False
             assert rows[barred]["reason"]

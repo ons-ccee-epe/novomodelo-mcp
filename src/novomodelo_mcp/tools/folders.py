@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
+from ..adapters import paths
 from ..adapters.envelope import as_error
 from ..adapters.obs import log
-from ..adapters.paths import include_folders
 from ..config import Settings
 from .annotations import WRITES
 
 
-def register_pastas(mcp, settings: Settings) -> None:
-    """Registra `incluir_pastas` no servidor `mcp`."""
+def register_folders(mcp, settings: Settings) -> None:
+    """Registra `include_folders` no servidor `mcp`."""
 
     # Nunca READ_ONLY: é a única tool que amplia o guard, e a aprovação do cliente a
     # cada chamada é a confirmação do usuário (o `configurar` só libera as de leitura).
     @mcp.tool(annotations=WRITES)
-    def incluir_pastas(pastas: list[str]) -> dict:
+    def include_folders(folders: list[str]) -> dict:
         """Inclui pastas de estudo na pasta de trabalho; vale na hora, sem reabrir o cliente.
 
         Use só depois de o usuário aceitar, com todas as pastas de uma vez (a
@@ -24,8 +24,8 @@ def register_pastas(mcp, settings: Settings) -> None:
         A inclusão fica gravada para as próximas conversas.
         """
         try:
-            result = include_folders(pastas, settings)
+            result = paths.include_folders(folders, settings)
         except Exception as exc:  # noqa: BLE001 - never-raise: falha de lock/escrita vira envelope
             return as_error(exc)
-        log(settings, "incluir_pastas", pastas=pastas, included=result.get("included"))
+        log(settings, "include_folders", folders=folders, included=result.get("included"))
         return result

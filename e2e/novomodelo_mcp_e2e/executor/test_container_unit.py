@@ -281,7 +281,7 @@ def test_kiro_soma_as_liberadas_ao_auto_approve_do_configurar(tmp_path):
         ("run_start,Bash", "inválida"),
         ("run_start; rm", "inválida"),
         ("tool_que_nao_existe", "não registrada"),
-        ("instalar_novomodelo", "nunca é liberada"),
+        ("install_novomodelo", "nunca é liberada"),
     ],
 )
 def test_liberar_recusa_o_que_nao_e_tool_do_mcp_liberavel(tmp_path, agente, nome, motivo):
@@ -308,7 +308,7 @@ def test_tools_do_servidor_marca_as_de_leitura_e_as_de_rede():
     tools = container.tools_do_servidor()
     assert tools["deck_list"] == container.AnotacoesTool(so_leitura=True, rede=False)
     assert tools["run_start"] == container.AnotacoesTool(so_leitura=False, rede=False)
-    assert tools["incluir_pastas"].so_leitura is False
+    assert tools["include_folders"].so_leitura is False
     assert tools["server_info"].rede is True
 
 

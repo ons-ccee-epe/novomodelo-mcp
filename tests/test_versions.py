@@ -101,7 +101,7 @@ def test_peca_ausente_tem_aviso_proprio(pecas):
     assert "novomodelo-cli-installer" in avisos[0]
 
 
-PECA_AO_AGENTE = "Peça ao agente: “instale o executável do novomodelo” (tool instalar_novomodelo)"
+PECA_AO_AGENTE = "Peça ao agente: “instale o executável do novomodelo” (tool install_novomodelo)"
 
 
 def _primeiro_o_agente_depois_o_manual(aviso):
@@ -129,7 +129,7 @@ def test_instrucoes_do_servidor_usam_a_mesma_frase():
     from novomodelo_mcp.server import SERVER_INSTRUCTIONS
 
     assert "“instale o executável do novomodelo”" in SERVER_INSTRUCTIONS
-    assert "`instalar_novomodelo`" in SERVER_INSTRUCTIONS
+    assert "`install_novomodelo`" in SERVER_INSTRUCTIONS
 
 
 def _bridge_do_pacote(monkeypatch):
@@ -148,7 +148,7 @@ def test_executavel_0_19_com_mcp_0_18(pecas, monkeypatch):
     [aviso] = V.version_warnings(object())
     assert aviso.startswith("O executável novomodelo está na 0.19.0 e o MCP na 0.18.0;")
     assert V.mcp_install_command("0.19.0") in aviso
-    assert "v0.18.0/novomodelo-cli-installer" in aviso and "instalar_novomodelo" in aviso
+    assert "v0.18.0/novomodelo-cli-installer" in aviso and "install_novomodelo" in aviso
     assert aviso.index(V.mcp_install_command("0.19.0")) < aviso.index("novomodelo-cli-installer")
 
 
@@ -228,7 +228,7 @@ def test_executavel_mais_velho_manda_instalar_a_versao_do_mcp(pecas):
     estado, _ = pecas
     estado["executable"] = "0.17.0"
     [aviso] = V.version_warnings(object())
-    assert "v0.18.0/novomodelo-cli-installer" in aviso and "instalar_novomodelo" in aviso
+    assert "v0.18.0/novomodelo-cli-installer" in aviso and "install_novomodelo" in aviso
 
 
 def test_bridge_instalado_a_parte_e_mais_novo_da_os_dois_caminhos(pecas):
@@ -387,7 +387,7 @@ def test_truststore_nao_e_injetado_no_processo():
     assert "inject_into_ssl" not in nomes
 
 
-def test_falha_de_certificado_vira_aviso_rede(monkeypatch):
+def test_falha_de_certificado_vira_network_warning(monkeypatch):
     def _cert(req, *, timeout, context):
         raise urllib.error.URLError(ssl.SSLCertVerificationError("self-signed certificate"))
 

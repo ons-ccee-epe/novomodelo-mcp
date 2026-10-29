@@ -36,18 +36,18 @@ def test_toda_tool_com_parametro_de_caminho_traz_o_aviso():
 def test_tool_sem_caminho_nao_leva_o_aviso():
     tools = _tools()
     assert AVISO_NA_TOOL not in tools["docs_search"].description
-    assert AVISO_NA_TOOL not in tools["instalar_novomodelo"].description
+    assert AVISO_NA_TOOL not in tools["install_novomodelo"].description
 
 
-def test_incluir_pastas_sempre_pede_aprovacao():
+def test_include_folders_sempre_pede_aprovacao():
     from novomodelo_mcp import client_config as C
 
-    tool = _tools()["incluir_pastas"]
+    tool = _tools()["include_folders"]
     assert tool.annotations.readOnlyHint is False
-    assert "incluir_pastas" not in C.read_only_tools()
+    assert "include_folders" not in C.read_only_tools()
 
 
-def test_incluir_pastas_pelo_servidor_vale_na_hora(tmp_path, monkeypatch):
+def test_include_folders_pelo_servidor_vale_na_hora(tmp_path, monkeypatch):
     ws, estudos, outra = tmp_path / "ws", tmp_path / "estudos", tmp_path / "outra"
     for p in (ws, estudos, outra):
         p.mkdir()
@@ -59,7 +59,7 @@ def test_incluir_pastas_pelo_servidor_vale_na_hora(tmp_path, monkeypatch):
     assert tools["deck_list"].fn(case_dir=str(estudos))["suggested_folder"] == str(
         estudos.resolve()
     )
-    out = tools["incluir_pastas"].fn(pastas=[str(estudos), str(outra)])
+    out = tools["include_folders"].fn(folders=[str(estudos), str(outra)])
     assert out["included"] == [str(estudos.resolve()), str(outra.resolve())]
     assert tools["deck_list"].fn(case_dir=str(estudos))["status"] == "ok"
     assert str(estudos.resolve()) in tools["server_info"].fn()["included_folders"]

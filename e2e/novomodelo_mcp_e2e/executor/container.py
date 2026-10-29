@@ -53,7 +53,7 @@ _CONFIAR_KIRO = (
 )
 PREFIXO_CLAUDE = "mcp__novomodelo__"
 _NOME_TOOL = re.compile(r"[a-z_]+")
-NUNCA_LIBERADAS = frozenset({"instalar_novomodelo"})
+NUNCA_LIBERADAS = frozenset({"install_novomodelo"})
 _TEMPO_LEITOR_ERRO = 30
 _TEMPO_REMOCAO = 30
 _MEMORIA_VALIDA = re.compile(r"[0-9]+[bkmgBKMG]?")

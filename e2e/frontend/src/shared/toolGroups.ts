@@ -40,7 +40,7 @@ export const TOOL_GROUPS: Record<string, string> = {
   case_init: "case",
   server_info: "meta",
   solver_version: "meta",
-  instalar_novomodelo: "meta",
+  install_novomodelo: "meta",
 };
 
 export function groupForTool(tool: string | null | undefined): string {

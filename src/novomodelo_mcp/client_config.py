@@ -28,7 +28,7 @@ _PROGRAMS = {"claude-desktop": (), "claude-code": ("claude",), "kiro": ("kiro", 
 INSTRUCTIONS_MARK = "<!-- novomodelo-mcp -->"
 INSTRUCTIONS_LINE = (
     "Para perguntas sobre a metodologia do novomodelo, use o MCP novomodelo: "
-    "`docs_search` (em inglês) e `docs_read`, citando `pagina#secao`."
+    "`docs_search` (em inglês) e `docs_read`, citando `page#section`."
 )
 
 

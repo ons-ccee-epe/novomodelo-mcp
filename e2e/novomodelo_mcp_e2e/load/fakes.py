@@ -122,7 +122,7 @@ def make_outcome(
         selection=Selection(
             specs=[
                 CallSpec("docs_list#todas", "docs_list", {}),
-                CallSpec("docs_search#sddp", "docs_search", {"consulta": "SDDP"}),
+                CallSpec("docs_search#sddp", "docs_search", {"query": "SDDP"}),
             ],
             excluded=excluded or [],
         ),

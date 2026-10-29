@@ -18,7 +18,7 @@ uv tool install --compile-bytecode novomodelo-mcp
 
 O pacote traz o `novomodelo-bridge`, a biblioteca `novomodelo-python` e as docs da mesma
 versão. O executável `novomodelo` é instalado à parte, na mesma versão: peça ao agente
-"instale o executável do novomodelo" (tool `instalar_novomodelo`, que usa o instalador
+"instale o executável do novomodelo" (tool `install_novomodelo`, que usa o instalador
 oficial da release e confere o SHA-256), ou use o instalador da
 [release](https://github.com/ons-ccee-epe/novomodelo/releases) da versão do MCP.
 
@@ -99,8 +99,8 @@ da organização.
 | Tipo | Tools |
 |---|---|
 | Só leitura | `server_info`, `solver_version`, `schema_list`, `schema_get`, `docs_list`, `docs_read`, `docs_search`, `deck_list`, `deck_read_json`, `deck_read_parquet`, `deck_describe_parquet`, `deck_sql`, `case_validate`, `case_summary`, `bridge_check_newave`, `bridge_check_decomp`, `results_status`, `results_convergence`, `results_list_entities`, `results_query`, `results_stochastic`, `results_policy`, `run_plan`, `run_status`, `run_logs` |
-| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard`, `incluir_pastas` |
-| Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `instalar_novomodelo` |
+| Escreve arquivos novos | `case_init`, `schema_export`, `bridge_convert_newave`, `bridge_convert_decomp`, `bridge_compare_newave`, `bridge_compare_decomp`, `bridge_dashboard`, `include_folders` |
+| Altera ou interrompe | `deck_edit_json`, `deck_edit_parquet`, `run_apply`, `run_start`, `run_cancel`, `install_novomodelo` |
 
 A lista de liberação das tools de leitura (Claude Code e Kiro) é gravada pelo
 `configurar`, a partir do servidor; para vê-la, rode
@@ -113,7 +113,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 **Pré-rodada**
 - `bridge_check_newave(src)`: pré-valida entradas NEWAVE (`novomodelo-bridge check newave`)
 - `bridge_convert_newave(src, dst, validate, force, dry_run)`: converte NEWAVE → novomodelo
-- `bridge_check_decomp(src)` / `bridge_convert_decomp(src, dst, validate, force, dry_run)`: o mesmo para DECOMP
+- `bridge_check_decomp(src)` / `bridge_convert_decomp(src, dst, validate, force, dry_run, import_fcf)`: o mesmo para DECOMP; `import_fcf=False` converte sem importar os cortes da FCF (`--no-fcf`)
 - `case_validate(case_dir, output_dir)`: valida o deck (binding `novomodelo.io.validate`, estruturado; fallback para o texto do CLI); com `output_dir`, confere também a saída de uma rodada anterior (retomada)
 - `case_summary(case_dir)`: o caso como o novomodelo o lê (`novomodelo.io.load_case`): contagens por tipo (`counts`) e `{id, name}` de cada item (`items`), com teto
 
@@ -129,7 +129,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `results_convergence(output_dir, tail)`: trajetória de convergência (`convergence.parquet`)
 - `results_list_entities(output_dir)`: entidades de simulação disponíveis
 - `results_query(output_dir, entity, columns, group_by, agg, scenario, limit)`: consulta agregada da simulação
-- `results_stochastic(output_dir, hydro_id, stage, aberturas_do_estagio)`: coeficientes do PAR(p) e árvore de aberturas do run (exige `exports.stochastic: true` no config.json do run)
+- `results_stochastic(output_dir, hydro_id, stage, openings_stage)`: coeficientes do PAR(p) e árvore de aberturas do run (exige `exports.stochastic: true` no config.json do run)
 - `results_policy(output_dir, stage, policy_subdir)`: resumo da política treinada (cortes e cortes ativos por estágio; com `stage`, os cortes daquele estágio sem os coeficientes)
 
 **Decks**
@@ -140,15 +140,15 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 - `deck_sql(query, max_rows)`: SQL **read-only** (DuckDB: `SELECT`, `WITH`, `DESCRIBE`, `SUMMARIZE`) sobre parquet/csv/json do deck ou dos resultados; caminhos confinados ao workspace
 
 **Referência**
-- `schema_list()` / `schema_get(tipo)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{tipo}`
+- `schema_list()` / `schema_get(type)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{type}`
 - `docs_list(section)`: páginas das docs embutidas, com título e descrição
-- `docs_read(page, secao)`: uma página das docs embutidas; com `secao` (âncora devolvida pelo `docs_search`, ou título), só aquela seção; sem `page`, a lista de páginas (a do `docs_list`)
-- `docs_search(consulta, k)`: busca por palavra nas docs embutidas (de preferência em inglês; os termos em português do glossário das docs são traduzidos); devolve página, seção e trecho
+- `docs_read(page, section)`: uma página das docs embutidas; com `section` (âncora devolvida pelo `docs_search`, ou título), só aquela seção; sem `page`, a lista de páginas (a do `docs_list`)
+- `docs_search(query, k)`: busca por palavra nas docs embutidas (de preferência em inglês; os termos em português do glossário das docs são traduzidos); devolve página, seção e trecho
 
 **Solver**
 - `solver_version()`: versão, backend e build do `novomodelo` (texto do CLI parseado + `raw`)
 - `schema_export(output_dir)`: exporta os JSON Schemas (`novomodelo schema export`)
-- `instalar_novomodelo(confirmar, pasta)`: instala o executável oficial da versão esperada pelo instalador da release, com o SHA-256 conferido; sem `confirmar=True`, só mostra o plano (URL, hash, destino, comando manual). Usa a rede. No Windows, o instalador oficial `.ps1` não confere o hash do pacote que ele baixa
+- `install_novomodelo(confirm, install_dir)`: instala o executável oficial da versão esperada pelo instalador da release, com o SHA-256 conferido; sem `confirm=True`, só mostra o plano (URL, hash, destino, comando manual). Usa a rede. No Windows, o instalador oficial `.ps1` não confere o hash do pacote que ele baixa
 
 **Caso e execução**
 - `case_init(directory, template, list, force)`: cria um caso a partir de template embutido (`novomodelo init`; ex.: `1dtoy`)
@@ -170,7 +170,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 
 **Diagnóstico**
 - `server_info()`: a versão do MCP (`mcp_version`), binários, versões das peças (`versions`), se há versão nova (`new_version`), workspace, pastas incluídas (`included_folders`), docs, state dir e settings
-- `incluir_pastas(pastas)`: acrescenta pastas de estudo às raízes do guard, depois de o usuário aceitar; vale na hora e fica gravado em `pastas.json` no state dir
+- `include_folders(folders)`: acrescenta pastas de estudo às raízes do guard, depois de o usuário aceitar; vale na hora e fica gravado em `pastas.json` no state dir
 
 ### Prompt `metodologia`
 
@@ -196,9 +196,9 @@ sinaliza o estado.
 
 A recusa (`exit_code` 13) diz ao agente para não ler o caminho por outras ferramentas,
 traz a pasta do caminho em `suggested_folder` e pede que o agente pergunte ao usuário se
-pode incluí-la. Com o sim, o agente chama `incluir_pastas` com todas as pastas de uma
+pode incluí-la. Com o sim, o agente chama `include_folders` com todas as pastas de uma
 vez: a inclusão vale na hora, sem reabrir o cliente, e fica em `pastas.json` no state
-dir, somada às raízes de `NOVOMODELO_MCP_WORKSPACE`. `incluir_pastas` nunca entra na
+dir, somada às raízes de `NOVOMODELO_MCP_WORKSPACE`. `include_folders` nunca entra na
 lista de liberação automática, então o cliente pede aprovação a cada chamada; ela recusa
 o que não é pasta, a pasta pessoal inteira (ou acima dela), a raiz do disco, pastas de
 configuração de programas (as que começam com `.`, `AppData`, `Library`) e o state dir.
@@ -219,7 +219,7 @@ velha que o MCP sobe até a versão dele. Para a mais nova há dois caminhos: at
 MCP para a versão dela, ou voltar a peça para a versão do MCP.
 
 A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo, do bridge e
-do MCP (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo `instalar_novomodelo`,
+do MCP (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo `install_novomodelo`,
 e apenas nestes domínios: `github.com/ons-ccee-epe/*`, `api.github.com/repos/ons-ccee-epe/*`,
 `pypi.org/pypi/novomodelo-bridge/*`, `pypi.org/pypi/novomodelo-mcp/*` e, como destino de
 download, `release-assets.githubusercontent.com`. Junto com a versão nova vêm as mudanças

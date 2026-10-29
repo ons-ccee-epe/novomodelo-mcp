@@ -55,9 +55,9 @@ FIXTURES_TOKEN = "{FIXTURES}"
 FIXTURES_POSIX_TOKEN = "{FIXTURES_POSIX}"
 CALL_TOKEN = "{CALL}"
 
-_BARRED = re.compile(r"^(run_(start|cancel|status|logs)$|instalar_|server_info$|incluir_pastas$)")
-_NETWORK = re.compile(r"^(server_info$|instalar_)")
-_WIDENS_WORKSPACE = re.compile(r"^incluir_pastas$")
+_BARRED = re.compile(r"^(run_(start|cancel|status|logs)$|install_|server_info$|include_folders$)")
+_NETWORK = re.compile(r"^(server_info$|install_)")
+_WIDENS_WORKSPACE = re.compile(r"^include_folders$")
 _SOLVER_RUN = re.compile(r"^run_start$")
 _WRITES = re.compile(
     r"_convert_|^bridge_compare_|^bridge_dashboard$|^deck_edit_|^case_init$|^schema_export$"
@@ -72,8 +72,8 @@ BARRED_TOOLS: tuple[str, ...] = (
     "run_logs",
     "run_cancel",
     "server_info",
-    "instalar_novomodelo",
-    "incluir_pastas",
+    "install_novomodelo",
+    "include_folders",
 )
 
 _NEWAVE_AGO = "newave/novomodelo-mini"
@@ -275,12 +275,12 @@ def _sql_calls() -> list[CallTemplate]:
 def _reference_calls() -> list[CallTemplate]:
     return [
         CallTemplate("docs_list", "todas", {}),
-        CallTemplate("docs_search", "sddp", {"consulta": "SDDP"}),
-        CallTemplate("docs_search", "convergence", {"consulta": "convergence"}),
+        CallTemplate("docs_search", "sddp", {"query": "SDDP"}),
+        CallTemplate("docs_search", "convergence", {"query": "convergence"}),
         CallTemplate("docs_read", "cli-reference", {"page": "reference/cli-reference"}),
         CallTemplate("schema_list", "todos", {}),
-        CallTemplate("schema_get", "config", {"tipo": "config"}),
-        CallTemplate("schema_get", "stages", {"tipo": "stages"}),
+        CallTemplate("schema_get", "config", {"type": "config"}),
+        CallTemplate("schema_get", "stages", {"type": "stages"}),
     ]
 
 

@@ -80,7 +80,7 @@ TOOL_GROUPS: dict[str, str] = {
     # Meta tools
     "server_info": "meta",
     "solver_version": "meta",
-    "instalar_novomodelo": "meta",
+    "install_novomodelo": "meta",
 }
 
 CONJUNTO_TODOS = "todos"

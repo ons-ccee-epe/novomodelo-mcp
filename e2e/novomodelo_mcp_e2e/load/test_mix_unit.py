@@ -25,7 +25,7 @@ from novomodelo_mcp_e2e.load.mix import (
 
 DETERM = "newave-determ/novomodelo-set-24-reduzido-calibrado-determ-2000"
 
-BARRED = ["run_start", "run_status", "run_logs", "run_cancel", "instalar_novomodelo", "server_info"]
+BARRED = ["run_start", "run_status", "run_logs", "run_cancel", "install_novomodelo", "server_info"]
 WRITES = [
     "bridge_convert_newave",
     "bridge_convert_decomp",

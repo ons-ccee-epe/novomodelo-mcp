@@ -74,7 +74,7 @@ def register_results(mcp, settings: Settings) -> None:
         output_dir: str,
         hydro_id: int | None = None,
         stage: int | None = None,
-        aberturas_do_estagio: int | None = None,
+        openings_stage: int | None = None,
     ) -> dict:
         """Modelo estocástico ajustado no run: coeficientes do PAR(p) e árvore de aberturas.
 
@@ -82,7 +82,7 @@ def register_results(mcp, settings: Settings) -> None:
         `stochastic/` da saída, que o run só grava com `exports.stochastic: true`
         no config.json. `par.rows`: {hydro_id, stage_id, lag, coefficient}
         (lag a partir de 1), filtráveis por `hydro_id` e `stage`.
-        `aberturas_do_estagio`: devolve também a árvore desse estágio (linha k =
+        `openings_stage`: devolve também a árvore desse estágio (linha k =
         vetor de ruído da abertura k). Com teto de linhas.
         """
         if err := ensure_in_workspace(output_dir, settings=settings) or R.folder_above_runs(
@@ -95,7 +95,7 @@ def register_results(mcp, settings: Settings) -> None:
                     output_dir,
                     hydro_id=hydro_id,
                     stage=stage,
-                    openings_stage=aberturas_do_estagio,
+                    openings_stage=openings_stage,
                     max_rows=budget.row_limit(settings),
                 ),
                 settings,

@@ -79,7 +79,7 @@ em `mix.barred_reason` (mostrado na tela e no 422 do launcher):
   dispara por conta própria);
 - `run_status`, `run_logs` e `run_cancel` dependem de um run iniciado por `run_start`:
   sem ele, só mediriam o erro de job inexistente;
-- `server_info` e `instalar_novomodelo` usam a rede.
+- `server_info` e `install_novomodelo` usam a rede.
 
 Uma tool só entra no mix se está no catálogo e o servidor a anuncia sem
 `openWorldHint` e, se não for das que gravam, com `readOnlyHint`: uma tool tida como

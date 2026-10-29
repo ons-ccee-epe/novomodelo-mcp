@@ -16,7 +16,7 @@
 #
 # O container roda com as permissões do `configurar`; as tools esperadas de
 # cada caso que pedem aprovação (as que gravam e as destrutivas) entram em
-# `Execucao.liberar`, e o caso confere o envelope delas. instalar_novomodelo
+# `Execucao.liberar`, e o caso confere o envelope delas. install_novomodelo
 # nunca é liberada (baixa e executa o instalador): o caso dela confere só a
 # chamada.
 #
@@ -516,7 +516,7 @@ cases:
   tags: [case, init]
 
 # ============================================================================
-# META - server_info, solver_version, instalar_novomodelo, incluir_pastas
+# META - server_info, solver_version, install_novomodelo, include_folders
 # ============================================================================
 
 - id: server-info-get
@@ -540,14 +540,14 @@ cases:
   query: Mostre o plano de instalação do executável do novomodelo, sem instalar
   expected:
     uses_mcp: true
-    tool: instalar_novomodelo
+    tool: install_novomodelo
   tags: [meta, install]
 
 - id: incluir-pastas-pedido
   query: Inclua a pasta /tmp na pasta de trabalho do MCP do novomodelo; eu autorizo
   expected:
     uses_mcp: true
-    tool: incluir_pastas
+    tool: include_folders
     status: ok
     content:
       included: "__nonempty__"

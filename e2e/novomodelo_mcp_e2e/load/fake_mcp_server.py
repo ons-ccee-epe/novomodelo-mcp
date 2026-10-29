@@ -35,9 +35,9 @@ def docs_list() -> dict:
 
 
 @server.tool(annotations=READ_ONLY)
-def docs_search(consulta: str, k: int = 5) -> dict:
+def docs_search(query: str, k: int = 5) -> dict:
     _count_call()
-    return {"status": "ok", "query_used": consulta, "results": []}
+    return {"status": "ok", "query_used": query, "results": []}
 
 
 @server.tool(annotations=READ_ONLY)

@@ -158,7 +158,7 @@ O framework abrange as tools MCP do novomodelo:
 | **Results** | `results_status`, `results_convergence`, `results_query`, `results_list_entities`, `results_policy`, `results_stochastic` |
 | **Schema** | `schema_list`, `schema_get`, `schema_export` |
 | **Run** | `run_plan`, `run_apply`, `run_start`, `run_status`, `run_logs`, `run_cancel` |
-| **Meta** | `server_info`, `solver_version`, `instalar_novomodelo` |
+| **Meta** | `server_info`, `solver_version`, `install_novomodelo` |
 
 ## Saída e Exit Codes
 
