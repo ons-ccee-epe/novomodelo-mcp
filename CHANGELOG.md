@@ -57,16 +57,16 @@ só do MCP vira `X.Y.Z.postN`.
   `page#section`. O `section` do `docs_list`, que é um prefixo do caminho da página,
   passa a `prefix`: no `docs_read` e no `docs_search`, `section` é a âncora de uma seção.
 
-  | Tool | Antes | Agora |
-  |---|---|---|
-  | `incluir_pastas` → `include_folders` | `pastas` | `folders` |
-  | `instalar_novomodelo` → `install_novomodelo` | `confirmar`, `pasta` | `confirm`, `install_dir` |
-  | `bridge_convert_decomp` | `importar_fcf` | `import_fcf` |
-  | `results_stochastic` | `aberturas_do_estagio` | `openings_stage` |
-  | `schema_get` | `tipo` | `type` |
-  | `docs_search` | `consulta` | `query` |
-  | `docs_read` | `secao` | `section` |
-  | `docs_list` | `section` (prefixo do caminho da página) | `prefix` |
+  | Tool                                         | Antes                                    | Agora                    |
+  | -------------------------------------------- | ---------------------------------------- | ------------------------ |
+  | `incluir_pastas` → `include_folders`         | `pastas`                                 | `folders`                |
+  | `instalar_novomodelo` → `install_novomodelo` | `confirmar`, `pasta`                     | `confirm`, `install_dir` |
+  | `bridge_convert_decomp`                      | `importar_fcf`                           | `import_fcf`             |
+  | `results_stochastic`                         | `aberturas_do_estagio`                   | `openings_stage`         |
+  | `schema_get`                                 | `tipo`                                   | `type`                   |
+  | `docs_search`                                | `consulta`                               | `query`                  |
+  | `docs_read`                                  | `secao`                                  | `section`                |
+  | `docs_list`                                  | `section` (prefixo do caminho da página) | `prefix`                 |
 
 - As versões mínimas das dependências passam a ser as que a CI testa: mcp 1.30.0,
   polars 2.1.0, jsonschema 4.26.0, duckdb 2.0.0 e truststore 0.10.5. As mínimas
