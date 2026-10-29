@@ -15,7 +15,8 @@
     "estado",
     "motivo",
     "tools",
-    "duracao_s"
+    "duracao_s",
+    "metricas"
   ],
   "properties": {
     "schema_versao": {
@@ -91,6 +92,134 @@
     "duracao_s": {
       "type": "number",
       "minimum": 0
+    },
+    "metricas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acerto_tool",
+        "contornos",
+        "aprovacoes",
+        "rigidez",
+        "erros_envelope",
+        "t_primeira_tool",
+        "tokens_entrada",
+        "tokens_saida",
+        "resposta_correta",
+        "interrupcoes",
+        "t_primeira_interrupcao",
+        "maior_trecho_sem_interrupcao",
+        "indice_autonomia",
+        "comandos_terminal",
+        "nota_juiz"
+      ],
+      "properties": {
+        "acerto_tool": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "contornos": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "aprovacoes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "rigidez": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "erros_envelope": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "t_primeira_tool": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "tokens_entrada": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "tokens_saida": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "resposta_correta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "interrupcoes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "t_primeira_interrupcao": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "maior_trecho_sem_interrupcao": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "indice_autonomia": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "comandos_terminal": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "nota_juiz": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2
+        }
+      }
     }
   }
 }

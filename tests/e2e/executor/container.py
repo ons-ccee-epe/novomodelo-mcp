@@ -13,7 +13,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -21,7 +21,7 @@ from tests.e2e.config import MOTIVO_MOTOR, Config, motor_suportado
 from tests.e2e.executor.eventos import Evento, Leitura, ler_claude, ler_kiro
 from tests.e2e.executor.mascara import mascarar
 from tests.e2e.resultado.armazenamento import caminho_execucao, gravar_registro
-from tests.e2e.resultado.modelos import ChamadaTool, Estado, Registro
+from tests.e2e.resultado.modelos import Avaliacao, ChamadaTool, Estado, Metricas, Registro
 
 HOME_AGENTE = "/home/agente"
 PASTA_ESTUDOS = "/estudos"
@@ -332,6 +332,25 @@ def _chamadas_mcp(leitura: Leitura) -> tuple[ChamadaTool, ...]:
     return tuple(chamadas)
 
 
+def _tokens(leitura: Leitura) -> tuple[int | None, int | None]:
+    fim = next((ev for ev in reversed(leitura.eventos) if ev.tipo == "fim"), None)
+    if fim is None:
+        return None, None
+    return fim.dados.get("tokens_entrada"), fim.dados.get("tokens_saida")
+
+
+def _com_tokens(metricas: Metricas, leitura: Leitura, agente: str) -> Metricas:
+    """Completa só os tokens ainda vazios; o Kiro não informa tokens e fica `None`."""
+    if agente != "claude":
+        return metricas
+    entrada, saida = _tokens(leitura)
+    return replace(
+        metricas,
+        tokens_entrada=metricas.tokens_entrada if metricas.tokens_entrada is not None else entrada,
+        tokens_saida=metricas.tokens_saida if metricas.tokens_saida is not None else saida,
+    )
+
+
 def _segredos(cfg: Config) -> tuple[str, ...]:
     try:
         valor = cfg.token_claude.read_text(encoding="utf-8").strip()
@@ -367,17 +386,23 @@ def executar(
     e: Execucao,
     cfg: Config,
     pasta_rodada: Path,
-    avaliar: Callable[[Leitura], tuple[Estado, str]],
+    avaliar: Callable[[Leitura], Avaliacao],
 ) -> Registro:
     """Roda uma execução e grava os logs mascarados e o registro; nunca levanta.
 
     Motor que não é o podman, caso indisponível ou recusado, motor ausente, tempo esgotado,
     limite de uso, código diferente de zero sem evento de fim e uma exceção de `avaliar`
-    viram `erro_infra`; o motivo nunca leva caminho absoluto do host.
+    viram `erro_infra`; o motivo nunca leva caminho absoluto do host. Os tokens do stream
+    do Claude entram nas métricas, também em `erro_infra`; o resto vem de `avaliar`.
     """
     t0 = time.monotonic()
 
-    def registro(estado: Estado, motivo: str, tools: tuple[ChamadaTool, ...] = ()) -> Registro:
+    def registro(
+        estado: Estado,
+        motivo: str,
+        tools: tuple[ChamadaTool, ...] = (),
+        metricas: Metricas | None = None,
+    ) -> Registro:
         return Registro(
             rodada=pasta_rodada.name,
             conjunto=e.conjunto,
@@ -389,6 +414,7 @@ def executar(
             motivo=motivo,
             tools=tools,
             duracao_s=round(time.monotonic() - t0, 3),
+            metricas=metricas or Metricas(),
         )
 
     try:
@@ -405,6 +431,7 @@ def executar(
     leitura = Leitura([])
     estado: Estado = "erro_infra"
     motivo = ""
+    metricas = Metricas()
     trabalho: Path | None = None
     nome = nome_container(e, pasta_rodada.name)
     avisos: list[str] = []
@@ -432,7 +459,12 @@ def executar(
             if motivo_infra is not None:
                 motivo = motivo_infra
             else:
-                estado, motivo = avaliar(leitura)
+                avaliacao = avaliar(leitura)
+                estado, motivo, metricas = (
+                    avaliacao.estado,
+                    avaliacao.motivo,
+                    avaliacao.metricas,
+                )
     except ComandoRecusado as erro:
         motivo = str(erro)
     except MotorAusente as erro:
@@ -455,7 +487,12 @@ def executar(
         c for c in (e.caso_origem, caso_real, trabalho, pasta_rodada, cfg.casos) if c is not None
     )
     motivo = _sem_caminhos(motivo, conhecidos)
-    final = registro(estado, mascarar(motivo, segredos), _chamadas_mcp(leitura))
+    final = registro(
+        estado,
+        mascarar(motivo, segredos),
+        _chamadas_mcp(leitura),
+        _com_tokens(metricas, leitura, e.agente),
+    )
     stderr = "\n".join([saida.stderr, *avisos]) if avisos else saida.stderr
     try:
         for arquivo, texto in (

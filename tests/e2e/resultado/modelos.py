@@ -31,6 +31,36 @@ class ChamadaTool:
 
 
 @dataclass(frozen=True)
+class Metricas:
+    """Métricas da pontuação de uma execução; `None` é métrica que o conjunto não calcula."""
+
+    acerto_tool: bool | None = None
+    contornos: int | None = None
+    aprovacoes: int | None = None
+    rigidez: int | None = None
+    erros_envelope: int | None = None
+    t_primeira_tool: float | None = None
+    tokens_entrada: int | None = None
+    tokens_saida: int | None = None
+    resposta_correta: bool | None = None
+    interrupcoes: int | None = None
+    t_primeira_interrupcao: float | None = None
+    maior_trecho_sem_interrupcao: float | None = None
+    indice_autonomia: float | None = None
+    comandos_terminal: int | None = None
+    nota_juiz: int | None = None
+
+
+@dataclass(frozen=True)
+class Avaliacao:
+    """O que `avaliar` devolve ao executor: o veredito e as métricas que ele calcula."""
+
+    estado: Estado
+    motivo: str
+    metricas: Metricas = Metricas()
+
+
+@dataclass(frozen=True)
 class Registro:
     rodada: str
     conjunto: Conjunto
@@ -42,6 +72,7 @@ class Registro:
     motivo: str
     tools: tuple[ChamadaTool, ...]
     duracao_s: float
+    metricas: Metricas = Metricas()
     schema_versao: int = SCHEMA_VERSAO
 
     def para_dict(self) -> dict[str, Any]:
@@ -49,7 +80,11 @@ class Registro:
 
     @classmethod
     def de_dict(cls, dados: dict[str, Any]) -> Registro:
-        campos = {**dados, "tools": tuple(ChamadaTool(**t) for t in dados["tools"])}
+        campos = {
+            **dados,
+            "tools": tuple(ChamadaTool(**t) for t in dados["tools"]),
+            "metricas": Metricas(**dados["metricas"]),
+        }
         return cls(**campos)
 
 

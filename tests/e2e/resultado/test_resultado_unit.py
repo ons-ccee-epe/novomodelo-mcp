@@ -24,6 +24,7 @@ from tests.e2e.resultado.modelos import (
     SCHEMA_VERSAO,
     ChamadaTool,
     Manifesto,
+    Metricas,
     Registro,
     VersaoDesconhecida,
 )
@@ -198,3 +199,63 @@ def test_padrao_de_nome_igual_no_schema_e_no_codigo() -> None:
     )
     for campo in ("caso", "agente", "config"):
         assert schema["properties"][campo]["pattern"] == PADRAO_NOME
+
+
+_METRICAS = Metricas(
+    acerto_tool=True,
+    contornos=1,
+    aprovacoes=2,
+    rigidez=0,
+    erros_envelope=1,
+    t_primeira_tool=3.5,
+    tokens_entrada=1200,
+    tokens_saida=300,
+    resposta_correta=False,
+    interrupcoes=2,
+    t_primeira_interrupcao=10.0,
+    maior_trecho_sem_interrupcao=42.5,
+    indice_autonomia=0.75,
+    comandos_terminal=4,
+    nota_juiz=2,
+)
+
+
+def test_registro_com_metricas_ida_e_volta(tmp_path: Path) -> None:
+    r = _registro(metricas=_METRICAS)
+    gravar_registro(tmp_path, r)
+    assert ler_registros(tmp_path) == [r]
+    gravado = json.loads((caminho_execucao(tmp_path, r) / "registro.json").read_text("utf-8"))
+    assert gravado["metricas"]["nota_juiz"] == 2
+
+
+def test_registro_sem_metricas_e_valido_com_tudo_nulo(tmp_path: Path) -> None:
+    r = _registro()
+    assert r.metricas == Metricas()
+    gravar_registro(tmp_path, r)
+    gravado = json.loads((caminho_execucao(tmp_path, r) / "registro.json").read_text("utf-8"))
+    assert set(gravado["metricas"].values()) == {None}
+    assert ler_registros(tmp_path) == [r]
+
+
+@pytest.mark.parametrize(
+    "mudanca",
+    [
+        {"nota_juiz": 3},
+        {"nota_juiz": -1},
+        {"indice_autonomia": 1.5},
+        {"tokens_entrada": -1},
+        {"campo_desconhecido": 1},
+    ],
+)
+def test_schema_recusa_metricas_invalidas(tmp_path: Path, mudanca: dict) -> None:
+    dados = _registro(metricas=_METRICAS).para_dict()
+    dados["metricas"].update(mudanca)
+    with pytest.raises(jsonschema.ValidationError):
+        armazenamento._validar(dados, "registro")
+
+
+def test_schema_exige_metricas_no_json_gravado() -> None:
+    dados = _registro().para_dict()
+    del dados["metricas"]
+    with pytest.raises(jsonschema.ValidationError):
+        armazenamento._validar(dados, "registro")

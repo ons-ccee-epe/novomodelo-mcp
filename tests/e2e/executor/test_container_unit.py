@@ -33,6 +33,7 @@ from tests.e2e.executor.container import (
 )
 from tests.e2e.executor.eventos import Leitura
 from tests.e2e.resultado.armazenamento import ler_registros
+from tests.e2e.resultado.modelos import Avaliacao, Metricas
 
 FIX = Path(__file__).parent / "fixtures"
 TOKEN_FALSO = "sk-ant-teste-000000000000"
@@ -304,7 +305,7 @@ def remocoes(monkeypatch):
 
 
 def _avaliar_passou(leitura: Leitura):
-    return "passou", "ok"
+    return Avaliacao("passou", "ok")
 
 
 def _stream(nome: str) -> list[str]:
@@ -482,7 +483,7 @@ def test_estado_vem_de_avaliar_com_a_leitura_do_agente(tmp_path, monkeypatch):
 
     def avaliar(leitura):
         vistos.append(leitura)
-        return "falhou", "tool esperada não chamada"
+        return Avaliacao("falhou", "tool esperada não chamada")
 
     e = _exec(agente="kiro")
     r = executar(e, _cfg(tmp_path), _pasta(tmp_path), avaliar)
@@ -722,3 +723,61 @@ def test_sem_caminhos_trata_espaco_e_dois_pontos(texto, vazado):
 def test_sem_caminhos_preserva_url_e_texto_comum():
     texto = "erro 429 em https://exemplo.invalid/api: tente de novo"
     assert container._sem_caminhos(texto) == texto
+
+
+def _gravado(tmp_path: Path, e: Execucao) -> dict:
+    return json.loads((_destino(tmp_path, e) / "registro.json").read_text(encoding="utf-8"))
+
+
+def test_executar_grava_os_tokens_do_stream_do_claude(tmp_path, monkeypatch):
+    _falso(monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False))
+    r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
+    assert (r.metricas.tokens_entrada, r.metricas.tokens_saida) == (60, r.metricas.tokens_saida)
+    assert r.metricas.tokens_saida and r.metricas.tokens_saida > 0
+    gravado = _gravado(tmp_path, _exec())["metricas"]
+    assert gravado["tokens_entrada"] == 60 and gravado["nota_juiz"] is None
+
+
+def test_kiro_sem_tokens_no_stream_fica_nulo(tmp_path, monkeypatch):
+    _falso(monkeypatch, Saida(_stream("kiro-stream-sintetico.jsonl"), "", 0, False))
+    r = executar(_exec(agente="kiro"), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
+    assert r.metricas == Metricas()
+
+
+def test_metricas_de_avaliar_chegam_ao_registro_sem_perder_os_tokens(tmp_path, monkeypatch):
+    _falso(monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False))
+
+    def avaliar(leitura):
+        return Avaliacao("passou", "ok", Metricas(acerto_tool=True, nota_juiz=2, contornos=1))
+
+    r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), avaliar)
+    gravado = _gravado(tmp_path, _exec())["metricas"]
+    assert (gravado["acerto_tool"], gravado["nota_juiz"], gravado["contornos"]) == (True, 2, 1)
+    assert gravado["tokens_entrada"] == 60 == r.metricas.tokens_entrada
+
+
+def test_avaliar_que_informa_tokens_nao_e_sobrescrito(tmp_path, monkeypatch):
+    _falso(monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False))
+
+    def avaliar(leitura):
+        return Avaliacao("passou", "ok", Metricas(tokens_entrada=7))
+
+    assert executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), avaliar).metricas.tokens_entrada == 7
+
+
+def test_erro_infra_mantem_os_tokens_e_deixa_o_resto_nulo(tmp_path, monkeypatch):
+    _falso(monkeypatch, Saida(_stream("claude-stream-sintetico.jsonl"), "", 0, False))
+
+    def avaliar(leitura):
+        raise RuntimeError("juiz sem resposta")
+
+    r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), avaliar)
+    assert r.estado == "erro_infra"
+    assert r.metricas == Metricas(tokens_entrada=60, tokens_saida=r.metricas.tokens_saida)
+    assert r.metricas.tokens_saida
+
+
+def test_erro_infra_sem_leitura_tem_metricas_vazias(tmp_path, monkeypatch):
+    _falso(monkeypatch, FileNotFoundError("podman"))
+    r = executar(_exec(), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
+    assert r.estado == "erro_infra" and r.metricas == Metricas()
