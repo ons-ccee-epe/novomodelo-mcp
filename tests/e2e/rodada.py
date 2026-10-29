@@ -581,6 +581,7 @@ class _Controle:
     concluidas_na_passada: int = 0
     em_voo: dict[str, Execucao] = field(default_factory=dict)
     pasta: Path | None = None
+    erro: BaseException | None = None
     trava: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -623,8 +624,6 @@ def rodar(
     if not configs:
         raise RodadaInterrompida(CODIGO_RECUSA, "nenhuma configuração do MCP")
     ctl = _Controle(t0=dep.relogio())
-    pasta: Path | None = None
-    log: _Log | None = None
     try:
         pasta, log, codigo, motivo = _preparar_e_rodar(
             rodada,
@@ -644,32 +643,49 @@ def rodar(
             ctl,
         )
     except KeyboardInterrupt:
-        codigo, motivo = (
-            CODIGO_INTERROMPIDA,
-            "rodada interrompida (Ctrl-C); retome com o mesmo --rodada",
-        )
-        pasta = ctl.pasta
-        log = _Log(pasta) if pasta is not None else None
-        if log is not None:
+        motivo = "rodada interrompida (Ctrl-C); retome com o mesmo --rodada"
+        if ctl.pasta is None:
+            raise RodadaInterrompida(CODIGO_INTERROMPIDA, motivo) from None
+        with _sem_ctrl_c():
+            log = _Log(ctl.pasta)
             log("interrompida", em_voo=[])
-    if pasta is None or log is None:
-        raise RodadaInterrompida(codigo, motivo)
+            _fechar(ctl.pasta, log, dep, CODIGO_INTERROMPIDA, motivo)
+        raise RodadaInterrompida(CODIGO_INTERROMPIDA, motivo, ctl.pasta) from None
+    except BaseException:
+        if ctl.pasta is not None:
+            with _sem_ctrl_c():
+                _bloquear_se_achar(ctl.pasta, _Log(ctl.pasta), dep)
+        raise
     with _sem_ctrl_c():
-        varredura = dep.varrer(pasta)
-        if varredura.erro or varredura.arquivos:
-            linhas = [varredura.erro] if varredura.erro else []
-            linhas += [f"segredo encontrado em: {a}" for a in varredura.arquivos]
-            (pasta / ARQUIVO_BLOQUEIO).write_text("\n".join(linhas) + "\n", encoding="utf-8")
-            log("segredo", arquivos=list(varredura.arquivos), erro=varredura.erro)
-            raise RodadaInterrompida(
-                CODIGO_SEGREDO,
-                f"varredura de segredos bloqueou a rodada: {ARQUIVO_BLOQUEIO}",
-                pasta,
-            )
-        log("fim", codigo=codigo, motivo=motivo)
+        _fechar(pasta, log, dep, codigo, motivo)
     if codigo:
         raise RodadaInterrompida(codigo, motivo, pasta)
     return pasta
+
+
+def _bloquear_se_achar(pasta: Path, log: _Log, dep: Dependencias) -> bool:
+    """Varre a pasta; achado ou varredura que não rodou grava `ARQUIVO_BLOQUEIO`."""
+    varredura = dep.varrer(pasta)
+    if not (varredura.erro or varredura.arquivos):
+        return False
+    linhas = [varredura.erro] if varredura.erro else []
+    linhas += [f"segredo encontrado em: {a}" for a in varredura.arquivos]
+    (pasta / ARQUIVO_BLOQUEIO).write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    log("segredo", arquivos=list(varredura.arquivos), erro=varredura.erro)
+    return True
+
+
+def _fechar(pasta: Path, log: _Log, dep: Dependencias, codigo: int, motivo: str) -> None:
+    """Varre e registra o fim.
+
+    Raises:
+        RodadaInterrompida: `CODIGO_SEGREDO`, quando a varredura bloqueia.
+    """
+    if _bloquear_se_achar(pasta, log, dep):
+        raise RodadaInterrompida(
+            CODIGO_SEGREDO, f"varredura de segredos bloqueou a rodada: {ARQUIVO_BLOQUEIO}", pasta
+        )
+    log("fim", codigo=codigo, motivo=motivo)
 
 
 def _preparar_e_rodar(
@@ -936,6 +952,16 @@ def _rodar_pendentes(
         print(f"limite     {rotulo}: {motivo}", flush=True)
 
     def trabalhador(fila: deque[Planejada]) -> None:
+        try:
+            _trabalhar(fila)
+        # Uma exceção numa thread morreria em silêncio: ela volta para a thread principal,
+        # que varre a pasta e a repropaga.
+        except Exception as erro:
+            with ctl.trava:
+                ctl.erro = ctl.erro or erro
+                ctl.parada = "erro"
+
+    def _trabalhar(fila: deque[Planejada]) -> None:
         while True:
             with ctl.trava:
                 if ctl.parada or not fila:
@@ -970,9 +996,9 @@ def _rodar_pendentes(
         for fila in filas.values()
         for _ in range(max(1, paralelo_por_agente))
     ]
-    for t in threads:
-        t.start()
     try:
+        for t in threads:
+            t.start()
         for t in threads:
             while t.is_alive():
                 t.join(timeout=0.5)
@@ -992,8 +1018,11 @@ def _rodar_pendentes(
             dep.encerrar_em_voo(cfg, prefixos)
             prazo = time.monotonic() + TEMPO_FIM_THREADS
             for t in threads:
-                t.join(timeout=max(0.0, prazo - time.monotonic()))
+                if t.ident is not None:
+                    t.join(timeout=max(0.0, prazo - time.monotonic()))
         return
+    if ctl.erro is not None:
+        raise ctl.erro
     _contar_suspeitas(ctl, log)
 
 

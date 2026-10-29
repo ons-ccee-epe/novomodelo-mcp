@@ -953,3 +953,41 @@ def test_encerrar_em_voo_usa_separador_no_prefixo(tmp_path, monkeypatch):
         "novomodelo-bateria-r1-x-1-abcd1234"
     ]
     assert removidos == ["novomodelo-bateria-r1-x-1-abcd1234"]
+
+
+@pytest.mark.parametrize("onde", ["deterministica", "executar"])
+def test_excecao_inesperada_ainda_varre_bloqueia_e_sobe(tmp_path, onde):
+    f = Falsos()
+    cfg = _cfg(tmp_path)
+    vazado = cfg.resultados / "r1" / "deterministica" / "saida.txt"
+
+    def quebrar(*args):
+        vazado.parent.mkdir(parents=True, exist_ok=True)
+        vazado.write_text(TOKEN_FALSO, encoding="utf-8")
+        raise OSError("disco cheio")
+
+    dep = rodada.Dependencias(**{**f.dep().__dict__, onde: quebrar})
+    with pytest.raises(OSError, match="disco cheio"):
+        rodada.rodar(
+            "r1", [_wheel(tmp_path)], ["usuario"], ["claude"], 1, cfg, filtro="i01*", dep=dep
+        )
+    pasta = cfg.resultados / "r1"
+    assert f.varridas == [pasta]
+    bloqueio = (pasta / rodada.ARQUIVO_BLOQUEIO).read_text(encoding="utf-8")
+    assert "deterministica/saida.txt" in bloqueio and TOKEN_FALSO not in bloqueio
+
+
+def test_excecao_inesperada_sem_achado_sobe_depois_de_varrer(tmp_path):
+    f = Falsos()
+
+    def quebrar(pasta, cfg):
+        raise RuntimeError("inesperado")
+
+    dep = rodada.Dependencias(**{**f.dep().__dict__, "deterministica": quebrar})
+    cfg = _cfg(tmp_path)
+    with pytest.raises(RuntimeError, match="inesperado"):
+        rodada.rodar(
+            "r1", [_wheel(tmp_path)], ["usuario"], ["claude"], 1, cfg, filtro="i01*", dep=dep
+        )
+    assert f.varridas == [cfg.resultados / "r1"]
+    assert not (cfg.resultados / "r1" / rodada.ARQUIVO_BLOQUEIO).exists()
