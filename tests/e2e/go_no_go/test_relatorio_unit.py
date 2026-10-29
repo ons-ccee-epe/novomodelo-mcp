@@ -362,3 +362,26 @@ def test_relatorio_mostra_sha256_origem_e_versoes(tmp_path: Path) -> None:
     assert "padrão do CLI (pedida 0.0)" in secao
     assert "`a01-x`" in secao
     assert "/home" not in texto
+
+
+def test_configuracoes_lista_todas_as_chaves_e_limpa_caminhos_da_origem(tmp_path: Path) -> None:
+    m = manifesto(configs=("com-mcp",))
+    m = Manifesto(
+        **{
+            **m.__dict__,
+            "wheels": {
+                "com-mcp": {
+                    "arquivo": "x.whl",
+                    "sha256": "cd" * 32,
+                    "origem": "wheel local /srv/builds/x.whl",
+                }
+            },
+            "imagens": {"img": {"novomodelo": "1", "ferramenta-nova": "9.9"}},
+        }
+    )
+    texto = gerar(tmp_path, [reg("a", "passou")], m=m)
+    secao = texto.split("\n## Configurações\n")[1].split("\n---")[0]
+    assert "/srv" not in secao
+    assert "wheel local <caminho>" in secao
+    assert "ferramenta-nova" in secao
+    assert "9.9" in secao

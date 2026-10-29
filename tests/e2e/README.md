@@ -62,7 +62,7 @@ Variáveis de ambiente da `Config` (todas opcionais):
 
 | Variável | O que faz | Default |
 |---|---|---|
-| `NOVOMODELO_BATERIA_MOTOR` | Motor de container; só o `podman` é aceito | `podman`, se estiver no `PATH` |
+| `NOVOMODELO_BATERIA_MOTOR` | Motor de container; só o `podman` é aceito | `podman` se estiver no `PATH`, senão `docker`, que o `verificar` recusa |
 | `NOVOMODELO_BATERIA_RESULTADOS` | Pasta das rodadas e do `lancamentos.json` | pasta de dados do usuário, `novomodelo-mcp-bateria/resultados` |
 | `NOVOMODELO_BATERIA_CASOS` | Pasta com um subdiretório por caso grande | não definida: esses casos ficam pulados |
 | `NOVOMODELO_BATERIA_CENARIOS_EXTRA` | Pasta de cenários extras, fora do repositório | não definida |
@@ -72,7 +72,7 @@ Variáveis de ambiente da `Config` (todas opcionais):
 
 Códigos de saída do `rodar`: 0 rodada completa; 1 determinística com falha, imagem não pronta ou execução sem registro; 2 argumentos inválidos ou retomada recusada; 3 segredo na pasta da rodada; 4 limite de uso do agente ou do juiz; 5 orçamento estourado; 130 Ctrl-C.
 
-Códigos de saída do `go-no-go` (outro subcomando, outra tabela): 0 go; 1 no-go; 2 inconclusivo ou recusa (rodada ou configuração inexistente, segredo bloqueado).
+Códigos de saída do `go-no-go` (outro subcomando, outra tabela): 0 go; 1 no-go; 2 inconclusivo; 3 segredo bloqueado na rodada; 64 recusa de uso (rodada, alvo ou configuração inexistente, manifesto ilegível, `--baseline` igual à própria rodada sem `--baseline-config`, lançamento marcado cuja rodada ou configuração não existe mais).
 
 ## Configuração
 

@@ -7,6 +7,8 @@ import json
 import os
 import re
 import sys
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import jsonschema
@@ -40,7 +42,8 @@ from tests.e2e.resultado.modelos import Manifesto, Registro, VersaoDesconhecida
 NOME_RELATORIO = "relatorio-go-no-go.md"
 NOME_JUNIT = "junit.xml"
 CODIGOS_DO_VEREDITO = {"go": 0, "no-go": 1, "inconclusivo": 2}
-CODIGO_RECUSA = 2
+CODIGO_SEGREDO = rodada.CODIGO_SEGREDO
+CODIGO_USO = 64
 ITENS_DO_AGENTE = {"claude": "token_claude", "kiro": "volume_kiro"}
 
 
@@ -196,7 +199,9 @@ def _parser() -> argparse.ArgumentParser:
 def _codigos_do_go_no_go() -> str:
     return (
         "códigos de saída do go-no-go (não são os do rodar): 0 go; 1 no-go; "
-        "2 inconclusivo ou recusa (rodada ou configuração inexistente, segredo bloqueado)"
+        "2 inconclusivo; 3 segredo bloqueado na rodada; 64 recusa de uso (rodada, alvo ou "
+        "configuração inexistente, manifesto ilegível, --baseline igual à própria rodada sem "
+        "--baseline-config, lançamento marcado cuja rodada ou configuração não existe mais)"
     )
 
 
@@ -303,17 +308,22 @@ def _rodar(cfg, args, parser: argparse.ArgumentParser) -> int:
 
 
 class _Recusa(Exception):
-    pass
+    codigo = CODIGO_USO
 
 
-def _pasta_da_rodada(cfg, nome: str) -> Path:
+class _Bloqueada(_Recusa):
+    codigo = CODIGO_SEGREDO
+
+
+def _pasta_da_rodada(cfg, nome: str, alvo: bool = True) -> Path:
     if not re.search(PADRAO_NOME, nome):
         raise _Recusa(f"nome de rodada inválido: {nome!r}")
     pasta = cfg.resultados / nome
     if not (pasta / "manifesto.json").is_file():
         raise _Recusa(f"rodada {nome!r} não existe em {cfg.resultados.name}/")
     if (pasta / rodada.ARQUIVO_BLOQUEIO).exists():
-        raise _Recusa(
+        erro = _Bloqueada if alvo else _Recusa
+        raise erro(
             f"rodada {nome!r} bloqueada por segredo ({rodada.ARQUIVO_BLOQUEIO}); "
             "sem relatório nem veredito"
         )
@@ -338,8 +348,11 @@ def _config_no_manifesto(manifesto: Manifesto, config: str, flag: str) -> None:
 
 
 def _base_de_outra_rodada(cfg, nome: str, config: str) -> tuple[list[Registro], str]:
-    manifesto, registros = _ler(_pasta_da_rodada(cfg, nome))
-    _config_no_manifesto(manifesto, config, "base")
+    try:
+        manifesto, registros = _ler(_pasta_da_rodada(cfg, nome, alvo=False))
+        _config_no_manifesto(manifesto, config, "base")
+    except _Recusa as erro:
+        raise _Recusa(f"base indisponível: {erro}") from erro
     return [r for r in registros if r.config == config], f"{config} · rodada {nome}"
 
 
@@ -354,6 +367,8 @@ def _escolher_base(
         base = [r for r in registros if r.config == args.baseline_config]
         return base, f"{args.baseline_config} · rodada {manifesto.rodada}"
     if args.baseline:
+        if args.baseline == manifesto.rodada:
+            raise _Recusa("--baseline é a própria rodada; informe --baseline-config")
         return _base_de_outra_rodada(cfg, args.baseline, args.alvo)
     try:
         ultimo = ultimo_lancamento(cfg.resultados)
@@ -371,6 +386,18 @@ def _escolher_base(
     return base, f"{rotulo} (lançamento {ultimo['versao']})"
 
 
+def _atomico(destino: Path, escrever: Callable[[Path], object]) -> None:
+    fd, nome = tempfile.mkstemp(dir=destino.parent, prefix=f".{destino.name}.", suffix=".tmp")
+    os.close(fd)
+    temporario = Path(nome)
+    try:
+        escrever(temporario)
+        os.replace(temporario, destino)
+    except BaseException:
+        temporario.unlink(missing_ok=True)
+        raise
+
+
 def _go_no_go(cfg, args) -> int:
     try:
         pasta = _pasta_da_rodada(cfg, args.rodada)
@@ -379,20 +406,17 @@ def _go_no_go(cfg, args) -> int:
         base, rotulo = _escolher_base(cfg, args, manifesto, registros)
     except _Recusa as erro:
         print(f"erro: {erro}", file=sys.stderr)
-        return CODIGO_RECUSA
+        return erro.codigo
     alvo = [r for r in registros if r.config in (args.alvo, rodada.CONFIG_DETERMINISTICA)]
     decisao: Decisao = decidir(alvo, base)
     do_relatorio = alvo + [r for r in (base or []) if r not in alvo]
-    escrever_relatorio(
-        manifesto,
-        do_relatorio,
-        decisao,
-        args.rodada,
-        rotulo,
+    _atomico(
         pasta / NOME_RELATORIO,
-        config_alvo=args.alvo,
+        lambda tmp: escrever_relatorio(
+            manifesto, do_relatorio, decisao, args.rodada, rotulo, tmp, config_alvo=args.alvo
+        ),
     )
-    escrever_junit(alvo, pasta / NOME_JUNIT)
+    _atomico(pasta / NOME_JUNIT, lambda tmp: escrever_junit(alvo, tmp))
     print(f"veredito: {decisao.veredito}")
     print(f"relatório: {NOME_RELATORIO}")
     print(f"junit: {NOME_JUNIT}")
@@ -405,9 +429,12 @@ def _marcar_lancamento(cfg, args) -> int:
         manifesto, _ = _ler(pasta)
         _config_no_manifesto(manifesto, args.config, "--config")
         marcar_lancamento(cfg.resultados, args.rodada, args.versao, args.config)
-    except (_Recusa, LancamentosCorrompido) as erro:
+    except _Recusa as erro:
         print(f"erro: {erro}", file=sys.stderr)
-        return CODIGO_RECUSA
+        return erro.codigo
+    except LancamentosCorrompido as erro:
+        print(f"erro: {erro}", file=sys.stderr)
+        return CODIGO_USO
     print(f"lançamento {args.versao}: {args.config} da rodada {args.rodada}")
     return 0
 

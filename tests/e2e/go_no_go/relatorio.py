@@ -8,6 +8,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from statistics import mean
 
+from tests.e2e.executor.container import _sem_caminhos
 from tests.e2e.go_no_go.criterio import Decisao
 from tests.e2e.go_no_go.estatistica import wilson
 from tests.e2e.resultado.modelos import Manifesto, Registro
@@ -32,8 +33,12 @@ INTRO_AMPLA = (
     "previstas (sem MCP é ~0 por construção). Tempo: o do agente, medido no stream. "
     f"{SEM_DADO} = o agente não informa a métrica."
 )
-CHAVES_DE_IMAGEM = ("novomodelo", "novomodelo-bridge", "claude-code", "kiro-cli")
-ROTULOS_DE_IMAGEM = ("novomodelo", "bridge", "Claude Code", "Kiro")
+ROTULOS_DE_IMAGEM = {
+    "novomodelo": "novomodelo",
+    "novomodelo-bridge": "bridge",
+    "claude-code": "Claude Code",
+    "kiro-cli": "Kiro",
+}
 _PARTE_VERSAO = re.compile(r"[._+-]")
 
 
@@ -234,14 +239,15 @@ def _configuracoes(m: Manifesto) -> list[str]:
                 config,
                 m.versoes.get(f"mcp:{config}", SEM_DADO),
                 f"`{wheel['sha256']}`" if wheel.get("sha256") else SEM_DADO,
-                wheel.get("origem", SEM_DADO),
+                _sem_caminhos(wheel.get("origem", SEM_DADO)),
             ]
         )
+    achadas = {chave for versoes in m.imagens.values() for chave in versoes}
+    chaves = [c for c in ROTULOS_DE_IMAGEM if c in achadas] + sorted(
+        achadas - set(ROTULOS_DE_IMAGEM)
+    )
     imagens = [
-        [
-            f"`{tag}`",
-            *(versoes.get(chave, SEM_DADO) for chave in CHAVES_DE_IMAGEM),
-        ]
+        [f"`{tag}`", *(versoes.get(chave, SEM_DADO) for chave in chaves)]
         for tag, versoes in sorted(m.imagens.items())
     ]
     do_juiz = [
@@ -254,7 +260,7 @@ def _configuracoes(m: Manifesto) -> list[str]:
         "",
         *_tabela(["Configuração", "Versão do MCP", "SHA-256 do wheel", "Origem"], linhas),
         "",
-        *_tabela(["Imagem", *ROTULOS_DE_IMAGEM], imagens),
+        *_tabela(["Imagem", *(ROTULOS_DE_IMAGEM.get(c, c) for c in chaves)], imagens),
         "",
         *do_juiz,
         "",
