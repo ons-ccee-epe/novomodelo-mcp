@@ -29,8 +29,6 @@ _scratch_ignore/
 # Testes E2E - fixtures pesadas e relatórios gerados
 tests/e2e/fixtures/
 tests/e2e/metrics/
-tests/e2e/reports/*.html
-tests/e2e/reports/*.json
 # Resultados de execuções de carga (saída local; os de query ficam versionados)
 tests/e2e/results/load/
 

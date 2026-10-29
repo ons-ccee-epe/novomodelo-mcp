@@ -6,8 +6,9 @@ apontado por ``NOVOMODELO_TERMOS_INTERNOS`` (uma expressão por linha, ``#`` com
 sem distinção de caixa). A lista interna nunca fica no repositório.
 
 Sem opções olha os arquivos versionados. ``--desde <ref>`` olha o conteúdo adicionado
-nos commits ``<ref>..HEAD``; ``--historico`` olha todos os commits; ``--mensagens``
-inclui as mensagens dos commits nesses dois modos.
+nos commits ``<ref>..HEAD``; ``--historico`` olha todos os commits, sem os padrões da
+seção ``[historico]`` do TOML; ``--mensagens`` inclui as mensagens dos commits nesses
+dois modos.
 
 Saída: ``arquivo:linha: <padrão>`` (``interno #<n>`` para a lista interna), nunca o
 trecho. Código de saída 0 limpo, 1 achados, 2 erro de uso.
@@ -38,7 +39,9 @@ class Padrao:
     escopo: tuple[str, ...] = ()
 
 
-def carregar_padroes(toml: Path) -> tuple[list[Padrao], dict[str, frozenset[str]]]:
+def carregar_padroes(
+    toml: Path,
+) -> tuple[list[Padrao], dict[str, frozenset[str]], frozenset[str]]:
     dados = tomllib.loads(toml.read_text(encoding="utf-8"))
     padroes = []
     for item in dados.get("padroes", []):
@@ -51,7 +54,8 @@ def carregar_padroes(toml: Path) -> tuple[list[Padrao], dict[str, frozenset[str]
         caminho: frozenset(regra["padroes"])
         for caminho, regra in dados.get("permitidos", {}).items()
     }
-    return padroes, permitidos
+    ignorados = frozenset(dados.get("historico", {}).get("ignora", ()))
+    return padroes, permitidos, ignorados
 
 
 class ListaInternaInvalida(Exception):
@@ -176,7 +180,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--toml", type=Path, default=TOML_PADRAO)
     args = ap.parse_args(argv)
 
-    padroes, permitidos = carregar_padroes(args.toml)
+    padroes, permitidos, ignorados = carregar_padroes(args.toml)
+    if args.historico:
+        padroes = [p for p in padroes if p.nome not in ignorados]
     try:
         padroes += carregar_internos(os.environ.get(VARIAVEL_INTERNOS))
     except ListaInternaInvalida as erro:

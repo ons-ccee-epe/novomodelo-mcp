@@ -258,3 +258,43 @@ def test_marca_ons_so_acusa_dentro_de_tests_e2e(repo):
     res = _rodar(repo)
     assert "tests/e2e/a.md:1: marca ONS" in res.stdout
     assert "docs/a.md" not in res.stdout
+
+
+TRES_PADROES = f"{NOME_ANTIGO}\nver Req 3.2\ncaminho .ki" + "ro/settings\n"
+TOML_PADRAO = RAIZ / "scripts" / "ci" / "termos_proibidos.toml"
+
+
+def _repo_com_tres_padroes(repo: Path) -> None:
+    _commit(repo, {"tests/e2e/a.md": TRES_PADROES})
+
+
+def test_historico_ignora_os_padroes_da_secao(repo):
+    _repo_com_tres_padroes(repo)
+    res = _rodar(repo, "--historico", "--mensagens")
+    assert res.returncode == 0, res.stdout + res.stderr
+
+
+def test_arvore_e_desde_continuam_acusando(repo):
+    _commit(repo, {"base.md": "x\n"}, mensagem="chore: base")
+    _repo_com_tres_padroes(repo)
+    for args in ((), ("--desde", "HEAD~1")):
+        res = _rodar(repo, *args)
+        assert res.returncode == 1
+        for nome in ("nome antigo", "referencia de spec", "diretorio kiro"):
+            assert "tests/e2e/a.md" in res.stdout and nome in res.stdout, (args, nome)
+
+
+def test_historico_nunca_ignora_a_lista_interna(repo, tmp_path):
+    lista = tmp_path / "interno.txt"
+    lista.write_text(CASO_SECRETO + "\n", encoding="utf-8")
+    _commit(repo, {"a.md": TRES_PADROES + CASO_SECRETO + "\n"})
+    res = _rodar(repo, "--historico", interno=lista)
+    assert res.returncode == 1
+    assert "a.md:4: interno #1" in res.stdout
+    assert "nome antigo" not in res.stdout
+
+
+def test_toml_nao_contem_literalmente_os_termos_da_receita():
+    texto = TOML_PADRAO.read_text(encoding="utf-8").lower()
+    for termo in ("ons" + "tec", "hots" + "ite"):
+        assert termo not in texto

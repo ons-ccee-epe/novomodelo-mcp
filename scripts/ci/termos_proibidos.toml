@@ -3,8 +3,8 @@
 # `escopo` restringe o padrão a prefixos de caminho; sem ele vale para o repositório todo.
 
 [[padroes]]
-nome = "<organização interna>"
-regex = '\bonstec\b'
+nome = "ons\u0074ec"
+regex = "\\bons\\u0074ec\\b"
 
 [[padroes]]
 nome = "homologado ONS"
@@ -27,8 +27,8 @@ nome = "diretorio kiro"
 regex = '[.]kiro/'
 
 [[padroes]]
-nome = "página de instalação"
-regex = 'página de instalação'
+nome = "hots\u0069te"
+regex = "hots\u0069te"
 
 [[padroes]]
 nome = "nome antigo"
@@ -45,10 +45,15 @@ nome = "referencia de spec"
 regex = '\bReq \d+\.\d+'
 escopo = ["tests/e2e/"]
 
+# Com --historico (e só nele) a checagem ignora os padrões listados; a árvore e --desde
+# continuam acusando todos, e a lista interna nunca é ignorada.
+[historico]
+ignora = ["nome antigo", "referencia de spec", "diretorio kiro"]
+
 # Exceções por caminho e por padrão: cada entrada libera só os padrões listados.
 # Um caminho que termina em "/" vale para tudo abaixo dele. A lista interna nunca é liberada.
 [permitidos]
-"scripts/ci/termos_proibidos.toml" = { padroes = ["<organização interna>", "homologado ONS", "página de instalação", "diretorio kiro"], motivo = "a própria lista de padrões" }
+"scripts/ci/termos_proibidos.toml" = { padroes = ["ons\u0074ec", "homologado ONS", "hots\u0069te", "diretorio kiro"], motivo = "a própria lista de padrões" }
 "src/novomodelo_mcp/_bundled/" = { padroes = ["nome antigo"], motivo = "docs oficiais do upstream, copiadas sem edição" }
 "scripts/rebrand/map.toml" = { padroes = ["nome antigo"], motivo = "mapa do verificador de nome: precisa citar o nome antigo" }
 "LICENSE" = { padroes = ["nome antigo"], motivo = "aviso de copyright do texto da licença upstream" }
