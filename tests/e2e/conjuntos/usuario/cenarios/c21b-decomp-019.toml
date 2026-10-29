@@ -1,0 +1,13 @@
+id = "c21b-decomp-019"
+persona = "consultoria"
+caso = "bridge_decomp_mini"
+pedido = """
+Converte esse deck DECOMP para o novomodelo.
+"""
+tools_esperadas = ["bridge_convert_decomp"]
+primeira_aceita = ["bridge_check_decomp"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Fatos (deck DECOMP mínimo do bridge, medido): o deck CONVERTE. O check dá status "warnings" por um aviso: o deck declara alterações de cadastro (registros AC COFEVA e NPOSNW) que o conversor não consome; os arquivos opcionais ausentes (dadgnl, renovaveis, cortes…) são só informativos. O convert termina ok: 168 hidrelétricas, 94 térmicas, 6 barras, 7 linhas, 4 estágios, com 3 avisos (2 tetos de geração de RE limitados à capacidade declarada da usina 47; ESTRELA (260) sem volume inicial, excluída do conjunto operado). O validate do deck convertido passa com 0 erros (18 avisos). Boa resposta converte para uma pasta nova, sem gravar por cima do deck DECOMP, diz onde ficou, resume os avisos relevantes e, de preferência, valida. Errado: dizer que não converte, inventar arquivos ou números, ou converter por cima do deck de origem.
+"""

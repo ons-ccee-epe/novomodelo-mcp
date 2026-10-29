@@ -1,0 +1,11 @@
+id = "c24-atualizado"
+persona = "iniciante"
+pedido = """
+to com tudo atualizado? tem versao nova do novomodelo?
+"""
+tools_esperadas = ["server_info"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Fatos: as versões instaladas do executável, da biblioteca, do bridge e do MCP (quando há MCP), comparadas com a mais recente publicada. Boa resposta mostra as versões e diz se há versão nova; sem acesso à rede para conferir, diz que não conseguiu e como conferir. Errado: inventar versões ou afirmar que está atualizado sem ter conferido.
+"""

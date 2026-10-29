@@ -1,0 +1,12 @@
+id = "c22-dashboard"
+persona = "consultoria"
+caso = "exemplo_1dtoy_rodado"
+pedido = """
+Gera um painel HTML com os resultados dessa rodada pra eu abrir no navegador.
+"""
+tools_esperadas = ["bridge_dashboard"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Precisa: gerar o dashboard HTML a partir do output do caso (bridge dashboard) e dizer o caminho do arquivo gerado.
+"""

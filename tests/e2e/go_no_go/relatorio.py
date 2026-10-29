@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from statistics import mean
 
 from tests.e2e.go_no_go.criterio import Decisao
 from tests.e2e.go_no_go.estatistica import wilson
@@ -12,6 +14,25 @@ from tests.e2e.resultado.modelos import Manifesto, Registro
 
 LIMITE_TOOLS = 10
 SEM_DADO = "—"
+SEM_MCP = "sem-mcp"
+METRICAS_AMPLAS = (
+    ("acerto_tool", "uso da tool esperada (0–1)"),
+    ("nota_juiz", "nota juiz (0–2)"),
+    ("contornos", "contornos"),
+    ("interrupcoes", "interrupções"),
+    ("indice_autonomia", "autonomia"),
+    ("duracao_s", "tempo (s)"),
+    ("tokens_entrada", "tokens entrada"),
+)
+POR_CENARIO = ("acerto_tool", "nota_juiz", "interrupcoes", "duracao_s")
+INTRO_AMPLA = (
+    "Médias por conversa. Autonomia = fração do tempo até a 1ª interrupção (1 = nenhuma). "
+    "Interrupções = aprovações que a pessoa teria de dar. Nota do juiz: qualidade da resposta "
+    "(0, 1 ou 2). Uso da tool esperada: fração das conversas que chamaram as tools do MCP "
+    "previstas (sem MCP é ~0 por construção). Tempo: duração da execução. "
+    f"{SEM_DADO} = o agente não informa a métrica."
+)
+_PARTE_VERSAO = re.compile(r"[._+-]")
 
 
 def _celula(texto: str) -> str:
@@ -135,6 +156,70 @@ def _mais_chamadas(registros: Sequence[Registro]) -> list[str]:
     return [f"## {LIMITE_TOOLS} tools mais chamadas", "", *(corpo if linhas else ["Nenhuma."]), ""]
 
 
+def ordenar_configs(configs: Iterable[str]) -> list[str]:
+    """Sem MCP primeiro, depois as versões do MCP em ordem crescente, e o resto no fim."""
+
+    def chave(config: str) -> tuple:
+        if config == SEM_MCP:
+            return (0, ())
+        if config.startswith("mcp-"):
+            partes = _PARTE_VERSAO.split(config.removeprefix("mcp-"))
+            return (1, tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in partes))
+        return (2, (config,))
+
+    return sorted(set(configs), key=chave)
+
+
+def _valor(r: Registro, metrica: str) -> float | None:
+    bruto = r.duracao_s if metrica == "duracao_s" else getattr(r.metricas, metrica)
+    return None if bruto is None else float(bruto)
+
+
+def _media(registros: Sequence[Registro], metrica: str) -> str:
+    valores = [v for r in registros if (v := _valor(r, metrica)) is not None]
+    if not valores:
+        return SEM_DADO
+    m = mean(valores)
+    return f"{m:.0f}" if m >= 100 else f"{m:.2f}"
+
+
+def avaliacao_ampla(registros: Sequence[Registro]) -> list[str]:
+    """Médias das métricas do conjunto usuário por agente, com as configurações lado a lado."""
+    rs = [r for r in registros if r.conjunto == "usuario" and r.estado in ("passou", "falhou")]
+    if not rs:
+        return []
+    configs = ordenar_configs(r.config for r in rs)
+    saida = [f"## Avaliação ampla — {len(rs)} conversas", "", INTRO_AMPLA, ""]
+    for agente in sorted({r.agente for r in rs}):
+        do_agente = [r for r in rs if r.agente == agente]
+        resumo = []
+        for config in configs:
+            grupo = [r for r in do_agente if r.config == config]
+            if grupo:
+                medias = [_media(grupo, k) for k, _ in METRICAS_AMPLAS]
+                resumo.append([config, str(len(grupo)), *medias])
+        cabecalho = ["condição", "n", *(nome for _, nome in METRICAS_AMPLAS)]
+        saida += [f"### {agente}: resumo", "", *_tabela(cabecalho, resumo), ""]
+        por: dict[tuple[str, str], list[Registro]] = defaultdict(list)
+        for r in do_agente:
+            por[(r.caso, r.config)].append(r)
+        linhas = [
+            [
+                caso,
+                *(
+                    " / ".join(_media(por[(caso, c)], k) for k in POR_CENARIO)
+                    if por.get((caso, c))
+                    else SEM_DADO
+                    for c in configs
+                ),
+            ]
+            for caso in sorted({caso for caso, _ in por})
+        ]
+        titulo = f"### {agente}: por cenário (uso da tool / nota / interrupções / tempo)"
+        saida += [titulo, "", *_tabela(["cenário", *configs], linhas), ""]
+    return saida
+
+
 def _versoes(m: Manifesto) -> list[str]:
     itens = [f"{nome} {valor}" for nome, valor in sorted(m.versoes.items())]
     itens.append(f"bateria {m.commit_bateria}")
@@ -163,6 +248,7 @@ def escrever_relatorio(
         *_lado_a_lado(m, registros),
         *_tempos(registros),
         *_mais_chamadas(registros),
+        *avaliacao_ampla(registros),
         *_versoes(m),
     ]
     destino.parent.mkdir(parents=True, exist_ok=True)

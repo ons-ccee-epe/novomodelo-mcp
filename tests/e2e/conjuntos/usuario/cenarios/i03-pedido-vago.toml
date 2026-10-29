@@ -1,0 +1,12 @@
+id = "i03-pedido-vago"
+persona = "iniciante"
+caso = "exemplo_1dtoy"
+pedido = """
+roda ai o caso e ve se ta bom os resultado
+"""
+tools_esperadas = ["run_start", "run_status"]
+contorno = ["novomodelo run", "\\.parquet", "duckdb"]
+timeout_s = 1200
+gabarito = """
+Precisa: localizar o caso (1dtoy), validar, planejar e rodar; ao fim, dizer se está bom: a rodada termina por limite de iterações (128) SEM convergir (gap final −96%), e explicar o que isso significa e o que ajustar. Em modo com aprovação, rodar exige o sim da pessoa.
+"""

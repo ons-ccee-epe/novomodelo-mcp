@@ -1,0 +1,11 @@
+id = "c19-schema-penalties"
+persona = "consultoria"
+pedido = """
+Quais penalidades eu posso configurar num caso e onde? Me dá os nomes dos campos.
+"""
+tools_esperadas = ["schema_get"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Precisa: listar os campos do penalties.json a partir do schema oficial (schema_get penalties) com tipos/descrição, sem inventar campos.
+"""

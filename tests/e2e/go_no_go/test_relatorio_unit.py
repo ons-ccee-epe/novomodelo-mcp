@@ -14,8 +14,15 @@ from tests.e2e.go_no_go.lancamentos import (
     marcar_lancamento,
     ultimo_lancamento,
 )
-from tests.e2e.go_no_go.relatorio import escrever_relatorio
-from tests.e2e.resultado.modelos import ChamadaTool, Conjunto, Estado, Manifesto, Registro
+from tests.e2e.go_no_go.relatorio import avaliacao_ampla, escrever_relatorio, ordenar_configs
+from tests.e2e.resultado.modelos import (
+    ChamadaTool,
+    Conjunto,
+    Estado,
+    Manifesto,
+    Metricas,
+    Registro,
+)
 
 
 def manifesto(configs: tuple[str, ...] = ("com-mcp",), completa: bool = False) -> Manifesto:
@@ -171,6 +178,116 @@ def test_relatorio_sem_caminho_absoluto(tmp_path: Path) -> None:
     assert "C:\\" not in texto
     assert str(tmp_path) not in texto
     assert "1.2.3" in texto.splitlines()[-1]
+
+
+def amplo(
+    caso: str,
+    config: str,
+    agente: str = "claude",
+    estado: Estado = "passou",
+    acerto: bool = True,
+    nota: int | None = 2,
+    interrupcoes: int = 1,
+    duracao_s: float = 10.0,
+    tokens: int | None = 1000,
+) -> Registro:
+    return Registro(
+        rodada="r2",
+        conjunto="usuario",
+        caso=caso,
+        agente=agente,
+        config=config,
+        repeticao=1,
+        estado=estado,
+        motivo="",
+        tools=(),
+        duracao_s=duracao_s,
+        metricas=Metricas(
+            acerto_tool=acerto,
+            contornos=0,
+            interrupcoes=interrupcoes,
+            indice_autonomia=0.5,
+            tokens_entrada=tokens,
+            nota_juiz=nota,
+        ),
+    )
+
+
+CABECALHO = " | ".join(
+    (
+        "| condição",
+        "n",
+        "uso da tool esperada (0–1)",
+        "nota juiz (0–2)",
+        "contornos",
+        "interrupções",
+        "autonomia",
+        "tempo (s)",
+        "tokens entrada |",
+    )
+)
+
+V19_CLAUDE = f"""### claude: resumo
+
+{CABECALHO}
+|---|---|---|---|---|---|---|---|---|
+| sem-mcp | 1 | 0.00 | 1.00 | 0.00 | 3.00 | 0.50 | 20.00 | 1000 |
+| mcp-0.18.0.post1 | 2 | 1.00 | 1.50 | 0.00 | 1.00 | 0.50 | 150 | 1000 |
+| mcp-0.19.1 | 1 | 1.00 | 2.00 | 0.00 | 1.00 | 0.50 | 10.00 | 1000 |
+
+### claude: por cenário (uso da tool / nota / interrupções / tempo)
+
+| cenário | sem-mcp | mcp-0.18.0.post1 | mcp-0.19.1 |
+|---|---|---|---|
+| c01-a | 0.00 / 1.00 / 3.00 / 20.00 | 1.00 / 2.00 / 1.00 / 10.00 | 1.00 / 2.00 / 1.00 / 10.00 |
+| c02-b | — | 1.00 / 1.00 / 1.00 / 290 | — |
+"""
+
+V19_KIRO = f"""### kiro: resumo
+
+{CABECALHO}
+|---|---|---|---|---|---|---|---|---|
+| mcp-0.19.1 | 1 | 1.00 | 2.00 | 0.00 | 1.00 | 0.50 | 10.00 | — |
+"""
+
+
+def _registros_amplos() -> list[Registro]:
+    return [
+        amplo("c01-a", "mcp-0.19.1"),
+        amplo("c01-a", "mcp-0.18.0.post1"),
+        amplo("c02-b", "mcp-0.18.0.post1", nota=1, duracao_s=290.0),
+        amplo("c01-a", "sem-mcp", acerto=False, nota=1, interrupcoes=3, duracao_s=20.0),
+        amplo("c01-a", "mcp-0.19.1", agente="kiro", tokens=None),
+        amplo("c03-c", "mcp-0.19.1", estado="erro_infra"),
+        reg("caso-de-tools", "passou", conjunto="tools"),
+    ]
+
+
+def test_relatorio_amplo_no_formato_da_v19() -> None:
+    texto = "\n".join(avaliacao_ampla(_registros_amplos())) + "\n"
+    assert texto.startswith("## Avaliação ampla — 5 conversas\n")
+    assert V19_CLAUDE in texto
+    assert V19_KIRO in texto
+    assert "c03-c" not in texto and "caso-de-tools" not in texto
+
+
+def test_configs_em_ordem_sem_mcp_e_depois_por_versao() -> None:
+    assert ordenar_configs(["mcp-0.19.1", "outra", "mcp-0.18.0.post1", "sem-mcp", "mcp-0.19"]) == [
+        "sem-mcp",
+        "mcp-0.18.0.post1",
+        "mcp-0.19",
+        "mcp-0.19.1",
+        "outra",
+    ]
+
+
+def test_escrever_relatorio_inclui_a_avaliacao_ampla_so_com_o_conjunto_usuario(
+    tmp_path: Path,
+) -> None:
+    texto = gerar(tmp_path, _registros_amplos(), m=manifesto(("mcp-0.19.1", "sem-mcp")))
+    assert V19_CLAUDE in texto
+    assert texto.index("## Avaliação ampla") < texto.index("Versões:")
+    assert "Avaliação ampla" not in gerar(tmp_path, [reg("a", "passou")])
 
 
 def test_marcar_e_ler_ultimo_lancamento(tmp_path: Path) -> None:

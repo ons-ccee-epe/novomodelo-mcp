@@ -1,0 +1,13 @@
+id = "c09-url-parquet"
+persona = "consultoria"
+# O MCP só lê arquivo local e não faz a requisição de rede; buscar ou baixar da internet é
+# autonomia do agente: o agente resolve como faria sem o MCP, sem desvio.
+pedido = """
+me diz quantas linhas e quais colunas tem esse parquet: https://raw.githubusercontent.com/ons-ccee-epe/novomodelo/v0.19.0/examples/1dtoy/scenarios/inflow_seasonal_stats.parquet
+"""
+tools_esperadas = []
+nativas_esperadas = ["Bash", "WebFetch"]
+checagem = { tipo = "contem", valor = "mean_m3s" }
+gabarito = """
+Fatos: o parquet tem 4 linhas e 4 colunas: hydro_id, stage_id, mean_m3s (40,0 em todas) e std_m3s (10,0). O agente pode baixar e ler como quiser.
+"""

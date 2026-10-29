@@ -1,0 +1,13 @@
+id = "c15-rodar-acompanhar"
+persona = "iniciante"
+caso = "exemplo_1dtoy"
+pedido = """
+roda esse caso pra mim e me fala quando terminar como foi
+"""
+tools_esperadas = ["run_start"]
+primeira_aceita = ["case_validate", "run_plan"]
+contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
+timeout_s = 1500
+gabarito = """
+Fatos: o 1dtoy roda em segundos; termina por limite de 128 iterações sem convergir (gap final ≈ −96%, limite inferior ≈ 15,6 mi, superior ≈ 0,58 mi). Boa resposta roda, acompanha até o fim e resume esses resultados.
+"""
