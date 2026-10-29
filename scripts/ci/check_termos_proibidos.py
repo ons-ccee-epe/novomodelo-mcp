@@ -28,7 +28,7 @@ from pathlib import Path
 RAIZ_PADRAO = Path(__file__).resolve().parents[2]
 TOML_PADRAO = Path(__file__).with_name("termos_proibidos.toml")
 VARIAVEL_INTERNOS = "NOVOMODELO_TERMOS_INTERNOS"
-HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+HUNK = re.compile(r"^(@@+) .* \+(\d+)(?:,\d+)? @@+")
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ class Padrao:
     escopo: tuple[str, ...] = ()
 
 
-def carregar_padroes(toml: Path) -> tuple[list[Padrao], dict[str, str]]:
+def carregar_padroes(toml: Path) -> tuple[list[Padrao], dict[str, frozenset[str]]]:
     dados = tomllib.loads(toml.read_text(encoding="utf-8"))
     padroes = []
     for item in dados.get("padroes", []):
@@ -47,38 +47,57 @@ def carregar_padroes(toml: Path) -> tuple[list[Padrao], dict[str, str]]:
         padroes.append(
             Padrao(item["nome"], re.compile(texto, flags), tuple(item.get("escopo", ())))
         )
-    return padroes, dict(dados.get("permitidos", {}))
+    permitidos = {
+        caminho: frozenset(regra["padroes"])
+        for caminho, regra in dados.get("permitidos", {}).items()
+    }
+    return padroes, permitidos
+
+
+class ListaInternaInvalida(Exception):
+    """A lista interna está configurada, mas não pôde ser usada."""
 
 
 def carregar_internos(caminho: str | None) -> list[Padrao]:
-    if not caminho:
+    if not caminho or not caminho.strip():
         return []
-    arquivo = Path(caminho)
-    if not arquivo.is_file():
-        return []
+    try:
+        linhas = Path(caminho).read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as erro:
+        raise ListaInternaInvalida("a lista interna configurada não pôde ser lida") from erro
     padroes = []
-    for n, linha in enumerate(arquivo.read_text(encoding="utf-8").splitlines(), 1):
+    for n, linha in enumerate(linhas, 1):
         texto = linha.strip()
         if not texto or texto.startswith("#"):
             continue
         try:
             padroes.append(Padrao(f"interno #{n}", re.compile(texto, re.IGNORECASE)))
         except re.error:
-            sys.exit(f"erro: expressão inválida na linha {n} da lista interna")
+            raise ListaInternaInvalida(
+                f"expressão inválida na linha {n} da lista interna"
+            ) from None
     return padroes
 
 
-def _caminho_permitido(caminho: str, permitidos: dict[str, str]) -> bool:
-    return any(caminho == p or (p.endswith("/") and caminho.startswith(p)) for p in permitidos)
-
-
-def casar(caminho: str, linha: str, padroes: list[Padrao], permitidos: dict[str, str]) -> list[str]:
-    if _caminho_permitido(caminho, permitidos):
-        return []
+def casar(
+    caminho: str,
+    linha: str,
+    padroes: list[Padrao],
+    permitidos: dict[str, frozenset[str]],
+) -> list[str]:
+    liberados = frozenset().union(
+        *(
+            nomes
+            for p, nomes in permitidos.items()
+            if caminho == p or (p.endswith("/") and caminho.startswith(p))
+        )
+    )
     return [
         p.nome
         for p in padroes
-        if (not p.escopo or caminho.startswith(p.escopo)) and p.regex.search(linha)
+        if (p.nome.startswith("interno #") or p.nome not in liberados)
+        and (not p.escopo or caminho.startswith(p.escopo))
+        and p.regex.search(linha)
     ]
 
 
@@ -98,39 +117,51 @@ def _git(raiz: Path, *args: str) -> str:
 
 
 def achados_da_arvore(raiz, padroes, permitidos):
-    for caminho in _git(raiz, "ls-files").splitlines():
+    for caminho in _git(raiz, "ls-files").split("\n"):
         arquivo = raiz / caminho
-        if not arquivo.is_file():
+        if not caminho or not arquivo.is_file():
             continue
-        try:
-            texto = arquivo.read_bytes().decode("utf-8")
-        except UnicodeDecodeError:
+        bruto = arquivo.read_bytes()
+        if b"\x00" in bruto:
             continue
-        for n, linha in enumerate(texto.splitlines(), 1):
+        for n, linha in enumerate(bruto.decode("utf-8", errors="replace").split("\n"), 1):
             for nome in casar(caminho, linha, padroes, permitidos):
                 yield f"{caminho}:{n}: {nome}"
 
 
 def achados_dos_commits(raiz, intervalo, mensagens, padroes, permitidos):
-    saida = _git(raiz, "log", "-p", "-U0", "--no-color", "--format=%x00%H", *intervalo)
-    caminho, n = "", 0
-    commit = ""
-    for linha in saida.splitlines():
+    saida = _git(
+        raiz, "log", "-p", "-U0", "--cc", "--no-prefix", "--no-color", "--format=%x00%H", *intervalo
+    )
+    caminho, n, colunas, commit, em_trecho = "", 0, 1, "", False
+    for linha in saida.split("\n"):
         if linha.startswith("\x00"):
-            commit, caminho = linha[1:8], ""
-        elif linha.startswith("+++ "):
-            caminho = linha[6:] if linha.startswith("+++ b/") else ""
-        elif (m := HUNK.match(linha)) and caminho:
-            n = int(m.group(1)) - 1
-        elif linha.startswith("+") and caminho:
+            commit, caminho, em_trecho = linha[1:8], "", False
+        elif linha.startswith("diff "):
+            caminho, em_trecho = "", False
+        elif not em_trecho:
+            if linha.startswith("+++ "):
+                destino = linha[4:]
+                caminho = "" if destino == "/dev/null" else destino
+            elif m := HUNK.match(linha):
+                em_trecho, colunas, n = True, len(m.group(1)) - 1, int(m.group(2)) - 1
+        elif m := HUNK.match(linha):
+            colunas, n = len(m.group(1)) - 1, int(m.group(2)) - 1
+        elif linha.startswith("\\") or not caminho:
+            continue
+        else:
+            marca = linha[:colunas]
+            if "-" in marca:
+                continue
             n += 1
-            for nome in casar(caminho, linha[1:], padroes, permitidos):
-                yield f"{caminho}:{n}: {nome} ({commit})"
+            if marca == "+" * colunas:
+                for nome in casar(caminho, linha[colunas:], padroes, permitidos):
+                    yield f"{caminho}:{n}: {nome} ({commit})"
     if mensagens:
         bruto = _git(raiz, "log", "--format=%x00%h%x01%B", *intervalo)
         for bloco in bruto.split("\x00")[1:]:
             curto, _, corpo = bloco.partition("\x01")
-            for linha in corpo.splitlines():
+            for linha in corpo.split("\n"):
                 for nome in casar("", linha, padroes, {}):
                     yield f"commit {curto}:mensagem: {nome}"
 
@@ -146,7 +177,11 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     padroes, permitidos = carregar_padroes(args.toml)
-    padroes += carregar_internos(os.environ.get(VARIAVEL_INTERNOS))
+    try:
+        padroes += carregar_internos(os.environ.get(VARIAVEL_INTERNOS))
+    except ListaInternaInvalida as erro:
+        print(f"erro: {erro}", file=sys.stderr)
+        return 2
     if args.desde:
         achados = achados_dos_commits(
             args.raiz, [f"{args.desde}..HEAD"], args.mensagens, padroes, permitidos

@@ -94,7 +94,7 @@ def test_permitido_por_caminho(repo, tmp_path):
     toml = tmp_path / "termos.toml"
     toml.write_text(
         '[[padroes]]\nnome = "caminho"\nregex = "/home/[a-z]"\n\n'
-        '[permitidos]\n"vendor/" = "docs de terceiros"\n',
+        '[permitidos]\n"vendor/" = { padroes = ["caminho"], motivo = "docs de terceiros" }\n',
         encoding="utf-8",
     )
     res = _rodar(repo, toml=toml)
@@ -153,3 +153,108 @@ def test_bateria_sem_marca_nem_referencia_de_spec(repo):
     assert "tests/e2e/painel.md:1: marca ONS" in res.stdout
     assert "tests/e2e/outro.md:1: referencia de spec" in res.stdout
     assert "README.md" not in res.stdout
+
+
+def test_permitido_para_um_padrao_ainda_acusa_outro(repo, tmp_path):
+    _commit(repo, {"vendor/docs.md": f"{CAMINHO_PESSOAL}\nhot" + "site\n"})
+    toml = tmp_path / "termos.toml"
+    toml.write_text(
+        '[[padroes]]\nnome = "caminho"\nregex = "/home/[a-z]"\n\n'
+        '[[padroes]]\nnome = "outro"\nregex = "hot' + 'site"\n\n'
+        '[permitidos]\n"vendor/" = { padroes = ["caminho"], motivo = "docs" }\n',
+        encoding="utf-8",
+    )
+    res = _rodar(repo, toml=toml)
+    assert res.returncode == 1
+    assert "vendor/docs.md:2: outro" in res.stdout
+    assert "vendor/docs.md:1" not in res.stdout
+
+
+def test_permitido_nao_libera_lista_interna(repo, tmp_path):
+    lista = tmp_path / "interno.txt"
+    lista.write_text(CASO_SECRETO + "\n", encoding="utf-8")
+    _commit(repo, {"vendor/a.md": CASO_SECRETO + "\n"})
+    toml = tmp_path / "termos.toml"
+    toml.write_text(
+        '[[padroes]]\nnome = "x"\nregex = "zzz"\n\n'
+        '[permitidos]\n"vendor/" = { padroes = ["interno #1"], motivo = "tentativa" }\n',
+        encoding="utf-8",
+    )
+    res = _rodar(repo, interno=lista, toml=toml)
+    assert res.returncode == 1
+    assert "vendor/a.md:1: interno #1" in res.stdout
+
+
+def test_lista_interna_configurada_e_ausente_sai_com_erro(repo, tmp_path):
+    _commit(repo, {"a.md": "limpo\n"})
+    ausente = tmp_path / "pasta-reservada" / "lista.txt"
+    res = _rodar(repo, interno=ausente)
+    assert res.returncode == 2
+    saida = res.stdout + res.stderr
+    assert "pasta-reservada" not in saida
+    assert str(tmp_path) not in saida
+
+
+def test_lista_interna_vazia_segue_so_com_genericos(repo):
+    _commit(repo, {"a.md": "limpo\n"})
+    env = {k: v for k, v in os.environ.items() if k != "NOVOMODELO_TERMOS_INTERNOS"}
+    env["NOVOMODELO_TERMOS_INTERNOS"] = ""
+    res = subprocess.run(
+        [sys.executable, str(SCRIPT), "--raiz", str(repo)],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert res.returncode == 0
+
+
+def test_lista_interna_com_regex_invalida_nao_imprime_o_termo(repo, tmp_path):
+    lista = tmp_path / "interno.txt"
+    lista.write_text("# c\ntermo_reservado(\n", encoding="utf-8")
+    _commit(repo, {"a.md": "limpo\n"})
+    res = _rodar(repo, interno=lista)
+    assert res.returncode == 2
+    assert "termo_reservado" not in res.stdout + res.stderr
+    assert "linha 2" in res.stderr
+
+
+def test_linha_adicionada_que_comeca_com_mais_nao_vira_cabecalho(repo):
+    _commit(repo, {"a.md": "base\n"}, mensagem="chore: base")
+    _commit(repo, {"a.md": "base\n++ x\n+++ b/falso.md\n" + CAMINHO_PESSOAL + "\n"})
+    res = _rodar(repo, "--desde", "HEAD~1")
+    assert res.returncode == 1
+    assert "a.md:4: caminho de maquina" in res.stdout
+    assert "falso.md" not in res.stdout
+
+
+def test_merge_so_acusa_o_que_foi_resolvido_no_merge(repo):
+    _commit(repo, {"a.md": "base\n"}, mensagem="chore: base")
+    _git(repo, "checkout", "-q", "-b", "lado")
+    _commit(repo, {"b.md": CAMINHO_PESSOAL + "\n"}, mensagem="chore: lado")
+    _git(repo, "checkout", "-q", "-")
+    _commit(repo, {"c.md": "c\n"}, mensagem="chore: principal")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "chore: merge", "lado")
+    merge = subprocess.run(
+        ["git", "rev-parse", "--short=7", "HEAD"], cwd=repo, capture_output=True, text=True
+    ).stdout.strip()
+    res = _rodar(repo, "--desde", "HEAD~1")
+    assert res.stdout.count("b.md:1") == 1
+    assert merge not in res.stdout
+
+
+def test_arquivo_fora_de_utf8_ainda_e_checado(repo):
+    alvo = repo / "latin.txt"
+    alvo.write_bytes(b"caf\xe9\n" + CAMINHO_PESSOAL.encode() + b"\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "chore: latin")
+    res = _rodar(repo)
+    assert res.returncode == 1
+    assert "latin.txt:2: caminho de maquina" in res.stdout
+
+
+def test_marca_ons_so_acusa_dentro_de_tests_e2e(repo):
+    _commit(repo, {"docs/a.md": "feito pela ONS\n", "tests/e2e/a.md": "feito pela ONS\n"})
+    res = _rodar(repo)
+    assert "tests/e2e/a.md:1: marca ONS" in res.stdout
+    assert "docs/a.md" not in res.stdout

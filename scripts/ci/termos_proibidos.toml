@@ -45,18 +45,19 @@ nome = "referencia de spec"
 regex = '\bReq \d+\.\d+'
 escopo = ["tests/e2e/"]
 
-# Caminhos que podem conter os padrões acima, cada um com a justificativa.
+# Exceções por caminho e por padrão: cada entrada libera só os padrões listados.
+# Um caminho que termina em "/" vale para tudo abaixo dele. A lista interna nunca é liberada.
 [permitidos]
-"scripts/ci/termos_proibidos.toml" = "a própria lista de padrões"
-"src/novomodelo_mcp/_bundled/" = "docs oficiais do upstream, copiadas sem edição"
-"scripts/rebrand/map.toml" = "mapa do verificador de nome: precisa citar o nome antigo"
-"LICENSE" = "aviso de copyright do texto da licença upstream"
-".kiro/steering/" = "regras do time versionadas para o Kiro"
-"scripts/gen/sync-kiro-steering.py" = "gera .kiro/steering/"
-"CLAUDE.md" = "regras do time: citam .kiro/steering/ e o gerador"
-"CONTRIBUTING.md" = "descreve .kiro/steering/"
-"README.md" = "caminhos de configuração do Kiro CLI (~/.kiro/settings/)"
-"src/novomodelo_mcp/client_config.py" = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)"
-"tests/e2e/launcher/providers.py" = "caminho de configuração do Kiro CLI"
-"tests/e2e/load/" = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)"
-"tests/e2e/queries/mcp_workspace.py" = "caminho de configuração do Kiro CLI"
+"scripts/ci/termos_proibidos.toml" = { padroes = ["<organização interna>", "homologado ONS", "página de instalação", "diretorio kiro"], motivo = "a própria lista de padrões" }
+"src/novomodelo_mcp/_bundled/" = { padroes = ["nome antigo"], motivo = "docs oficiais do upstream, copiadas sem edição" }
+"scripts/rebrand/map.toml" = { padroes = ["nome antigo"], motivo = "mapa do verificador de nome: precisa citar o nome antigo" }
+"LICENSE" = { padroes = ["nome antigo"], motivo = "aviso de copyright do texto da licença upstream" }
+".kiro/steering/" = { padroes = ["diretorio kiro"], motivo = "regras do time versionadas para o Kiro" }
+"scripts/gen/sync-kiro-steering.py" = { padroes = ["diretorio kiro"], motivo = "gera .kiro/steering/" }
+"CLAUDE.md" = { padroes = ["diretorio kiro"], motivo = "regras do time: citam .kiro/steering/ e o gerador" }
+"CONTRIBUTING.md" = { padroes = ["diretorio kiro"], motivo = "descreve .kiro/steering/" }
+"README.md" = { padroes = ["diretorio kiro"], motivo = "caminhos de configuração do Kiro CLI (~/.kiro/settings/)" }
+"src/novomodelo_mcp/client_config.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
+"tests/e2e/launcher/providers.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI" }
+"tests/e2e/load/" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
+"tests/e2e/queries/mcp_workspace.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI" }
