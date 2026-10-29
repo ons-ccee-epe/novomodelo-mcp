@@ -147,6 +147,7 @@ def _comando(
         f"--memory-swap={cfg.memoria}",
         f"--pids-limit={LIMITE_PIDS}",
         "--security-opt=no-new-privileges",
+        "--cap-drop=ALL",
         "--userns=keep-id",
     ]
     if e.agente == "claude":

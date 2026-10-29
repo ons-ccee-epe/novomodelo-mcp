@@ -109,6 +109,8 @@ def test_comando_nao_monta_home_nem_socket(tmp_path, monkeypatch, agente, motor)
 def test_comando_endurece_o_container(tmp_path):
     cmd = _cmd(_exec(), _cfg(tmp_path), tmp_path)
     assert "--security-opt=no-new-privileges" in cmd
+    assert "--cap-drop=ALL" in cmd
+    assert cmd.index("--cap-drop=ALL") < cmd.index("localhost/bateria:local")
     assert f"--pids-limit={LIMITE_PIDS}" in cmd and 0 < LIMITE_PIDS <= 4096
     assert f"--name={NOME}" in cmd
     assert cmd.index(f"--name={NOME}") < cmd.index("localhost/bateria:local")
