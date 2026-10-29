@@ -25,7 +25,7 @@ def test_le_o_stream_do_claude():
     assert next(e for e in leitura.eventos if e.nome == "server_info" and e.tipo == "tool").do_mcp
     assert not next(e for e in leitura.eventos if e.nome == "Bash").do_mcp
     resultados = [(e.nome, e.erro) for e in leitura.eventos if e.tipo == "resultado_tool"]
-    assert resultados == [("server_info", False), ("Bash", False), ("case_validate", True)]
+    assert resultados == [("server_info", False), ("Bash", False), ("case_validate", False)]
     fim = leitura.eventos[-1]
     assert fim.tipo == "fim" and fim.dados["tokens_saida"] > 0
     assert fim.dados["tokens_entrada"] == 60 and fim.dados["duracao_s"] == 4.2

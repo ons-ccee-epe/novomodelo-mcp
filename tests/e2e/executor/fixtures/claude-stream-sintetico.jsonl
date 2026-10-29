@@ -5,5 +5,5 @@
 {"t": 2.5, "evento": {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "uso-2", "name": "Bash", "input": {"command": "ls /estudos"}}]}}}
 {"t": 3.0, "evento": {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "uso-2", "content": "caso-exemplo"}]}}}
 {"t": 3.5, "evento": {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "uso-3", "name": "mcp__novomodelo__case_validate", "input": {"case_dir": "/estudos/caso-exemplo"}}]}}}
-{"t": 4.0, "evento": {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "uso-3", "is_error": true, "content": "{\"status\": \"error\"}"}]}}}
+{"t": 4.0, "evento": {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "uso-3", "is_error": false, "content": "{\"status\": \"error\", \"exit_code\": 1, \"diagnostics\": [\"deck incompleto\"]}"}]}}}
 {"t": 4.2, "evento": {"type": "result", "subtype": "success", "is_error": false, "result": "O servidor respondeu e o caso tem erros.", "duration_ms": 4200, "usage": {"input_tokens": 10, "cache_creation_input_tokens": 20, "cache_read_input_tokens": 30, "output_tokens": 42}}}

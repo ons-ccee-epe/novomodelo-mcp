@@ -14,6 +14,9 @@ import platformdirs
 
 APP = "novomodelo-mcp-bateria"
 VOLUME_KIRO_PADRAO = "novomodelo-bateria-kiro"
+MEMORIA_PADRAO = "6g"
+MOTOR_SUPORTADO = "podman"
+MOTIVO_MOTOR = "o token do Claude só entra pelo secret do podman; use podman"
 TEMPO_MAXIMO_VOLUME = 15
 
 
@@ -29,6 +32,7 @@ class Config:
     token_claude: Path
     volume_kiro: str
     cache: Path
+    memoria: str = MEMORIA_PADRAO
 
 
 @dataclass(frozen=True)
@@ -67,7 +71,12 @@ def carregar_config(
         ),
         volume_kiro=_valor(env, "VOLUME_KIRO") or VOLUME_KIRO_PADRAO,
         cache=platformdirs.user_cache_path(APP),
+        memoria=_valor(env, "MEMORIA") or MEMORIA_PADRAO,
     )
+
+
+def motor_suportado(motor: str) -> bool:
+    return Path(motor).stem == MOTOR_SUPORTADO
 
 
 def volume_existe_no_motor(motor: str, nome: str) -> bool:
@@ -117,6 +126,8 @@ def verificar(
     motor_ok = quem(cfg.motor) is not None
     if not motor_ok:
         problemas.append(Problema("motor", f"motor de container '{cfg.motor}' fora do PATH"))
+    if not motor_suportado(cfg.motor):
+        problemas.append(Problema("motor", MOTIVO_MOTOR))
     problema_token = _problema_do_token(cfg.token_claude)
     if problema_token:
         problemas.append(problema_token)

@@ -237,3 +237,24 @@ def test_itens_dos_problemas_sao_os_estaveis(tmp_path):
     (tmp_path / "arq").write_text("x")
     problemas = verificar(cfg, quem=so(), volume_existe=lambda m, v: False)
     assert itens(problemas) == set(ITENS)
+
+
+def test_memoria_vem_do_ambiente_com_padrao():
+    assert carregar_config({}, quem=so("podman")).memoria == "6g"
+    env = {"NOVOMODELO_BATERIA_MEMORIA": "3g"}
+    assert carregar_config(env, quem=so("podman")).memoria == "3g"
+
+
+@pytest.mark.parametrize("motor", ["docker", "/usr/bin/docker", "nerdctl"])
+def test_verificar_recusa_motor_que_nao_e_podman(tmp_path, motor):
+    cfg = Config(**{**preparar_ok(tmp_path).__dict__, "motor": motor})
+    problemas = verificar(cfg, quem=lambda nome: nome, volume_existe=lambda m, v: True)
+    assert Problema("motor", "o token do Claude só entra pelo secret do podman; use podman") in (
+        problemas
+    )
+
+
+@pytest.mark.parametrize("motor", ["podman", "/usr/bin/podman", "podman.exe"])
+def test_verificar_aceita_podman_por_nome_ou_caminho(tmp_path, motor):
+    cfg = Config(**{**preparar_ok(tmp_path).__dict__, "motor": motor})
+    assert verificar(cfg, quem=lambda nome: nome, volume_existe=lambda m, v: True) == []
