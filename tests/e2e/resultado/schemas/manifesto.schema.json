@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manifesto.schema.json",
+  "title": "Manifesto",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_versao",
+    "rodada",
+    "criado_em",
+    "configs",
+    "conjuntos",
+    "agentes",
+    "repeticoes",
+    "flags",
+    "versoes",
+    "commit_bateria"
+  ],
+  "properties": {
+    "schema_versao": {
+      "const": 1
+    },
+    "rodada": {
+      "type": "string"
+    },
+    "criado_em": {
+      "type": "string"
+    },
+    "configs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "conjuntos": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "deterministica",
+          "tools",
+          "usuario"
+        ]
+      }
+    },
+    "agentes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "repeticoes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "flags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "versoes": {
+      "type": "object",
+      "required": [
+        "novomodelo",
+        "novomodelo-bridge",
+        "claude-code",
+        "kiro-cli",
+        "juiz-modelo",
+        "juiz-temperatura"
+      ],
+      "properties": {
+        "novomodelo": {
+          "type": "string"
+        },
+        "novomodelo-bridge": {
+          "type": "string"
+        },
+        "claude-code": {
+          "type": "string"
+        },
+        "kiro-cli": {
+          "type": "string"
+        },
+        "juiz-modelo": {
+          "type": "string"
+        },
+        "juiz-temperatura": {
+          "type": "string"
+        }
+      },
+      "patternProperties": {
+        "^mcp:.+$": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "commit_bateria": {
+      "type": "string"
+    }
+  }
+}

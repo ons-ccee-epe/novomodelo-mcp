@@ -593,6 +593,7 @@ dev = [
 e2e = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "jsonschema" },
     { name = "pyyaml" },
     { name = "uvicorn" },
 ]
@@ -619,6 +620,7 @@ dev = [
 e2e = [
     { name = "fastapi", specifier = "==0.159.1" },
     { name = "httpx", specifier = "==0.28.1" },
+    { name = "jsonschema", specifier = "==4.26.0" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "uvicorn", specifier = "==0.54.0" },
 ]

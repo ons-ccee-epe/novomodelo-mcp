@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "registro.schema.json",
+  "title": "Registro",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_versao",
+    "rodada",
+    "conjunto",
+    "caso",
+    "agente",
+    "config",
+    "repeticao",
+    "estado",
+    "motivo",
+    "tools",
+    "duracao_s"
+  ],
+  "properties": {
+    "schema_versao": {
+      "const": 1
+    },
+    "rodada": {
+      "type": "string"
+    },
+    "conjunto": {
+      "enum": [
+        "deterministica",
+        "tools",
+        "usuario"
+      ]
+    },
+    "caso": {
+      "type": "string"
+    },
+    "agente": {
+      "type": "string"
+    },
+    "config": {
+      "type": "string"
+    },
+    "repeticao": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "estado": {
+      "enum": [
+        "passou",
+        "falhou",
+        "pulado",
+        "erro_infra"
+      ]
+    },
+    "motivo": {
+      "type": "string"
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nome",
+          "ok",
+          "duracao_s"
+        ],
+        "properties": {
+          "nome": {
+            "type": "string"
+          },
+          "ok": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "duracao_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "duracao_s": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}
