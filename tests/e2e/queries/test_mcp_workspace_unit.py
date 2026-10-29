@@ -91,11 +91,11 @@ def test_linked_fixture_target_becomes_explicit_root(
 ) -> None:
     monkeypatch.setattr(mcp_workspace, "_REPO_ROOT", tmp_path.resolve())
     _write_user_config(fake_home, {"command": "novomodelo-mcp"})
-    real_case = tmp_path / "real_cases" / "novomodelo-caso-reduzido"
+    real_case = tmp_path / "real_cases" / "bridge_newave_mini"
     real_case.mkdir(parents=True)
     fixtures = tmp_path / "fixtures"
     (fixtures / "newave").mkdir(parents=True)
-    _link_dir(fixtures / "newave" / "novomodelo-caso-reduzido", real_case)
+    _link_dir(fixtures / "newave" / "bridge_newave_mini", real_case)
 
     server = server_config_for_workspace(fixtures)
 

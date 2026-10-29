@@ -33,7 +33,7 @@ describe("LoadCapacityHint", () => {
         heavy_tools: ["bridge_check_newave"],
         write_tools: ["deck_edit_json"],
         copy_mb: 23.4,
-        subtrees: ["newave/novomodelo-caso-reduzido"],
+        subtrees: ["newave/bridge_newave_mini"],
       },
       disk: {
         path: "C:\\Temp",
@@ -62,7 +62,7 @@ describe("LoadCapacityHint", () => {
       "Seleção pesada: sobe o bridge ou o solver (bridge_check_newave).",
     );
     expect(selection).toHaveTextContent(
-      "Seleção que grava: cada sessão copia 23.4 MB de fixtures (newave/novomodelo-caso-reduzido).",
+      "Seleção que grava: cada sessão copia 23.4 MB de fixtures (newave/bridge_newave_mini).",
     );
   });
 

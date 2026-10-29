@@ -212,7 +212,7 @@ export function makeCapacity(overrides: Partial<LoadCapacity> = {}): LoadCapacit
 export function makeSandbox(overrides: Partial<LoadSandbox> = {}): LoadSandbox {
   return {
     enabled: true,
-    subtrees: ["newave/novomodelo-caso-reduzido"],
+    subtrees: ["newave/bridge_newave_mini"],
     copy_mb: 23.4,
     sessions: 2,
     copy_ms_mean: 180,

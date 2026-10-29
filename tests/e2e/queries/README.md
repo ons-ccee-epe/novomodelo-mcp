@@ -69,7 +69,7 @@ Os casos de teste são definidos em `cases.yaml` usando formato YAML declarativo
 ```yaml
 # Exemplo de caso de teste básico
 - id: bridge-check-newave-valid
-  query: Valide o caso NEWAVE em {FIXTURES}/newave/newave-caso-reduzido
+  query: Valide o caso NEWAVE em {caso:bridge_newave_mini}
   expected:
     uses_mcp: true
     tool: bridge_check_newave

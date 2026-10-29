@@ -447,7 +447,7 @@ describe("LoadForm com casos que gravam e pesados", () => {
         heavy_tools: ["bridge_convert_newave"],
         write_tools: ["deck_edit_json"],
         copy_mb: 23.4,
-        subtrees: ["newave/novomodelo-caso-reduzido"],
+        subtrees: ["newave/bridge_newave_mini"],
       },
       disk: {
         path: "C:\\Temp",

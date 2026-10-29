@@ -23,7 +23,7 @@ def _case(requires: tuple[str, ...]) -> QueryTestCase:
 
 
 def test_missing_source_is_reported(tmp_path: Path) -> None:
-    absent = str(tmp_path / "newave-caso-reduzido")
+    absent = str(tmp_path / "bridge_newave_mini")
     assert missing_sources(_case((absent,))) == [absent]
 
 
