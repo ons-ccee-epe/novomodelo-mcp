@@ -227,11 +227,12 @@ def test_no_go_tem_precedencia_sobre_ausente():
     assert d.ausentes == ("tools/u/ag",)
 
 
-def test_conjunto_desconhecido_levanta():
-    estranho = reg("tools", "t", "passou")
-    estranho = Registro(**{**estranho.__dict__, "conjunto": "outro"})
+@pytest.mark.parametrize("base", ["nenhuma", "vazia", "com_grupo"])
+def test_conjunto_desconhecido_levanta(base):
+    estranho = Registro(**{**reg("tools", "t", "passou").__dict__, "conjunto": "outro"})
+    bases = {"nenhuma": None, "vazia": [], "com_grupo": [estranho]}
     with pytest.raises(ValueError, match="conjunto desconhecido"):
-        decidir([estranho], [estranho])
+        decidir([estranho], bases[base])
 
 
 def test_empate_com_erro_infra_em_tools_e_inconclusivo():

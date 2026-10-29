@@ -14,6 +14,7 @@ from tests.e2e.resultado.modelos import Estado, Registro
 Veredito = Literal["go", "no-go", "inconclusivo"]
 Regra = Literal["deterministica", "regressao_tool", "regressao_maioria"]
 Grupo = tuple[str, str, str]
+CONJUNTOS = ("deterministica", "tools", "usuario")
 
 
 @dataclass(frozen=True)
@@ -67,16 +68,17 @@ def _regra_do_grupo(
             "regressao_tool",
             lambda passou, falhou: base_passava and not _maioria(passou, falhou),
         )
-    if conjunto == "usuario":
-        return (
-            "regressao_maioria",
-            lambda passou, falhou: base_passava and _maioria(falhou, passou),
-        )
-    raise ValueError(f"conjunto desconhecido: {conjunto!r}")
+    return (
+        "regressao_maioria",
+        lambda passou, falhou: base_passava and _maioria(falhou, passou),
+    )
 
 
 def decidir(alvo: Sequence[Registro], base: Sequence[Registro] | None) -> Decisao:
     """Decide a rodada. Com `base=None` não há baseline: `sem_base` e `ausentes` ficam vazios."""
+    for r in (*alvo, *(base or ())):
+        if r.conjunto not in CONJUNTOS:
+            raise ValueError(f"conjunto desconhecido: {r.conjunto!r}")
     grupos_base = _agrupar(base) if base is not None else {}
     bloqueios: list[Bloqueio] = []
     inconclusivos: list[str] = []
