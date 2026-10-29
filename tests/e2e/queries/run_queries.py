@@ -410,8 +410,7 @@ def main() -> int:
     print("=" * 60)
 
     # Dados persistidos em JSON (results/*.json + metrics/history.jsonl).
-    # O dashboard agora e o frontend Vite em tests/e2e/frontend, que consome
-    # esses JSON — nao geramos mais HTML por execucao.
+    # O dashboard é o frontend Vite em tests/e2e/frontend, que consome esses JSON.
     if args.report:
         frontend_dir = base_dir / "frontend"
         print()

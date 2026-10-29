@@ -241,6 +241,8 @@ class TestResult:
         validation_checks: Lista de verificações realizadas como dicts
     """
 
+    __test__ = False
+
     test_id: str
     query: str
     expected_tool: str | None

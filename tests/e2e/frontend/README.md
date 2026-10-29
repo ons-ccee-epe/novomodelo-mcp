@@ -89,9 +89,9 @@ transporte. A raiz e qualquer rota desconhecida levam a `/#/funcionais`.
   As duas listas podem ser recolhidas. O Histórico lê só os JSON, então funciona com
   o launcher desligado.
 
-## O que mudou nos runners
+## Runners
 
-A geração de HTML foi aposentada; os runners seguem gravando os JSON:
+Os runners gravam JSON, que o painel lê:
 
 - `tests/e2e/queries/run_queries.py --report` → imprime como abrir o frontend.
 - `tests/e2e/eval/run.py` → grava `reports/latest.json`, sem `latest.html`.

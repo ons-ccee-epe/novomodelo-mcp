@@ -55,7 +55,7 @@ Tudo vem de variável de ambiente ou de argumento. Hoje a bateria lê:
 | `NOVOMODELO_MCP_TARGET` | Alvo do `eval`: `local` ou a URL de um servidor MCP | `local` |
 | `NOVOMODELO_MCP_METRICS_PATH` | Arquivo JSONL do histórico de métricas do `eval` | pasta `metrics` da bateria |
 | `QUERY_FIXTURES_DIR` | Pasta com os decks usados pelas perguntas | pasta `fixtures` da bateria |
-| `QUERY_TIMEOUT_S` X
+| `QUERY_TIMEOUT_S` | Força um timeout único, em segundos, para todas as perguntas ao agente | não definida: cada caso usa o seu `timeout_s` de `queries/cases.yaml` (por caso ou grupo) |
 | `KIRO_API_KEY` | Credencial do `kiro-cli`; sem ela, vale o login já feito no próprio `kiro-cli` | não definida |
 
 Nunca grave credenciais em arquivo do repositório. Lê-las do ambiente, ou de um arquivo fora do repositório com permissão `600`, mantém o valor fora do código e dos logs.
