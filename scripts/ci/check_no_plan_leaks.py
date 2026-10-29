@@ -7,7 +7,8 @@ not how the work was organized (`.claude/rules/comments.md` N4,
 
 Three HARD scopes (any non-empty ⇒ exit 1):
 
-* shipped docs — whole-file scan of README.md, CONTRIBUTING.md, CHANGELOG.md.
+* shipped docs — whole-file scan of README.md, CONTRIBUTING.md, CHANGELOG.md,
+  docs/**/*.md.
 * src/ prose — comments + docstrings under src/. On failure the hits are
   grouped by file so the offender is obvious.
 * tests/ prose — comments + docstrings under tests/, same rule.
@@ -16,8 +17,8 @@ Three HARD scopes (any non-empty ⇒ exit 1):
   character), so ``test_ticket_016_regression`` never matches while the prose
   "ticket 016" in a comment or docstring does.
 
-The prose here is Portuguese, so the Portuguese plan word (``épico``) is
-matched next to the English ones.
+Prose in these repositories is English or Portuguese, so the Portuguese plan
+word (``épico``) is matched next to the English ones.
 
 ``--all`` prints every src hit (for triage); otherwise the top offender files.
 
@@ -45,11 +46,15 @@ PATTERN = re.compile(
 )
 
 HARD_DOCS = ["README.md", "CONTRIBUTING.md", "CHANGELOG.md"]
+HARD_GLOBS = ["docs/**/*.md"]
 
 
 def doc_scope_hits() -> list[str]:
     hits: list[str] = []
-    for path in (REPO_ROOT / name for name in HARD_DOCS):
+    files = [REPO_ROOT / name for name in HARD_DOCS]
+    for glob in HARD_GLOBS:
+        files.extend(sorted(REPO_ROOT.glob(glob)))
+    for path in files:
         if not path.is_file():
             continue
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):

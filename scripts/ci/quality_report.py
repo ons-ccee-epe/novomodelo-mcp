@@ -5,7 +5,7 @@ The check_*.py gates are a ratchet: they stop new drift but do not rank the
 debt that already exists. This report joins the signals the repo already has
 into one ranked "where to act first" table.
 
-Signals per production source file (src/novomodelo_mcp/**/*.py):
+Signals per production source file (src/<package>/**/*.py):
 
   churn        — commits touching the file within CHURN_SINCE (default
                  "12 months ago"); the dominant hotspot signal.
@@ -55,8 +55,8 @@ def churn_map() -> Counter[str]:
             "--name-only",
             "--pretty=format:",
             "--",
-            "src/novomodelo_mcp/*.py",
-            "src/novomodelo_mcp/**/*.py",
+            f"{rel(SRC_ROOT)}/*.py",
+            f"{rel(SRC_ROOT)}/**/*.py",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -124,7 +124,8 @@ def main() -> int:
     )
 
     print(f"Code-quality hotspots (churn since {CHURN_SINCE}). Higher = act first.\n")
-    header = f"{'SCORE':>6} {'churn':>5} {'loc':>5} {'>100L':>5} {'suppr':>5} {'plan':>5}  FILE"
+    counts = " ".join(f"{n:>5}" for n in ("churn", "loc", ">100L", "suppr", "plan"))
+    header = f"{'SCORE':>6} {counts}  FILE"
     print(header)
     print("-" * len(header))
     shown = 0

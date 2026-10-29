@@ -19,7 +19,7 @@ HARD (exit 1):
     symbol or the docs page instead,
   * design-doc section refs (``design §5``): those docs live in gitignored
     ``plans/`` — inline the durable content,
-  * a repo-relative ``src/novomodelo_mcp/...`` or ``tests/...`` ``.py`` path that
+  * a repo-relative ``src/<package>/...`` or ``tests/...`` ``.py`` path that
     no longer resolves — a sibling-test / module pointer that rotted when the
     file moved. Repoint it to the live path or (better) name the symbol/test.
 
@@ -61,7 +61,8 @@ HARD_PATTERNS = [
 # A repo-relative source/test .py path cited in prose. The match stops at
 # ``.py`` (``:`` and ``::`` are not in the class), so a ``…py::symbol`` or
 # ``…py:NNN`` suffix is dropped before the existence check.
-_REPO_PY_PATH = re.compile(r"\b(?:src/novomodelo_mcp|tests)/[\w./-]+\.py\b")
+_SRC_PREFIX = re.escape(rel(SRC_ROOT))
+_REPO_PY_PATH = re.compile(rf"\b(?:{_SRC_PREFIX}|tests)/[\w./-]+\.py\b")
 
 
 def _stale_path_hits(line: str, where: str) -> list[str]:
