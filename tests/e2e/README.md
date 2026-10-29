@@ -2,7 +2,7 @@
 
 Testes de integração do servidor MCP com as CLIs reais (`novomodelo-bridge`, `novomodelo`) e dados reais. A bateria mede se as tools respondem como esperado, se um agente de IA as escolhe e usa bem, e como o servidor se comporta sob carga concorrente.
 
-Autores originais da bateria: Raquel Grillo e João Weydt.
+Autores originais da bateria: Raquel Pereira Grillo e João Weydt.
 
 ## Estrutura
 
