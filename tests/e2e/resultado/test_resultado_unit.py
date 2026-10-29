@@ -261,3 +261,38 @@ def test_schema_exige_metricas_no_json_gravado() -> None:
     del dados["metricas"]
     with pytest.raises(jsonschema.ValidationError):
         armazenamento._validar(dados, "registro")
+
+
+def _decisao() -> dict:
+    return {
+        "schema_versao": 1,
+        "alvo": "mcp",
+        "base": None,
+        "veredito": "go",
+        "bloqueios": [],
+        "inconclusivos": [],
+        "pulados": [],
+        "sem_base": [],
+        "ausentes": [],
+    }
+
+
+def test_decisao_ida_e_volta_e_sem_arquivo_e_none(tmp_path: Path) -> None:
+    from tests.e2e.resultado.armazenamento import gravar_decisao, ler_decisao
+
+    assert ler_decisao(tmp_path) is None
+    gravar_decisao(tmp_path, _decisao())
+    assert ler_decisao(tmp_path) == _decisao()
+
+
+def test_decisao_recusa_schema_invalido_e_versao_desconhecida(tmp_path: Path) -> None:
+    from tests.e2e.resultado.armazenamento import gravar_decisao, ler_decisao
+    from tests.e2e.resultado.modelos import VersaoDesconhecida
+
+    with pytest.raises(jsonschema.ValidationError):
+        gravar_decisao(tmp_path, {**_decisao(), "veredito": "talvez"})
+    (tmp_path / "decisao-go-no-go.json").write_text(
+        json.dumps({**_decisao(), "schema_versao": 2}), encoding="utf-8"
+    )
+    with pytest.raises(VersaoDesconhecida):
+        ler_decisao(tmp_path)

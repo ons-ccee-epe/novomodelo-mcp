@@ -14,7 +14,7 @@ function Lista({ titulo, itens }: { titulo: string; itens: string[] }) {
   if (itens.length === 0) return null;
   return (
     <p className="nm-muted">
-      {titulo}: {itens.join(", ")}
+      {titulo}: {itens.map(limparCaminhos).join(", ")}
     </p>
   );
 }

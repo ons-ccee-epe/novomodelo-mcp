@@ -105,6 +105,8 @@ jobs:
         working-directory: tests/e2e/frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # Mesma versão do engines.node do package.json.
       - name: Instalar o Node

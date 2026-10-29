@@ -227,10 +227,32 @@ def test_detalhe_devolve_a_decisao_do_go_no_go_quando_gravada(
     assert client.get("/api/rodadas/r1").json()["go_no_go"] is None
 
     (pasta / "decisao-go-no-go.json").write_text(
-        json.dumps({"schema_versao": 1, "veredito": "go", "alvo": "sem-mcp", "base": None}),
+        json.dumps(
+            {
+                "schema_versao": 1,
+                "veredito": "go",
+                "alvo": "sem-mcp",
+                "base": None,
+                "bloqueios": [],
+                "inconclusivos": [],
+                "pulados": [],
+                "sem_base": [],
+                "ausentes": [],
+            }
+        ),
         encoding="utf-8",
     )
     assert client.get("/api/rodadas/r1").json()["go_no_go"]["veredito"] == "go"
+
+    (pasta / "decisao-go-no-go.json").write_text(
+        json.dumps({"schema_versao": 1, "veredito": "go"}), encoding="utf-8"
+    )
+    assert "erro" in client.get("/api/rodadas/r1").json()["go_no_go"]
+
+    (pasta / "decisao-go-no-go.json").write_text(
+        json.dumps({"schema_versao": 2, "veredito": "go"}), encoding="utf-8"
+    )
+    assert "schema_versao" in client.get("/api/rodadas/r1").json()["go_no_go"]["erro"]
 
     (pasta / "decisao-go-no-go.json").write_text("{", encoding="utf-8")
     assert "erro" in client.get("/api/rodadas/r1").json()["go_no_go"]

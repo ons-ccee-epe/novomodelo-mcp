@@ -16,6 +16,7 @@ from tests.e2e.resultado.modelos import SCHEMA_VERSAO, Manifesto, Registro, Vers
 
 NOME_MANIFESTO = "manifesto.json"
 NOME_REGISTRO = "registro.json"
+NOME_DECISAO = "decisao-go-no-go.json"
 PADRAO_NOME = r"^(?!\.{1,2}(?![\s\S]))[A-Za-z0-9._-]+(?![\s\S])"
 
 
@@ -95,3 +96,21 @@ def ler_registros(pasta: Path) -> list[Registro]:
         _validar(dados, "registro")
         registros.append(Registro.de_dict(dados))
     return registros
+
+
+def gravar_decisao(pasta: Path, dados: dict[str, Any]) -> Path:
+    """Grava a decisão do go-no-go depois de validá-la contra o schema."""
+    dados = json.loads(json.dumps(dados))
+    _validar(dados, "decisao")
+    return _gravar_json(pasta / NOME_DECISAO, dados)
+
+
+def ler_decisao(pasta: Path) -> dict[str, Any] | None:
+    """A decisão gravada na rodada; `None` se o go-no-go ainda não rodou."""
+    arquivo = pasta / NOME_DECISAO
+    if not arquivo.is_file():
+        return None
+    dados = _ler_json(arquivo)
+    _checar_versao(dados, arquivo)
+    _validar(dados, "decisao")
+    return dados

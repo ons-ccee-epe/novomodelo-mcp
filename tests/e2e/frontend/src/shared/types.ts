@@ -1,4 +1,87 @@
 /**
+ * O conjunto tools como as telas de gráficos o leem: um lote é uma configuração e um
+ * agente de uma rodada, montado por `loteDeTools` (`@/data/rodada`) a partir dos registros.
+ */
+
+export type TestStatus = "pass" | "partial" | "fail" | "skip" | "timeout" | "erro_infra";
+
+export interface ToolCall {
+  name: string;
+  args: Record<string, unknown>;
+  tool_id?: string | null;
+}
+
+export interface TestResult {
+  /** Grupo do caso quando o lote o define (o registro não guarda a tool esperada). */
+  grupo?: string;
+  test_id: string;
+  query: string;
+  expected_tool: string | null;
+  expected_tools: string[] | null;
+  actual_tool: string | null;
+  all_tool_calls: ToolCall[];
+  status: TestStatus;
+  latency_ms: number;
+  tool_latency_ms: number | null;
+  mcp_used: boolean;
+  correct_tool: boolean;
+  correct_result: boolean;
+  agent_response: string;
+  error_message: string | null;
+  tags: string[];
+  validation_checks: Array<Record<string, unknown>>;
+}
+
+export interface BatchMetrics {
+  pct_mcp_used: number;
+  pct_correct_tool: number;
+  pct_correct_result: number;
+  avg_latency_ms: number;
+  p95_latency_ms: number;
+  passed_full?: number;
+  passed_mcp_only?: number;
+  failed_no_mcp?: number;
+  failed_wrong_tool?: number;
+  failed_other?: number;
+}
+
+export interface TagMetrics {
+  total: number;
+  passed: number;
+  failed: number;
+  mcp_used: number;
+  correct_tool: number;
+}
+
+export interface GroupMetrics {
+  total: number;
+  pct_pass: number;
+  pct_mcp_used: number;
+  pct_correct_tool: number;
+  avg_latency_ms: number;
+}
+
+export interface BatchResult {
+  batch_id: string;
+  timestamp: string;
+  mcp_version: string;
+  git_commit_sha: string;
+  environment: string;
+  total_tests: number;
+  passed: number;
+  partial: number;
+  failed: number;
+  skipped: number;
+  timeout: number;
+  erro_infra?: number;
+  test_results: TestResult[];
+  metrics: BatchMetrics;
+  metrics_by_tag: Record<string, TagMetrics>;
+  metrics_by_group: Record<string, GroupMetrics>;
+  conjunto?: string | null;
+}
+
+/**
  * Teste de carga — espelha o JSON de tests/e2e/load/store.py (build_record e index_entry),
  * que o launcher serve em /data/results/load/. Latências são só das chamadas ok; null quando não houve.
  */

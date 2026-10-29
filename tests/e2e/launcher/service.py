@@ -12,7 +12,6 @@ decisão do critério sem base de comparação.
 from __future__ import annotations
 
 import dataclasses
-import json
 import os
 import re
 import subprocess
@@ -31,7 +30,12 @@ from tests.e2e.go_no_go.criterio import decidir
 from tests.e2e.launcher.run_gate import RunAlreadyActiveError, RunGate
 from tests.e2e.queries.loader import CasesLoader
 from tests.e2e.queries.models import QueryTestCase
-from tests.e2e.resultado.armazenamento import PADRAO_NOME, ler_manifesto, ler_registros
+from tests.e2e.resultado.armazenamento import (
+    PADRAO_NOME,
+    ler_decisao,
+    ler_manifesto,
+    ler_registros,
+)
 from tests.e2e.resultado.modelos import VersaoDesconhecida
 from tests.e2e.rodada import (
     ARQUIVO_BLOQUEIO,
@@ -59,7 +63,6 @@ __all__ = [
 PASTA_WHEELS_ENV = "NOVOMODELO_LAUNCHER_PASTA_WHEELS"
 PASTA_LOGS = ".launcher"
 PADRAO_DE_NOME = PADRAO_NOME
-NOME_DECISAO = "decisao-go-no-go.json"
 NOME_DA_RODADA = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
 NOME_DE_WHEEL = r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}\.whl$"
 FILTRO = r"^[A-Za-z0-9][A-Za-z0-9_.*?-]*(,[A-Za-z0-9_.*?-]+)*$"
@@ -386,12 +389,9 @@ class RodadaService:
 
     def _go_no_go(self, pasta: Path) -> dict[str, Any] | None:
         """A decisão gravada pelo `go-no-go`; `None` se ele ainda não rodou nesta rodada."""
-        arquivo = pasta / NOME_DECISAO
-        if not arquivo.is_file():
-            return None
         try:
-            return json.loads(arquivo.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as erro:
+            return ler_decisao(pasta)
+        except (OSError, ValueError, VersaoDesconhecida, jsonschema.ValidationError) as erro:
             return {"erro": self._erro(erro, pasta)}
 
     def _resumo(self, pasta: Path) -> dict[str, Any]:

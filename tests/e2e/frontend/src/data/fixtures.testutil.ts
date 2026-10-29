@@ -1,4 +1,4 @@
-import type { Decisao, Manifesto, Metricas, Registro, Rodada } from "./rodada";
+import { loteDeTools, type Decisao, type Manifesto, type Metricas, type Registro, type Rodada } from "./rodada";
 
 export const SHA_A = "a".repeat(64);
 export const SHA_B = "b".repeat(64);
@@ -111,3 +111,44 @@ export function corpoDetalhe(id: string, registros: Registro[]): Record<string, 
   const r = rodada(id, registros);
   return { ...r, erro: undefined };
 }
+
+export interface LinhaDeTools {
+  caso: string;
+  estado?: Registro["estado"];
+  duracao_s?: number;
+  tools?: Array<[nome: string, duracao_s: number | null]>;
+  repeticao?: number;
+  motivo?: string;
+}
+
+/** Registros do conjunto tools (config mcp-1.0, agente claude) a partir de linhas curtas. */
+export function registrosDeTools(linhas: LinhaDeTools[]): Registro[] {
+  return linhas.map((l) =>
+    registro({
+      conjunto: "tools",
+      caso: l.caso,
+      estado: l.estado ?? "passou",
+      duracao_s: l.duracao_s ?? 1,
+      repeticao: l.repeticao ?? 0,
+      motivo: l.motivo ?? "",
+      tools: (l.tools ?? []).map(([nome, duracao_s]) => ({ nome, ok: true, duracao_s })),
+    }),
+  );
+}
+
+/** O lote do conjunto tools de uma rodada sintética, como as telas de gráficos o leem. */
+export function loteSintetico(
+  id: string,
+  criado_em: string,
+  linhas: LinhaDeTools[],
+  config = "mcp-1.0",
+) {
+  const r = rodada(id, registrosDeTools(linhas).map((x) => ({ ...x, rodada: id, config })), {
+    criado_em,
+  });
+  return loteDeTools(r, config, "claude");
+}
+
+/** Caminhos de máquina montados em tempo de execução, para os testes de limpeza. */
+export const CAMINHO_POSIX = ["", "home", "pessoa"].join("/");
+export const CAMINHO_WINDOWS = ["C:", "Users", "pessoa"].join("\\");

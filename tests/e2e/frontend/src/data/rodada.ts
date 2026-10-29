@@ -5,6 +5,8 @@
  * As vistas só importam este módulo; nenhuma lê arquivo do disco.
  */
 import { API, LAUNCHER_HEADERS } from "@/services/launcherApi";
+import { groupForTool } from "@/shared/toolGroups";
+import type { BatchResult, TestResult, TestStatus } from "@/shared/types";
 
 export const SCHEMA_VERSAO = 1;
 export const SEM_DADO = "—";
@@ -99,6 +101,33 @@ export interface Decisao {
   sem_base: string[];
   ausentes: string[];
 }
+
+export const CAMPOS_DECISAO: Record<keyof Decisao, true> = {
+  schema_versao: true,
+  alvo: true,
+  base: true,
+  veredito: true,
+  bloqueios: true,
+  inconclusivos: true,
+  pulados: true,
+  sem_base: true,
+  ausentes: true,
+};
+
+export const CAMPOS_BLOQUEIO: Record<keyof Bloqueio, true> = {
+  regra: true,
+  conjunto: true,
+  caso: true,
+  agente: true,
+  evidencia: true,
+};
+
+export const VEREDITOS: readonly Veredito[] = ["go", "no-go", "inconclusivo"];
+export const REGRAS: readonly Bloqueio["regra"][] = [
+  "deterministica",
+  "regressao_tool",
+  "regressao_maioria",
+];
 
 export interface DecisaoComErro {
   erro: string;
@@ -231,6 +260,25 @@ export function adaptarRegistro(bruto: unknown): Registro {
   return dados as unknown as Registro;
 }
 
+/** A decisão gravada pelo go-no-go; recusa `schema_versao` desconhecido e campo faltando. */
+export function adaptarDecisao(bruto: unknown): Decisao {
+  const dados = objeto(bruto, "decisão");
+  conferir(dados, CAMPOS_DECISAO, "decisão");
+  if (!VEREDITOS.includes(dados.veredito as Veredito)) {
+    throw new Error(`decisão: veredito ${String(dados.veredito)} desconhecido`);
+  }
+  if (!Array.isArray(dados.bloqueios)) throw new Error("decisão: bloqueios deve ser uma lista");
+  for (const b of dados.bloqueios) {
+    const bloqueio = objeto(b, "decisão.bloqueio");
+    const faltam = Object.keys(CAMPOS_BLOQUEIO).filter((c) => !(c in bloqueio));
+    if (faltam.length > 0) throw new Error(`decisão.bloqueio: faltam os campos ${faltam.join(", ")}`);
+    if (!REGRAS.includes(bloqueio.regra as Bloqueio["regra"])) {
+      throw new Error(`decisão.bloqueio: regra ${String(bloqueio.regra)} desconhecida`);
+    }
+  }
+  return dados as unknown as Decisao;
+}
+
 function adaptarResumo(bruto: unknown): ResumoRodada {
   const d = objeto(bruto, "rodada");
   const lista = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
@@ -276,6 +324,13 @@ export async function carregarRodadas(): Promise<ResumoRodada[]> {
   return itens.map(adaptarResumo);
 }
 
+function adaptarGoNoGo(bruto: unknown): Rodada["go_no_go"] {
+  if (bruto === null || bruto === undefined) return null;
+  const dados = objeto(bruto, "decisão");
+  if ("erro" in dados && !("schema_versao" in dados)) return { erro: String(dados.erro) };
+  return adaptarDecisao(dados);
+}
+
 export async function carregarRodada(id: string): Promise<Rodada> {
   const res = await fetch(`${API}/rodadas/${encodeURIComponent(id)}`, { cache: "no-store" });
   if (!res.ok) return recusa(res, "Falha ao carregar a rodada");
@@ -285,7 +340,7 @@ export async function carregarRodada(id: string): Promise<Rodada> {
     ...adaptarResumo(corpo),
     manifesto: corpo.manifesto ? adaptarManifesto(corpo.manifesto) : null,
     registros,
-    go_no_go: (corpo.go_no_go ?? null) as Rodada["go_no_go"],
+    go_no_go: adaptarGoNoGo(corpo.go_no_go),
   };
 }
 
@@ -344,7 +399,13 @@ export const ROTULO_CONJUNTO: Record<Conjunto, string> = {
 
 const INICIO_CAMINHO = String.raw`(?:[A-Za-z]:[\\/]|\\\\|/(?!/))`;
 const CAMINHO_ENTRE_ASPAS = new RegExp(`'${INICIO_CAMINHO}[^']*'|"${INICIO_CAMINHO}[^"]*"`, "g");
-const CAMINHO_ABSOLUTO = new RegExp(String.raw`(?<![\w.~/\\-])${INICIO_CAMINHO}[^\s'"]*`, "g");
+// Como `tests/e2e/textos.py`: o caminho segue por palavras separadas por espaço até o último
+// trecho que tem barra, para um nome de pasta com espaço sair inteiro.
+const CAMINHO_ABSOLUTO = new RegExp(
+  String.raw`(?<![\w.~/\\-])${INICIO_CAMINHO}[^\s'"]*` +
+    String.raw`(?:(?: [^\s'"/\\]+)* [^\s'"]*[/\\][^\s'"]*)*`,
+  "g",
+);
 
 /** Troca caminhos absolutos (POSIX, Windows e UNC) por `<caminho>`, como a bateria faz nos relatórios. */
 export function limparCaminhos(texto: string): string {
@@ -573,3 +634,118 @@ export function avaliacaoAmpla(registros: Registro[]): AvaliacaoDoAgente[] {
     return { agente, configs, resumo, cenarios };
   });
 }
+
+// ---- conjunto tools: o lote que as telas de gráficos leem ----------------
+
+const STATUS_DO_ESTADO: Record<Estado, TestStatus> = {
+  passou: "pass",
+  falhou: "fail",
+  pulado: "skip",
+  erro_infra: "erro_infra",
+};
+
+/** Configurações e agentes que têm execuções do conjunto tools. */
+export function opcoesDeTools(registros: Registro[]): { configs: string[]; agentes: string[] } {
+  const rs = registros.filter((r) => r.conjunto === "tools");
+  return {
+    configs: ordenarConfigs(rs.map((r) => r.config)),
+    agentes: [...new Set(rs.map((r) => r.agente))].sort(comparaTexto),
+  };
+}
+
+function percentual(parte: number, total: number): number {
+  return total === 0 ? 0 : (100 * parte) / total;
+}
+
+function percentil95(valores: number[]): number {
+  if (valores.length === 0) return 0;
+  const ordem = [...valores].sort((a, b) => a - b);
+  return ordem[Math.max(0, Math.ceil(0.95 * ordem.length) - 1)]!;
+}
+
+/**
+ * Os registros do conjunto tools de uma configuração e um agente, no formato dos gráficos.
+ * O registro não guarda o texto da pergunta, a tool esperada, os argumentos das chamadas nem
+ * a resposta do agente: a pergunta é o id do caso, o grupo é o da primeira tool chamada e
+ * a tool esperada fica sem valor. O uso do MCP é "chamou alguma tool"; tool certa e resultado
+ * certo vêm de `acerto_tool` e `resposta_correta`, ou do estado quando a métrica não existe.
+ */
+export function loteDeTools(rodada: Rodada, config: string, agente: string): BatchResult {
+  const registros = rodada.registros
+    .filter((r) => r.conjunto === "tools" && r.config === config && r.agente === agente)
+    .sort((a, b) => comparaTexto(a.caso, b.caso) || a.repeticao - b.repeticao);
+  const repetido = registros.some((r) => registros.some((o) => o !== r && o.caso === r.caso));
+  const resultados: TestResult[] = registros.map((r) => {
+    const tempoNaTool = r.tools.reduce((t, c) => t + (c.duracao_s ?? 0), 0);
+    const comTempo = r.tools.some((c) => c.duracao_s !== null);
+    return {
+      test_id: repetido ? `${r.caso}#${r.repeticao}` : r.caso,
+      query: r.caso,
+      grupo: groupForTool(r.tools[0]?.nome),
+      expected_tool: null,
+      expected_tools: null,
+      actual_tool: r.tools[0]?.nome ?? null,
+      all_tool_calls: r.tools.map((c) => ({ name: c.nome, args: {} })),
+      status: STATUS_DO_ESTADO[r.estado],
+      latency_ms: r.duracao_s * 1000,
+      tool_latency_ms: comTempo ? tempoNaTool * 1000 : null,
+      mcp_used: r.tools.length > 0,
+      correct_tool: r.metricas.acerto_tool ?? r.estado === "passou",
+      correct_result: r.metricas.resposta_correta ?? r.estado === "passou",
+      agent_response: "",
+      error_message: r.motivo ? limparCaminhos(r.motivo) : null,
+      tags: [],
+      validation_checks: [],
+    };
+  });
+  const contaveis = resultados.filter((r) => r.status !== "skip");
+  const n = contaveis.length;
+  const grupos = new Map<string, TestResult[]>();
+  for (const r of contaveis) grupos.set(r.grupo!, [...(grupos.get(r.grupo!) ?? []), r]);
+  const contar = (s: TestStatus) => resultados.filter((r) => r.status === s).length;
+  const latencias = contaveis.map((r) => r.latency_ms);
+  const media = (v: number[]) => (v.length === 0 ? 0 : soma(v) / v.length);
+  return {
+    batch_id: rodada.rodada,
+    timestamp: rodada.criado_em ?? "",
+    mcp_version: rodada.manifesto?.versoes[`mcp:${config}`] ?? "unknown",
+    git_commit_sha: rodada.commit_bateria ?? "",
+    environment: agente,
+    total_tests: resultados.length,
+    passed: contar("pass"),
+    partial: contar("partial"),
+    failed: contar("fail"),
+    skipped: contar("skip"),
+    timeout: contar("timeout"),
+    erro_infra: contar("erro_infra"),
+    test_results: resultados,
+    metrics: {
+      pct_mcp_used: percentual(contaveis.filter((r) => r.mcp_used).length, n),
+      pct_correct_tool: percentual(contaveis.filter((r) => r.correct_tool).length, n),
+      pct_correct_result: percentual(contaveis.filter((r) => r.correct_result).length, n),
+      avg_latency_ms: media(latencias),
+      p95_latency_ms: percentil95(latencias),
+    },
+    metrics_by_tag: {},
+    metrics_by_group: Object.fromEntries(
+      [...grupos.entries()].map(([grupo, rs]) => [
+        grupo,
+        {
+          total: rs.length,
+          pct_pass: percentual(rs.filter((r) => r.status === "pass").length, rs.length),
+          pct_mcp_used: percentual(rs.filter((r) => r.mcp_used).length, rs.length),
+          pct_correct_tool: percentual(rs.filter((r) => r.correct_tool).length, rs.length),
+          avg_latency_ms: media(rs.map((r) => r.latency_ms)),
+        },
+      ]),
+    ),
+    conjunto: `${config} · ${agente}`,
+  };
+}
+
+/** O que o registro do conjunto tools não guarda, dito na tela. */
+export const AVISOS_DE_TOOLS = [
+  "O registro não guarda o texto da pergunta, a tool esperada, os argumentos das chamadas nem a resposta do agente: a pergunta aparece pelo id do caso e a tool esperada fica sem valor.",
+  "O grupo do caso é o da primeira tool chamada (\"other\" quando nenhuma foi chamada); o uso do MCP é ter chamado alguma tool.",
+  "Tool certa e resultado certo vêm de acerto_tool e resposta_correta; sem a métrica, vale o estado da execução.",
+];

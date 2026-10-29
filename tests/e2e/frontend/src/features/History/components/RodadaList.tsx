@@ -67,8 +67,8 @@ export function RodadaList({ rodadas, selectedId, collapsed, onToggleCollapsed, 
             </span>
             <span className="nm-batch-counts">
               {r.criado_em ? formatDate(r.criado_em) : "—"}
-              {r.configs.length > 0 ? ` · ${r.configs.join(", ")}` : ""}
-              {r.agentes.length > 0 ? ` · ${r.agentes.join(", ")}` : ""}
+              {(r.configs ?? []).length > 0 ? ` · ${(r.configs ?? []).join(", ")}` : ""}
+              {(r.agentes ?? []).length > 0 ? ` · ${(r.agentes ?? []).join(", ")}` : ""}
             </span>
           </li>
         ))}

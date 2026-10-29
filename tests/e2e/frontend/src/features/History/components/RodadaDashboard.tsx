@@ -16,6 +16,7 @@ import { Execucoes } from "./Execucoes";
 import { GoNoGo } from "./GoNoGo";
 import { NotasDoJuiz } from "./NotasDoJuiz";
 import { Taxas } from "./Taxas";
+import { ToolsView } from "./ToolsView";
 
 interface Props {
   rodada: Rodada;
@@ -82,6 +83,8 @@ export function RodadaDashboard({ rodada, todas }: Props) {
           <NotasDoJuiz registros={doConjunto} />
           {doConjunto.length === 0 && <p className="nm-no-data">Nenhuma execução neste conjunto</p>}
         </>
+      ) : conjunto === "tools" ? (
+        <ToolsView rodada={rodada} todas={todas} />
       ) : (
         <>
           <Taxas registros={doConjunto} />

@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppRoutes } from "@/navigation";
-import { carregarRodadas } from "@/data/rodada";
+import { carregarRodadas, type ResumoRodada } from "@/data/rodada";
 
 vi.mock("@/data/rodada", () => ({
   carregarRodadas: vi.fn(),
@@ -19,6 +19,23 @@ vi.mock("@/features/Load", () => ({
   Load: () => <div>tela carga</div>,
 }));
 
+function resumo(rodada: string, configs: string[]): ResumoRodada {
+  return {
+    rodada,
+    bloqueada: false,
+    em_andamento: false,
+    disparo: null,
+    erro: null,
+    criado_em: "2026-10-25T10:00:00Z",
+    configs,
+    conjuntos: ["tools"],
+    agentes: ["claude"],
+    repeticoes: 1,
+    filtro: null,
+    commit_bateria: "abc1234",
+  };
+}
+
 const mockedIndex = vi.mocked(carregarRodadas);
 
 function renderAt(path: string) {
@@ -32,9 +49,9 @@ function renderAt(path: string) {
 beforeEach(() => {
   mockedIndex.mockReset();
   mockedIndex.mockResolvedValue([
-    { rodada: "20261025_100000_abc", configs: ["sem-mcp", "mcp-1.2"] },
-    { rodada: "20261024_100000_abc", configs: ["sem-mcp"] },
-  ] as never);
+    resumo("20261025_100000_abc", ["sem-mcp", "mcp-1.2"]),
+    resumo("20261024_100000_abc", ["sem-mcp"]),
+  ]);
 });
 
 describe("AppLayout", () => {

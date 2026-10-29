@@ -6,7 +6,7 @@ import { defineConfig, loadEnv } from "vite";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// Defaults espelhados em .env.template; o dev server sobe sem .env.
+// O dev server sobe sem .env: estes são os defaults.
 const DEFAULT_DEV_HOST = "127.0.0.1";
 const DEFAULT_DEV_PORT = "5174";
 const DEFAULT_LAUNCHER_URL = "http://127.0.0.1:5175";

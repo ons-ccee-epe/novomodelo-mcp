@@ -1,104 +1,77 @@
 # Dashboard de Testes E2E — novomodelo-mcp (frontend)
 
-Frontend único que **consome os resultados dos testes** em vez de gerar HTML a
-cada execução. Os runners de teste gravam JSON; este frontend lê esses JSON e se
-atualiza a cada refresh.
+Painel que mostra as rodadas da bateria e dispara novas. Ele lê tudo do launcher de dev
+(FastAPI) e não gera HTML a cada execução.
 
 ## Stack
 
 React 19 + TypeScript + Vite 6, HashRouter, Radix UI Themes, Recharts e SVG
 próprio para os gráficos, react-markdown (com remark-gfm) para a resposta do agente, Vitest
-para testes. Sem backend — hospedagem estática.
+para testes. As dependências estão fixadas em versões exatas.
 
 ## Como rodar
 
 ```bash
 cd tests/e2e/frontend
-npm install          # primeira vez
-npm run dev          # http://127.0.0.1:5174
+npm ci               # versões do package-lock.json; Node em engines.node
+npm run dev:launcher # sobe o launcher (porta 5175) e o painel (http://127.0.0.1:5174)
 ```
 
-Rode os testes E2E normalmente (gera/atualiza os JSON em `../results` e
-`../metrics`) e dê **refresh** no dashboard.
+`npm run dev` sobe só o painel; ele precisa do launcher no ar. `npm run dev:tests` roda
+uma rodada (`python -m tests.e2e rodar`, argumentos depois de `--`) e depois sobe os dois.
 
-Build estático (para publicar):
+Build estático:
 
 ```bash
-npm run build        # gera dist/ e copia os JSON para dist/data/
+npm run build        # gera dist/
 npm run preview
 ```
 
+O build não leva dados: o painel os lê do launcher em tempo de execução.
+
 ## De onde vêm os dados
 
-O frontend busca tudo sob `/data`:
+O painel não lê arquivo do disco. Tudo passa por `src/data/rodada.ts`, que fala com o
+launcher:
 
-| Rota                         | Arquivo real                         | Conteúdo                       |
-| ---------------------------- | ------------------------------------ | ------------------------------ |
-| `/data/results/index.json`   | `tests/e2e/results/index.json`       | lista de baterias              |
-| `/data/results/<id>.json`    | `tests/e2e/results/<id>.json`        | uma bateria completa           |
-| `/data/results/baseline.json`| `tests/e2e/results/baseline.json`    | baseline de cada conjunto      |
-| `/data/metrics/history.jsonl`| `tests/e2e/metrics/history.jsonl`    | histórico das baterias         |
-| `/data/results/load/index.json` | `tests/e2e/results/load/index.json` | lista de cargas (Testes de Carga)|
-| `/data/results/load/<id>.json`  | `tests/e2e/results/load/<id>.json`  | uma carga completa           |
+| Rota                      | Conteúdo                                                            |
+| ------------------------- | ------------------------------------------------------------------- |
+| `GET /api/rodadas`        | resumo de cada rodada gravada                                       |
+| `GET /api/rodadas/{id}`   | manifesto, registros e a decisão do go-no-go (quando já rodou)      |
+| `POST /api/rodadas`       | dispara uma rodada com as opções da lista branca do launcher        |
+| `GET /api/command-preview`| o comando equivalente de um disparo                                 |
+| `GET /data/results/load/` | as cargas gravadas (Testes de Carga e o Histórico de carga)         |
 
-- As pastas `results/` e `results/load/` são criadas quando a primeira bateria ou carga
-  é gravada; sem elas, o Histórico de funcionais mostra o erro de carregamento do
-  índice e o de cargas, a lista vazia.
-- **Em dev**: o plugin `resultsDataPlugin` (em `vite.config.ts`) serve `/data`
-  lendo direto do disco — nenhuma cópia, sempre o estado atual.
-- **No build**: `scripts/copy-data.mjs` (hook `postbuild`) copia os JSON para
-  `dist/data/`, inclusive `results/load/`.
-
-O contrato de tipos (`src/shared/types.ts`) espelha os dataclasses de
-`tests/e2e/queries/models.py` e o formato de `tests/e2e/queries/store.py`.
+Em dev, o Vite repassa `/api` e `/data` ao launcher (`VITE_LAUNCHER_URL`). Os tipos de
+`rodada.ts` são conferidos por teste contra `tests/e2e/resultado/schemas/` (manifesto,
+registro e decisão); um `schema_versao` desconhecido é recusado.
 
 ## Áreas
 
-A barra do topo (`navigation/AppNav.tsx`) liga três áreas (HashRouter) e traz o
-botão de modo noturno (a escolha fica no `localStorage` do navegador) e a
-engrenagem com a última bateria, a versão do MCP, o estado do launcher e o
-transporte. A raiz e qualquer rota desconhecida levam a `/#/funcionais`.
+A barra do topo (`navigation/AppNav.tsx`) liga três áreas (HashRouter) e traz o botão de
+modo noturno (a escolha fica no `localStorage` do navegador) e a engrenagem com a última
+rodada, as configurações dela, o estado do launcher e o transporte. A raiz e qualquer rota
+desconhecida levam a `/#/funcionais`.
 
-- **Testes Funcionais** (`/#/funcionais`): escolhe o provedor e o conjunto (esteira
-  completa, um grupo de tools ou uma pergunta) e mostra o quadro de comando de
-  referência (o do terminal e o do agente, vindos de `GET /api/command-preview`). O
-  disparo de agente passa pelo executor em container: o launcher responde 409. A tela
-  traz o progresso ao vivo com **Parar**, o detalhe de cada pergunta e o atalho para a
-  bateria no Histórico para os runs que o launcher aceita. Precisa do launcher.
-- **Testes de Carga** (`/#/carga`): dispara o teste de carga do servidor MCP.
-  Formulário (concorrência, com a capacidade da máquina para a seleção, incluindo o
-  disco das cópias; duração ou iterações, timeout; os casos, no modo agente, cujo disparo o launcher recusa com 409) com o
-  mix de tools resumido numa linha e a lista completa em **Personalizar**, com selos
-  para as que gravam numa cópia das fixtures por sessão e as pesadas. Abaixo, o
-  progresso ao vivo com **Parar** e, ao fim, um resumo da carga gravada e o atalho
-  **Ver no Histórico**. Precisa do launcher. Detalhes do teste em
-  [`../load/README.md`](../load/README.md).
-- **Histórico**: a chave **Funcionais | Carga** no topo da lista escolhe o que
-  aparece.
-  - **Funcionais** (`/#/historico` e `/#/historico/:batchId`): lista as baterias
-    gravadas em `tests/e2e/results/`, filtráveis por conjunto num dropdown, com a
-    variação em relação à baseline do conjunto, a tag do conjunto e a marca de
-    baseline. O detalhe de uma bateria traz o resumo, os tempos, os gráficos (cada um
-    com download em PNG), a lista de perguntas, o detalhe de cada pergunta e o
-    download do resumo. Definir ou remover a baseline usa
-    `PUT`/`DELETE /api/baselines/{conjunto}` e precisa do launcher.
-  - **Carga** (`/#/historico/carga` e `/#/historico/carga/:loadId`): lista as cargas
-    gravadas em `tests/e2e/results/load/`, filtráveis pelo modo, e a carga
-    selecionada: cards (vazão, taxa de erro, p50/p95/p99), a comparação com a carga
-    anterior do mesmo modo (ou outra à escolha), gráfico de latência e vazão no
-    tempo, gráfico e tabela por tool e os detalhes recolhidos (subida dos servidores,
-    recursos, erros, chamadas fora do mix).
+- **Testes Funcionais** (`/#/funcionais`): monta e dispara uma rodada (wheels, conjuntos,
+  agentes, filtro, repetições e os limites da lista branca), com o comando equivalente.
+  Precisa do launcher; ele recusa com 409 enquanto outro run está ativo.
+- **Testes de Carga** (`/#/carga`): dispara o teste de carga do servidor MCP, com o
+  progresso ao vivo e **Parar**. Detalhes em [`../load/README.md`](../load/README.md).
+- **Histórico**: a chave **Rodadas | Carga** no topo da lista escolhe o que aparece.
+  - **Rodadas** (`/#/historico` e `/#/historico/:rodadaId`): no topo, o veredito do
+    go-no-go (com os bloqueios e a evidência) e as configurações (versão, SHA-256 e
+    origem de cada wheel, versões das imagens). Depois, o filtro por conjunto:
+    determinística, tools e usuário. O usuário traz as configurações lado a lado por
+    agente, o detalhe por cenário e a nota com a justificativa do juiz. O tools traz os
+    gráficos, as perguntas, a variação e a evolução entre rodadas, por configuração e
+    agente, e o **Baixar resumo**. A comparação com outra rodada lista as regressões.
+  - **Carga** (`/#/historico/carga` e `/#/historico/carga/:loadId`): as cargas gravadas,
+    a comparação com a anterior e os gráficos.
 
-  As duas listas podem ser recolhidas. O Histórico lê só os JSON, então funciona com
-  o launcher desligado.
-
-## Runners
-
-Os runners gravam JSON, que o painel lê:
-
-- `tests/e2e/queries/run_queries.py` → fora do executor em container recusa a execução.
-
-Este frontend é o único dashboard.
+O registro do conjunto tools não guarda o texto da pergunta, a tool esperada, os
+argumentos das chamadas nem a resposta do agente; a tela diz isso e usa o id do caso e o
+grupo da primeira tool chamada.
 
 ## Estrutura
 
@@ -107,46 +80,34 @@ Layout:
 ```
 src/
   main.tsx                       # entrypoint (HashRouter + Radix Theme)
-  navigation/index.tsx           # rotas
-  navigation/AppNav.tsx          # barra de navegação e layout das rotas
+  data/rodada.ts                 # única fonte dos dados das rodadas: tipos, adaptadores, seletores
+  navigation/                    # rotas e barra de navegação
   shared/constants/Routes.ts     # path de cada tela
   shared/constants/status.ts     # ícones e rótulos de status
-  shared/components/TestDetail.tsx # detalhe de uma pergunta executada (Funcionais e Histórico)
-  shared/types.ts                # contrato de dados (espelha o store.py)
-  shared/toolGroups.ts           # mapa tool->grupo (espelha store.TOOL_GROUPS)
-  shared/conjunto.ts             # valores e rótulos de conjunto (todos, grupo:x, pergunta:y)
-  shared/comparison.ts           # variação entre duas baterias
+  shared/components/TestDetail.tsx # detalhe de uma pergunta do conjunto tools
+  shared/types.ts                # lote do conjunto tools e contrato das cargas
+  shared/toolGroups.ts           # mapa tool->grupo
+  shared/conjunto.ts             # rótulos de conjunto
+  shared/comparison.ts           # variação entre dois lotes
   shared/charts/                 # ChartCard e SvgLegend, base dos gráficos com download
   shared/exportPng.ts            # SVG -> canvas -> PNG
-  theme/styles.css               # tokens de tema claro e escuro (sem cor literal nos componentes)
-  theme/colorScheme.ts           # modo claro/escuro, aplicado antes do primeiro render
-  services/resultsApi.ts         # fetch dos JSON + parse do JSONL
-  services/launcherApi.ts        # controle do launcher (polling cancelável)
-  services/api/useHistory.ts     # baterias, baselines e comparação do histórico
-  services/api/useLauncher.ts    # provedores, casos e disparo de runs
-  services/loadApi.ts            # cargas: leitura de results/load e controle pelo launcher
-  services/api/useLoadResults.ts # index, carga selecionada e comparação
-  services/api/useLoadLauncher.ts# tools/limites, disparo, polling e parada da carga
-  features/Functional/
-    index.tsx                    # tela dos testes funcionais
-    components/                  # TestLauncher, CommandPreview, RunFinished
-      launcher/                  # partes do TestLauncher
+  theme/                         # tokens de tema claro e escuro e o modo noturno
+  services/launcherApi.ts        # base das rotas, header dos POSTs, saúde do launcher
+  services/api/useRodadas.ts     # rodadas, uma rodada e várias para a evolução
+  services/loadApi.ts            # cargas: leitura e controle pelo launcher
+  services/api/useLoad*.ts       # cargas gravadas, disparo, polling e parada
+  features/Functional/           # disparo de uma rodada
   features/History/
-    index.tsx                    # lista e detalhe das baterias ou das cargas
-    format.ts                    # formatação de datas, durações e variações
-    charts/                      # os gráficos do dashboard de uma bateria
-    components/                  # BatchList, BatchDashboard, LoadHistory, ...
-  features/Load/
-    index.tsx                    # disparo da carga
-    compare.ts                   # deltas entre duas cargas (melhor/pior por métrica)
-    components/                  # LoadForm, LoadProgress e o dashboard de uma carga (LoadResult)
+    index.tsx                    # rodadas ou cargas, cada uma com lista e dashboard
+    charts/                      # os gráficos do conjunto tools
+    components/                  # RodadaDashboard, GoNoGo, Configuracoes, AvaliacaoAmpla, ToolsView, ...
+  features/Load/                 # disparo e dashboard da carga
 ```
 
 ## Configuração
 
 Host, porta e URL do launcher vêm de `VITE_DEV_HOST`, `VITE_DEV_PORT` e
-`VITE_LAUNCHER_URL` (ver `.env.template`); sem `.env`, valem os defaults do
-`vite.config.ts`.
+`VITE_LAUNCHER_URL`; sem elas, valem os defaults do `vite.config.ts`.
 
 ## Qualidade
 

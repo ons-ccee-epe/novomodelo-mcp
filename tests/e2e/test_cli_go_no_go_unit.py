@@ -11,7 +11,7 @@ import pytest
 from tests.e2e import __main__ as cli
 from tests.e2e.config import Config
 from tests.e2e.go_no_go.lancamentos import marcar_lancamento
-from tests.e2e.resultado.armazenamento import gravar_manifesto, gravar_registro
+from tests.e2e.resultado.armazenamento import gravar_manifesto, gravar_registro, ler_decisao
 from tests.e2e.resultado.modelos import Conjunto, Estado, Manifesto, Registro
 
 VERSOES = {
@@ -312,3 +312,9 @@ def test_decisao_sem_base_grava_base_nula(tmp_path):
     assert _go("r1", "--alvo", "mcp") == 0
     dados = json.loads((pasta / "decisao-go-no-go.json").read_text(encoding="utf-8"))
     assert dados["veredito"] == "go" and dados["base"] is None
+
+
+def test_decisao_gravada_valida_contra_o_schema(tmp_path):
+    pasta = _rodada(tmp_path, "r1", {"antiga": {"c": "passou"}, "nova": {"c": "falhou"}})
+    assert _go("r1", "--alvo", "nova", "--baseline-config", "antiga") == 1
+    assert ler_decisao(pasta)["veredito"] == "no-go"

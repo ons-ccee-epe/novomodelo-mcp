@@ -36,13 +36,18 @@ from tests.e2e.go_no_go.lancamentos import (
     ultimo_lancamento,
 )
 from tests.e2e.go_no_go.relatorio import escrever_relatorio
-from tests.e2e.resultado.armazenamento import PADRAO_NOME, ler_manifesto, ler_registros
+from tests.e2e.resultado.armazenamento import (
+    NOME_DECISAO,
+    PADRAO_NOME,
+    gravar_decisao,
+    ler_manifesto,
+    ler_registros,
+)
 from tests.e2e.resultado.junit import escrever_junit
-from tests.e2e.resultado.modelos import Manifesto, Registro, VersaoDesconhecida
+from tests.e2e.resultado.modelos import SCHEMA_VERSAO, Manifesto, Registro, VersaoDesconhecida
 
 NOME_RELATORIO = "relatorio-go-no-go.md"
 NOME_JUNIT = "junit.xml"
-NOME_DECISAO = "decisao-go-no-go.json"
 CODIGOS_DO_VEREDITO = {"go": 0, "no-go": 1, "inconclusivo": 2}
 CODIGO_SEGREDO = rodada.CODIGO_SEGREDO
 CODIGO_USO = 64
@@ -442,18 +447,9 @@ def _go_no_go(cfg, args) -> int:
         ),
     )
     _atomico(pasta / NOME_JUNIT, lambda tmp: escrever_junit(alvo, tmp))
-    _atomico(
-        pasta / NOME_DECISAO,
-        lambda tmp: tmp.write_text(
-            json.dumps(
-                {"schema_versao": 1, "alvo": args.alvo, "base": rotulo, **asdict(decisao)},
-                ensure_ascii=False,
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-            newline="\n",
-        ),
+    gravar_decisao(
+        pasta,
+        {"schema_versao": SCHEMA_VERSAO, "alvo": args.alvo, "base": rotulo, **asdict(decisao)},
     )
     print(f"veredito: {decisao.veredito}")
     print(f"relatório: {NOME_RELATORIO}")

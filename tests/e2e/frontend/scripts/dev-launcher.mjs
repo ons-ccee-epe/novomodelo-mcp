@@ -10,7 +10,7 @@
  * - Encerra ambos ao receber Ctrl+C.
  *
  * Se o launcher nao subir (ex.: deps nao instaladas), avisa e sobe o Vite mesmo
- * assim em modo somente-leitura (o dashboard mostra as baterias ja gravadas).
+ * assim; o painel le tudo do launcher, entao abre sem dados e mostra o erro de carga.
  */
 import { spawn, spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
@@ -104,7 +104,7 @@ async function main() {
     console.warn(
       "[dev:launcher] launcher NAO respondeu o health a tempo.\n" +
         "  Verifique as deps: pip install -r tests/e2e/launcher/requirements.txt\n" +
-        "  O Vite vai subir mesmo assim (dashboard somente-leitura das baterias ja gravadas).",
+        "  O Vite vai subir mesmo assim (o painel abre sem dados, pois le tudo do launcher).",
     );
   }
   startVite();

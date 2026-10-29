@@ -7,6 +7,7 @@
   --nm-error: #f59e0b;
   --nm-skip: #94a3b8;
   --nm-timeout: #8b5cf6;
+  --nm-erro_infra: var(--nm-error);
   --nm-partial: #eab308;
 
   /* Texto sobre fundo tingido (pílulas, % e Δ): contraste AA no tema claro. */
@@ -356,6 +357,7 @@ pre {
 .nm-pill[data-tone="partial"] { --pill-color: var(--nm-partial-strong); }
 [data-status="timeout"].nm-status,
 .nm-pill[data-tone="timeout"] { --pill-color: var(--nm-timeout-strong); }
+[data-status="erro_infra"].nm-status { --pill-color: var(--nm-warn-strong); }
 [data-status="skip"].nm-status,
 .nm-pill[data-tone="skip"] { --pill-color: var(--nm-skip-strong); }
 [data-status="running"].nm-status,
@@ -399,11 +401,6 @@ pre {
   cursor: pointer;
 }
 
-.nm-detail-head > .nm-btn {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
 .nm-btn:hover:not(:disabled) {
   border-color: var(--nm-text-muted);
 }
@@ -427,16 +424,6 @@ pre {
 .nm-btn-danger {
   border-color: var(--nm-fail-strong);
   color: var(--nm-fail-strong);
-}
-
-.nm-btn-ghost {
-  background: var(--nm-surface);
-}
-
-.nm-btn-ghost[data-active="true"] {
-  background: var(--nm-primary);
-  border-color: var(--nm-primary);
-  color: var(--nm-on-primary);
 }
 
 .nm-btn-sm {
@@ -516,21 +503,6 @@ pre {
   font-size: 0.8rem;
   white-space: pre-wrap;
   overflow-x: auto;
-}
-
-.nm-pre-wrap {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.nm-pre-wrap[data-kind="error"] {
-  color: var(--nm-fail-strong);
-}
-
-.nm-pre-scroll {
-  max-height: 300px;
-  overflow: auto;
 }
 
 .nm-tool-call-list {
@@ -625,21 +597,6 @@ pre {
 
 .nm-delta[data-trend="up"] { color: var(--nm-pass-strong); }
 .nm-delta[data-trend="down"] { color: var(--nm-fail-strong); }
-
-.nm-delta-box {
-  --pill-color: var(--nm-skip-strong);
-  padding: 0.05rem 0.35rem;
-  border: 1px solid color-mix(in srgb, var(--pill-color) 45%, var(--nm-surface));
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--pill-color) 10%, var(--nm-surface));
-  color: var(--pill-color);
-  font-size: 0.72rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.nm-delta-box[data-trend="up"] { --pill-color: var(--nm-pass-strong); }
-.nm-delta-box[data-trend="down"] { --pill-color: var(--nm-fail-strong); }
 
 /* ===== Tabelas ===== */
 .nm-table {
@@ -789,42 +746,6 @@ pre {
   padding: 1rem 1.25rem;
 }
 
-.nm-launcher-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.9rem 1.25rem;
-  background: var(--nm-surface-2);
-  border-bottom: 1px solid var(--nm-border);
-}
-
-.nm-launcher-toolbar > .nm-banner {
-  margin: 0;
-}
-
-.nm-launcher-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.75rem;
-}
-
-.nm-launcher-groups {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.nm-launcher-groups .nm-btn {
-  padding: 0.25rem 0.65rem;
-  font-size: 0.8rem;
-}
-
-.nm-btn-run-group {
-  margin-left: auto;
-}
-
 .nm-launcher-split {
   display: grid;
   grid-template-columns: minmax(320px, 440px) 1fr;
@@ -903,15 +824,6 @@ pre {
   overflow-wrap: anywhere;
 }
 
-.nm-case-item-side {
-  grid-column: 2;
-  grid-row: 1 / 3;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.3rem;
-}
-
 .nm-case-item-id {
   grid-column: 1;
   font-family: var(--nm-mono);
@@ -926,31 +838,6 @@ pre {
   border: 1px solid var(--nm-border);
   border-radius: var(--nm-radius);
   min-width: 0;
-}
-
-.nm-detail-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--nm-border);
-}
-
-.nm-detail-question {
-  margin: 0 0 0.4rem;
-  font-size: 1.15rem;
-  font-weight: 600;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.nm-detail-sub {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .nm-detail-id {
@@ -1002,40 +889,6 @@ pre {
 }
 
 .nm-detail-hint {
-  font-size: 0.85rem;
-}
-
-.nm-command-preview {
-  border: 1px solid var(--nm-border);
-  border-radius: var(--nm-radius-sm);
-  background: var(--nm-surface);
-}
-
-.nm-command-preview > summary {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.nm-command-preview-body {
-  padding: 0 0.75rem 0.75rem;
-}
-
-.nm-command-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.25rem;
-}
-
-.nm-command {
-  margin-bottom: 0.75rem;
-}
-
-/* ===== Testes de Carga ===== */
-.nm-load-intro {
-  margin: 0 0 1rem;
   font-size: 0.85rem;
 }
 
@@ -1427,11 +1280,6 @@ pre {
   font-size: 1rem;
 }
 
-.nm-batch-card .nm-delta-box {
-  min-width: 3.5rem;
-  text-align: center;
-}
-
 .nm-batch-dashboard {
   display: flex;
   flex-direction: column;
@@ -1820,11 +1668,6 @@ details[open] > summary.nm-call-head::before {
 .nm-case-detail .nm-test-detail {
   padding: 0;
   border-top: none;
-}
-
-.nm-launcher-toolbar > .nm-launcher-progress {
-  margin: 0;
-  padding: 0.6rem 0.85rem;
 }
 
 .nm-launcher-progress[data-status="done"] .nm-progress-fill {

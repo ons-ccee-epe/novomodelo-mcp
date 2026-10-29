@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DECISAO_GO, SHA_A, SHA_B, manifesto, registro, rodada } from "@/data/fixtures.testutil";
+import { CAMINHO_POSIX, CAMINHO_WINDOWS, DECISAO_GO, SHA_A, SHA_B, manifesto, registro, rodada } from "@/data/fixtures.testutil";
 import type { Rodada } from "@/data/rodada";
 import { History } from "@/features/History";
 
@@ -43,10 +43,10 @@ const REGISTROS = [
     config: "mcp-1.0",
     caso: "caso-a",
     metricas: M(true, 2, 0, 12.345, 2000),
-    motivo: "juiz: ótimo, veja /home/pessoa/dados/caso e C:\\Users\\pessoa\\x",
+    motivo: `juiz: ótimo, veja ${CAMINHO_POSIX}/dados/caso e ${CAMINHO_WINDOWS}\\x`,
   }),
   registro({ config: "mcp-1.1", caso: "caso-a", metricas: M(true, 2, 0, 11, null) }),
-  registro({ conjunto: "tools", agente: "claude", caso: "ferramenta-a", tools: [{ nome: "tool_a", ok: true, duracao_s: 1 }] }),
+  registro({ conjunto: "tools", agente: "claude", caso: "ferramenta-a", tools: [{ nome: "docs_list", ok: true, duracao_s: 1 }] }),
   registro({ conjunto: "deterministica", agente: "nenhum", config: "checkout", caso: "unitario-a" }),
 ];
 
@@ -143,11 +143,13 @@ describe("Histórico das rodadas", () => {
       "usuário",
     ]);
     fireEvent.change(filtro, { target: { value: "tools" } });
-    expect(await screen.findByText("tool_a")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Perguntas" })).toHaveTextContent("ferramenta-a");
+    expect(screen.getByLabelText("Configuração")).toHaveValue("mcp-1.0");
+    expect(screen.getByLabelText("Agente")).toHaveValue("claude");
     expect(screen.queryByRole("table", { name: "claude: resumo" })).not.toBeInTheDocument();
     fireEvent.change(filtro, { target: { value: "deterministica" } });
     expect(await screen.findByText("unitario-a")).toBeInTheDocument();
-    expect(screen.queryByText("tool_a")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Perguntas" })).not.toBeInTheDocument();
   });
 
   it("mostra a nota e a justificativa do juiz sem o prefixo", async () => {
@@ -163,8 +165,8 @@ describe("Histórico das rodadas", () => {
       erro: "falha em /var/dados/resultados/r1/manifesto.json",
       manifesto: manifesto({
         wheels: {
-          "mcp-1.0": { arquivo: "a.whl", sha256: SHA_A, origem: "/home/pessoa/build/a.whl" },
-          "mcp-1.1": { arquivo: "b.whl", sha256: SHA_B, origem: "C:\\Users\\pessoa\\b.whl" },
+          "mcp-1.0": { arquivo: "a.whl", sha256: SHA_A, origem: `${CAMINHO_POSIX}/build/a.whl` },
+          "mcp-1.1": { arquivo: "b.whl", sha256: SHA_B, origem: `${CAMINHO_WINDOWS}\\b.whl` },
         },
       }),
     });
@@ -173,8 +175,58 @@ describe("Histórico das rodadas", () => {
     await screen.findByRole("region", { name: "Notas e justificativas do juiz" });
     await waitFor(() => expect(screen.getAllByText("<caminho>").length).toBeGreaterThan(0));
     const texto = document.body.textContent ?? "";
-    expect(texto).not.toContain("/home/");
-    expect(texto).not.toContain("C:\\");
+    expect(texto).not.toContain(CAMINHO_POSIX);
+    expect(texto).not.toContain(CAMINHO_WINDOWS);
     expect(texto).not.toContain("/var/dados/resultados");
+  });
+
+  it("limpa os caminhos com espaço no conjunto tools e nas listas do go-no-go", async () => {
+    const regs = [
+      registro({
+        conjunto: "tools",
+        caso: "ferramenta-a",
+        estado: "falhou",
+        motivo: `falhou em ${CAMINHO_POSIX}/Minha Pasta/x.json fim`,
+      }),
+      registro({
+        conjunto: "deterministica",
+        agente: "nenhum",
+        config: "checkout",
+        caso: "unitario-a",
+        estado: "falhou",
+        motivo: `quebrou em ${CAMINHO_WINDOWS}\\Minha Pasta\\y.txt fim`,
+      }),
+    ];
+    const r = rodada("r1", regs, {
+      go_no_go: {
+        ...DECISAO_GO,
+        inconclusivos: [`caso em ${CAMINHO_POSIX}/Minha Pasta/z`],
+        pulados: [`${CAMINHO_POSIX}/Minha Pasta/p`],
+        sem_base: [`${CAMINHO_POSIX}/Minha Pasta/s`],
+        ausentes: [`${CAMINHO_POSIX}/Minha Pasta/a`],
+      },
+    });
+    servir(r);
+    abrir();
+    const filtro = await screen.findByRole("combobox", { name: "Conjunto" });
+    fireEvent.click(await screen.findByRole("button", { name: /ferramenta-a/ }));
+    expect(await screen.findByText("falhou em <caminho> fim")).toBeInTheDocument();
+    fireEvent.change(filtro, { target: { value: "deterministica" } });
+    expect(await screen.findByText("quebrou em <caminho> fim")).toBeInTheDocument();
+    const texto = document.body.textContent ?? "";
+    for (const proibido of [CAMINHO_POSIX, CAMINHO_WINDOWS, "Minha Pasta"]) expect(texto).not.toContain(proibido);
+  });
+
+  it("tolera um resumo incompleto na lista de rodadas", async () => {
+    const r = rodada("r1", REGISTROS);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const corpo = url.endsWith("api/rodadas") ? { rodadas: [{ rodada: "r1" }] } : r;
+        return { ok: true, status: 200, json: async () => corpo } as unknown as Response;
+      }),
+    );
+    abrir();
+    expect(await screen.findByRole("link", { name: "r1" })).toBeInTheDocument();
   });
 });

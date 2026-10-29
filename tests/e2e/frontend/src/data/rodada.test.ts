@@ -4,21 +4,38 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  CAMPOS_BLOQUEIO,
+  CAMPOS_DECISAO,
   CAMPOS_MANIFESTO,
   CAMPOS_METRICAS,
   CAMPOS_REGISTRO,
   CONJUNTOS,
   ESTADOS,
+  REGRAS,
+  VEREDITOS,
   VersaoDesconhecida,
+  adaptarDecisao,
   avaliacaoAmpla,
   carregarRodada,
   carregarRodadas,
   comparar,
   dispararRodada,
+  justificativaDoJuiz,
+  limparCaminhos,
+  loteDeTools,
   ordenarConfigs,
   porVersao,
 } from "./rodada";
-import { corpoDetalhe, manifesto, registro, rodada } from "./fixtures.testutil";
+import {
+  CAMINHO_POSIX,
+  CAMINHO_WINDOWS,
+  DECISAO_GO,
+  corpoDetalhe,
+  manifesto,
+  registro,
+  registrosDeTools,
+  rodada,
+} from "./fixtures.testutil";
 
 const SCHEMAS = resolve(dirname(fileURLToPath(import.meta.url)), "../../../resultado/schemas");
 
@@ -58,6 +75,100 @@ describe("tipos conferidos contra os schemas", () => {
     const r = schema("registro");
     expect([...CONJUNTOS]).toEqual(r.properties.conjunto!.enum);
     expect([...ESTADOS]).toEqual(r.properties.estado!.enum);
+  });
+});
+
+describe("decisão do go-no-go contra o schema", () => {
+  type Esquema = {
+    required: string[];
+    properties: Record<string, { enum?: string[] }> & {
+      bloqueios: {
+        items: { required: string[]; properties: Record<string, { enum?: string[] }> };
+      };
+    };
+  };
+  const esquema = schema("decisao") as unknown as Esquema;
+
+  it("os campos e os enums são os do schema", () => {
+    expect(Object.keys(CAMPOS_DECISAO).sort()).toEqual(Object.keys(esquema.properties).sort());
+    expect(Object.keys(CAMPOS_DECISAO).sort()).toEqual([...esquema.required].sort());
+    const bloqueio = esquema.properties.bloqueios.items;
+    expect(Object.keys(CAMPOS_BLOQUEIO).sort()).toEqual([...bloqueio.required].sort());
+    expect([...VEREDITOS]).toEqual(esquema.properties.veredito!.enum);
+    expect([...REGRAS]).toEqual(bloqueio.properties.regra!.enum);
+  });
+
+  it("aceita a decisão válida e recusa versão desconhecida, campo faltando e enum fora", () => {
+    expect(adaptarDecisao(DECISAO_GO).veredito).toBe("go");
+    expect(() => adaptarDecisao({ ...DECISAO_GO, schema_versao: 2 })).toThrow(VersaoDesconhecida);
+    const semBase: Record<string, unknown> = { ...DECISAO_GO };
+    delete semBase.base;
+    expect(() => adaptarDecisao(semBase)).toThrow(/base/);
+    expect(() => adaptarDecisao({ ...DECISAO_GO, veredito: "talvez" })).toThrow(/veredito/);
+    const bloqueio = { regra: "outra", conjunto: "tools", caso: "c", agente: "a", evidencia: [] };
+    expect(() => adaptarDecisao({ ...DECISAO_GO, bloqueios: [bloqueio] })).toThrow(/regra/);
+  });
+
+  it("carregarRodada recusa uma decisão com schema_versao desconhecido", async () => {
+    const corpo = corpoDetalhe("r1", []);
+    corpo.go_no_go = { ...DECISAO_GO, schema_versao: 7 };
+    respostas(corpo);
+    await expect(carregarRodada("r1")).rejects.toBeInstanceOf(VersaoDesconhecida);
+  });
+
+  it("repassa o erro que o launcher devolve no lugar da decisão", async () => {
+    const corpo = corpoDetalhe("r1", []);
+    corpo.go_no_go = { erro: "resultado ilegível" };
+    respostas(corpo);
+    expect((await carregarRodada("r1")).go_no_go).toEqual({ erro: "resultado ilegível" });
+  });
+});
+
+describe("limparCaminhos", () => {
+  it("troca caminhos POSIX, Windows e UNC, inclusive com espaço no nome", () => {
+    expect(limparCaminhos(`falha em ${CAMINHO_POSIX}/Meus Documentos/x.json fim`)).toBe(
+      "falha em <caminho> fim",
+    );
+    expect(limparCaminhos(`abriu ${CAMINHO_WINDOWS}\\Meus Arquivos\\a.txt agora`)).toBe(
+      "abriu <caminho> agora",
+    );
+    expect(limparCaminhos(String.raw`rede \\servidor\pasta\a`)).toBe("rede <caminho>");
+    expect(limparCaminhos("'/var/dados com espaço/r1'")).toBe("<caminho>");
+    expect(limparCaminhos("mcp/x e tools/caso")).toBe("mcp/x e tools/caso");
+  });
+
+  it("tira o prefixo do juiz e limpa a justificativa", () => {
+    expect(justificativaDoJuiz("nota 1 abaixo de 2; juiz: ruim em /tmp/a b/c.txt")).toBe("ruim em <caminho>");
+    expect(justificativaDoJuiz("falha na execução")).toBe("falha na execução");
+  });
+});
+
+describe("loteDeTools", () => {
+  it("monta o lote a partir dos registros: grupo pela primeira tool, estados e tempos", () => {
+    const regs = registrosDeTools([
+      { caso: "q1", duracao_s: 2, tools: [["docs_list", 0.5], ["deck_list", 0.25]] },
+      { caso: "q2", estado: "falhou", tools: [] },
+      { caso: "q3", estado: "erro_infra" },
+      { caso: "q4", estado: "pulado" },
+    ]);
+    const lote = loteDeTools(rodada("r1", regs), "mcp-1.0", "claude");
+    expect(lote.batch_id).toBe("r1");
+    expect(lote.mcp_version).toBe("1.0.0");
+    expect([lote.passed, lote.failed, lote.erro_infra, lote.skipped]).toEqual([1, 1, 1, 1]);
+    const [q1] = lote.test_results;
+    expect(q1).toMatchObject({ grupo: "docs", latency_ms: 2000, tool_latency_ms: 750, mcp_used: true });
+    expect(lote.test_results[1]).toMatchObject({ grupo: "other", tool_latency_ms: null });
+    expect(lote.metrics.pct_mcp_used).toBeCloseTo(100 / 3);
+    expect(Object.keys(lote.metrics_by_group)).toEqual(["docs", "other"]);
+  });
+
+  it("distingue as repetições do mesmo caso", () => {
+    const regs = registrosDeTools([
+      { caso: "q1", repeticao: 0 },
+      { caso: "q1", repeticao: 1 },
+    ]);
+    const lote = loteDeTools(rodada("r1", regs), "mcp-1.0", "claude");
+    expect(lote.test_results.map((r) => r.test_id)).toEqual(["q1#0", "q1#1"]);
   });
 });
 
