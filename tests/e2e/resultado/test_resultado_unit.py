@@ -12,6 +12,7 @@ import pytest
 
 from tests.e2e.resultado import armazenamento
 from tests.e2e.resultado.armazenamento import (
+    PADRAO_NOME,
     caminho_execucao,
     gravar_manifesto,
     gravar_registro,
@@ -150,7 +151,7 @@ def test_junit_mapeia_os_quatro_estados(tmp_path: Path) -> None:
     assert casos[1].find("failure").get("message") == "resposta errada"
 
 
-@pytest.mark.parametrize("nome", ["../x", "/etc", "a/b", "a\\b", "..", ".", ""])
+@pytest.mark.parametrize("nome", ["../x", "/etc", "a/b", "a\\b", "..", ".", "", "a\n"])
 @pytest.mark.parametrize("campo", ["caso", "agente", "config"])
 def test_caminho_execucao_recusa_nome_que_escapa(tmp_path: Path, campo: str, nome: str) -> None:
     with pytest.raises(ValueError, match=campo):
@@ -165,7 +166,7 @@ def test_deterministica_com_hifen_passa(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("campo", ["caso", "agente", "config"])
-@pytest.mark.parametrize("nome", ["a/b", "..", "", "a\\b"])
+@pytest.mark.parametrize("nome", ["a/b", "..", "", "a\\b", "a\n"])
 def test_schema_recusa_nome_invalido(campo: str, nome: str) -> None:
     dados = _registro().para_dict()
     dados[campo] = nome
@@ -189,3 +190,11 @@ def test_schema_versao_bate_com_os_schemas() -> None:
     for nome in ("registro", "manifesto"):
         schema = json.loads((pasta / f"{nome}.schema.json").read_text(encoding="utf-8"))
         assert schema["properties"]["schema_versao"]["const"] == SCHEMA_VERSAO
+
+
+def test_padrao_de_nome_igual_no_schema_e_no_codigo() -> None:
+    schema = json.loads(
+        (Path(__file__).parent / "schemas" / "registro.schema.json").read_text(encoding="utf-8")
+    )
+    for campo in ("caso", "agente", "config"):
+        assert schema["properties"][campo]["pattern"] == PADRAO_NOME
