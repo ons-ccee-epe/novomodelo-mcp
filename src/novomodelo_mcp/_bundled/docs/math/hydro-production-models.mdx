@@ -161,14 +161,14 @@ The plane is fitted once per plant (§2.1–§2.8); a plant split across buses e
 
 ### 2.6 Computed FPHA Fitting Pipeline
 
-The computed-FPHA path produces hyperplanes from topology data in four stages: convex-hull fit → $k_{FPHA}$ correction → lateral-flow secant → optional plane reduction. The fit is resolved **per production-model entry** (per season or stage range), so planes can differ across the horizon for the same plant. Results are expanded to per-stage hyperplane rows.
+The computed-FPHA path produces hyperplanes from topology data in four stages: convex-hull fit → $k_{FPHA}$ correction → lateral-flow secant → optional plane reduction. The fit is resolved **per production-model entry** (per season or stage range), so planes can differ across the horizon for the same plant. Only the stages whose entry selects FPHA are fit; a stage of the same plant that uses another production model carries no planes. Results are expanded to per-stage hyperplane rows.
 
 #### 2.6.1 Grid and Cloud
 
 The fitter evaluates the exact production function $\phi = (9.81\,\eta_h/1000) \cdot q \cdot h_{net}$ on a uniform two-dimensional grid over the fitting window, **with spillage $s = 0$ and lateral flow $= 0$**. The grid has:
 
 - **Volume axis**: a configurable number of uniformly spaced values spanning the fitting window $[v_{min}, v_{max}]$. The window lies within the plant's forebay storage range (the full range unless narrowed) and is distinct from the reference volume (§4.1), which fixes an operating point, not this window. The point counts and the window are set on the Configure tab.
-- **Flow axis**: a configurable number of uniformly spaced values spanning $[0, q_{max}]$. The axis **starts at $q = 0$**, where generation is zero; this zero-flow column anchors the lower closure of the cloud and eliminates the need for any synthetic closing point.
+- **Flow axis**: a configurable number of uniformly spaced values spanning $[0, q^{fit}_{max}]$, where the upper end $q^{fit}_{max}$ of the turbined-flow fit range is the plant's maximum turbined flow $q_{max}$ unless another upper end is set on the Configure tab. The axis **starts at $q = 0$**, where generation is zero; this zero-flow column anchors the lower closure of the cloud and eliminates the need for any synthetic closing point.
 
 Each cloud point is capped at the plant's installed capacity $\bar{G}_h$. Spillage is not a cloud dimension — it is fixed at zero throughout.
 
@@ -206,13 +206,35 @@ The figure below shows a synthetic plant with normalized axes: storage, flow and
 
 ### 2.7 Lateral-Flow Secant
 
-Spillage raises the tailrace level, lowering net head and generation. The $\gamma_s^m$ coefficient for each plane is fit by a **per-plane 1-D ordinary-least-squares secant** of generation vs lateral flow (the plant's own spillage $s$) over evenly spaced samples of $q_{lat} \in [0, S_{max}]$, evaluated at the plane's representative (active-maximum) operating point:
+Spillage raises the tailrace level, lowering net head and generation. The $\gamma_s^m$ coefficient of each plane is the mean, over the spill$=0$ grid points where that plane binds, of a **zero-anchored least-squares slope** of generation against lateral flow $q_{lat}$ (the plant's own spillage $s$).
+
+**Pointwise slope.** At each grid point $(V_i, Q_j)$ of §2.6.1, the lateral flow is sampled at $N$ evenly spaced values $s_n = n \, S_{max} / N$, $n = 1, \ldots, N$, of $[0, S_{max}]$, and a line through the spill$=0$ generation is fit to the samples:
 
 $$
-S_{max} = \begin{cases}2 \cdot \text{MLT} & \text{if MLT} > 0 \\ 2 \cdot q_{max} & \text{if MLT} = 0\end{cases}
+\sigma_{ij} = \frac{\sum_{n=1}^{N} s_n \big[\phi(V_i, Q_j, s_n) - \phi(V_i, Q_j, 0)\big]}{\sum_{n=1}^{N} s_n^2}
 $$
 
-where MLT is the long-term mean inflow (m³/s). The **representative operating point** for each plane is the spill$=0$ grid point where that plane is the active (tightest) upper bound and attains the largest generation — the operating region the plane actually governs. The secant samples the **uncapped** production function $\phi$ (not clipped at installed capacity $\bar{G}_h$), so the spillage sensitivity is read from the raw head curve and is not flattened wherever the capacity ceiling binds — unlike the cloud and the $k_{FPHA}$ regression (§2.6), which both use the capacity-capped output.
+The line is anchored at $\phi(V_i, Q_j, 0)$ instead of carrying a free intercept, because the plane already holds the spill$=0$ generation in its other terms. The slope samples the **uncapped** production function $\phi$ (not clipped at installed capacity $\bar{G}_h$), so the spillage sensitivity is read from the raw head curve and is not flattened wherever the capacity ceiling binds — unlike the cloud and the $k_{FPHA}$ regression (§2.6), which both use the capacity-capped output.
+
+**Binding points.** A grid point counts for plane $m$ when that plane is the binding bound there, the pointwise minimum over the planes of §2.6.3 at spill $= 0$, up to a small tolerance $\epsilon$, so a point on a facet edge counts for every plane that meets there:
+
+$$
+\mathcal{A}_m = \Big\{ (i, j) : \hat{g}^m(V_i, Q_j) - \min_{m'} \hat{g}^{m'}(V_i, Q_j) \le \epsilon \Big\}, \qquad \hat{g}^m(V, Q) = \gamma_0^m + \gamma_v^m V + \gamma_q^m Q
+$$
+
+$$
+\gamma_s^m = \frac{1}{\lvert\mathcal{A}_m\rvert} \sum_{(i, j) \in \mathcal{A}_m} \sigma_{ij}, \qquad \gamma_s^m = 0 \ \text{ when } \mathcal{A}_m = \emptyset
+$$
+
+The minimum selects the points, not the maximum: the LP applies $g \le \hat{g}^m$ for every plane, so a plane governs generation only where it is the tightest bound, the min-envelope that the $k_{FPHA}$ regression also reads. Averaging where a plane is the loosest bound would read its slope where it does not govern.
+
+**Sample range.** The lateral flow is sampled up to
+
+$$
+S_{max} = \begin{cases} \bar{S}^{fit} & \text{if the spillage fit range has a configured upper end } \bar{S}^{fit} \\ 2 \cdot \text{MLT} & \text{otherwise, if MLT} > 0 \\ 2 \cdot q_{max} & \text{otherwise} \end{cases}
+$$
+
+where MLT is the plant's long-term mean inflow (m³/s), the mean of its recorded inflow history, and $q_{max}$ is the plant's maximum turbined flow, whatever the turbined-flow fit range of §2.6.1. The upper end $\bar{S}^{fit}$ is set on the Configure tab.
 
 **Sign**: $\gamma_s^m \le 0$ (more lateral flow raises the tailrace, reduces generation). A slope that is non-negative or negligibly negative is **snapped to exactly 0** (Implementation notes, "Computed-FPHA fitting behavior") to protect LP column scaling from near-zero structural coefficients.
 
@@ -619,8 +641,12 @@ synthetic closing point and no spillage axis in the cloud — takes the 3-D
 convex hull of the resulting cloud with vendored qhull, applies a
 least-squares $k_{FPHA}$ correction that scales the **whole affine plane**
 (intercept and slopes together, not just the intercept), and fits a per-plane
-lateral-flow secant. Fits are resolved independently per stage range or
-season. Run-of-river plants (a single fitting volume) are supported: the
+lateral-flow secant. Planes are fit only on the stages whose entry selects
+`"fpha"`, independently per stage range or season, so the plant's other stages
+may use constant productivity; each FPHA stage needs an entry that carries an
+`fpha_config` (see
+[Production Model Files](/reference/case-format/production-models/#systemhydro_production_modelsjson)).
+Run-of-river plants (a single fitting volume) are supported: the
 fitter synthesizes two nearby volume samples to keep the hull non-degenerate,
 then snaps the resulting `gamma_v` to exactly `0`. See Implementation notes
 for the full fitting-pipeline summary and methodology §2.6–§2.7 for the
@@ -638,7 +664,9 @@ run-of-river plants (a constant forebay, so `gamma_v = 0`).
   "turbine_discretization_points": 5,
   "spillage_discretization_points": 5,
   "max_planes_per_hydro": 10,
-  "fitting_window": null
+  "fitting_window": null,
+  "turbined_fit_max_m3s": null,
+  "spillage_fit_max_m3s": null
 }
 ```
 
@@ -651,6 +679,8 @@ All fields except `source` are optional:
 | `spillage_discretization_points` | 5       | Validated (must be `>= 2`) but does **not** add a spillage axis to the fitting grid — the cloud and the $k_{FPHA}$ regression fix spillage at `0`, and the lateral-flow secant sweeps its own sample range independently (§2.7). The field is retained for input round-tripping. |
 | `max_planes_per_hydro`           | 10      | Accepted and validated (`>= 1`) but does not trim the plane set — the hull fitter emits exactly the upper-envelope facets. |
 | `fitting_window`                 | null    | Optional volume range for fitting; absent uses the full forebay range of the plant's `system/hydro_geometry.parquet` volume-height curve. |
+| `turbined_fit_max_m3s`           | null    | Upper end (m³/s) of the turbined-flow axis of the fitting grid, $q^{fit}_{max}$ in §2.6.1; the axis starts at `0`. Finite and `> 0`, else rejected at load. Absent uses the plant's `max_turbined_m3s`. It may lie below or above `max_turbined_m3s`; the LP turbined-flow bounds stay the plant's own. |
+| `spillage_fit_max_m3s`           | null    | Upper end (m³/s) of the lateral-flow sample of the secant, $\bar{S}^{fit}$ in §2.7. Finite and `> 0`, else rejected at load. Absent uses twice the mean of the plant's `scenarios/inflow_history.parquet` values, or twice its `max_turbined_m3s` when that mean is not positive. |
 
 `fitting_window` restricts which portion of the operating range builds the
 grid — useful when the plant rarely operates near one extreme:
@@ -776,7 +806,9 @@ planned-outage stage, as
 | Rule                            | Error Class          | Description |
 | -------------------------------- | --------------------- | ----------- |
 | FPHA geometry coverage            | Dimensional error      | When `system/hydro_geometry.parquet` holds any row, every `fpha` plant must have at least 1 row of its own (a single row is valid for run-of-river plants); with no row in the file this rule does not run. |
-| FPHA plane coverage               | Dimensional error      | Every `(hydro_id, stage_id)` group in `system/fpha_hyperplanes.parquet` must have at least 1 plane. |
+| FPHA hyperplane coverage          | Dimensional error      | When `system/fpha_hyperplanes.parquet` holds any row, every `fpha` plant with turbine capacity must have rows of its own, whatever its `source`; with no row in the file this rule does not run. |
+| FPHA fit ranges                   | Schema error           | `turbined_fit_max_m3s` and `spillage_fit_max_m3s`, when set, must be finite and `> 0`. |
+| FPHA stage coverage (computed)    | Setup error            | On a plant with any `source: "computed"` entry, every stage whose entry selects `"fpha"` must resolve to an entry with an `fpha_config`; an uncovered stage or a `default_model` of `"fpha"` is rejected when the study is set up. |
 | FPHA coefficient signs            | Semantic error         | `gamma_v` must be non-negative (`>= 0`; run-of-river plants have `gamma_v = 0`); `gamma_s` must be non-positive. |
 | Geometry monotonicity             | Semantic error         | `volume_hm3` must be strictly increasing; `height_m` and `area_km2` must be non-decreasing. |
 
@@ -796,10 +828,10 @@ and [Output Format](/reference/output/) pages).
 | `system/hydro_geometry.parquet` | Volume-Height-Area (VHA) curves — required for any hydro using computed FPHA and for the evaporation area-volume conversion; when the file holds any row, every FPHA plant needs at least 1 row of its own; also read, for any plant with a specific productivity, by the useful-range mean evaluator ([Hydro Production Function Models §4.3](/math/hydro-production-models#43-useful-range-mean-productivity)). |
 | `system/hydro_energy_productivity.parquet` | Per-`(hydro, stage)` overrides: equivalent productivity (the reference-point value), useful-range mean equivalent productivity (the mean value, set outright), specific productivity (both evaluators' head term and the `specific_productivity` tag), reference turbined flow (the `reference_turbine` tag only) — the tabular authoring source of the Configure tab's resolution order, and the FPHA override. |
 | `system/tailrace_curves.parquet` | Optional piecewise-quartic tailrace-level curves — `tailrace_level(outflow)` per `(hydro_id, family_id, segment_id)` — feeding the computed-FPHA fit. A hydro with no curve uses its entity-level `tailrace` model. |
-| `system/fpha_hyperplanes.parquet` | Pre-fitted FPHA hyperplane coefficients, read when a plant's `fpha_config.source` is `"precomputed"`. |
+| `system/fpha_hyperplanes.parquet` | Pre-fitted FPHA hyperplane coefficients, read for a plant whose `"fpha"` entries are `"precomputed"` or carry no `fpha_config`; a plant with any `"computed"` entry is fit from geometry and its rows here are not read. |
 | `constraints/hydro_unit_group_bounds.parquet` | Optional stage-varying, optionally per-block overrides of a unit group's four declared bounds (see the [System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo) Configure tab). Rows are keyed by `(hydro_id, hydro_unit_group_id, stage_id, block_id?)`, where `hydro_unit_group_id` matches a group's own `id` in `hydros.json`; a group with no override row reads its declared value. |
 | `constraints/hydro_bounds.parquet` | Optional stage-varying (and optionally per-block) overrides of a hydro **plant's** own bounds (maximum turbined flow, storage, outflow, maximum generation, diversion, spillage, filling rate, withdrawal). Its `min_turbined_m3s` and `min_generation_mw` bind on the plant's total turbined flow and generation where they exceed the sum of its unit groups' resolved minima, and its `max_turbined_m3s` and `max_generation_mw` cap that total where they are below the sum of its buses' capacities ([LP Formulation — Plant Minimum and Maximum](/math/lp-formulation#plant-minimum-and-maximum)). Keyed by `(hydro_id, stage_id)` with an optional `block_id`; an absent/null cell falls back to the declared base value. **Distinct** from the per-unit-group `hydro_unit_group_bounds.parquet` above — a separate, plant-level file (see the [System Element Modeling Overview](/math/system-elements#implementation-in-novomodelo) Configure tab). |
-| `initial_conditions.json` (hydro rows) | Per-hydro initial state: `storage` or `filling_storage` (exactly one), and optional `past_defluences` seeding the pre-study releases in transit on a declared travel-time arc. AR-lag seeding for the PAR inflow model derives from `scenarios/inflow_history.parquet` and `recent_observations` instead — see the [PAR(p) Inflow Model](/math/par-inflow-model#implementation-in-novomodelo) Inputs & Outputs tab. |
+| `initial_conditions.json` (hydro rows) | Per-hydro initial state: `storage` for a hydro without a `filling` configuration, `filling_storage` for one with it (an entry in the other array is refused), a `storage` value inside the hydro's own `[min_storage_hm3, max_storage_hm3]`, and optional `past_defluences` seeding the pre-study releases in transit on a declared travel-time arc. AR-lag seeding for the PAR inflow model derives from `scenarios/inflow_history.parquet` and `recent_observations` instead — see the [PAR(p) Inflow Model](/math/par-inflow-model#implementation-in-novomodelo) Inputs & Outputs tab. |
 
 For the complete field-by-field schema of each file above, see the
 [Case Format](/reference/case-format/) reference page in
@@ -819,7 +851,7 @@ Each row names a data source, the fields the methodology above reads from it, an
 | Hydro production models input | Range-level productivity per `stage_range` / `seasonal` entry (non-FPHA, optional) | $\rho_{h,t}$ for §1 (§4.1) |
 | Hydro production models input | `reference_volume` per `stage_range` / `seasonal` entry (absolute or percentile) | $V^{ref}$ for the energy-conversion reduction (§4.1) and the tailrace backwater reference level (§2.3.1) |
 | Hydro production models input | FPHA `fitting_window` per `stage_range` / `seasonal` entry (absolute or percentile bounds, optional) | Computed-FPHA volume grid $[v_{min}, v_{max}]$ (§2.6.1) |
-| Hydro production models input | FPHA fitting configuration and optional `fpha_plane_reduction` block | Grid sizes, plane reduction method (§2.6–§2.8) |
+| Hydro production models input | FPHA fitting configuration (`turbined_fit_max_m3s`, `spillage_fit_max_m3s` among it) and optional `fpha_plane_reduction` block | Grid sizes, the fit-range upper ends $q^{fit}_{max}$ (§2.6.1) and $\bar{S}^{fit}$ (§2.7), plane reduction method (§2.6–§2.8) |
 | Hydro energy productivity input | Per-(hydro, stage) `equivalent_productivity_mw_per_m3s`, `integrated_equivalent_productivity_mw_per_m3s` and specific productivity | $\rho_{eq,h,t}$: the authoring source of a non-FPHA plant, the override of an FPHA plant (§4.1); $\bar\rho_{eq,h,t}$ set outright by the integrated column (§4.3); $\rho_{esp,h,t}$ for both evaluators' head-derived value (§4.1, §4.3) |
 | Hydro geometry | `volume_hm3`, `height_m` | $h_{fore}(v)$ interpolation (§2.3); mean forebay level $\bar h_{fore,h}$ (§4.3) |
 | Pre-fitted FPHA planes | `gamma_0`, `gamma_v`, `gamma_q`, `gamma_s` (plus the optional `kappa` intercept factor, default 1.0) | Optional alternative to in-process fitting |
@@ -855,8 +887,13 @@ starts at `q = 0`; that zero-flow column is generation-zero by construction
 and anchors the lower closure of the cloud, so the fitter needs neither a
 synthetic closing point nor a spillage axis in the cloud itself — spillage
 sensitivity is captured separately by the per-plane lateral-flow secant
-(§2.7), not by adding a third grid dimension. That secant uses
-nine evenly spaced samples of the lateral flow.
+(§2.7), not by adding a third grid dimension. The secant samples the lateral
+flow at `101` evenly spaced values of `[0, S_max]`, both ends included (`N = 100`
+in §2.7), at every point of the same (volume, turbined-flow) grid, and a grid
+point counts for a plane when that plane lies within `1e-8` MW of the
+pointwise minimum there. The upper end `turbined_fit_max_m3s` of the flow
+axis and the upper end `spillage_fit_max_m3s` of the lateral-flow sample are
+set per production-model entry (Configure tab).
 
 The 3-D convex hull's upper-envelope facets are corrected by a single
 least-squares $k_{FPHA}$ scalar. That correction scales the **whole affine
@@ -933,8 +970,9 @@ FPHA fit for hydro UHE Example (stage 3) deviates 6.2% from the exact production
 
 The warning is informational — the run continues with the fitted planes. A
 high deviation typically indicates a strongly non-concave production surface
-that no single $k_{FPHA}$ scalar can track well; narrowing `fitting_window`
-or raising the discretization point counts are the usual remedies.
+that no single $k_{FPHA}$ scalar can track well; narrowing `fitting_window`,
+lowering `turbined_fit_max_m3s` or raising the discretization point counts are
+the usual remedies.
 
 ### Determinism guarantees
 
@@ -973,7 +1011,7 @@ for the water-balance treatment of the resulting flux.
 
 ### Commissioning: the PreFilling state
 
-A hydro's `entry_stage_id`/`exit_stage_id` commissioning window is honored even for a **non-filling** hydro (one with no `filling` block). At any stage outside its window — before `entry_stage_id`, or from `exit_stage_id` onward — the plant is **PreFilling**: the site is not in service, so its turbine, spillage, and diversion columns are pinned to zero, its storage is frozen by the identity $v_h = v^{in}_h$, and its local inflow, the upstream releases, the flows diverted in and the in-transit water maturing into it are routed past the site to the first downstream plant that is not PreFilling (or leaves the modelled system if there is none). Unlike the generic outside-window zero-pin used for the other entity types, the river is never trapped or duplicated at a site that is not in service. See [LP Formulation — Lifecycle Phases](/math/lp-formulation#lifecycle-phases) for every phase and [Penalty System](/math/penalty-system) for the spillage-frozen-versus-costed distinction.
+A hydro's `entry_stage_id`/`exit_stage_id` commissioning window is honored even for a **non-filling** hydro (one with no `filling` block). At any stage outside its window — before `entry_stage_id`, or from `exit_stage_id` onward — the plant is **PreFilling**: the site is not in service, so its turbine, spillage, and diversion columns are pinned to zero, its storage is frozen by the identity $v_h = v^{in}_h$, and its local inflow with its inflow non-negativity slack, the upstream releases, the flows diverted in and the in-transit water maturing into it are routed past the site to the first downstream plant that is not PreFilling (or leaves the modelled system if there is none). A plant dormant before its `entry_stage_id` therefore keeps its `initial_conditions.json` storage at every dormant stage. At a PreFilling stage the storage column has a floor of `0` and a ceiling never below the plant's own `max_storage_hm3`, so a stage `max_storage_hm3` in `constraints/hydro_bounds.parquet` below the kept storage does not make that stage infeasible. Unlike the generic outside-window zero-pin used for the other entity types, the river is never trapped or duplicated at a site that is not in service. See [LP Formulation — Lifecycle Phases](/math/lp-formulation#lifecycle-phases) for every phase and [Penalty System](/math/penalty-system) for the spillage-frozen-versus-costed distinction.
 
 ### Water travel time: in-transit seed and validation
 

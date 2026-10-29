@@ -3,6 +3,39 @@ title: novomodelo changelog
 description: What changed in each novomodelo release, from 0.18.0 on.
 ---
 
+## 0.19.1
+
+Released 2026-10-26.
+
+### Added
+
+- `fpha_config.spillage_fit_max_m3s` and `fpha_config.turbined_fit_max_m3s` in
+  `system/hydro_production_models.json` set the upper end of the spillage and
+  turbined-flow ranges a computed FPHA is fit over. Absent, the ranges are
+  unchanged.
+
+### Changed
+
+- **BREAKING:** an `initial_conditions.json` storage outside the hydro's
+  storage range is refused at load. It used to be clamped silently. A `filling`
+  hydro listed under `storage`, or a non-filling one under `filling_storage`,
+  is refused too.
+- The spillage coefficients of computed FPHA planes change: they are now fit
+  over the points where each plane binds.
+
+### Fixed
+
+- The initial storage is no longer moved into the first stage's
+  `min_storage_hm3` and `max_storage_hm3` from
+  `constraints/hydro_bounds.parquet`, which bound the end of that stage; the
+  move added or removed water before the first solve. `novomodelo validate`
+  warns when the initial storage lies outside those bounds.
+- A `max_storage_hm3` in `constraints/hydro_bounds.parquet` below a hydro's
+  storage no longer makes a stage before its `entry_stage_id` or after its
+  `exit_stage_id` infeasible.
+- A hydro with computed FPHA on some stages and another model on others, such
+  as constant productivity 0.0 on an outage stage, is no longer refused.
+
 ## 0.19.0
 
 Released 2026-10-20.
