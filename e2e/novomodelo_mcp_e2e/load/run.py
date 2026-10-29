@@ -32,7 +32,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -426,7 +426,7 @@ def _progress_printer(json_mode: bool) -> Any:
 
 
 @contextmanager
-def _server_errlog(path: Path | None) -> Iterator[tuple[Path, TextIO]]:
+def _server_errlog(path: Path | None) -> Generator[tuple[Path, TextIO]]:
     """Arquivo para o stderr dos servidores: o pedido ou um temporário apagado ao fim."""
     temporary = path is None
     if path is None:

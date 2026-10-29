@@ -16,6 +16,7 @@ from novomodelo_mcp_e2e.executor.casos import PUBLICOS, pasta_preparados
 from novomodelo_mcp_e2e.executor.container import (
     NUNCA_LIBERADAS,
     PASTA_ESTUDOS,
+    Agente,
     Execucao,
     tools_do_servidor,
 )
@@ -24,9 +25,9 @@ from novomodelo_mcp_e2e.executor.imagens import ConfigMCP, tag_imagem
 from novomodelo_mcp_e2e.queries.loader import MARCADOR_CASO, CasesLoader
 from novomodelo_mcp_e2e.queries.models import QueryResult, QueryTestCase, ToolCall
 from novomodelo_mcp_e2e.queries.validator import QueryValidator, campos_conferem
-from novomodelo_mcp_e2e.resultado.modelos import Avaliacao, Metricas
+from novomodelo_mcp_e2e.resultado.modelos import Avaliacao, Conjunto, Metricas
 
-CONJUNTO = "tools"
+CONJUNTO: Conjunto = "tools"
 CASES_PATH = Path(__file__).resolve().parents[2] / "queries" / "cases.yaml"
 TIMEOUT_PADRAO = 300
 
@@ -80,7 +81,7 @@ def para_execucoes(
     casos: Sequence[QueryTestCase],
     cfg: Config,
     *,
-    agentes: Sequence[str],
+    agentes: Sequence[Agente],
     configs: Sequence[ConfigMCP],
     repeticoes: int,
     preparados: Path | None = None,

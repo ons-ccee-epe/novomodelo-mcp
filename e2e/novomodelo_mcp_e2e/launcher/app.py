@@ -375,13 +375,15 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         """Comando que um disparo com estas opções executaria; nada é iniciado nem gravado."""
         try:
-            req = RodadaRequest(
-                mcp=mcp or ["sem"],
-                conjuntos=_split(conjuntos),
-                agentes=_split(agentes),
-                filtro=filtro,
-                repeticoes=repeticoes,
-                completa=completa,
+            req = RodadaRequest.model_validate(
+                {
+                    "mcp": mcp or ["sem"],
+                    "conjuntos": _split(conjuntos),
+                    "agentes": _split(agentes),
+                    "filtro": filtro,
+                    "repeticoes": repeticoes,
+                    "completa": completa,
+                }
             )
         except ValidationError as exc:
             raise _unprocessable("; ".join(e["msg"] for e in exc.errors())) from exc

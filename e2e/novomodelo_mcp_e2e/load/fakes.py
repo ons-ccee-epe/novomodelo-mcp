@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -14,7 +14,7 @@ from novomodelo_mcp_e2e.load.agent_engine import AgentLoadConfig, AgentOutcome, 
 from novomodelo_mcp_e2e.load.client import CallOutcome
 from novomodelo_mcp_e2e.load.engine import LoadConfig, LoadOutcome
 from novomodelo_mcp_e2e.load.mix import CallSpec, Excluded, Selection, ToolHints
-from novomodelo_mcp_e2e.load.stats import Sample
+from novomodelo_mcp_e2e.load.stats import Outcome, Sample
 from novomodelo_mcp_e2e.queries.models import (
     ExpectedResult,
     QueryResult,
@@ -33,7 +33,7 @@ DEFAULT_TOOLS = ("docs_list", "docs_search", "schema_list")
 class Behavior:
     """Como uma tool responde: ``outcome``, ``delay_s`` e se a sessão fica inutilizável."""
 
-    outcome: str = "ok"
+    outcome: Outcome = "ok"
     delay_s: float = 0.005
     broken: bool = False
     error: str | None = None
@@ -60,7 +60,7 @@ class FakeClient:
         if behavior.broken and not owner.broken_once.get((self.index, tool)):
             owner.broken_once[(self.index, tool)] = True
             return CallOutcome("timeout", behavior.delay_s * 1000, "sem resposta", True)
-        return CallOutcome(behavior.outcome, behavior.delay_s * 1000, behavior.error)  # type: ignore[arg-type]
+        return CallOutcome(behavior.outcome, behavior.delay_s * 1000, behavior.error)
 
 
 class FakeFactory:
@@ -89,7 +89,7 @@ class FakeFactory:
         return self._open(index)
 
     @asynccontextmanager
-    async def _open(self, index: int) -> AsyncIterator[FakeClient]:
+    async def _open(self, index: int) -> AsyncGenerator[FakeClient]:
         await asyncio.sleep(self.startup_delay_s.get(index, 0.0))
         if index in self.fail_startup:
             raise RuntimeError(f"cliente {index} não subiu")
@@ -305,7 +305,7 @@ def make_agent_outcome(samples: list[AgentSample] | None = None, **config: Any) 
             ),
         ]
     )
-    values = {"concurrency": 2, "duration_s": 60.0, "provider": "claude"}
+    values: dict[str, Any] = {"concurrency": 2, "duration_s": 60.0, "provider": "claude"}
     values.update(config)
     return AgentOutcome(
         config=AgentLoadConfig(**values),

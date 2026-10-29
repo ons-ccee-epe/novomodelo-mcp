@@ -39,7 +39,7 @@ def marcar_lancamento(resultados: Path, rodada: str, versao: str, config: str) -
             "marcado_em": datetime.now(UTC).isoformat(timespec="seconds"),
         }
     )
-    _gravar_json(resultados / NOME_ARQUIVO, lista)  # type: ignore[arg-type]
+    _gravar_json(resultados / NOME_ARQUIVO, lista)  # ty: ignore[invalid-argument-type] - serializa qualquer JSON
 
 
 def ultimo_lancamento(resultados: Path) -> dict[str, Any] | None:

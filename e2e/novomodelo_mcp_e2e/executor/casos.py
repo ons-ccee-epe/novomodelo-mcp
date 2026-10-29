@@ -227,7 +227,16 @@ def preparar_1dtoy_rodado(imagem: str, cfg: Config, rodar: Rodar = subprocess.ru
         dentro = f"{PASTA_ESTUDOS}/{caso.name}"
         nome = nome_container(
             Execucao(
-                "preparo", caso.name, "claude", "sem-mcp", 0, "", None, False, TEMPO_RODADA, imagem
+                "preparo",  # ty: ignore[invalid-argument-type] - a Execucao só dá nome ao container
+                caso.name,
+                "claude",
+                "sem-mcp",
+                0,
+                "",
+                None,
+                False,
+                TEMPO_RODADA,
+                imagem,
             ),
             "preparo",
         )

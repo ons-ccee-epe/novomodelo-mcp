@@ -12,7 +12,7 @@ import json
 import os
 import sys
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import timedelta
@@ -146,7 +146,7 @@ class McpStdioClient:
 @asynccontextmanager
 async def _open_stdio_client(
     command: str, args: list[str], env: dict[str, str], errlog: TextIO
-) -> AsyncIterator[McpStdioClient]:
+) -> AsyncGenerator[McpStdioClient]:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 

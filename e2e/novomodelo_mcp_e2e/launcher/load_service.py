@@ -14,6 +14,7 @@ lhe dá tempo de limpar.
 
 from __future__ import annotations
 
+import builtins
 import collections
 import contextlib
 import json
@@ -134,7 +135,9 @@ class LoadRunService:
     def __init__(
         self,
         gate: RunGate,
-        command_builder: Callable[[LoadConfig | AgentLoadConfig], list[str]] = build_command,
+        command_builder: Callable[
+            [LoadConfig | AgentLoadConfig], builtins.list[str]
+        ] = build_command,
         cwd: Path = _REPO_ROOT,
     ) -> None:
         self._gate = gate
@@ -148,7 +151,7 @@ class LoadRunService:
         with self._lock:
             return self._runs.get(run_id)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> builtins.list[dict[str, Any]]:
         with self._lock:
             return [state.to_dict() for state in self._runs.values()]
 
@@ -193,7 +196,7 @@ class LoadRunService:
             tree.kill()
         return state
 
-    def _supervise(self, state: LoadRunState, command: list[str], work_dir: Path) -> None:
+    def _supervise(self, state: LoadRunState, command: builtins.list[str], work_dir: Path) -> None:
         try:
             process = self._spawn(state, command)
             if process is None:
@@ -226,7 +229,9 @@ class LoadRunService:
                 with contextlib.suppress(OSError):
                     stream.close()
 
-    def _spawn(self, state: LoadRunState, command: list[str]) -> subprocess.Popen[str] | None:
+    def _spawn(
+        self, state: LoadRunState, command: builtins.list[str]
+    ) -> subprocess.Popen[str] | None:
         with self._lock:
             if state.cancel_requested:
                 self._set_terminal(state, "cancelled", "Parada antes de iniciar; nada foi gravado.")

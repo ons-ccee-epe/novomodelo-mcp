@@ -11,6 +11,7 @@ import tempfile
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from typing import NoReturn
 
 import jsonschema
 
@@ -120,11 +121,11 @@ def _origem(valor: str) -> tuple[str, str]:
 def _uso_sai_64(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Faz o erro de uso do subparser sair com o código de recusa, e não com o 2 do argparse."""
 
-    def erro(mensagem: str):
+    def erro(mensagem: str) -> NoReturn:
         parser.print_usage(sys.stderr)
         parser.exit(CODIGO_USO, f"{parser.prog}: erro: {mensagem}\n")
 
-    parser.error = erro  # type: ignore[method-assign]
+    parser.error = erro  # ty: ignore[invalid-assignment] - troca o método na instância
     return parser
 
 

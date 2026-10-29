@@ -19,7 +19,7 @@ _MB = 1024 * 1024
 
 def load_psutil() -> ModuleType | None:
     try:
-        import psutil
+        import psutil  # ty: ignore[unresolved-import] - opcional, fora das dependências da bateria
     except ImportError:
         return None
     return psutil
