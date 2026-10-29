@@ -38,7 +38,7 @@ from tests.e2e.conjuntos.usuario.pontuar import (
 from tests.e2e.executor import container
 from tests.e2e.executor.casos import PUBLICOS
 from tests.e2e.executor.container import ENDURECIMENTO, SEGREDO_CLAUDE, Execucao, Saida, executar
-from tests.e2e.executor.eventos import Evento, Leitura, ler_claude
+from tests.e2e.executor.eventos import Evento, Leitura, ler_claude, ler_kiro
 from tests.e2e.resultado.modelos import Metricas
 
 LEITURA = {"server_info", "case_validate", "deck_sql"}
@@ -510,3 +510,10 @@ def test_nome_do_container_do_juiz_leva_a_rodada_e_a_execucao(tmp_path, juiz_fal
     assert nome.startswith("novomodelo-bateria-juiz-r7-usuario-i01-comecar-claude-mcp-1.0-1-t1-")
     assert nome.startswith(prefixo_do_juiz(destino) + "-")
     assert juiz_falso.removidos == [nome]
+
+
+def test_erros_de_envelope_do_kiro_atual_contam_pelo_rawoutput():
+    fixture = Path(__file__).resolve().parents[2] / "executor" / "fixtures"
+    linhas = (fixture / "kiro-stream-sintetico-2.jsonl").read_text("utf-8").splitlines()
+    resultado = pontuar(_cen(), ler_kiro(linhas).eventos, agente="kiro")
+    assert resultado.erros_envelope == 2

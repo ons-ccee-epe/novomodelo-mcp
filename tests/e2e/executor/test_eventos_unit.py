@@ -146,3 +146,35 @@ def test_kiro_mcp_pelo_meta_e_aprovacao_negada_vira_negacao():
     negadas = [e.nome for e in ev if e.tipo == "negacao"]
     assert negadas == ["server_info", "case_validate"]
     assert not [e for e in ev if e.tipo == "resultado_tool" and e.do_mcp and e.erro]
+
+
+def test_kiro_atual_le_o_resultado_de_rawoutput_com_o_id_da_chamada():
+    ev = ler_kiro(_linhas("kiro-stream-sintetico-2.jsonl")).eventos
+    resultados = {e.dados["id"]: e for e in ev if e.tipo == "resultado_tool"}
+    assert {i: e.nome for i, e in resultados.items()} == {
+        "m1": "server_info",
+        "m2": "case_validate",
+        "m3": "deck_list",
+    }
+    assert json.loads(resultados["m1"].dados["conteudo"])["status"] == "ok"
+    assert json.loads(resultados["m2"].dados["conteudo"])["status"] == "error"
+    assert [resultados[i].erro for i in ("m1", "m2", "m3")] == [False, False, True]
+    assert all(e.do_mcp for e in resultados.values())
+
+
+def test_kiro_junta_os_itens_de_texto_e_ignora_os_de_outro_tipo():
+    saida = {"items": [{"Json": {"content": [{"type": "text", "text": "a"}, {"type": "image"}]}}]}
+    saida["items"].append({"Json": {"content": [{"type": "text", "text": "b"}], "isError": False}})
+    update = {"sessionUpdate": "tool_call_update", "toolCallId": "x", "status": "completed"}
+    linha = {"type": "sessionUpdate", "data": {"update": {**update, "rawOutput": saida}}}
+    [resultado] = ler_kiro(_wrap([linha])).eventos
+    assert resultado.dados["conteudo"] == "a\nb" and not resultado.erro
+
+
+def test_kiro_negacao_vale_tambem_no_formato_de_rawoutput():
+    texto = "Permission request failed: Internal error: approval is not supported"
+    saida = {"items": [{"Json": {"content": [{"type": "text", "text": texto}], "isError": True}}]}
+    update = {"sessionUpdate": "tool_call_update", "toolCallId": "x", "status": "failed"}
+    linha = {"type": "sessionUpdate", "data": {"update": {**update, "rawOutput": saida}}}
+    [evento] = ler_kiro(_wrap([linha])).eventos
+    assert evento.tipo == "negacao"

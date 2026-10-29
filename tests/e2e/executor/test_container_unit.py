@@ -965,3 +965,13 @@ def test_sem_output_copia_o_caso_sem_as_pastas_de_saida(tmp_path, monkeypatch):
         if esperado is not None:
             assert copiados[-1] == esperado
     assert copiados[-1] == ["config.json", "output", "output-2", "system"]
+
+
+def test_ok_da_tool_do_kiro_atual_vem_do_envelope_em_rawoutput(tmp_path, monkeypatch):
+    _falso(monkeypatch, Saida(_stream("kiro-stream-sintetico-2.jsonl"), "", 0, False))
+    r = executar(_exec(agente="kiro"), _cfg(tmp_path), _pasta(tmp_path), _avaliar_passou)
+    assert [(t.nome, t.ok) for t in r.tools] == [
+        ("server_info", True),
+        ("case_validate", False),
+        ("deck_list", False),
+    ]

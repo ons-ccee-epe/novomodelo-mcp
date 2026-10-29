@@ -191,6 +191,32 @@ def _nome_kiro(chamada: dict) -> tuple[str, bool]:
     return _NATIVAS_KIRO.get(str(chamada.get("kind") or ""), titulo), False
 
 
+def _resultado_kiro(u: dict) -> tuple[str, bool]:
+    """Texto e erro do resultado de uma tool do Kiro.
+
+    O Kiro atual traz a lista de conteúdo do MCP em `rawOutput.items[].Json`; versões
+    anteriores traziam `content[].content.text`, que segue valendo sem `rawOutput`.
+    """
+    itens = (u.get("rawOutput") or {}).get("items")
+    jsons = [
+        i["Json"] for i in itens or [] if isinstance(i, dict) and isinstance(i.get("Json"), dict)
+    ]
+    if jsons:
+        textos = [
+            str(b.get("text", ""))
+            for j in jsons
+            for b in j.get("content") or []
+            if isinstance(b, dict) and b.get("type") == "text"
+        ]
+        return "\n".join(textos), any(j.get("isError") is True for j in jsons)
+    texto = "\n".join(
+        str((c.get("content") or {}).get("text", ""))
+        for c in u.get("content") or []
+        if isinstance(c, dict)
+    )
+    return texto, False
+
+
 def ler_kiro(linhas: Iterable[str]) -> Leitura:
     """Eventos ACP do `kiro-cli chat --output-format stream-json`."""
     eventos: list[Evento] = []
@@ -219,12 +245,9 @@ def ler_kiro(linhas: Iterable[str]) -> Leitura:
                 )
             elif qual == "tool_call_update" and u.get("status") in ("completed", "failed"):
                 nome, mcp = por_id.get(ident, (None, False))
-                texto = "\n".join(
-                    str((c.get("content") or {}).get("text", ""))
-                    for c in u.get("content") or []
-                    if isinstance(c, dict)
-                )
-                if u.get("status") == "failed" and texto.startswith(_NEGADA_KIRO):
+                texto, erro_saida = _resultado_kiro(u)
+                falhou = u.get("status") == "failed" or erro_saida
+                if falhou and texto.startswith(_NEGADA_KIRO):
                     eventos.append(Evento("negacao", nome, {}, t, dados={"mcp": mcp}))
                     continue
                 eventos.append(
@@ -233,7 +256,7 @@ def ler_kiro(linhas: Iterable[str]) -> Leitura:
                         nome,
                         {},
                         t,
-                        erro=u.get("status") == "failed",
+                        erro=falhou,
                         dados={"mcp": mcp, "conteudo": texto, "id": ident},
                     )
                 )

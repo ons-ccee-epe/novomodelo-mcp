@@ -28,6 +28,7 @@ from tests.e2e.queries.models import ExpectedResult, QueryResult, QueryTestCase
 from tests.e2e.queries.validator import MCP_TOOLS, QueryValidator
 
 PREFIXO = "mcp__novomodelo__"
+FIX = Path(__file__).resolve().parents[2] / "executor" / "fixtures"
 
 
 def _caso(**expected) -> QueryTestCase:
@@ -434,3 +435,13 @@ def test_resultado_fora_de_ordem_pareia_pelo_id_da_chamada_no_kiro() -> None:
     )
     envelope = para_query_result(_caso(tool="results_status", status="ok"), leitura).envelope
     assert envelope["arguments"] == {"output_dir": "/estudos/x/output"}
+
+
+def test_envelope_do_kiro_atual_vem_de_rawoutput() -> None:
+    leitura = ler_kiro((FIX / "kiro-stream-sintetico-2.jsonl").read_text("utf-8").splitlines())
+    resultado = para_query_result(_caso(tool="server_info", status="ok"), leitura)
+    assert resultado.envelope["tool"] == "server_info"
+    assert resultado.envelope["result"] == {"status": "ok", "versao": "0.0.0-exemplo"}
+    erro = para_query_result(_caso(tool="case_validate", status="error"), leitura)
+    assert erro.envelope["arguments"]["case_dir"] == "/estudos/caso-exemplo"
+    assert erro.envelope["result"]["status"] == "error"
