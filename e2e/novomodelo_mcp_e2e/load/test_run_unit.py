@@ -70,10 +70,9 @@ class TestValidation:
         assert (command, args) == ("python", ["-m", "outro_servidor"])
 
     def test_default_server_command_is_the_current_interpreter(self) -> None:
-        import sys
-
         command, args = run_mod._server_command(None)
-        assert command == sys.executable
+        # `python` e `python3` do venv são links para o mesmo interpretador.
+        assert Path(command).resolve() == Path(sys.executable).resolve()
         assert args == ["-m", "novomodelo_mcp"]
 
 
