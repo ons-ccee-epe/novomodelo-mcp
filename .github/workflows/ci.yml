@@ -94,9 +94,13 @@ jobs:
           test "$codigo" -eq 1
           python3 -c 'import json, sys; n = len(json.load(open(sys.argv[1]))); sys.exit(0 if n == 3 else f"esperados 3 achados, vieram {n}")' "$pasta/achados.json"
 
-      # O histórico antigo ainda tem termos até a limpeza; até lá a CI olha só a árvore.
       - name: Termos proibidos na árvore
         run: python3 scripts/ci/check_termos_proibidos.py
+
+      # O histórico vai inteiro para o repositório público: um commit novo com termo
+      # proibido, no conteúdo ou na mensagem, não pode entrar.
+      - name: Termos proibidos no histórico inteiro e nas mensagens
+        run: python3 scripts/ci/check_termos_proibidos.py --historico --mensagens
 
   painel:
     name: painel (lint, test, build)
