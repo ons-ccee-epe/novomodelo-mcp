@@ -19,7 +19,8 @@ updates:
     commit-message:
       prefix: "build"
 
-  # Versões das actions usadas no CI (checkout, setup-uv).
+  # Versões das actions usadas no CI. Elas ficam fixadas por SHA, com a versão em
+  # comentário; o Dependabot atualiza os dois juntos.
   - package-ecosystem: "github-actions"
     directory: "/"
     target-branch: "develop"
@@ -27,3 +28,20 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "ci"
+
+  # Painel da bateria e2e: dependências de desenvolvimento, fora do pacote. Uma PR
+  # por semana com todas as atualizações juntas.
+  - package-ecosystem: "npm"
+    directory: "/tests/e2e/frontend"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    groups:
+      painel:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build"
+
+# Correções de segurança das dependências Python do pacote (as que seguem o uv.lock)
+# chegam pelos alertas e pelas atualizações de segurança do Dependabot, ligados nas
+# configurações do repositório (Code security), e não por este arquivo.
