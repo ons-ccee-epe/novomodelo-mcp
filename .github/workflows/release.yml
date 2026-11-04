@@ -1,8 +1,9 @@
 name: Release
 
-# Tag `v<versão>` (a do pyproject): confere as docs embutidas, roda os testes, gera o wheel
-# e o sdist, confere a instalação limpa em cada alvo e versão do Python suportados e publica
-# no PyPI e no release do GitHub.
+# Tag `v<versão>` (a do pyproject) num commit da main: confere as docs embutidas, gera o
+# wheel e o sdist, roda os testes contra o wheel, confere a instalação limpa em cada alvo e
+# versão do Python suportados e, só no repositório público, publica no PyPI e no release
+# do GitHub.
 # O ensaio faz tudo, menos publicar (os arquivos ficam como artefato da execução): push
 # numa branch `ensaio/**`, ou `workflow_dispatch`, que o GitHub só oferece depois que
 # este arquivo estiver na branch padrão.
@@ -28,8 +29,10 @@ jobs:
     outputs:
       version: ${{ steps.versao.outputs.version }}
     steps:
+      # Histórico inteiro: a conferência da tag precisa da origin/main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Instalar uv
@@ -44,6 +47,16 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
             echo "::error::a tag $GITHUB_REF_NAME não bate com a versão do pyproject ($version)"
+            exit 1
+          fi
+
+      # O sync leva ao público toda tag, aponte ela para onde for, e o PyPI não aceita
+      # a mesma versão duas vezes: só sai versão de commit que está na main.
+      - name: A tag está na main
+        if: github.ref_type == 'tag'
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::a tag $GITHUB_REF_NAME ($(git rev-parse --short HEAD)) não está na main"
             exit 1
           fi
 
@@ -94,15 +107,20 @@ jobs:
           python3 scripts/sync_bundled.py --source _docs
           --changelog novomodelo=_novomodelo --changelog novomodelo-bridge=_bridge --check
 
-      - name: Testes
-        run: |
-          uv sync --dev --locked
-          uv run pytest -q
-
       - name: Wheel e sdist
         run: |
           uv build --out-dir dist
           cd dist && sha256sum ./*.whl ./*.tar.gz | sed 's# \./# #' > SHA256SUMS && cat SHA256SUMS
+
+      # Os testes importam o wheel instalado, não o src/: a instalação editável passaria
+      # com um arquivo que o wheel deixa de fora. O `pythonpath` do pyproject põe o src/
+      # na frente; aqui fica só o tests/.
+      - name: Testes contra o wheel
+        run: |
+          uv sync --dev --locked --no-install-project
+          uv pip install --no-deps dist/novomodelo_mcp-${{ steps.versao.outputs.version }}-py3-none-any.whl
+          uv run --no-sync python -c "import novomodelo_mcp as m; print(m.__file__); assert 'site-packages' in m.__file__"
+          uv run --no-sync pytest -q -o pythonpath=tests
 
       - name: Toda dependência tem wheel em cada alvo e versão do Python
         run: scripts/conferir_wheels.sh dist/novomodelo_mcp-${{ steps.versao.outputs.version }}-py3-none-any.whl
@@ -195,11 +213,12 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
 
   publicar:
-    # Só na tag. Se a organização não der `contents: write` ao GITHUB_TOKEN, este job
-    # falha e o anexo vira passo manual (CONTRIBUTING.md, "Release").
+    # Só na tag e no repositório público, como o PyPI. Se a organização não der
+    # `contents: write` ao GITHUB_TOKEN, este job falha e o anexo vira passo manual
+    # (CONTRIBUTING.md, "Release").
     name: Publicar no release
     needs: [build, instalacao]
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' && github.repository == 'ons-ccee-epe/novomodelo-mcp'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
