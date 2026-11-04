@@ -237,8 +237,8 @@ jobs:
 
   rename-guard:
     # Falha se o nome antigo do produto reaparecer fora das exceções do mapa.
-    # Usa a ferramenta do novomodelo (fonte única), fixada numa tag: o commit de
-    # pareamento sobe o `ref` junto com o pin do novomodelo-bridge.
+    # Usa a ferramenta do novomodelo (fonte única), fixada no commit de uma tag: o commit
+    # de pareamento sobe o `ref` (e a tag no comentário) junto com o pin do novomodelo-bridge.
     name: Trava de nome (rebrand check)
     runs-on: ubuntu-24.04
     timeout-minutes: 5

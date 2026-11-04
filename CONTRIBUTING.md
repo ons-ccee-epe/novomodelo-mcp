@@ -157,7 +157,7 @@ uv run --no-sync python $R check  --root . --map $M   # 0 ocorrências = pronto
 
 Para o próximo nome, crie um mapa com `from = "novomodelo"`. As exceções atuais estão
 comentadas no próprio mapa. A CI roda o `check` em todo push e PR (job `rename-guard`),
-com a ferramenta do novomodelo fixada numa tag.
+com a ferramenta do novomodelo fixada no commit de uma tag.
 
 ## Parear com uma versão do novomodelo
 
@@ -172,7 +172,9 @@ bridge `X.Y.Z` está no PyPI e as docs têm a tag `vX.Y.Z`:
    `uv lock --upgrade-package novomodelo-bridge --upgrade-package novomodelo-python`.
    `tests/test_package_metadata.py` falha se a versão do MCP e o pin divergirem.
 2. As docs embutidas e os changelogs nas tags `vX.Y.Z` (seção acima).
-3. O `ref` do job `rename-guard` em `.github/workflows/ci.yml` para `vX.Y.Z`.
+3. O `ref` do job `rename-guard` em `.github/workflows/ci.yml` para o commit da tag
+   `vX.Y.Z` do novomodelo, com a tag no comentário:
+   `git ls-remote https://github.com/ons-ccee-epe/novomodelo 'refs/tags/vX.Y.Z^{}'`.
 4. Cada opção nova das CLIs classificada em `tests/surface.toml`; confira com
    `uv run pytest tests/test_surface_parity.py --executaveis-reais` contra o novomodelo e
    o bridge `X.Y.Z` instalados.
@@ -182,19 +184,40 @@ Uma correção só do MCP vira `X.Y.Z.postN`.
 
 ## Release
 
-Quem mantém o repositório cria a tag `vX.Y.Z`, igual à `version` do `pyproject.toml`, e
-faz o push. `.github/workflows/release.yml`:
+O desenvolvimento acontece num repositório privado de origem. O
+`.github/workflows/sync-external.yml` leva ao repositório público
+(`ons-ccee-epe/novomodelo-mcp`) a `main` a cada PR mergeado, as branches `feat/**` e
+`fix/**` e as tags; o comentário no topo do arquivo descreve cada caso e o secret que ele
+usa. O release roda nos dois repositórios, mas só o público publica.
 
-1. confere a tag contra a `version` e as docs embutidas contra os commits gravados no
-   manifesto, e roda os testes;
-2. gera o wheel, o sdist e o `SHA256SUMS` dos dois, e confere que toda dependência tem
-   wheel em cada alvo e versão do Python suportados (`scripts/conferir_wheels.sh`): quem
-   instala resolve na hora, sem o `uv.lock`, e não deve precisar compilar nada;
+Quem mantém o repositório:
+
+1. faz o merge da `develop` na `main`, com a versão nova, e espera o sync da `main`
+   terminar;
+2. cria a tag anotada `vX.Y.Z`, igual à `version` do `pyproject.toml`, no commit de merge
+   da `main`, e faz o push só dela: `git push origin vX.Y.Z`.
+
+O GitHub roda os workflows do commit da tag: numa tag num commit sem o
+`sync-external.yml`, nada chega ao público, e numa tag num commit com um `release.yml`
+antigo, a publicação usa o antigo. Uma tag errada que ainda não chegou ao público é
+apagada (`git tag -d vX.Y.Z` e `git push --delete origin vX.Y.Z`) e recriada no commit
+certo. Uma que já chegou fica onde está, porque o sync nunca move tag no público; a
+correção sai como `X.Y.Z.postN`.
+
+`.github/workflows/release.yml`:
+
+1. confere que a tag bate com a `version` e que o commit dela está na `main`, e as docs
+   embutidas contra os commits gravados no manifesto;
+2. gera o wheel, o sdist e o `SHA256SUMS` dos dois, roda os testes contra o wheel
+   instalado (e não contra o `src/`), e confere que toda dependência tem wheel em cada
+   alvo e versão do Python suportados (`scripts/conferir_wheels.sh`): quem instala
+   resolve na hora, sem o `uv.lock`, e não deve precisar compilar nada;
 3. instala o wheel com `uv tool install` num diretório vazio, em cada sistema,
    arquitetura e versão do Python suportados, e confere pelo stdio a versão anunciada, as
    tools e o `server_info` (`scripts/conferir_instalacao.py`);
-4. publica no PyPI por trusted publishing, só no repositório público e pelo environment
-   `pypi`, e anexa os arquivos ao release do GitHub.
+4. só no repositório público, publica no PyPI por trusted publishing, pelo environment
+   `pypi`, e anexa os arquivos ao release do GitHub. No repositório de origem, a tag roda
+   todo o resto e serve de conferência.
 
 Para ensaiar sem publicar, faça push numa branch `ensaio/<nome>` (ou use "Run workflow"
 na aba Actions): os arquivos ficam como artefato da execução.

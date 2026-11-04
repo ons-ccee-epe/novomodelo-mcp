@@ -52,7 +52,7 @@ Documentation = "https://docs.modelossetoreletrico.org.br/"
 novomodelo-mcp = "novomodelo_mcp.server:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
