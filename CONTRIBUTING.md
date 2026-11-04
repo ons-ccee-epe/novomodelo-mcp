@@ -180,10 +180,14 @@ no `versions.json`):
 3. O `ref` do job `rename-guard` em `.github/workflows/ci.yml` para o commit da tag
    `vX.Y.Z` do novomodelo, com a tag no comentário:
    `git ls-remote https://github.com/ons-ccee-epe/novomodelo 'refs/tags/vX.Y.Z^{}'`.
-4. Cada opção nova das CLIs classificada em `tests/surface.toml`; confira com
+4. Os commits das tags `vX.Y.Z` do novomodelo e do bridge em
+   `tests/e2e/executor/fontes.toml`, pelo mesmo `git ls-remote` (no bridge, com
+   `novomodelo-bridge` no lugar de `novomodelo`): a bateria de ponta a ponta confere
+   os clones dos casos públicos contra eles.
+5. Cada opção nova das CLIs classificada em `tests/surface.toml`; confira com
    `uv run pytest tests/test_surface_parity.py --executaveis-reais` contra o novomodelo e
    o bridge `X.Y.Z` instalados.
-5. As entradas de `Unreleased` do `CHANGELOG.md` sob a versão nova.
+6. As entradas de `Unreleased` do `CHANGELOG.md` sob a versão nova.
 
 Uma correção só do MCP vira `X.Y.Z.postN`.
 
