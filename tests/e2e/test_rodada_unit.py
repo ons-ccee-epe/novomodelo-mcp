@@ -742,8 +742,14 @@ def test_ctrl_c_encerra_containers_em_voo_varre_e_retoma(tmp_path):
 
     def interromper(e):
         sobra.mkdir(parents=True, exist_ok=True)
+        em_voo = rodada._pasta_da_execucao(cfg.resultados / "r1", e)
+        em_voo.mkdir(parents=True)
+        (em_voo / "log.jsonl").write_text("{}\n", encoding="utf-8")
         _thread.interrupt_main()
         assert liberado.wait(10)
+        # O container demora a sair depois de encerrado: sem essa folga, uma rodada que
+        # não espera os trabalhadores ainda passa.
+        time.sleep(0.3)
 
     def encerrar(cfg_, prefixos):
         f.encerrados.append(list(prefixos))
@@ -768,6 +774,7 @@ def test_ctrl_c_encerra_containers_em_voo_varre_e_retoma(tmp_path):
     assert erro.value.codigo == rodada.CODIGO_INTERROMPIDA
     [prefixos] = f.encerrados
     destino = rodada._pasta_da_execucao(erro.value.pasta, f.execucoes[0])
+    assert not destino.exists()
     assert prefixos == [
         rodada.prefixo_do_container(f.execucoes[0], "r1"),
         prefixo_do_juiz(destino),

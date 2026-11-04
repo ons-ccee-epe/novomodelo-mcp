@@ -54,7 +54,7 @@ ignora = ["nome antigo", "referencia de spec", "diretorio kiro"]
 # Um caminho que termina em "/" vale para tudo abaixo dele. A lista interna nunca é liberada.
 [permitidos]
 "scripts/ci/termos_proibidos.toml" = { padroes = ["ons\u0074ec", "homologado ONS", "hots\u0069te", "diretorio kiro"], motivo = "a própria lista de padrões" }
-"src/novomodelo_mcp/_bundled/" = { padroes = ["nome antigo"], motivo = "docs oficiais do upstream, copiadas sem edição" }
+"src/novomodelo_mcp/_bundled/" = { padroes = ["nome antigo", "diretorio kiro"], motivo = "docs oficiais do upstream, copiadas sem edição" }
 "scripts/rebrand/map.toml" = { padroes = ["nome antigo"], motivo = "mapa do verificador de nome: precisa citar o nome antigo" }
 "LICENSE" = { padroes = ["nome antigo"], motivo = "aviso de copyright do texto da licença upstream" }
 ".kiro/steering/" = { padroes = ["diretorio kiro"], motivo = "regras do time versionadas para o Kiro" }
