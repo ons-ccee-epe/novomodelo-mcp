@@ -62,13 +62,13 @@ ignoradas = { "--verbose" = "log do processo; o envelope --json traz os diagnós
 [bridge."convert newave"]
 tool = "bridge_convert_newave"
 expostas = ["--json", "--no-color", "--validate", "--force", "--dry-run"]
-ignoradas = { "--diagnostics-json" = "o envelope --json já traz os diagnósticos", "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+ignoradas = { "--diagnostics-json" = "o envelope --json já traz os diagnósticos", "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--json-float-digits" = "o padrão mantém o caso válido; com poucos dígitos o novomodelo recusa o caso", "--help" = "ajuda" }
 assimetria = "sem --no-fcf: o convert newave do bridge não tem essa opção (só o convert decomp)"
 
 [bridge."convert decomp"]
 tool = "bridge_convert_decomp"
 expostas = ["--json", "--no-color", "--validate", "--force", "--dry-run", "--no-fcf"]
-ignoradas = { "--diagnostics-json" = "o envelope --json já traz os diagnósticos", "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--help" = "ajuda" }
+ignoradas = { "--diagnostics-json" = "o envelope --json já traz os diagnósticos", "--verbose" = "log do processo; o envelope --json traz os diagnósticos", "--log-file" = "grava log de depuração fora do envelope", "--quiet" = "o --json já suprime a saída humana", "--json-float-digits" = "o padrão mantém o caso válido; com poucos dígitos o novomodelo recusa o caso", "--help" = "ajuda" }
 
 [bridge."compare newave"]
 tool = "bridge_compare_newave"

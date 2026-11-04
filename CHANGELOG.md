@@ -9,6 +9,14 @@ só do MCP vira `X.Y.Z.postN`.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-04
+
+### Changed
+
+- O MCP pareia com o novomodelo 0.20.0 e o novomodelo-bridge 0.20.0. As docs embutidas
+  são as da 0.20.0, e as páginas `changelog/novomodelo` e `changelog/novomodelo-bridge`
+  trazem a seção da 0.20.0.
+
 ## [0.19.1] - 2026-10-28
 
 ### Changed

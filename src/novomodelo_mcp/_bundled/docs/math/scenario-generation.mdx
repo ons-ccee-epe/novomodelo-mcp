@@ -128,11 +128,33 @@ the validity of the lower bound.
    and MPI configurations (see section 2.2)
 3. Correlation is applied per the active profile for each stage (see section
    2.4)
-4. In the opening tree, consecutive stages sharing a **noise group** — keyed by
+4. Optionally, the inflow noise of each stage is **moment-matched** over the
+   stage's openings. For hydro $i$, let $\bar{\varepsilon}_i$ and $s_i$ be the
+   mean and the standard deviation, with divisor $N_t$, of its correlated noise
+   values $\varepsilon_{i,1}, \ldots, \varepsilon_{i,N_t}$ at the stage. Each
+   value is replaced by
+
+   $$
+   \varepsilon'_{i,j} = \left(\varepsilon_{i,j} - \bar{\varepsilon}_i\right) \frac{\sigma_i}{s_i},
+   \qquad
+   \sigma_i^2 = \bigl(U \tilde{\Lambda} U^\top\bigr)_{ii}
+   $$
+
+   so the stage's openings have, for every hydro, mean zero and the variance
+   $\sigma_i^2$ that the spectral transform of section 2.1 gives its noise:
+   one, or more where a negative eigenvalue was clipped, and one for a hydro in
+   no correlation group. The step is affine in each hydro's values, so it
+   leaves the sample correlation between hydros unchanged. It leaves as drawn a
+   stage with a single opening and a hydro whose values at the stage are all
+   equal, and it does not apply to the historical-residual stages of section
+   2.5 or to load and non-controllable-source noise.
+5. In the opening tree, consecutive stages sharing a **noise group** — keyed by
    season and year, as when several weekly stages fall inside one monthly
    season — receive one shared noise draw per opening: the group's first stage
-   draws its noise as in step 2 and each later stage in the
-   group copies that stage's already-correlated noise. A stage without a
+   draws its noise as in steps 2 to 4 and each later stage in the
+   group copies that stage's noise. A later stage can hold no more openings
+   than the group's first stage; one with fewer copies the first $N_t$ of them
+   unchanged, so its openings are not moment-matched as a set. A stage without a
    season gets its own group; in a uniform monthly study every group is
    unique and every stage draws independently. See
    [Multi-Resolution Studies](/math/multi-resolution-studies) for the
@@ -167,10 +189,11 @@ memory, enabling linear access during the backward pass. The noise vector for
 a given (stage, opening) pair is read directly without iteration over
 the tree structure.
 
-The same tree is generated bit-identically on every MPI rank because both the
+The same tree is generated bit-identically on every MPI rank because the
 seed derivation of step 2 and the noise-group assignment
 are pure functions of globally known inputs — the base seed and the stage
-calendar of the broadcast system. For the determinism guarantees that follow
+calendar of the broadcast system — and the moment matching of step 4 sums over
+the openings in a fixed order. For the determinism guarantees that follow
 from this property, see [Determinism & Provenance](/math/determinism-guarantees).
 
 ### 2.3a Sampling Method and Opening Tree Generation
@@ -816,6 +839,10 @@ For `out_of_sample`, the forward draw is fresh noise from a seed independent of 
 | Selective            | `selective`                | A supplied opening tree: `training.scenario_source.openings` set to `{"source": "file"}`, which reads `scenarios/noise_openings.parquet` |
 | Historical residuals | `historical_residuals`     | `scenarios/inflow_history.parquet` and a season on every study stage, when the opening tree is generated                                 |
 
+### Moment matching
+
+Step 4 of [§2.3](/math/scenario-generation#23-opening-tree) defines the moment matching of a generated opening tree. `training.scenario_source.openings.moment_matching` selects it: `"per_coordinate"`, the default and the mode when `openings` is absent, matches the inflow openings of every generated stage, and `"none"` keeps them as drawn. A tree read from `scenarios/noise_openings.parquet` is used as supplied and takes no `moment_matching`. The tree that `exports.stochastic` writes to `stochastic/noise_openings.parquet` holds the matched openings. [`training.scenario_source.openings`](/running/configuration/#trainingscenario_sourceopenings) owns the field table.
+
 ### Seeds
 
 | Key                             | Seeds                                                  | Default                                                          |
@@ -869,7 +896,7 @@ The σ = 0 rule of §4.3 compares the standard deviation with `0.0` exactly. At 
 
 ### Warnings
 
-Novomodelo logs these six warnings and continues. Each text below is fixed apart from the values at its placeholders.
+Novomodelo logs these eight warnings and continues. Each text below is fixed apart from the values at its placeholders. Under `novomodelo run` on two or more MPI processes, only rank 0 prints them.
 
 - **Clamp by external scenarios.** A class on the external scheme has fewer raw external scenarios at a stage than the stage's `branching_factor`, and no tighter clamp applies:
 
@@ -905,12 +932,30 @@ Novomodelo logs these six warnings and continues. Each text below is fixed apart
   ```
 
   The `{class}` placeholder reads `inflow`, `load` or `ncs`.
+- **Constant coordinates under moment matching.** Moment matching finds hydros whose openings at a generated stage are all equal, and leaves them as drawn; the counts cover the whole tree:
+
+  ```text
+  moment matching left {coordinates} inflow coordinate(s) in {stages} stage(s) as drawn: every opening is equal there
+  ```
+- **Shorter noise-group copies under moment matching.** A stage of a noise group has fewer openings than the matched first stage of its group, so the openings it copies are not matched as a set:
+
+  ```text
+  {stages} stage(s) copy a noise-group stage with a different opening count; their copied openings are not moment-matched
+  ```
 
 ### Sobol dimension limit
 
 The Sobol direction numbers cover `SOBOL_MAX_DIM: usize = 21201` dimensions. A stage on `qmc_sobol` whose noise vector has more coordinates is rejected with the error below, where `{method}` is `sobol`.
 
 `noise dimension {dim} exceeds maximum supported dimension {max_dim} for {method}`
+
+### Opening tree across MPI ranks
+
+On two or more MPI processes, `novomodelo run` checks after setup that every rank built the same opening tree. Each rank hashes its tree with 64-bit FNV-1a over the stage count, the noise dimension, the per-stage opening counts, the bit pattern of every noise value and the solve order, and the ranks exchange the smallest and the largest digest. When the two differ, the run stops with exit `4` before training ([Communication failures](/reference/error-codes/#communication-failures)):
+
+```text
+opening tree differs across MPI ranks (fingerprints {min:#018x} to {max:#018x}); every rank must build the same tree from the broadcast inputs
+```
 
 ## Cross-References
 

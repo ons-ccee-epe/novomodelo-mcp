@@ -112,7 +112,10 @@ uv run python scripts/sync_bundled.py --source /caminho/para/clone/do/novomodelo
 # o mesmo comando com --check só confere
 ```
 
-Os clones ficam na tag da versão. Os changelogs do novomodelo e do bridge viram as
+O clone das docs fica na `main`, onde está sempre a versão mais nova (o `latest` do
+`versions.json`); uma versão só ganha `ref` próprio no `versions.json` quando é congelada,
+no minor seguinte. Os clones do novomodelo e do bridge ficam na tag da versão. Os
+changelogs do novomodelo e do bridge viram as
 páginas `changelog/novomodelo` e `changelog/novomodelo-bridge`, com uma seção por versão
 a partir da 0.18.0, que o agente lê com `docs_read(pagina, "<versão>")`. O commit de cada
 clone fica no `manifest.json`.
@@ -166,12 +169,14 @@ bridge fixa `novomodelo-python==X.Y.Z`, e `expected_version()`
 (`src/novomodelo_mcp/adapters/versions.py`) lê a versão esperada desse pin.
 
 O pareamento é um commit só, `build: pair with novomodelo X.Y.Z`, feito depois que o
-bridge `X.Y.Z` está no PyPI e as docs têm a tag `vX.Y.Z`:
+bridge `X.Y.Z` está no PyPI e a `main` das docs aponta para o novomodelo `vX.Y.Z` (`latest`
+no `versions.json`):
 
 1. `version` e o pin do bridge no `pyproject.toml`, e o lock:
    `uv lock --upgrade-package novomodelo-bridge --upgrade-package novomodelo-python`.
    `tests/test_package_metadata.py` falha se a versão do MCP e o pin divergirem.
-2. As docs embutidas e os changelogs nas tags `vX.Y.Z` (seção acima).
+2. As docs embutidas da `main` das docs e os changelogs nas tags `vX.Y.Z` do novomodelo e
+   do bridge (seção acima).
 3. O `ref` do job `rename-guard` em `.github/workflows/ci.yml` para o commit da tag
    `vX.Y.Z` do novomodelo, com a tag no comentário:
    `git ls-remote https://github.com/ons-ccee-epe/novomodelo 'refs/tags/vX.Y.Z^{}'`.
