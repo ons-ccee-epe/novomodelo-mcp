@@ -54,7 +54,7 @@ ignora = ["nome antigo", "referencia de spec", "diretorio kiro"]
 # Um caminho que termina em "/" vale para tudo abaixo dele. A lista interna nunca é liberada.
 [permitidos]
 "scripts/ci/termos_proibidos.toml" = { padroes = ["ons\u0074ec", "homologado ONS", "hots\u0069te", "diretorio kiro"], motivo = "a própria lista de padrões" }
-"src/novomodelo_mcp/_bundled/" = { padroes = ["nome antigo"], motivo = "docs oficiais do upstream, copiadas sem edição" }
+"src/novomodelo_mcp/_bundled/" = { padroes = ["nome antigo", "diretorio kiro"], motivo = "docs oficiais do upstream, copiadas sem edição" }
 "scripts/rebrand/map.toml" = { padroes = ["nome antigo"], motivo = "mapa do verificador de nome: precisa citar o nome antigo" }
 "LICENSE" = { padroes = ["nome antigo"], motivo = "aviso de copyright do texto da licença upstream" }
 ".kiro/steering/" = { padroes = ["diretorio kiro"], motivo = "regras do time versionadas para o Kiro" }
@@ -66,3 +66,4 @@ ignora = ["nome antigo", "referencia de spec", "diretorio kiro"]
 "tests/e2e/load/" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
 "tests/e2e/queries/mcp_workspace.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI" }
 "tests/e2e/executor/container.py" = { padroes = ["caminho de maquina"], motivo = "home do usuário dentro da imagem do container dos agentes" }
+"tests/e2e/frontend/src/features/History/Rodada.test.tsx" = { padroes = ["caminho de maquina"], motivo = "caminhos fictícios de uma pessoa genérica, num teste que confere que o painel os esconde" }

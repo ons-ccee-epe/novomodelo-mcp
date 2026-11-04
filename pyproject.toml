@@ -1,6 +1,6 @@
 [project]
 name = "novomodelo-mcp"
-version = "0.19.1"
+version = "0.20.0"
 description = "Servidor MCP (fachada local) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -31,7 +31,7 @@ dependencies = [
     # sobe a versão com um bump só (o binding vem junto pelo uv.lock), e
     # `versions.expected_version()` lê a versão esperada deste pin.
     "novomodelo-python",
-    "novomodelo-bridge==0.19.1",
+    "novomodelo-bridge==0.20.0",
     "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
     "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
     # O cryptography (via mcp -> pyjwt[crypto]) publica wheel para macOS Intel só até a
@@ -52,7 +52,7 @@ Documentation = "https://docs.modelossetoreletrico.org.br/"
 novomodelo-mcp = "novomodelo_mcp.server:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]

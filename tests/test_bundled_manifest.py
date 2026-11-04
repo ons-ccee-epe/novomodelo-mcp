@@ -219,13 +219,26 @@ def test_bundled_do_repositorio_tem_manifesto_e_indice_pequeno():
     assert not (BUNDLED / "docs" / "math" / "_impl").exists()
 
 
-def test_docs_embutidas_na_versao_do_mcp():
+def _versao_pareada() -> str:
+    """A versão do novomodelo com que o MCP pareia: a do MCP sem o `.postN`."""
     import novomodelo_mcp
 
+    return novomodelo_mcp.__version__.split(".post")[0]
+
+
+def test_docs_embutidas_na_versao_do_mcp():
     man = json.loads((BUNDLED / "manifest.json").read_text(encoding="utf-8"))
-    menor = lambda v: tuple(v.split(".")[:2])  # noqa: E731
-    assert menor(man["docs_versao"]) == menor(novomodelo_mcp.__version__), (
+    assert man["docs_versao"] == _versao_pareada(), (
         "docs embutidas de outra versão: rode scripts/sync_bundled.py com as docs da versão do MCP"
+    )
+
+
+@pytest.mark.parametrize("produto", ["novomodelo", "novomodelo-bridge"])
+def test_changelog_embutido_tem_a_secao_da_versao_do_mcp(produto):
+    man = json.loads((BUNDLED / "manifest.json").read_text(encoding="utf-8"))
+    assert _versao_pareada() in man["changelogs"][produto]["versoes"], (
+        f"o changelog embutido do {produto} não tem a seção da versão do MCP: rode "
+        "scripts/sync_bundled.py com o clone na tag da versão"
     )
 
 

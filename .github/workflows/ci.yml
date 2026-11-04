@@ -19,7 +19,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Instalar uv
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
@@ -57,7 +59,7 @@ jobs:
       GITLEAKS_VERSION: "8.30.1"
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -92,9 +94,13 @@ jobs:
           test "$codigo" -eq 1
           python3 -c 'import json, sys; n = len(json.load(open(sys.argv[1]))); sys.exit(0 if n == 3 else f"esperados 3 achados, vieram {n}")' "$pasta/achados.json"
 
-      # O histórico antigo ainda tem termos até a limpeza; até lá a CI olha só a árvore.
       - name: Termos proibidos na árvore
         run: python3 scripts/ci/check_termos_proibidos.py
+
+      # O histórico vai inteiro para o repositório público: um commit novo com termo
+      # proibido, no conteúdo ou na mensagem, não pode entrar.
+      - name: Termos proibidos no histórico inteiro e nas mensagens
+        run: python3 scripts/ci/check_termos_proibidos.py --historico --mensagens
 
   painel:
     name: painel (lint, test, build)
@@ -104,13 +110,13 @@ jobs:
       run:
         working-directory: tests/e2e/frontend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       # Mesma versão do engines.node do package.json.
       - name: Instalar o Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: "25.9.0"
 
@@ -137,7 +143,9 @@ jobs:
     name: pytest (${{ matrix.os }}, Python ${{ matrix.python }})
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Instalar uv
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
@@ -165,7 +173,7 @@ jobs:
     name: e2e (${{ matrix.os }}, Python ${{ matrix.python }})
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
@@ -196,7 +204,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Instalar uv
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
@@ -211,7 +221,7 @@ jobs:
         run: echo "v=$(uv run python -c 'from novomodelo_mcp.adapters.versions import expected_version; print(expected_version())')" >> "$GITHUB_OUTPUT"
 
       - name: Decks mínimos do novomodelo-bridge na tag
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ons-ccee-epe/novomodelo-bridge
           ref: v${{ steps.versao.outputs.v }}
@@ -227,19 +237,21 @@ jobs:
 
   rename-guard:
     # Falha se o nome antigo do produto reaparecer fora das exceções do mapa.
-    # Usa a ferramenta do novomodelo (fonte única), fixada numa tag: o commit de
-    # pareamento sobe o `ref` junto com o pin do novomodelo-bridge.
+    # Usa a ferramenta do novomodelo (fonte única), fixada no commit de uma tag: o commit
+    # de pareamento sobe o `ref` (e a tag no comentário) junto com o pin do novomodelo-bridge.
     name: Trava de nome (rebrand check)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Ferramenta de rename do novomodelo (fixada na tag)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ons-ccee-epe/novomodelo
-          ref: v0.19.1
+          ref: 55a2181eaba612d4f5d84d2731120356713e230d  # v0.20.0
           path: _upstream
           sparse-checkout: scripts/rebrand
           persist-credentials: false
@@ -255,14 +267,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Commit das docs gravado no manifesto
         id: manifesto
         run: echo "commit=$(python3 -c "import json;print(json.load(open('src/novomodelo_mcp/_bundled/manifest.json'))['docs_commit'])")" >> "$GITHUB_OUTPUT"
 
       - name: novomodelo-docs nesse commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ons-ccee-epe/novomodelo-docs
           ref: ${{ steps.manifesto.outputs.commit }}
@@ -280,7 +294,7 @@ jobs:
           PY
 
       - name: novomodelo nesse commit (CHANGELOG.md)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ons-ccee-epe/novomodelo
           ref: ${{ steps.changelogs.outputs.novomodelo }}
@@ -290,7 +304,7 @@ jobs:
           persist-credentials: false
 
       - name: novomodelo-bridge nesse commit (CHANGELOG.md)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ons-ccee-epe/novomodelo-bridge
           ref: ${{ steps.changelogs.outputs.bridge }}
