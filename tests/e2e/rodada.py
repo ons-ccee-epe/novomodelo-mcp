@@ -1121,7 +1121,7 @@ def _rodar_pendentes(
         log("limite", execucao=rotulo, motivo=motivo)
         print(f"limite     {rotulo}: {motivo}", flush=True)
 
-    def trabalhador(fila: deque[Planejada]) -> None:
+    def trabalhador(fila: deque[Planejada], fim: threading.Event) -> None:
         try:
             _trabalhar(fila)
         # Uma exceção numa thread morreria em silêncio: ela volta para a thread principal,
@@ -1130,6 +1130,8 @@ def _rodar_pendentes(
             with ctl.trava:
                 ctl.erro = ctl.erro or erro
                 ctl.parada = "erro"
+        finally:
+            fim.set()
 
     def _trabalhar(fila: deque[Planejada]) -> None:
         while True:
@@ -1161,17 +1163,21 @@ def _rodar_pendentes(
 
     ctl.limites_na_passada.clear()
     ctl.concluidas_na_passada = 0
-    threads = [
-        threading.Thread(target=trabalhador, args=(fila,), daemon=True)
-        for fila in filas.values()
-        for _ in range(max(1, paralelo_por_agente))
-    ]
+    trabalhos: list[tuple[threading.Thread, threading.Event]] = []
+    for fila in filas.values():
+        for _ in range(max(1, paralelo_por_agente)):
+            fim = threading.Event()
+            trabalho = threading.Thread(target=trabalhador, args=(fila, fim), daemon=True)
+            trabalhos.append((trabalho, fim))
+    # Espera pelo Event, com prazo e nunca por Thread.join: no Windows uma espera sem prazo
+    # segura o Ctrl-C, e no Python 3.12 um join que o Ctrl-C interrompe marca a thread viva
+    # como parada, e a limpeza voltaria com ela ainda gravando na pasta da rodada.
     try:
-        for t in threads:
+        for t, _ in trabalhos:
             t.start()
-        for t in threads:
-            while t.is_alive():
-                t.join(timeout=0.5)
+        for _, fim in trabalhos:
+            while not fim.wait(timeout=0.5):
+                pass
     except KeyboardInterrupt:
         with _sem_ctrl_c():
             with ctl.trava:
@@ -1187,9 +1193,9 @@ def _rodar_pendentes(
             ]
             dep.encerrar_em_voo(cfg, prefixos)
             prazo = time.monotonic() + TEMPO_FIM_THREADS
-            for t in threads:
+            for t, fim in trabalhos:
                 if t.ident is not None:
-                    t.join(timeout=max(0.0, prazo - time.monotonic()))
+                    fim.wait(timeout=max(0.0, prazo - time.monotonic()))
         return
     if ctl.erro is not None:
         raise ctl.erro
