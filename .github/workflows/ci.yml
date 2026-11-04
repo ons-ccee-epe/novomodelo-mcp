@@ -251,7 +251,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ons-ccee-epe/novomodelo
-          ref: 9399601386c89eb594e14cdf519eaff2a4bfaf3c  # v0.19.1
+          ref: 55a2181eaba612d4f5d84d2731120356713e230d  # v0.20.0
           path: _upstream
           sparse-checkout: scripts/rebrand
           persist-credentials: false

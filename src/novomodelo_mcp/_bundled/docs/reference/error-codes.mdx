@@ -1786,11 +1786,13 @@ in this phase, such as a load error (after the label, its message begins
 it traces to.
 
 **Example:** A historical library that holds no complete window, a
-non-stationary fitted inflow model (non-finite innovation scale), or an
-autoregressive stage whose standard deviation is zero, or a declared
+non-stationary fitted inflow model (non-finite innovation scale), an
+autoregressive stage whose standard deviation is zero, a stage with more
+openings than the first stage of its noise group, or a declared
 opening-tree file that is absent.
 [Historical-library refusals](#historical-library-refusals),
-[Inflow-model refusals](#inflow-model-refusals) and
+[Inflow-model refusals](#inflow-model-refusals),
+[Noise-group opening count](#noise-group-opening-count) and
 [Opening-tree file missing](#opening-tree-file-missing) quote the messages.
 
 #### Historical-library refusals
@@ -1883,6 +1885,34 @@ study. Two refusals carry a fixed message:
   with the `scenarios/` file label and exits `1`. `novomodelo run` prints it without
   the `I/O error: ` prefix, followed by a hint to run `novomodelo validate`, and also
   exits `1`.
+
+#### Noise-group opening count
+
+**When it occurs:** A study stage has more openings than the first stage of its
+noise group, the run of adjacent study stages with the same `season_id` whose
+start dates fall in one calendar year
+([Scenario Generation §2.3](/math/scenario-generation/#23-opening-tree)). The
+counts compared are the ones the opening tree uses: `num_openings` after the
+clamps by a historical window pool and by an external scenario library (the
+clamp warnings of the Implementation notes tab of
+[Scenario Generation](/math/scenario-generation/#implementation-in-novomodelo)),
+so a clamp on the first stage alone can bring it about. The check runs before
+any noise is drawn. The message names both stages:
+
+```text
+insufficient data: stage {dst_id} has {k_dst} openings but shares a noise group with stage {src_id}, which has {k_src}; a stage cannot have more openings than the first stage of its noise group: lower num_openings of stage {dst_id} in stages.json to {k_src}
+```
+
+This is a stochastic-model error. `novomodelo validate` prints it after the
+`scenarios/inflow_history.parquet: stochastic error: ` prefix and exits `1`.
+`novomodelo run` prints it as `error: stochastic error: insufficient data: stage …`
+with the validate hint, and exits `1`.
+
+**Resolution:** Lower `num_openings` of the named stage in `stages.json` to the
+count the message gives. When a clamp lowered the first stage's count, more
+historical windows or external scenarios for that stage also clear the refusal.
+A later stage with fewer openings than the first stage is accepted and copies
+the first of them.
 
 #### Opening-tree file missing
 
@@ -2308,13 +2338,13 @@ solver profile field "primal_feasibility_tolerance" (1e-7) for phase "forward" i
 **Resolution:** Remove the override field from `config.json` on a CLP-built
 binary, or switch to the default HiGHS backend if the override is required.
 
-### HiGHS backend: seven per-field range checks
+### HiGHS backend: six per-field range checks
 
 The default (`highs`) backend accepts every solver-profile field. The closed
 enums (`dual_edge_weight`, `scale`, `price`, `presolve`) and `use_warm_start`
 are unconditionally valid — every variant is checked when `config.json` is
 read, so there is no separate runtime range check for them. The remaining
-seven numeric fields are range-checked at study setup; each failure names the
+six numeric fields are range-checked at study setup; each failure names the
 field, the rejected value, and the phase (`forward` / `backward` /
 `simulation`) whose profile set it.
 
@@ -2324,7 +2354,6 @@ field, the rejected value, and the phase (`forward` / `backward` /
 | `dual_feasibility_tolerance` | must be finite and `>= 0.0000000001` | `unsupported dual_feasibility_tolerance {value} for backend "highs" in phase "{phase}": value must be finite and >= 0.0000000001` |
 | `simplex_update_limit` | must be `<= 2147483647` | `unsupported simplex_update_limit {value} for backend "highs" in phase "{phase}": value must be <= 2147483647` |
 | `cost_perturbation` | must be finite and `>= 0` | `unsupported cost_perturbation {value} for backend "highs" in phase "{phase}": value must be finite and >= 0` |
-| `refactor_error_tolerance` | must be finite and `>= 0` | `unsupported refactor_error_tolerance {value} for backend "highs" in phase "{phase}": value must be finite and >= 0` |
 | `factor_pivot_threshold` | must be in `[0.0008, 0.5]` | `unsupported factor_pivot_threshold {value} for backend "highs" in phase "{phase}": value must be in [0.0008, 0.5]` |
 | `steepest_edge_devex_fallback_threshold` | must be finite and `>= 1.0` | `unsupported steepest_edge_devex_fallback_threshold {value} for backend "highs" in phase "{phase}": value must be finite and >= 1.0` |
 
@@ -2377,6 +2406,24 @@ error: LP infeasible at stage 0, iteration 1, scenario 0
   -> run `novomodelo validate <CASE_DIR>` for a full diagnostic report
 ```
 
+### Solves that miss a row bound
+
+When any LP solve of the run returned an optimal primal solution that misses a
+row bound, `novomodelo run` prints one line on stderr when the run ends (rank 0
+only; `--quiet` does not suppress it). The run still succeeds and the exit code
+does not change:
+
+```text
+warning: LP solves returned a primal solution that misses a row bound by more than the primal feasibility tolerance plus 1e-11 of the row's magnitude: {n} of {m} (forward {f}, backward {b}, lower bound {l}, simulation {s}); per-stage counts are in the lp_row_violations column of solver/iterations.parquet
+```
+
+A row counts when its violation exceeds the solver's primal feasibility
+tolerance plus `1e-11` times the row's magnitude: the sum of the absolute values
+of its terms at the returned solution, taken as at least 1. The Python
+`novomodelo.run` prints the same text prefixed by `novomodelo-python: `. A count
+above zero means outputs recomputed from that solve (balances, duals, cuts) may
+not close; report it with the case.
+
 ### Simulation failures
 
 A stage-LP failure in simulation exits `3`, and every other simulation failure exits `4`.
@@ -2403,6 +2450,8 @@ A stage-LP failure in simulation exits `3`, and every other simulation failure e
 | `gather_basis_store: rank {rank} sent more than its {passes} rows at node {node}`, `gather_basis_store: rank {rank} sent {count} f64 values its rows at node {node} do not read` or `{operation}: rank {rank}'s basis payload at node {node} does not fit an i32 count` | `1` | Rank 0 cannot decode the stored LP bases it gathers from every process at a periodic checkpoint or at the end of training, or the bases one process holds for a node exceed an MPI count; `{operation}` is `gather_basis_store_i32` or `gather_basis_store_f64`. The `novomodelo validate` hint after it does not apply. | Report the case with the message. |
 | `rank 0 signaled broadcast failure (length 0)`                                                                                                                                                                                                                                                                                                                                                                        | `4`       | Rank 0 fails while loading the case, before it broadcasts the study, so the other processes receive an empty broadcast; rank 0 exits with the code of its own error.                                                                                                                                                                               | Fix the error that rank 0 prints under its `rank 0:` line.                                                                                            |
 | `hydro model preprocessing error on non-root rank: {e}`                                                                                                                                                                                                                                                                                                                                                               | `4`       | A process other than rank 0 fails to prepare the hydro models, which it rebuilds from the case directory.                                                                                                                                                                                                                                          | Give every process read access to the same case directory, and read `{e}` for the cause.                                                              |
+| `opening tree differs across MPI ranks (fingerprints {min:#018x} to {max:#018x}); every rank must build the same tree from the broadcast inputs`                                                                                                                                                                                                                                                                      | `4`       | On two or more MPI processes, the digests of the opening tree that the ranks built differ after setup, so they would train against different trees; `{min}` and `{max}` are the smallest and the largest digest, each `0x` and 16 hexadecimal digits ([Opening tree across MPI ranks](/math/scenario-generation/#implementation-in-novomodelo)).   | Report the case with the message.                                                                                                                     |
+| `opening tree fingerprint exchange failed: {e}`                                                                                                                                                                                                                                                                                                                                                                       | `4`       | The exchange of the opening-tree digests across the MPI processes fails; `{e}` is the communication error.                                                                                                                                                                                                                                         | Read `{e}` for the failing operation.                                                                                                                 |
 | `enumerated training at world >= 2 requires a graph with no interior branching (a deterministic trunk + terminal fan): node {node_id} is a non-leaf node not shared by every root→leaf path — the enumerated forward's per-rank state exchange is elided for it, so the replicated backward would cut against a zeroed incoming state on any rank that never visits it, pending the interior-node state-exchange fix` | `1`       | Enumerated training (`training.selection.method` `"enumerated"`) runs on two or more MPI processes over a policy graph with an interior branching node; the message has no prefix and is followed by ``-> run `novomodelo validate <CASE_DIR>` for a full diagnostic report``, although `novomodelo validate` does not check this and exits `0` on the case. | Keep all branching at the last stage, run on one process, or use sampled selection.                                                                   |
 
 Requesting the MPI backend from a binary built without MPI support prints:
