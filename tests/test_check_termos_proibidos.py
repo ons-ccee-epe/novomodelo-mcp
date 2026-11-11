@@ -315,3 +315,22 @@ def test_toda_excecao_por_caminho_aponta_para_algo_que_existe():
     permitidos = tomllib.loads(TOML_PADRAO.read_text(encoding="utf-8"))["permitidos"]
     faltam = [caminho for caminho in permitidos if not (RAIZ / caminho).exists()]
     assert faltam == []
+
+
+def test_excecao_do_historico_vale_so_no_historico(repo, tmp_path):
+    toml = tmp_path / "termos.toml"
+    toml.write_text(
+        '[[padroes]]\nnome = "caminho de maquina"\nregex = "/home/[a-z]+/"\n\n'
+        '[historico.permitidos]\n"antigo/" = { padroes = ["caminho de maquina"], motivo = "x" }\n',
+        encoding="utf-8",
+    )
+    _commit(repo, {"antigo/a.md": f"{CAMINHO_PESSOAL}\n"}, mensagem="chore: base")
+    (repo / "antigo" / "a.md").rename(repo / "b.md")
+    _commit(repo, {}, mensagem="chore: move")
+    historico = _rodar(repo, "--historico", toml=toml)
+    assert "antigo/a.md" not in historico.stdout
+    assert historico.returncode == 0, historico.stdout
+    assert "b.md:1: caminho de maquina" in _rodar(repo, toml=toml).stdout
+    _commit(repo, {"antigo/c.md": f"{CAMINHO_PESSOAL}\n"}, mensagem="chore: volta")
+    assert "antigo/c.md:1" in _rodar(repo, toml=toml).stdout
+    assert "antigo/c.md:1" in _rodar(repo, "--desde", "HEAD~1", toml=toml).stdout

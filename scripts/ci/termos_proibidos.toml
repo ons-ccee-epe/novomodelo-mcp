@@ -50,6 +50,12 @@ escopo = ["e2e/"]
 [historico]
 ignora = ["nome antigo", "referencia de spec", "diretorio kiro"]
 
+# Exceções por caminho que só valem com --historico: caminhos que existiram em commits
+# antigos e saíram da árvore. As da árvore ficam em [permitidos].
+[historico.permitidos]
+"tests/e2e/executor/container.py" = { padroes = ["caminho de maquina"], motivo = "a bateria antes de ir para e2e/: home do usuário na imagem dos agentes" }
+"tests/e2e/frontend/src/features/History/Rodada.test.tsx" = { padroes = ["caminho de maquina"], motivo = "a bateria antes de ir para e2e/: caminhos fictícios no teste do painel" }
+
 # Exceções por caminho e por padrão: cada entrada libera só os padrões listados.
 # Um caminho que termina em "/" vale para tudo abaixo dele. A lista interna nunca é liberada.
 [permitidos]
