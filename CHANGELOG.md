@@ -11,6 +11,18 @@ só do MCP vira `X.Y.Z.postN`.
 
 ### Changed
 
+- **Para quem atualiza da 0.20:** `uv tool upgrade novomodelo-mcp` e fechar e abrir o
+  cliente. O agente lê os nomes novos do servidor a cada conversa, e a lista de tools de
+  leitura que o `configurar` libera no cliente é a mesma: nenhuma delas muda de nome.
+  Precisa agir só quem:
+  - liberou à mão `incluir_pastas` ou `instalar_novomodelo` no cliente: troque pelos
+    nomes novos;
+  - tem script, integração ou instruções próprias que chamam as tools ou leem as
+    respostas pelos nomes antigos: veja as tabelas abaixo;
+  - quer a citação como `page#section` na linha que o `configurar --instrucoes` gravou no
+    `~/.claude/CLAUDE.md`: apague a linha marcada com `<!-- novomodelo-mcp -->` e rode o
+    `configurar --instrucoes` de novo. A linha antiga continua funcionando. No Kiro, o
+    `configurar --instrucoes` regrava o arquivo inteiro.
 - **BREAKING:** as chaves que o próprio MCP escreve nas respostas passam a ser em inglês.
   O texto para pessoas (mensagens, `diagnostics`, avisos, docstrings) continua em
   português. Não mudam as chaves repassadas das CLIs e do `novomodelo-python`, as do
