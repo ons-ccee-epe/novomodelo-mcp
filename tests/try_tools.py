@@ -17,7 +17,7 @@ from pathlib import Path
 # torna o pacote em src/ importável sem instalar
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from novomodelo_mcp.server import build_server  # noqa: E402
+from novomodelo_mcp.server import build_server
 
 
 def _text(result) -> str:

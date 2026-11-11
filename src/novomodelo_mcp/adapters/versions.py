@@ -3,7 +3,7 @@
 Dono único da comparação de versões (nenhuma tool compara por conta própria) e da
 única saída de rede do MCP (`fetch_bytes`/`fetch_json`): só domínios oficiais, timeout
 curto, certificados do sistema por um contexto local do `truststore`. Nunca levanta:
-falha vira `aviso_rede`.
+falha vira `network_warning`.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ def expected_version() -> str | None:
 
 def _piece(version: Any, missing: str) -> dict[str, Any]:
     v = normalize_version(version)
-    return {"versao": v} if v else {"versao": None, "motivo": missing}
+    return {"version": v} if v else {"version": None, "reason": missing}
 
 
 def _read_local(settings) -> dict[str, dict[str, Any]]:
@@ -96,12 +96,12 @@ def _read_local(settings) -> dict[str, dict[str, Any]]:
     bridge_path, origin = bridge_origin(settings)
     bridge = bridge_version(bridge_path, origin)
     return {
-        "executavel": _piece(
+        "executable": _piece(
             cli.get("version") if cli.get("status") == "ok" else None, "não encontrado"
         ),
-        "biblioteca": _piece(lib, "não encontrada no ambiente do MCP"),
+        "library": _piece(lib, "não encontrada no ambiente do MCP"),
         "bridge": _piece(bridge.split()[-1] if bridge else None, "não encontrado")
-        | {"origem": origin},
+        | {"origin": origin},
         "docs": _docs_piece(),
     }
 
@@ -111,7 +111,7 @@ def _docs_piece() -> dict[str, Any]:
 
     manifest = bundled_manifest()
     if not manifest:
-        return {"versao": None, "motivo": "sem manifesto"}
+        return {"version": None, "reason": "sem manifesto"}
     return _piece(manifest.get("docs_versao"), "manifesto sem versão") | {
         "commit": manifest.get("docs_commit")
     }
@@ -132,7 +132,7 @@ def cli_install_command(version: str) -> str:
 
 
 ASK_AGENT_TO_INSTALL = (
-    "Peça ao agente: “instale o executável do novomodelo” (tool instalar_novomodelo)"
+    "Peça ao agente: “instale o executável do novomodelo” (tool install_novomodelo)"
 )
 
 
@@ -168,30 +168,30 @@ def _piece_warnings(settings, expected: str) -> list[str]:
     """
     pieces = local_versions(settings)
     actions = {
-        "executavel": (
+        "executable": (
             "o executável novomodelo",
             f"{ASK_AGENT_TO_INSTALL}. Manual: {cli_install_command(expected)}",
         ),
-        "biblioteca": ("a biblioteca novomodelo-python", mcp_install_command(expected)),
-        "bridge": (f"o {BRIDGE_CLI}", _bridge_command(expected, pieces["bridge"].get("origem"))),
+        "library": ("a biblioteca novomodelo-python", mcp_install_command(expected)),
+        "bridge": (f"o {BRIDGE_CLI}", _bridge_command(expected, pieces["bridge"].get("origin"))),
         "docs": ("as docs embutidas", mcp_install_command(expected)),
     }
     lines = []
     for key, (label, action) in actions.items():
-        version = normalize_version(pieces[key]["versao"])
-        verb = "" if key == "executavel" else "Instale: "
+        version = normalize_version(pieces[key]["version"])
+        verb = "" if key == "executable" else "Instale: "
         name = label.split(" ", 1)[1]
         if version is not None and not _version_key(version):
             continue
         if version is None:
             if key != "docs":
-                lines.append(f"{name} {pieces[key]['motivo']}. {verb}{action}")
+                lines.append(f"{name} {pieces[key]['reason']}. {verb}{action}")
         elif _version_key(version) < _version_key(expected):
-            verb = "" if key == "executavel" else "Atualize: "
+            verb = "" if key == "executable" else "Atualize: "
             lines.append(f"{name} na versão {version}; a do MCP é {expected}. {verb}{action}")
         elif _version_key(version) > _version_key(expected):
             notes = {
-                "executavel": ("novomodelo", CLI_RELEASES),
+                "executable": ("novomodelo", CLI_RELEASES),
                 "bridge": ("bridge", BRIDGE_RELEASES),
             }.get(key)
             lines.append(
@@ -209,9 +209,9 @@ def version_warnings(settings) -> list[str]:
     expected = expected_version()
     lines = _piece_warnings(settings, expected) if expected else []
     origin = docs_origin(settings)
-    if origin["origem"] == "pasta_de_desenvolvimento":
+    if origin["origin"] == "pasta_de_desenvolvimento":
         lines.append(
-            f"docs lidas de uma pasta de desenvolvimento ({origin['caminho']}), não "
+            f"docs lidas de uma pasta de desenvolvimento ({origin['path']}), não "
             "das embutidas da versão do MCP; tire NOVOMODELO_MCP_DOCS_DIR da "
             "configuração para usar as embutidas"
         )
@@ -275,10 +275,10 @@ def _reason(exc: BaseException) -> str:
 
 
 def fetch_bytes(url: str, *, timeout: float) -> bytes | dict[str, str]:
-    """Conteúdo de `url` ou `{"aviso_rede": motivo}`; nunca levanta."""
+    """Conteúdo de `url` ou `{"network_warning": motivo}`; nunca levanta."""
     host = urlsplit(url).hostname or url
     if not allowed_url(url):
-        return {"aviso_rede": f"domínio não permitido: {host}"}
+        return {"network_warning": f"domínio não permitido: {host}"}
     req = urllib.request.Request(url, headers={"User-Agent": MCP_DIST})
     context = _ssl_context()
     try:
@@ -289,7 +289,7 @@ def fetch_bytes(url: str, *, timeout: float) -> bytes | dict[str, str]:
                 raise
             return _open(req, timeout=timeout, context=ssl.create_default_context())
     except Exception as exc:  # noqa: BLE001 - never-raise: rede indisponível vira aviso, não derruba a tool
-        return {"aviso_rede": f"não foi possível acessar {host}: {_reason(exc)}"}
+        return {"network_warning": f"não foi possível acessar {host}: {_reason(exc)}"}
 
 
 def fetch_json(url: str, *, timeout: float) -> dict[str, Any]:
@@ -297,9 +297,9 @@ def fetch_json(url: str, *, timeout: float) -> dict[str, Any]:
     if isinstance(body, dict):
         return body
     try:
-        return {"dados": json.loads(body)}
+        return {"data": json.loads(body)}
     except ValueError:
-        return {"aviso_rede": f"resposta não é JSON: {urlsplit(url).hostname}"}
+        return {"network_warning": f"resposta não é JSON: {urlsplit(url).hostname}"}
 
 
 # ── versão nova (server_info) ─────────────────────────────────────────────────
@@ -310,25 +310,25 @@ _UPDATE: dict[str, Any] = {}
 def _newer(
     current: str | None, fetched: dict[str, Any], extract, manual: str, command
 ) -> dict[str, Any]:
-    if "aviso_rede" in fetched:
+    if "network_warning" in fetched:
         return {
             "status": "nao_foi_possivel_verificar",
-            "aviso_rede": fetched["aviso_rede"],
-            "verifique_em": manual,
+            "network_warning": fetched["network_warning"],
+            "check_at": manual,
         }
     try:
-        latest = normalize_version(extract(fetched["dados"]))
+        latest = normalize_version(extract(fetched["data"]))
     except (KeyError, TypeError):
         latest = None
     if not latest:
         return {
             "status": "nao_foi_possivel_verificar",
-            "aviso_rede": "resposta sem versão",
-            "verifique_em": manual,
+            "network_warning": "resposta sem versão",
+            "check_at": manual,
         }
     if current and _version_key(latest) <= _version_key(current):
-        return {"status": "atual", "mais_recente": latest}
-    return {"status": "nova", "mais_recente": latest, "comando": command(latest)}
+        return {"status": "atual", "latest": latest}
+    return {"status": "nova", "latest": latest, "command": command(latest)}
 
 
 def _shorten(text: str, limit: int) -> str:
@@ -370,28 +370,28 @@ def release_changes(body: str | None) -> list[str]:
 
 
 def _release_notes(fetched: dict[str, Any], version: str, releases: str) -> dict[str, Any]:
-    """`notas` (o link) e, se o release lido é o da `version`, `mudancas`."""
-    data = fetched.get("dados") if isinstance(fetched, dict) else None
+    """`release_notes` (o link) e, se o release lido é o da `version`, `release_changes`."""
+    data = fetched.get("data") if isinstance(fetched, dict) else None
     if isinstance(data, dict) and normalize_version(data.get("tag_name")) == version:
         changes = release_changes(data.get("body"))
         link = data.get("html_url") or f"{releases}/tag/v{version}"
-        return {"notas": link, **({"mudancas": changes} if changes else {})}
-    return {"notas": f"{releases}/tag/v{version}"}
+        return {"release_notes": link, **({"release_changes": changes} if changes else {})}
+    return {"release_notes": f"{releases}/tag/v{version}"}
 
 
 def _cached_notes(piece: str, version: str) -> dict[str, Any] | None:
-    if "resultado" not in _UPDATE or time.monotonic() - _UPDATE["quando"] >= UPDATE_TTL_S:
+    if "result" not in _UPDATE or time.monotonic() - _UPDATE["checked_at"] >= UPDATE_TTL_S:
         return None
-    notes = _UPDATE.get("notas", {}).get(piece)
-    return notes if notes and notes.get("versao") == version else None
+    notes = _UPDATE.get("release_notes", {}).get(piece)
+    return notes if notes and notes.get("version") == version else None
 
 
 def _notes_text(piece: str, version: str, releases: str) -> str:
     notes = _cached_notes(piece, version)
-    if notes and notes.get("mudancas"):
-        bullets = "".join(f"\n- {line}" for line in notes["mudancas"])
-        return f" Mudanças da {version}:{bullets}\nNotas: {notes['notas']}"
-    link = notes["notas"] if notes else f"{releases}/tag/v{version}"
+    if notes and notes.get("release_changes"):
+        bullets = "".join(f"\n- {line}" for line in notes["release_changes"])
+        return f" Mudanças da {version}:{bullets}\nNotas: {notes['release_notes']}"
+    link = notes["release_notes"] if notes else f"{releases}/tag/v{version}"
     return f" Notas da {version}: {link}"
 
 
@@ -411,21 +411,21 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     atualizar o MCP, que traz as peças juntas. Todo o trabalho cabe em `budget_s`; o que
     não responder a tempo vira aviso.
     """
-    if "resultado" in _UPDATE and time.monotonic() - _UPDATE["quando"] < UPDATE_TTL_S:
-        return _UPDATE["resultado"]
+    if "result" in _UPDATE and time.monotonic() - _UPDATE["checked_at"] < UPDATE_TTL_S:
+        return _UPDATE["result"]
     pieces = local_versions(settings)
-    current = expected_version() or pieces["executavel"]["versao"]
-    origin = pieces["bridge"].get("origem")
+    current = expected_version() or pieces["executable"]["version"]
+    origin = pieces["bridge"].get("origin")
     pool = ThreadPoolExecutor(max_workers=4)
     futures = {
         "mcp": pool.submit(fetch_json, MCP_PYPI, timeout=budget_s),
         "novomodelo": pool.submit(fetch_json, NOVOMODELO_LATEST, timeout=budget_s),
         "bridge": pool.submit(fetch_json, BRIDGE_PYPI, timeout=budget_s),
-        "bridge_notas": pool.submit(fetch_json, BRIDGE_LATEST, timeout=budget_s),
+        "bridge_notes": pool.submit(fetch_json, BRIDGE_LATEST, timeout=budget_s),
     }
     wait(futures.values(), timeout=budget_s)
     pool.shutdown(wait=False, cancel_futures=True)
-    late = {"aviso_rede": f"tempo esgotado ({budget_s:g} s)"}
+    late = {"network_warning": f"tempo esgotado ({budget_s:g} s)"}
     got = {k: (f.result() if f.done() else late) for k, f in futures.items()}
     cli = _newer(
         current, got["novomodelo"], lambda d: d["tag_name"], CLI_RELEASES, cli_install_command
@@ -438,41 +438,41 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
         lambda v: _bridge_command(v, origin),
     )
     notes: dict[str, dict[str, Any]] = {}
-    if cli.get("mais_recente"):
+    if cli.get("latest"):
         notes["novomodelo"] = {
-            "versao": cli["mais_recente"],
-            **_release_notes(got["novomodelo"], cli["mais_recente"], CLI_RELEASES),
+            "version": cli["latest"],
+            **_release_notes(got["novomodelo"], cli["latest"], CLI_RELEASES),
         }
-    if bridge.get("mais_recente"):
+    if bridge.get("latest"):
         notes["bridge"] = {
-            "versao": bridge["mais_recente"],
-            **_release_notes(got["bridge_notas"], bridge["mais_recente"], BRIDGE_RELEASES),
+            "version": bridge["latest"],
+            **_release_notes(got["bridge_notes"], bridge["latest"], BRIDGE_RELEASES),
         }
     mcp = _newer(current, got["mcp"], lambda d: d["info"]["version"], MCP_PAGE, mcp_install_command)
     if mcp["status"] == "nova":
-        mcp["notas"] = f"{MCP_RELEASES}/tag/v{mcp['mais_recente']}"
+        mcp["release_notes"] = f"{MCP_RELEASES}/tag/v{mcp['latest']}"
     if cli["status"] == "nova":
-        newest = cli["mais_recente"]
+        newest = cli["latest"]
         note = _release_note("novomodelo", newest, current)
         cli = (
-            {k: v for k, v in cli.items() if k != "comando"}
-            | {"nota": note}
-            | {k: v for k, v in notes["novomodelo"].items() if k != "versao"}
+            {k: v for k, v in cli.items() if k != "command"}
+            | {"note": note}
+            | {k: v for k, v in notes["novomodelo"].items() if k != "version"}
         )
         if mcp["status"] != "nova":
-            mcp = {"status": "a_conferir", "novomodelo": newest, "nota": note}
+            mcp = {"status": "a_conferir", "novomodelo": newest, "note": note}
     elif mcp["status"] == "nao_foi_possivel_verificar":
-        mcp = {"status": cli["status"], "nota": "inferida pela versão do novomodelo"}
+        mcp = {"status": cli["status"], "note": "inferida pela versão do novomodelo"}
     if bridge["status"] == "nova":
         bridge = (
-            {k: v for k, v in bridge.items() if k != "comando"}
-            | {"nota": _release_note(BRIDGE_CLI, bridge["mais_recente"], current)}
-            | {k: v for k, v in notes["bridge"].items() if k != "versao"}
+            {k: v for k, v in bridge.items() if k != "command"}
+            | {"note": _release_note(BRIDGE_CLI, bridge["latest"], current)}
+            | {k: v for k, v in notes["bridge"].items() if k != "version"}
         )
-    _UPDATE["resultado"] = {"novomodelo": cli, "bridge": bridge, "mcp": mcp}
-    _UPDATE["notas"] = notes
-    _UPDATE["quando"] = time.monotonic()
-    return _UPDATE["resultado"]
+    _UPDATE["result"] = {"novomodelo": cli, "bridge": bridge, "mcp": mcp}
+    _UPDATE["release_notes"] = notes
+    _UPDATE["checked_at"] = time.monotonic()
+    return _UPDATE["result"]
 
 
 def reset_caches() -> None:

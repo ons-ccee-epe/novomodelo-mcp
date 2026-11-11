@@ -58,6 +58,7 @@ MACHINE = {"cpu_count": 8, "performance_cpus": 4, "ram_bytes": 16 * 1024**3}
 
 def test_escolhe_o_caso_de_tamanho_mais_parecido_e_nao_o_mais_recente():
     ref = runtime.select_reference([TOY, CASO_GRANDE], CASE_DIMS, "novo")
+    assert ref is not None
     assert ref["level_name"] == "outro_caso"
     assert [p["source"] for p in ref["points"]] == ["caso_grande"]
     assert ref["size_ratio"] < 2
@@ -72,6 +73,7 @@ def test_estimativa_usa_a_referencia_parecida():
 
 def test_so_caso_de_brinquedo_disponivel_da_indeterminado():
     ref = runtime.select_reference([TOY], CASE_DIMS, "novo")
+    assert ref is not None
     assert ref["size_ratio"] > runtime.MAX_SIZE_RATIO
     plan = build_plan(PARAMS, MACHINE, ref, time_budget_s=900)
     assert plan["verdict"] == "indeterminado"

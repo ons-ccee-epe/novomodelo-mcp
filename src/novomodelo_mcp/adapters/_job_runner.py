@@ -60,7 +60,7 @@ def _kill_tree(proc: subprocess.Popen, *, force: bool) -> None:
             capture_output=True,
             check=False,
             creationflags=subprocess.CREATE_NO_WINDOW,
-        )  # type: ignore[attr-defined]  # só existe no Windows
+        )
         return
     # O comando lidera o próprio grupo (start_new_session): o sinal alcança os netos.
     try:
@@ -89,7 +89,7 @@ def main(argv: list[str]) -> int:
         # Sinal externo (ex.: shutdown) vira pedido de cancelamento ordenado.
         signal.signal(signal.SIGTERM, lambda *_: cancel.touch())
 
-    flags = subprocess.CREATE_NO_WINDOW if _WIN else 0  # type: ignore[attr-defined]
+    flags = subprocess.CREATE_NO_WINDOW if _WIN else 0
     try:
         # argv em lista e sem shell, montada pelo servidor (tools.run) com caminhos absolutos.
         proc = subprocess.Popen(

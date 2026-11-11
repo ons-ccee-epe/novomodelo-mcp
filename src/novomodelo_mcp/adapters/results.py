@@ -89,7 +89,7 @@ def find_runs(folder: Path) -> list[Path]:
 def folder_above_runs(output_dir: str) -> dict[str, Any] | None:
     """Recusa uma pasta que contém rodadas (a do caso, a do estudo) no lugar da rodada.
 
-    Com uma rodada, sugere ela em `output_sugerido`; com várias, só lista, porque a
+    Com uma rodada, sugere ela em `suggested_output`; com várias, só lista, porque a
     escolha é do usuário. Sem rodada abaixo, devolve None e cada tool segue com o
     próprio erro.
     """
@@ -103,16 +103,16 @@ def folder_above_runs(output_dir: str) -> dict[str, Any] | None:
         return error(
             2,
             f"{output_dir} não é a pasta de uma rodada; a rodada encontrada nela "
-            f"está em output_sugerido",
-            output_sugerido=runs[0],
-            rodadas=runs,
+            f"está em suggested_output",
+            suggested_output=runs[0],
+            runs=runs,
         )
     return error(
         2,
         f"{output_dir} não é a pasta de uma rodada e tem {len(runs)} rodadas",
         "pergunte ao usuário qual rodada usar e passe a pasta dela em output_dir",
-        rodadas=runs[:_RUNS_LISTED],
-        rodadas_total=len(runs),
+        runs=runs[:_RUNS_LISTED],
+        runs_total=len(runs),
     )
 
 
@@ -153,16 +153,16 @@ def read_metadata(output_dir: str) -> dict[str, Any]:
 def termination_fields(
     training: dict[str, Any] | None, simulation: dict[str, Any] | None
 ) -> dict[str, Any]:
-    """`treino`/`simulacao`: como a rodada terminou, copiado do metadata sem interpretar.
+    """`training`/`simulation`: como a rodada terminou, copiado do metadata sem interpretar.
 
     Nomes da 0.18: `convergence.termination_reason`, `iterations.converged_at` e
     `iterations.completed`; campo ausente vira None.
     """
     t = training if isinstance(training, dict) else {}
-    conv = t.get("convergence") if isinstance(t.get("convergence"), dict) else {}
+    conv = raw if isinstance(raw := t.get("convergence"), dict) else {}
     its = t.get("iterations")
     out: dict[str, Any] = {
-        "treino": {
+        "training": {
             "status": t.get("status"),
             "termination_reason": conv.get("termination_reason"),
             "converged_at": its.get("converged_at") if isinstance(its, dict) else None,
@@ -170,7 +170,7 @@ def termination_fields(
         }
     }
     if isinstance(simulation, dict):
-        out["simulacao"] = {"status": simulation.get("status")}
+        out["simulation"] = {"status": simulation.get("status")}
     return out
 
 
@@ -188,16 +188,16 @@ _HEURISTIC_NOTE = (
 
 
 def numeric_diagnosis(output_dir: str) -> dict[str, Any]:
-    """`escalonamento` (copiado de training/scaling_report.json) e, acima de
-    `HEURISTIC_RATIO`, `diagnostico_heuristico`. Relatório ausente ou ilegível → {}."""
+    """`scaling` (copiado de training/scaling_report.json) e, acima de
+    `HEURISTIC_RATIO`, `heuristic_diagnosis`. Relatório ausente ou ilegível → {}."""
     report = _read_object(Path(output_dir) / "training" / "scaling_report.json")
     if isinstance(report, str):
         return {}
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = raw if isinstance(raw := report.get("summary"), dict) else {}
     worst = summary.get("worst_pre_scaling_matrix_ratio")
     if not isinstance(worst, (int, float)):
         return {}
-    stages = report.get("stages") if isinstance(report.get("stages"), list) else []
+    stages = raw if isinstance(raw := report.get("stages"), list) else []
     stage = next(
         (
             s
@@ -207,21 +207,21 @@ def numeric_diagnosis(output_dir: str) -> dict[str, Any]:
         ),
         {},
     )
-    faixa = (stage.get("pre_scaling") or {}).get("matrix_coeff_range")
+    coeff_range = (stage.get("pre_scaling") or {}).get("matrix_coeff_range")
     out: dict[str, Any] = {
-        "escalonamento": {
-            "razao_pre": worst,
-            "razao_pos": summary.get("worst_post_scaling_matrix_ratio"),
-            "estagio": stage.get("stage_id"),
-            "faixa": faixa,
+        "scaling": {
+            "pre_ratio": worst,
+            "post_ratio": summary.get("worst_post_scaling_matrix_ratio"),
+            "stage": stage.get("stage_id"),
+            "range": coeff_range,
         }
     }
     if worst > HEURISTIC_RATIO:
-        out["diagnostico_heuristico"] = {
-            "razao": worst,
-            "faixa": faixa,
-            "estagio": stage.get("stage_id"),
-            "nota": _HEURISTIC_NOTE,
+        out["heuristic_diagnosis"] = {
+            "ratio": worst,
+            "range": coeff_range,
+            "stage": stage.get("stage_id"),
+            "note": _HEURISTIC_NOTE,
         }
     return out
 
@@ -252,20 +252,20 @@ def stochastic_query(
         out: dict[str, Any] = {
             "status": "ok",
             "par": {
-                "linhas": rows[:max_rows],
+                "rows": rows[:max_rows],
                 "total": len(rows),
-                "truncado": len(rows) > max_rows,
+                "truncated": len(rows) > max_rows,
             },
         }
         if openings_stage is not None:
             tree = stoch.opening_tree(openings_stage)
             n, dim = (tree.shape + (1,))[:2]
-            out["aberturas"] = {
-                "estagio": openings_stage,
-                "n_aberturas": int(n),
+            out["openings"] = {
+                "stage": openings_stage,
+                "n_openings": int(n),
                 "dim": int(dim),
-                "linhas": tree[:max_rows].tolist(),
-                "truncado": n > max_rows,
+                "rows": tree[:max_rows].tolist(),
+                "truncated": n > max_rows,
             }
         return out
     except FileNotFoundError as exc:
@@ -285,7 +285,7 @@ def stochastic_query(
         )
 
 
-def _policy_dir(output_dir: str, policy_subdir: str, settings: Settings) -> Path | dict:
+def _policy_dir(output_dir: str, policy_subdir: str, settings: Settings) -> Path | dict[str, Any]:
     if not _ENTITY_NAME.match(policy_subdir or ""):
         return error(
             13,
@@ -310,7 +310,7 @@ def _cut_row(cut: dict[str, Any]) -> dict[str, Any]:
         "forward_pass_index": cut.get("forward_pass_index"),
         "intercept": cut.get("intercept"),
         "is_active": cut.get("is_active"),
-        "n_coeficientes": len(cut.get("coefficients") or []),
+        "n_coefficients": len(cut.get("coefficients") or []),
     }
 
 
@@ -345,8 +345,8 @@ def policy_summary(
     if isinstance(graph, dict):
         meta["graph_manifest"] = {
             "n_pools": graph.get("n_pools"),
-            "n_nos": len(graph.get("nodes") or []),
-            "n_arestas": len(graph.get("edges") or []),
+            "n_nodes": len(graph.get("nodes") or []),
+            "n_edges": len(graph.get("edges") or []),
         }
     stages = loaded.get("stage_cuts") or []
     rows = [
@@ -356,8 +356,8 @@ def policy_summary(
             "capacity": s.get("capacity"),
             "warm_start_count": s.get("warm_start_count"),
             "state_dimension": s.get("state_dimension"),
-            "n_cortes": len(s.get("cuts") or []),
-            "n_ativos": sum(1 for c in s.get("cuts") or [] if c.get("is_active")),
+            "n_cuts": len(s.get("cuts") or []),
+            "n_active": sum(1 for c in s.get("cuts") or [] if c.get("is_active")),
         }
         for s in stages
     ]
@@ -365,8 +365,8 @@ def policy_summary(
     out: dict[str, Any] = {
         "status": "ok",
         "metadata": meta,
-        "estagios": rows[:cap],
-        "estagios_truncado": len(rows) > cap,
+        "stages": rows[:cap],
+        "stages_truncated": len(rows) > cap,
     }
     if stage is not None:
         chosen = next((s for s in stages if s.get("stage_id") == stage), None)
@@ -374,11 +374,11 @@ def policy_summary(
             return error(22, f"estágio inexistente na política: {stage}")
         cuts = chosen.get("cuts") or []
         n = budget.row_limit(settings)
-        out["cortes"] = {
-            "estagio": stage,
-            "linhas": [_cut_row(c) for c in cuts[:n]],
+        out["cuts"] = {
+            "stage": stage,
+            "rows": [_cut_row(c) for c in cuts[:n]],
             "total": len(cuts),
-            "truncado": len(cuts) > n,
+            "truncated": len(cuts) > n,
         }
     return out
 
@@ -476,7 +476,7 @@ def simulation_query(
         lf = pl.scan_parquet(str(base / "**" / "*.parquet"))
         if scenario is not None:
             lf = lf.filter(pl.col("scenario_id") == scenario)
-        if group_by:
+        if group_by and agg and columns:
             lf = lf.group_by(group_by).agg(_agg_exprs(pl, agg, columns)).sort(group_by)
         elif columns:
             lf = lf.select(columns)
@@ -493,7 +493,7 @@ def simulation_query(
         "rows": df.to_dicts(),
     }
     if limit > max_rows:
-        out["limite_aplicado"] = max_rows
+        out["limit_applied"] = max_rows
     glob = f"{base.as_posix()}/**/*.parquet".replace("'", "''")
     next_step = (
         "o recorte não coube na resposta. Escolha menos colunas ou, para varrer todos os "
@@ -502,5 +502,5 @@ def simulation_query(
     )
     out = fit_to_budget(out, settings, "rows", reserve=len(next_step.encode("utf-8")) + 64)
     if out["truncated"]:
-        out["proximo_passo"] = next_step
+        out["next"] = next_step
     return out

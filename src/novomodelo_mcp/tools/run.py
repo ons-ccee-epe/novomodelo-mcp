@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from ..adapters import deck_io, jobs, runtime
 from ..adapters.discovery import find_novomodelo
@@ -64,8 +65,8 @@ def make_plan(
     *,
     time_budget_s: float = 900,
     threads: int | None = None,
-    machine: dict | None = None,
-) -> dict:
+    machine: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Compõe máquina + pontos medidos + parâmetros do caso num plano (sem gravar)."""
     try:
         params = read_case_params(case_dir)
@@ -89,11 +90,8 @@ def make_plan(
         if installed.get("status") == "ok"
         else None
     )
-    ref = (
-        runtime.select_reference(
-            points, params["dimensions"], params["config_sig"], case_dir, version=version
-        )
-        or runtime.calibration_probe()
+    ref = runtime.select_reference(
+        points, params["dimensions"], params["config_sig"], case_dir, version=version
     )
     plan = build_plan(params, machine, ref, time_budget_s, threads)
     if ref and ref.get("version_mismatch"):
@@ -118,7 +116,9 @@ def _free_output(output: Path) -> Path:
     return candidate
 
 
-def _knob_changes(config: dict, overrides: dict) -> list[dict] | dict:
+def _knob_changes(
+    config: dict[str, Any], overrides: dict[str, Any]
+) -> list[dict[str, Any]] | dict[str, Any]:
     changes = []
     for knob, value in overrides.items():
         if knob not in CONFIG_KNOBS:
@@ -159,7 +159,7 @@ def register_run(mcp, settings: Settings) -> None:
         template: str | None = None,
         list: bool = False,
         force: bool = False,
-    ) -> dict:  # noqa: A002
+    ) -> dict[str, Any]:
         """Cria um caso a partir de um template embutido (`novomodelo init`).
 
         `list=True` lista os templates disponíveis (ex.: `1dtoy`) e sai.
@@ -197,7 +197,9 @@ def register_run(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def run_plan(case_dir: str, time_budget_s: float = 900, threads: int | None = None) -> dict:
+    def run_plan(
+        case_dir: str, time_budget_s: float = 900, threads: int | None = None
+    ) -> dict[str, Any]:
         """Planeja um run LOCAL do caso: estima tempo e memória. NÃO executa, NÃO grava.
 
         Lê config.json (forward_passes, iteration_limit, simulação), stages.json
@@ -221,7 +223,9 @@ def register_run(mcp, settings: Settings) -> None:
             return as_error(exc)
 
     @mcp.tool(annotations=DESTRUCTIVE)
-    def run_apply(case_dir: str, overrides: dict, dry_run: bool = False) -> dict:
+    def run_apply(
+        case_dir: str, overrides: dict[str, Any], dry_run: bool = False
+    ) -> dict[str, Any]:
         """Aplica knobs de execução no config.json do caso (só config; nada mais).
 
         `overrides`: {"forward_passes": 2, "iteration_limit": 3,
@@ -252,7 +256,7 @@ def register_run(mcp, settings: Settings) -> None:
         time_budget_s: float = 900,
         override: bool = False,
         overwrite: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Dispara `novomodelo run` em BACKGROUND e devolve `job_id` na hora.
 
         Comando: `novomodelo run <case> --output <output> --threads N --comm-backend
@@ -260,7 +264,7 @@ def register_run(mcp, settings: Settings) -> None:
         CPU híbrida, ou o nº medido mais rápido); `output` default =
         `<case_dir>/output`. Antes de lançar roda o run_plan: se o veredito
         for `nao_cabe`, RECUSA (salvo `override=True`). Um `output` com rodada
-        concluída também é RECUSADO, com `output_sugerido`: rodar de novo nele
+        concluída também é RECUSADO, com `suggested_output`: rodar de novo nele
         apaga a rodada anterior. `overwrite=True` só quando a pessoa pediu para
         substituir (ou para `resume`/`warm_start`/simulação da política salva nele).
         Acompanhe com run_status / run_logs; interrompa com run_cancel.
@@ -272,9 +276,9 @@ def register_run(mcp, settings: Settings) -> None:
             return error(
                 17,
                 f"já há uma rodada concluída em {output}",
-                "rodar de novo nela apaga a rodada anterior: use output_sugerido, ou "
+                "rodar de novo nela apaga a rodada anterior: use suggested_output, ou "
                 "overwrite=True se a pessoa pediu para substituir",
-                output_sugerido=str(_free_output(Path(output))),
+                suggested_output=str(_free_output(Path(output))),
             )
         binpath = find_novomodelo(settings)
         if binpath is None:
@@ -293,15 +297,12 @@ def register_run(mcp, settings: Settings) -> None:
         if plan.get("status") != "ok":
             return plan
         if plan["verdict"] == "nao_cabe" and not override:
-            return {
-                "status": "error",
-                "exit_code": 28,
-                "plan": plan,
-                "diagnostics": [
-                    "plano diz 'nao_cabe' — run recusado",
-                    "ajuste com run_apply ou passe override=True",
-                ],
-            }
+            return error(
+                28,
+                "plano diz 'nao_cabe' — run recusado",
+                "ajuste com run_apply ou passe override=True",
+                plan=plan,
+            )
         n = threads or plan.get("target_threads") or 1
         cmd = [
             binpath,
@@ -347,14 +348,14 @@ def register_run(mcp, settings: Settings) -> None:
         return {"status": "ok", **meta, "warnings": plan.get("warnings", [])}
 
     @mcp.tool(annotations=READ_ONLY)
-    def run_status(job_id: str) -> dict:
+    def run_status(job_id: str) -> dict[str, Any]:
         """Estado de um run: running | succeeded | failed | cancelled | lost.
 
         Inclui tempo decorrido, estimativa do plano e marcos de saída
         (`training/_SUCCESS`, `simulation/_SUCCESS`). `_SUCCESS` só indica que a
-        saída foi gravada; veja `treino.termination_reason` e `treino.converged_at`
-        para saber se convergiu. Se o run falhou, `escalonamento` repassa a razão de
-        coeficientes do executável e, se for extrema, `diagnostico_heuristico`
+        saída foi gravada; veja `training.termination_reason` e `training.converged_at`
+        para saber se convergiu. Se o run falhou, `scaling` repassa a razão de
+        coeficientes do executável e, se for extrema, `heuristic_diagnosis`
         sugere a causa provável (heurística). Com o run concluído, use results_status /
         results_convergence no `output`.
         """
@@ -372,7 +373,10 @@ def register_run(mcp, settings: Settings) -> None:
                 meta = {}
             if meta.get("status") == "ok":
                 st.update(termination_fields(meta["training"], meta.get("simulation")))
-        if st["state"] == "failed" or (st.get("treino") or {}).get("termination_reason") == "error":
+        if (
+            st["state"] == "failed"
+            or (st.get("training") or {}).get("termination_reason") == "error"
+        ):
             st.update(numeric_diagnosis(str(out)))
         if st["state"] in ("failed", "lost"):
             st["stderr_tail"] = jobs.job_stderr(settings, job_id, lines=20)
@@ -381,10 +385,10 @@ def register_run(mcp, settings: Settings) -> None:
         return {"status": "ok", **st}
 
     @mcp.tool(annotations=READ_ONLY)
-    def run_logs(job_id: str, lines: int = 100) -> dict:
+    def run_logs(job_id: str, lines: int = 100) -> dict[str, Any]:
         """Últimas `lines` linhas da saída do run (com teto de caracteres).
 
-        `saida` junta o stdout e o stderr do novomodelo na ordem de chegada, com as
+        `log` junta o stdout e o stderr do novomodelo na ordem de chegada, com as
         linhas do stderr marcadas `[stderr] `: o relatório do run (banner, progresso,
         resumos) sai no stderr até a 0.18.0 e no stdout a partir da 0.18.1; avisos e
         erros saem no stderr. Jobs de antes dessa junção trazem `stdout` e `stderr`.
@@ -397,7 +401,7 @@ def register_run(mcp, settings: Settings) -> None:
         return {"status": "ok", "job_id": job_id, **logs}
 
     @mcp.tool(annotations=DESTRUCTIVE)
-    def run_cancel(job_id: str) -> dict:
+    def run_cancel(job_id: str) -> dict[str, Any]:
         """Interrompe um run em andamento (encerra a árvore de processos; força se não sair).
 
         Funciona igual em Windows, macOS e Linux. Pode levar alguns segundos.

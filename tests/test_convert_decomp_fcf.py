@@ -1,4 +1,4 @@
-"""`bridge_convert_decomp(importar_fcf=False)` passa `--no-fcf`; o NEWAVE não tem a opção."""
+"""`bridge_convert_decomp(import_fcf=False)` passa `--no-fcf`; o NEWAVE não tem a opção."""
 
 import inspect
 
@@ -38,7 +38,7 @@ def tools(monkeypatch):
 
 def test_sem_fcf_passa_no_fcf(tools, tmp_path):
     t, argvs = tools
-    t["bridge_convert_decomp"](str(tmp_path / "src"), str(tmp_path / "dst"), importar_fcf=False)
+    t["bridge_convert_decomp"](str(tmp_path / "src"), str(tmp_path / "dst"), import_fcf=False)
     assert "--no-fcf" in argvs[-1]
 
 
@@ -50,4 +50,4 @@ def test_padrao_importa_a_fcf(tools, tmp_path):
 
 def test_newave_nao_tem_a_opcao(tools):
     t, _ = tools
-    assert "importar_fcf" not in inspect.signature(t["bridge_convert_newave"]).parameters
+    assert "import_fcf" not in inspect.signature(t["bridge_convert_newave"]).parameters

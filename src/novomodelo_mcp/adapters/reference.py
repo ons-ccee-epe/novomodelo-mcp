@@ -17,6 +17,7 @@ import tempfile
 import unicodedata
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 from ..config import Settings
 from .discovery import find_novomodelo
@@ -100,29 +101,23 @@ def list_schema_types(settings: Settings) -> list[str]:
     return sorted(p.name[: -len(_SUFFIX)] for p in Path(root).glob(f"*{_SUFFIX}"))
 
 
-def read_schema(settings: Settings, tipo: str) -> dict:
+def read_schema(settings: Settings, tipo: str) -> dict[str, Any]:
     if not _SCHEMA_NAME.match(tipo or ""):
-        return {"status": "error", "diagnostics": [f"tipo invalido: {tipo!r}"]}
+        return error(22, f"tipo invalido: {tipo!r}")
     root = schemas_root(settings)
     if not root:
-        return {
-            "status": "error",
-            "diagnostics": [
-                "schemas indisponiveis; defina NOVOMODELO_MCP_SCHEMAS_DIR ou NOVOMODELO_MCP_SOLVER_BIN"
-            ],
-        }
+        return error(
+            2,
+            "schemas indisponiveis; defina NOVOMODELO_MCP_SCHEMAS_DIR ou NOVOMODELO_MCP_SOLVER_BIN",
+        )
     f = (Path(root) / f"{tipo}{_SUFFIX}").resolve()
     if not _within(f, Path(root).resolve()):
-        return {"status": "error", "diagnostics": [f"tipo invalido: {tipo!r}"]}
+        return error(22, f"tipo invalido: {tipo!r}")
     if not f.exists():
-        return {
-            "status": "error",
-            "diagnostics": [
-                f"schema inexistente: {tipo}",
-                f"disponiveis: {list_schema_types(settings)}",
-            ],
-        }
-    return {"status": "ok", "tipo": tipo, "schema": json.loads(f.read_text(encoding="utf-8"))}
+        return error(
+            2, f"schema inexistente: {tipo}", f"disponiveis: {list_schema_types(settings)}"
+        )
+    return {"status": "ok", "type": tipo, "schema": json.loads(f.read_text(encoding="utf-8"))}
 
 
 def _within(path: Path, root: Path) -> bool:
@@ -150,19 +145,19 @@ def docs_root(settings: Settings) -> str | None:
     return _dev_docs_dir(settings) or _bundled_dir("docs")
 
 
-def docs_origin(settings: Settings) -> dict:
+def docs_origin(settings: Settings) -> dict[str, Any]:
     """De onde vêm as docs: `embutidas` (versão e commit) ou `pasta_de_desenvolvimento`."""
     if dev := _dev_docs_dir(settings):
-        return {"origem": "pasta_de_desenvolvimento", "caminho": dev}
+        return {"origin": "pasta_de_desenvolvimento", "path": dev}
     manifest = bundled_manifest() or {}
     return {
-        "origem": "embutidas",
-        "versao": manifest.get("docs_versao"),
+        "origin": "embutidas",
+        "version": manifest.get("docs_versao"),
         "commit": manifest.get("docs_commit"),
     }
 
 
-def _docs_unavailable(settings: Settings) -> dict:
+def _docs_unavailable(settings: Settings) -> dict[str, Any]:
     if settings.docs_dir:
         return error(
             2,
@@ -175,27 +170,29 @@ def _docs_unavailable(settings: Settings) -> dict:
     )
 
 
-def list_docs(settings: Settings, section: str | None = None) -> dict:
+def list_docs(settings: Settings, prefix: str | None = None) -> dict[str, Any]:
     root = docs_root(settings)
     if root is None:
         return _docs_unavailable(settings)
     base = Path(root)
     items = []
     for rel, path in iter_doc_pages(base):
-        if section and not rel.startswith(section):
+        if prefix and not rel.startswith(prefix):
             continue
         fields = frontmatter_fields(path.read_text(encoding="utf-8", errors="replace"))
-        items.append({"pagina": rel, "titulo": fields["title"], "descricao": fields["description"]})
+        items.append({"page": rel, "title": fields["title"], "description": fields["description"]})
     return {
         "status": "ok",
         "docs_dir": str(base),
         "count": len(items),
-        "pages": [i["pagina"] for i in items],
-        "itens": items,
+        "pages": [i["page"] for i in items],
+        "items": items,
     }
 
 
-def read_doc(settings: Settings, page: str, max_chars: int, section: str | None = None) -> dict:
+def read_doc(
+    settings: Settings, page: str, max_chars: int, section: str | None = None
+) -> dict[str, Any]:
     root = docs_root(settings)
     if root is None:
         return _docs_unavailable(settings)
@@ -204,24 +201,22 @@ def read_doc(settings: Settings, page: str, max_chars: int, section: str | None 
     # existe fora da raiz (respostas diferentes para "fora" e "inexistente").
     candidates = [c.resolve() for c in (base / page, base / f"{page}.md", base / f"{page}.mdx")]
     if not all(_within(c, base) for c in candidates):
-        return {"status": "error", "diagnostics": [f"pagina fora do docs root: {page}"]}
+        return error(13, f"pagina fora do docs root: {page}")
     tr = next((c for c in candidates if c.is_file()), None)
     if tr is None:
-        return {"status": "error", "diagnostics": [f"pagina inexistente: {page}"]}
+        return error(2, f"pagina inexistente: {page}")
     text = resolve_mdx(tr)
     extra = {}
     if section:
         found = find_section(text, section)
         if found is None:
-            return {
-                **error(
-                    2,
-                    f"seção inexistente em {page}: {section!r}",
-                    "use uma das `secoes` (âncora ou título)",
-                ),
-                "secoes": section_list(text)[:200],
-            }
-        text, extra = found["texto"], {"secao": found["ancora"], "titulo": found["titulo"]}
+            return error(
+                2,
+                f"seção inexistente em {page}: {section!r}",
+                "use uma das `sections` (âncora ou título)",
+                sections=section_list(text)[:200],
+            )
+        text, extra = found["text"], {"section": found["anchor"], "title": found["title"]}
     truncated = len(text) > max_chars
     return {
         "status": "ok",
@@ -399,7 +394,7 @@ def split_sections(page: str, text: str) -> list[dict[str, str]]:
     return sections
 
 
-def find_section(text: str, wanted: str) -> dict | None:
+def find_section(text: str, wanted: str) -> dict[str, Any] | None:
     """A seção cuja âncora (ou título, sem caixa nem acento) é `wanted`, com as subseções:
     do título até o próximo de mesmo nível ou acima. None se não houver."""
     _, body = split_frontmatter(text)
@@ -409,13 +404,13 @@ def find_section(text: str, wanted: str) -> dict | None:
     for pos, (i, level, title, anchor) in enumerate(heads):
         if anchor == wanted.strip() or normalize_text(title.replace("`", "")) == key:
             stop = next((j for j, lv, *_ in heads[pos + 1 :] if lv <= level), len(lines))
-            return {"titulo": title, "ancora": anchor, "texto": "\n".join(lines[i:stop]).strip()}
+            return {"title": title, "anchor": anchor, "text": "\n".join(lines[i:stop]).strip()}
     return None
 
 
 def section_list(text: str) -> list[dict[str, str]]:
     _, body = split_frontmatter(text)
-    return [{"titulo": t, "ancora": a} for _, _, t, a in _headings(body.split("\n"))]
+    return [{"title": t, "anchor": a} for _, _, t, a in _headings(body.split("\n"))]
 
 
 def normalize_text(text: str) -> str:
@@ -487,7 +482,7 @@ def build_docs_index(docs_dir: Path, db_path: str | Path) -> sqlite3.Connection:
     return con
 
 
-def bundled_manifest() -> dict | None:
+def bundled_manifest() -> dict[str, Any] | None:
     """O manifesto das docs embutidas, ou None se o pacote não o tiver."""
     root = _bundled_dir("docs")
     if root is None:
@@ -550,7 +545,7 @@ _SEARCH_SQL = {
 }
 
 
-def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
+def search_docs(settings: Settings, query: str, k: int = 5) -> dict[str, Any]:
     """Seções mais relevantes para `query` (BM25, título com peso maior).
 
     Os termos em português do glossário das docs ganham o equivalente em inglês; os
@@ -584,14 +579,14 @@ def search_docs(settings: Settings, query: str, k: int = 5) -> dict:
         return error(2, "falha na busca do índice de docs", str(exc))
     return {
         "status": "ok",
-        "consulta_usada": match,
-        "termos_do_glossario": glossary,
-        "resultados": [
+        "query_used": match,
+        "glossary_terms": glossary,
+        "results": [
             {
-                "pagina": p,
-                "secao": a,
-                "titulo": t,
-                "trecho": (snip or "")[:_SNIPPET_CHARS],
+                "page": p,
+                "section": a,
+                "title": t,
+                "snippet": (snip or "")[:_SNIPPET_CHARS],
                 "score": round(-r, 3),
             }
             for p, t, a, snip, r in rows

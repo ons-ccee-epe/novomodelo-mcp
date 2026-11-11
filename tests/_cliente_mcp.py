@@ -35,6 +35,7 @@ class ClienteMCP:
         self.params = params
         self.chamadas: set[str] = set()
         self.avisos: list[tuple[str, str]] = []
+        self.instalacao: dict | None = None
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
         self._thread.start()
@@ -71,8 +72,8 @@ class ClienteMCP:
     def chamar(self, tool: str, argumentos: dict | None = None, *, timeout: float = 900) -> dict:
         self.chamadas.add(tool)
         env = payload(self._rodar(self._sessao.call_tool(tool, argumentos or {}), timeout))
-        if env.get("avisos_de_versao"):
-            self.avisos.append((tool, str(env["avisos_de_versao"][0])[:160]))
+        if env.get("version_warnings"):
+            self.avisos.append((tool, str(env["version_warnings"][0])[:160]))
         return env
 
     def fechar(self) -> None:

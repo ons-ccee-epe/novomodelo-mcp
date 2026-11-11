@@ -202,10 +202,15 @@ def test_itens_pendentes():
 # ── sem os programas: manifesto × código das tools ────────────────────────────
 
 
+def _module_file(name: str) -> Path:
+    file = importlib.import_module(name).__file__
+    assert file is not None
+    return Path(file)
+
+
 def _tool_modules() -> dict[str, Path]:
     return {
-        t.name: Path(importlib.import_module(t.fn.__module__).__file__)
-        for t in build_server()._tool_manager.list_tools()
+        t.name: _module_file(t.fn.__module__) for t in build_server()._tool_manager.list_tools()
     }
 
 

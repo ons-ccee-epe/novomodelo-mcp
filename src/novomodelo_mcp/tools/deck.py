@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 from ..adapters import budget, deck_io
 from ..adapters import reference as REF
@@ -25,10 +26,10 @@ from .shaping import cap_envelope, fit_to_budget
 def register_deck(mcp, settings: Settings) -> None:
     """Registra as tools do manipulador de decks no servidor `mcp`."""
 
-    def _guard(*paths: str) -> dict | None:
+    def _guard(*paths: str) -> dict[str, Any] | None:
         return ensure_in_workspace(*paths, settings=settings)
 
-    def _too_big_to_load(path: str) -> dict | None:
+    def _too_big_to_load(path: str) -> dict[str, Any] | None:
         """Pasta ou parquet acima de NOVOMODELO_MCP_MAX_READ_BYTES não é carregado inteiro:
         a pasta de resultados de um caso real passa de dezenas de GB descomprimida e
         derruba o servidor por falta de memória."""
@@ -45,7 +46,7 @@ def register_deck(mcp, settings: Settings) -> None:
             f"grande demais para carregar na memória ({size} bytes"
             f"{', pasta' if p.is_dir() else ''})",
             f"teto: {settings.max_read_bytes} (NOVOMODELO_MCP_MAX_READ_BYTES)",
-            proximo_passo=(
+            next=(
                 "use o deck_sql, que lê sob demanda: SUMMARIZE SELECT * FROM "
                 f"read_parquet('{alvo}') para as estatísticas, ou SELECT com "
                 "WHERE/GROUP BY para um recorte"
@@ -53,7 +54,7 @@ def register_deck(mcp, settings: Settings) -> None:
         )
 
     @mcp.tool(annotations=READ_ONLY)
-    def deck_list(case_dir: str, max_files: int = 500) -> dict:
+    def deck_list(case_dir: str, max_files: int = 500) -> dict[str, Any]:
         """Mapa do caso: entradas (o deck), rodadas e outros arquivos.
 
         `files`: cada arquivo de ENTRADA (.json/.parquet) com caminho, tamanho e,
@@ -74,7 +75,7 @@ def register_deck(mcp, settings: Settings) -> None:
         return cap_envelope(deck_io.case_map(case_dir, types, max(1, int(max_files))), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def deck_read_json(path: str) -> dict:
+    def deck_read_json(path: str) -> dict[str, Any]:
         """Lê um arquivo JSON do deck (com teto de tamanho).
 
         Recusa arquivos acima de NOVOMODELO_MCP_MAX_READ_BYTES — para arquivos grandes,
@@ -100,7 +101,7 @@ def register_deck(mcp, settings: Settings) -> None:
     @mcp.tool(annotations=READ_ONLY)
     def deck_read_parquet(
         path: str, columns: list[str] | None = None, limit: int | None = None
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Lê um Parquet do deck: schema, nº de linhas e uma AMOSTRA (nunca tudo)."""
         if err := _guard(path):
             return err
@@ -113,7 +114,7 @@ def register_deck(mcp, settings: Settings) -> None:
         return fit_to_budget(out, settings, "head")
 
     @mcp.tool(annotations=READ_ONLY)
-    def deck_describe_parquet(path: str) -> dict:
+    def deck_describe_parquet(path: str) -> dict[str, Any]:
         """Estatísticas de um Parquet do deck (schema + describe por coluna).
 
         Pasta ou arquivo acima de NOVOMODELO_MCP_MAX_READ_BYTES (resultados de rodada) é
@@ -129,7 +130,7 @@ def register_deck(mcp, settings: Settings) -> None:
         return out
 
     @mcp.tool(annotations=READ_ONLY)
-    def deck_sql(query: str, max_rows: int | None = None) -> dict:
+    def deck_sql(query: str, max_rows: int | None = None) -> dict[str, Any]:
         """Consulta SQL read-only (DuckDB) sobre Parquet/CSV/JSON do deck ou dos resultados.
 
         Para AGREGAR / FILTRAR / juntar o que as outras tools nao tratam: contagem
@@ -157,11 +158,11 @@ def register_deck(mcp, settings: Settings) -> None:
     @mcp.tool(annotations=DESTRUCTIVE)
     def deck_edit_json(
         path: str,
-        changes: list[dict],
+        changes: list[dict[str, Any]],
         dry_run: bool = False,
         ensure_valid: bool = False,
         force: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Edita valores de um JSON do deck por caminho, DENTRO do contrato.
 
         `changes`: lista de {"path": "training.stopping_rules[0].limit", "value": 80}.
@@ -195,19 +196,21 @@ def register_deck(mcp, settings: Settings) -> None:
                 return result
             if v.get("status") != "ok":
                 deck_io.restore_backup(path)
-                return {
-                    "status": "error",
-                    "reverted": True,
-                    "path": path,
-                    "changes": result.get("changes"),
-                    "validation": cap_envelope(v, settings),
-                    "diagnostics": ["validacao reprovou — edicao revertida"],
-                }
+                return error(
+                    1,
+                    "validacao reprovou — edicao revertida",
+                    reverted=True,
+                    path=path,
+                    changes=result.get("changes"),
+                    validation=cap_envelope(v, settings),
+                )
             result["case_validation"] = "ok"
         return result
 
     @mcp.tool(annotations=DESTRUCTIVE)
-    def deck_edit_parquet(path: str, where: dict, set_values: dict, dry_run: bool = False) -> dict:
+    def deck_edit_parquet(
+        path: str, where: dict[str, Any], set_values: dict[str, Any], dry_run: bool = False
+    ) -> dict[str, Any]:
         """Edita células de um Parquet do deck PRESERVANDO o schema (colunas/dtypes)."""
         if (err := _guard(path)) or (err := _too_big_to_load(path)):
             return err

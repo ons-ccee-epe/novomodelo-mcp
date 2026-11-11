@@ -29,7 +29,9 @@ file adds only what an agent working in this checkout needs beyond them.
 uv sync                                       # install, dev group included (--system-certs behind a corporate CA)
 uv run novomodelo-mcp                         # start the server on stdio
 uv run pytest -q                              # offline suite; real-binary and network tests skip
+uv run --package novomodelo-mcp-e2e pytest e2e -q   # e2e battery suite (its own uv workspace member)
 uv run ruff check . && uv run ruff format --check .   # whole tree, as CI and the pre-commit hook run it
+uv run --all-packages ty check                # type check, as CI runs it (the e2e member needs its deps)
 python3 scripts/ci/check_no_plan_leaks.py     # hard gates, also run by CI
 python3 scripts/ci/check_comment_refs.py
 python3 scripts/ci/check_doc_paths.py
@@ -63,13 +65,15 @@ These are non-negotiable. Fix them before any commit.
 - **Thin facade, no business logic.** A tool envelopes a CLI subcommand (with
   `--json`) or a `novomodelo-python` binding and relays the result. Never reimplement
   conversion, validation, comparison, or solving inside this server. New
-  behaviour belongs in `novomodelo` or `novomodelo-bridge`, not here.
+  behaviour belongs in `novomodelo` or `novomodelo-bridge`, not here. The one
+  sanctioned exception is the run-time estimate of `run_plan`
+  (`.claude/rules/mcp-facade.md` §1).
 - **Network: official domains, local first, warn when absent.** The server
   speaks stdio. A tool may use the network only through `adapters/versions.py`
   (`fetch_bytes`/`fetch_json`, the single exit point), only to the allow-listed
   official domains, with a short timeout and a local `truststore` context (never
   `truststore.inject_into_ssl()`). Docs and schemas stay bundled. Without
-  network the tool still answers, with `aviso_rede` and the manual command.
+  network the tool still answers, with `network_warning` and the manual command.
   Every network tool is listed in `tools/annotations.py::NETWORK_TOOLS` and
   carries `openWorldHint=True`. Tests never touch the network.
 - **Never raise to the caller.** Every tool and adapter returns an error
@@ -88,7 +92,7 @@ These are non-negotiable. Fix them before any commit.
   pairs — or the asymmetry is recorded.
 - **No secrets or credentials** committed; no `.env` files.
 - **No plan-structure vocabulary** (`epic`, `ticket`, `sprint`, plan ids) in
-  `src/`, `tests/` prose, `README.md`, `CONTRIBUTING.md`, or `CHANGELOG.md`.
+  `src/`, `tests/` or `e2e/` prose, `README.md`, `CONTRIBUTING.md`, or `CHANGELOG.md`.
   Plans live in the gitignored `plans/`. Commit messages may reference them.
 - **No rot-prone references** in shipped prose: no `file.py:NNN`, no
   `MEMORY.md`, no machine-local (`~/git/...`) or gitignored paths, no paths into
@@ -105,3 +109,4 @@ These are non-negotiable. Fix them before any commit.
 | Shared transport  | `src/novomodelo_mcp/adapters/`    | CLI runners, path guard, error envelope  |
 | Tools             | `src/novomodelo_mcp/tools/`       | Registered MCP tools, grouped by phase   |
 | Security model    | `README.md` (Segurança)      | Workspace guard and force-write gate     |
+| e2e battery       | `e2e/README.md`              | Agent runs, advisory go/no-go, load, dashboard; not shipped |

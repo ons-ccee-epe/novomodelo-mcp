@@ -248,7 +248,7 @@ def test_docs_embutidas_trazem_a_truncagem_do_larroyd(monkeypatch):
     monkeypatch.delenv("NOVOMODELO_MCP_DOCS_DIR", raising=False)
     hits = REF.search_docs(load_settings(), "Relation to Larroyd", k=5)
     assert any(
-        h["pagina"] == "math/inflow-nonnegativity"
-        and h["titulo"].startswith("6.2 Relation to Larroyd")
-        for h in hits["resultados"]
+        h["page"] == "math/inflow-nonnegativity"
+        and h["title"].startswith("6.2 Relation to Larroyd")
+        for h in hits["results"]
     )

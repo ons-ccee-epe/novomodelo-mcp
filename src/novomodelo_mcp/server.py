@@ -6,6 +6,7 @@ import asyncio
 import functools
 import os
 import sys
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -26,8 +27,8 @@ from .config import load_settings
 from .names import SERVER_NAME
 from .tools.annotations import READ_ONLY_NET
 from .tools.deck import register_deck
+from .tools.folders import register_folders
 from .tools.novomodelo_meta import register_novomodelo_meta
-from .tools.pastas import register_pastas
 from .tools.post_run import register_post_run
 from .tools.pre_run import register_pre_run
 from .tools.prompts import register_prompts
@@ -41,25 +42,25 @@ Servidor MCP do novomodelo: valida, converte (NEWAVE/DECOMP), roda, compara e l�
 resultados de casos, e responde sobre a metodologia pelas docs oficiais.
 
 - Comece por `server_info`: versões das peças, workspace e se há versão nova.
-- Se uma resposta trouxer `avisos_de_versao`, avise a pessoa e ofereça rodar os comandos
+- Se uma resposta trouxer `version_warnings`, avise a pessoa e ofereça rodar os comandos
   dele, com o ok dela; o MCP continua funcionando.
-- Se faltar o executável do novomodelo, ofereça a tool `instalar_novomodelo` (a pessoa
+- Se faltar o executável do novomodelo, ofereça a tool `install_novomodelo` (a pessoa
   pode pedir “instale o executável do novomodelo”); o comando manual é a alternativa.
 - As docs embutidas são as oficiais da versão instalada. Para a metodologia e o uso do
   novomodelo, use `docs_search` antes de responder, e não a web nem a memória: a
   definição do novomodelo pode diferir da literatura e do NEWAVE.
 - Busque em inglês (as docs estão em inglês); termos em português do glossário das
-  docs são traduzidos. Depois leia a seção com `docs_read(page, secao)`.
+  docs são traduzidos. Depois leia a seção com `docs_read(page, section)`.
 - O que mudou entre versões do novomodelo e do bridge está em `changelog/novomodelo` e
   `changelog/novomodelo-bridge`: leia a seção de cada versão com
-  `docs_read(pagina, "<versão>")`.
-- Toda resposta sobre metodologia cita a página e a seção (`pagina#secao`) de onde veio.
+  `docs_read(page, "<versão>")`.
+- Toda resposta sobre metodologia cita a página e a seção (`page#section`) de onde veio.
 - Se as docs não tratam do assunto, diga isso: não complete de memória.
 - A rede só é usada para versões e para instalar o executável.
 - Pedido sobre resultados de um caso (status, convergência, CMO, geração, política):
   vá direto às tools `results_*`. Se não souber a pasta da rodada, passe a do caso: a
-  recusa traz a rodada encontrada em `output_sugerido`, ou, se houver várias, a lista
-  em `rodadas` para o usuário escolher.
+  recusa traz a rodada encontrada em `suggested_output`, ou, se houver várias, a lista
+  em `runs` para o usuário escolher.
 - Resultados de muitos cenários: agregue ou filtre com o `deck_sql` sobre as partições
   de `simulation/` e só depois detalhe; não leia os parquets por outras ferramentas.
 - As tools que gravam ou alteram arquivos pedem aprovação.
@@ -90,7 +91,7 @@ def _never_raise(fn):
 
 
 class _WithVersionWarnings:
-    """`mcp` cujo `.tool()` faz toda resposta levar `avisos_de_versao` quando houver,
+    """`mcp` cujo `.tool()` faz toda resposta levar `version_warnings` quando houver,
     e põe `AVISO_NA_TOOL` na descrição de toda tool guardada (`is_guarded_tool`).
 
     Embrulhar no registro, e não no `cap_envelope`: parte das tools não passa por ele.
@@ -103,6 +104,9 @@ class _WithVersionWarnings:
         return getattr(self._mcp, name)
 
     def tool(self, *args, **kwargs):
+        # Sem isto, o `-> dict[str, Any]` das tools faz o FastMCP mandar a resposta duas
+        # vezes (texto e `structuredContent`): o dobro do teto de tamanho por chamada.
+        kwargs.setdefault("structured_output", False)
         register = self._mcp.tool(*args, **kwargs)
 
         def deco(fn):
@@ -117,7 +121,8 @@ class _WithVersionWarnings:
                     warnings = []
                 return attach_version_warnings(result, warnings)
 
-            with_warnings._avisos_de_versao = True
+            # Marcador lido por test_versions: toda tool registrada passa por aqui.
+            with_warnings._version_warnings = True  # ty: ignore[unresolved-attribute]
             if is_guarded_tool(fn):
                 with_warnings.__doc__ = f"{(fn.__doc__ or '').rstrip()}\n\n{AVISO_NA_TOOL}"
             return register(with_warnings)
@@ -141,14 +146,14 @@ def build_server() -> FastMCP:
     register_novomodelo_meta(mcp, settings)  # meta do novomodelo: version + schema export
     register_run(mcp, settings)  # init / plano / apply / run assíncrono
     register_prompts(mcp, settings)  # prompts: metodologia
-    register_pastas(mcp, settings)  # inclusão de pastas de estudo no guard
+    register_folders(mcp, settings)  # inclusão de pastas de estudo no guard
 
     @mcp.tool(annotations=READ_ONLY_NET)
-    def server_info() -> dict:
+    def server_info() -> dict[str, Any]:
         """Diagnóstico do próprio MCP: binários, versões e se há versão nova.
 
-        `versoes`: executável, biblioteca, bridge e docs, com a versão esperada.
-        `versao_nova`: consulta, no máximo a cada 6 horas e em até alguns segundos, os
+        `versions`: executável, biblioteca, bridge e docs, com a versão esperada.
+        `new_version`: consulta, no máximo a cada 6 horas e em até alguns segundos, os
         releases do novomodelo e do bridge (domínios oficiais); sem rede, diz que
         não foi possível verificar e mostra onde conferir.
         """
@@ -158,17 +163,17 @@ def build_server() -> FastMCP:
             pieces = versions.local_versions(settings)
             newer = versions.update_check(settings)
         except Exception as exc:  # noqa: BLE001 - never-raise: diagnóstico parcial em vez de derrubar
-            pieces, newer = {"erro": str(exc)}, {"erro": str(exc)}
+            pieces, newer = {"error": str(exc)}, {"error": str(exc)}
         return {
             "server": f"{SERVER_NAME}-mcp",
-            "versao_mcp": __version__,
-            "versoes": {**pieces, "esperada": versions.expected_version()},
-            "versao_nova": newer,
+            "mcp_version": __version__,
+            "versions": {**pieces, "expected": versions.expected_version()},
+            "new_version": newer,
             "bridge": {
                 "path": bridge,
                 "version": bridge_version(bridge, bridge_from),
                 "available": bridge is not None,
-                "origem": bridge_from,
+                "origin": bridge_from,
             },
             "novomodelo": {
                 "path": novomodelo,
@@ -179,7 +184,7 @@ def build_server() -> FastMCP:
             "docs": docs_origin(settings),
             "workspace": [str(r) for r in allowed_roots(settings)]
             or "irrestrito (defina NOVOMODELO_MCP_WORKSPACE)",
-            "pastas_incluidas": [str(r) for r in included_roots(settings)],
+            "included_folders": [str(r) for r in included_roots(settings)],
             "allow_force": settings.allow_force,
             "state_dir": str(state_dir(settings)),
             "max_jobs": settings.max_jobs,

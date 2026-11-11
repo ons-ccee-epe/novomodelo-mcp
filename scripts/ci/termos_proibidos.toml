@@ -37,13 +37,13 @@ hex = "636f627265"
 [[padroes]]
 nome = "marca ONS"
 regex = '\bONS\b(?!,? (?:e )?CCEE)'
-escopo = ["tests/e2e/"]
+escopo = ["e2e/"]
 sensivel_a_caixa = true
 
 [[padroes]]
 nome = "referencia de spec"
 regex = '\bReq \d+\.\d+'
-escopo = ["tests/e2e/"]
+escopo = ["e2e/"]
 
 # Com --historico (e só nele) a checagem ignora os padrões listados; a árvore e --desde
 # continuam acusando todos, e a lista interna nunca é ignorada.
@@ -63,7 +63,7 @@ ignora = ["nome antigo", "referencia de spec", "diretorio kiro"]
 "CONTRIBUTING.md" = { padroes = ["diretorio kiro"], motivo = "descreve .kiro/steering/" }
 "README.md" = { padroes = ["diretorio kiro"], motivo = "caminhos de configuração do Kiro CLI (~/.kiro/settings/)" }
 "src/novomodelo_mcp/client_config.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
-"tests/e2e/load/" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
-"tests/e2e/queries/mcp_workspace.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI" }
-"tests/e2e/executor/container.py" = { padroes = ["caminho de maquina"], motivo = "home do usuário dentro da imagem do container dos agentes" }
-"tests/e2e/frontend/src/features/History/Rodada.test.tsx" = { padroes = ["caminho de maquina"], motivo = "caminhos fictícios de uma pessoa genérica, num teste que confere que o painel os esconde" }
+"e2e/novomodelo_mcp_e2e/load/" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI (.kiro/settings/mcp.json)" }
+"e2e/novomodelo_mcp_e2e/queries/mcp_workspace.py" = { padroes = ["diretorio kiro"], motivo = "caminho de configuração do Kiro CLI" }
+"e2e/novomodelo_mcp_e2e/executor/container.py" = { padroes = ["caminho de maquina"], motivo = "home do usuário dentro da imagem do container dos agentes" }
+"e2e/frontend/src/features/History/Rodada.test.tsx" = { padroes = ["caminho de maquina"], motivo = "caminhos fictícios de uma pessoa genérica, num teste que confere que o painel os esconde" }

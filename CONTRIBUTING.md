@@ -28,8 +28,9 @@ O servidor fala **stdio**: não abre porta e é iniciado pelo cliente MCP como
 subprocesso. A rede só é usada pelas tools listadas em `NETWORK_TOOLS`
 (`src/novomodelo_mcp/tools/annotations.py`), pelo `src/novomodelo_mcp/adapters/versions.py`.
 
-O hook de pre-commit roda as mesmas checagens de lint e os gates da CI antes de cada
-commit:
+O hook de pre-commit roda antes de cada commit as mesmas checagens de lint e os gates da
+CI, inclusive o de termos proibidos, e o gitleaks nas mudanças preparadas quando ele está
+instalado (a CI varre o histórico inteiro de qualquer jeito):
 
 ```bash
 ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
@@ -40,12 +41,13 @@ ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
 ```bash
 uv run pytest -q                                      # suíte offline, com binários falsos
 uv run ruff check . && uv run ruff format --check .   # lint e formatação, árvore inteira
+uv run --all-packages ty check                        # tipos: src, tests, scripts e e2e
 python3 scripts/ci/check_no_plan_leaks.py             # sem vocabulário de plano no que é publicado
 python3 scripts/ci/check_comment_refs.py              # sem referência que apodrece na prosa do código
 python3 scripts/ci/check_doc_paths.py                 # todo caminho citado nas docs existe
 ```
 
-A CI (`.github/workflows/ci.yml`) roda o ruff e os três gates uma vez, a suíte em cada
+A CI (`.github/workflows/ci.yml`) roda o ruff, o ty e os três gates uma vez, a suíte em cada
 sistema, arquitetura e versão do Python que o projeto suporta, os testes com os
 executáveis reais e a conferência das docs embutidas. `scripts/ci/check_comment_bloat.py`
 e `scripts/ci/quality_report.py` são relatórios: nunca falham.
@@ -79,6 +81,19 @@ As outras opções: `--mcp-instalado [CAMINHO]` (o pacote instalado em vez do c�
 `--newave-src` e `--decomp-src` (casos próprios). `tests/conftest.py` é o dono delas.
 
 `tests/try_tools.py` é um utilitário manual, fora da CI.
+
+**Bateria e2e com agentes** (`e2e/`): rodadas com o Claude Code e o Kiro num executor em
+container, juiz, go/no-go, teste de carga e o painel. É um projeto à parte no workspace do
+uv (`e2e/pyproject.toml`, `novomodelo-mcp-e2e`), fora do sdist e do wheel, e o
+`uv run pytest` da raiz não a coleta. A CI roda a suíte dela num job próprio, além do lint,
+dos testes e do build do painel:
+
+```bash
+uv sync --package novomodelo-mcp-e2e
+uv run --package novomodelo-mcp-e2e pytest e2e -q
+```
+
+Pré-requisitos, rodadas, go/no-go, carga e painel estão em `e2e/README.md`.
 
 ## Convenções que a CI confere
 
@@ -117,7 +132,7 @@ O clone das docs fica na `main`, onde está sempre a versão mais nova (o `lates
 no minor seguinte. Os clones do novomodelo e do bridge ficam na tag da versão. Os
 changelogs do novomodelo e do bridge viram as
 páginas `changelog/novomodelo` e `changelog/novomodelo-bridge`, com uma seção por versão
-a partir da 0.18.0, que o agente lê com `docs_read(pagina, "<versão>")`. O commit de cada
+a partir da 0.18.0, que o agente lê com `docs_read(page, "<versão>")`. O commit de cada
 clone fica no `manifest.json`.
 
 O script grava as páginas já resolvidas (os trechos `_impl` entram no lugar dos
@@ -128,7 +143,7 @@ roda essa checagem no commit gravado no manifesto.
 
 Para testar mudanças nas docs antes de um release, `NOVOMODELO_MCP_DOCS_DIR` aponta para
 a pasta de páginas de um clone do novomodelo-docs. É uma opção de desenvolvimento: com
-ela, toda resposta traz um aviso em `avisos_de_versao`.
+ela, toda resposta traz um aviso em `version_warnings`.
 
 ## Organização do código
 
@@ -181,7 +196,7 @@ no `versions.json`):
    `vX.Y.Z` do novomodelo, com a tag no comentário:
    `git ls-remote https://github.com/ons-ccee-epe/novomodelo 'refs/tags/vX.Y.Z^{}'`.
 4. Os commits das tags `vX.Y.Z` do novomodelo e do bridge em
-   `tests/e2e/executor/fontes.toml`, pelo mesmo `git ls-remote` (no bridge, com
+   `e2e/novomodelo_mcp_e2e/executor/fontes.toml`, pelo mesmo `git ls-remote` (no bridge, com
    `novomodelo-bridge` no lugar de `novomodelo`): a bateria de ponta a ponta confere
    os clones dos casos públicos contra eles.
 5. Cada opção nova das CLIs classificada em `tests/surface.toml`; confira com
@@ -230,6 +245,9 @@ correção sai como `X.Y.Z.postN`.
 
 Para ensaiar sem publicar, faça push numa branch `ensaio/<nome>` (ou use "Run workflow"
 na aba Actions): os arquivos ficam como artefato da execução.
+
+A decisão de go/no-go da bateria e2e (`e2e/README.md`) é consultiva: informa quem cria a
+tag, mas não bloqueia o release, e o `release.yml` não roda a bateria.
 
 Se a organização não permitir `contents: write` ao `GITHUB_TOKEN`, o job do release do
 GitHub falha e o resto continua valendo. Nesse caso, baixe o artefato da execução e

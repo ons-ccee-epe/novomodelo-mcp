@@ -13,13 +13,15 @@ import socket
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
-from _fakes import fake_bin
 
 from novomodelo_mcp.adapters import jobs, machine, run_plan, runtime, state
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.run import make_plan, register_run
+
+from ._fakes import fake_bin
 
 FAKE = fake_bin("fake_novomodelo.py")
 HOST = "host-sintetico"
@@ -37,7 +39,7 @@ MOCK_MACHINE = {
 # Fixture sintética com ordens de grandeza de um run real de porte médio
 # (8 CPUs/16 GiB, 4 threads): 72 estágios × 159 hidros, fwd=4, iters=6,
 # 8 aberturas -> 15408 solves, ~243 s de treino. Valida o modelo de custo.
-REF_META = {
+REF_META: dict[str, Any] = {
     "hostname": HOST,
     "duration_seconds": 242.633,
     "completed_at": "2026-10-01T00:00:00Z",
@@ -242,30 +244,42 @@ def test_machine_hybrid_parsers():
 # ── tempo de execução ─────────────────────────────────────────────────────────
 
 
+def _point(train_meta, sim_meta, source) -> dict[str, Any]:
+    point = runtime.point_from_run(train_meta, sim_meta, source=source)
+    assert point is not None
+    return point
+
+
+def _estimate(points, threads, train_solves, sim_solves) -> dict[str, Any]:
+    est = runtime.estimate(points, threads, train_solves, sim_solves)
+    assert est is not None
+    return est
+
+
 def test_runtime_model_matches_reference_point():
-    p4 = runtime.point_from_run(REF_META, SIM_META, source="ref4")
+    p4 = _point(REF_META, SIM_META, "ref4")
     assert abs(p4["train"]["s_per_solve"] - 0.046) < 0.001, p4
     solves = runtime.training_solves(6, 4, [8] * 72)
     assert abs(solves - 15408) / 15408 < 0.01, solves  # modelo ≈ contagem real (~1%)
-    est = runtime.estimate([p4], 4, solves, 7200)
+    est = _estimate([p4], 4, solves, 7200)
     assert abs(est["training_seconds"] - 243) / 243 < 0.02, est
     assert abs(est["simulation_seconds"] - 149) / 149 < 0.01, est
     # acima do medido: SEM ganho; abaixo: reescala linear
-    assert runtime.estimate([p4], 8, solves, 7200)["total_seconds"] == est["total_seconds"]
-    half = runtime.estimate([p4], 2, solves, 7200)
+    assert _estimate([p4], 8, solves, 7200)["total_seconds"] == est["total_seconds"]
+    half = _estimate([p4], 2, solves, 7200)
     assert abs(half["training_seconds"] - 2 * est["training_seconds"]) < 0.2, half
     # com o ponto a 7 threads: 7 previsto pelo próprio ponto (real 256 s), 5 interpolado
-    p7 = runtime.point_from_run(REF_META_7, SIM_META_7, source="ref7")
-    e7 = runtime.estimate([p4, p7], 7, solves, 7200)
+    p7 = _point(REF_META_7, SIM_META_7, "ref7")
+    e7 = _estimate([p4, p7], 7, solves, 7200)
     assert abs(e7["training_seconds"] - 256) / 256 < 0.02, e7
-    e5 = runtime.estimate([p4, p7], 5, solves, 7200)
+    e5 = _estimate([p4, p7], 5, solves, 7200)
     assert est["training_seconds"] < e5["training_seconds"] < e7["training_seconds"], e5
     assert "interpolado" in e5["training_method"]
 
 
 def test_threads_choice_hybrid_and_measured():
-    p4 = {**runtime.point_from_run(REF_META, SIM_META, source="a"), "threads": 4}
-    p7 = runtime.point_from_run(REF_META_7, SIM_META_7, source="b")
+    p4 = {**_point(REF_META, SIM_META, "a"), "threads": 4}
+    p7 = _point(REF_META_7, SIM_META_7, "b")
     ref = {"level": 3, "points": [p4, p7]}
     hybrid = {**MOCK_MACHINE, "performance_cpus": 4}
     assert run_plan.choose_threads(hybrid, None, None)[0] == 4
@@ -381,7 +395,7 @@ def test_plan_nao_cabe_and_indeterminado():
         plan = make_plan(str(case), load_settings(), machine=MOCK_MACHINE)
         assert plan["verdict"] == "indeterminado", plan
         assert plan["reference"] is None
-        assert any("calibração" in w for w in plan["warnings"]), plan["warnings"]
+        assert any("sem run anterior" in w for w in plan["warnings"]), plan["warnings"]
 
 
 def test_plan_memory_gate():
@@ -485,7 +499,7 @@ def test_run_async_lifecycle():
         assert st["state"] == "succeeded" and st["exit_code"] == 0, st
         assert st["milestones"]["training"] is True, st
         logs = t["run_logs"](r["job_id"])
-        assert "fake run: done" in logs["saida"], logs
+        assert "fake run: done" in logs["log"], logs
         assert t["run_status"]("../../etc")["status"] == "error"
 
 
@@ -498,7 +512,7 @@ def test_run_logs_mostra_os_dois_canais_em_ordem_sem_duplicar():
             assert _wait(t, r["job_id"])["state"] == "succeeded"
             logs = t["run_logs"](r["job_id"])
             assert "stdout" not in logs and "stderr" not in logs, logs
-            linhas = [x for x in logs["saida"].splitlines() if "relatorio" in x or "aviso" in x]
+            linhas = [x for x in logs["log"].splitlines() if "relatorio" in x or "aviso" in x]
             marca = "[stderr] " if canal == "stderr" else ""
             assert linhas == [
                 f"{marca}relatorio: banner",
@@ -547,8 +561,8 @@ def test_run_start_nao_sobrescreve_rodada_concluida():
         de_novo = t["run_start"](str(case), override=True)
         assert de_novo["status"] == "error" and de_novo["exit_code"] == 17, de_novo
         assert any("overwrite=True" in x for x in de_novo["diagnostics"]), de_novo
-        assert de_novo["output_sugerido"] != str((case / "output").resolve()), de_novo
-        outro = t["run_start"](str(case), output=de_novo["output_sugerido"], override=True)
+        assert de_novo["suggested_output"] != str((case / "output").resolve()), de_novo
+        outro = t["run_start"](str(case), output=de_novo["suggested_output"], override=True)
         assert outro["status"] == "ok", outro
         _wait(t, outro["job_id"])
         assert t["run_start"](str(case), override=True, overwrite=True)["status"] == "ok"
@@ -604,7 +618,9 @@ def test_job_lost_when_runner_dies():
         (d / "heartbeat").touch()
         old = time.time() - 3600
         os.utime(d / "heartbeat", (old, old))
-        assert jobs.job_state(settings, d.name)["state"] == "lost"
+        state_now = jobs.job_state(settings, d.name)
+        assert state_now is not None
+        assert state_now["state"] == "lost"
         assert jobs.prune_jobs(settings, keep_days=0) == [d.name]
 
 

@@ -51,23 +51,23 @@ def test_truncado_traz_o_proximo_passo_com_o_glob_das_particoes(query):
     r = results_query(str(out), "hydros", limit=1000)
     assert r["truncated"] is True and r["row_count"] == 50
     glob = (out.resolve() / "simulation" / "hydros").as_posix() + "/**/*.parquet"
-    assert "deck_sql" in r["proximo_passo"] and f"read_parquet('{glob}')" in r["proximo_passo"]
+    assert "deck_sql" in r["next"] and f"read_parquet('{glob}')" in r["next"]
 
 
 def test_limit_acima_do_teto_avisa_o_limite_aplicado(query):
     results_query, out, settings = query
     r = results_query(str(out), "hydros", limit=1000)
-    assert r["limite_aplicado"] == 50
+    assert r["limit_applied"] == 50
 
 
 def test_so_a_resposta_truncada_traz_proximo_passo(query):
     results_query, out, _ = query
     r = results_query(str(out), "hydros", scenario=0, limit=5)
-    assert r["truncated"] is True and "proximo_passo" in r
+    assert r["truncated"] is True and "next" in r
     r = results_query(
         str(out), "hydros", group_by=["hydro_id"], agg="max", columns=["storage_final_hm3"]
     )
-    assert r["truncated"] is False and "proximo_passo" not in r and "limite_aplicado" not in r
+    assert r["truncated"] is False and "next" not in r and "limit_applied" not in r
 
 
 def test_descricao_e_instrucoes_apontam_o_deck_sql_para_varredura(query):
@@ -89,7 +89,7 @@ def test_proximo_passo_com_apostrofo_no_caminho_e_sql_valido(tmp_path, monkeypat
     monkeypatch.setattr(budget, "row_limit", lambda settings: 50)
     settings = dataclasses.replace(load_settings(), workspace=str(tmp_path))
     register_results(mcp, settings)
-    passo = mcp.tools["results_query"](str(out), "hydros")["proximo_passo"]
+    passo = mcp.tools["results_query"](str(out), "hydros")["next"]
     trecho = passo[passo.index("read_parquet(") : passo.index(")") + 1]
     r = run_readonly_sql(f"SELECT count(*) n FROM {trecho}", settings=settings)
     assert r["status"] == "ok" and r["rows"] == [{"n": 60}]

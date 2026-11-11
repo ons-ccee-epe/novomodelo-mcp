@@ -43,10 +43,10 @@ def test_corta_pelo_tamanho_e_diz_quanto_veio():
     out = fit_to_budget(env, s, "rows")
     assert response_bytes(out) <= 4 * 1024
     assert out["truncated"] is True and 0 < len(out["rows"]) < 200
-    assert out["cortado_por_tamanho"] == {
-        "teto_kb": 4,
-        "linhas_devolvidas": len(out["rows"]),
-        "linhas_antes_do_corte": 200,
+    assert out["size_truncation"] == {
+        "limit_kb": 4,
+        "rows_returned": len(out["rows"]),
+        "rows_total": 200,
     }
 
 
@@ -77,17 +77,15 @@ def test_consulta_estreita_traz_muito_mais_que_50_linhas(query):
     r = fn(out, "hydros", columns=["stage_id", "col_01"], limit=1000)
     assert r["row_count"] > 500 and response_bytes(r) <= settings.max_response_kb * 1024
     r = fn(out, "hydros", columns=["stage_id"], limit=1000)
-    assert r["row_count"] == 1000 and "cortado_por_tamanho" not in r
+    assert r["row_count"] == 1000 and "size_truncation" not in r
 
 
 def test_consulta_larga_cabe_no_orcamento_e_aponta_o_deck_sql(query):
     fn, out, settings = query
     r = fn(out, "hydros", limit=1000)
     assert response_bytes(r) <= settings.max_response_kb * 1024
-    assert r["truncated"] is True and r["cortado_por_tamanho"]["linhas_devolvidas"] == len(
-        r["rows"]
-    )
-    assert "deck_sql" in r["proximo_passo"]
+    assert r["truncated"] is True and r["size_truncation"]["rows_returned"] == len(r["rows"])
+    assert "deck_sql" in r["next"]
 
 
 def test_deck_sql_estreito_passa_de_mil_linhas_e_o_largo_cabe(tmp_path):
@@ -102,4 +100,4 @@ def test_deck_sql_estreito_passa_de_mil_linhas_e_o_largo_cabe(tmp_path):
     assert estreito["row_count"] == 1500 and estreito["truncated"] is False
     largo = run_readonly_sql(f"SELECT * FROM read_parquet('{p}')", settings=s)
     assert response_bytes(largo) <= s.max_response_kb * 1024 and largo["truncated"] is True
-    assert json.loads(json.dumps(largo))["cortado_por_tamanho"]["teto_kb"] == 50
+    assert json.loads(json.dumps(largo))["size_truncation"]["limit_kb"] == 50

@@ -69,13 +69,13 @@ def _tools(tmp_path, monkeypatch, out):
 def test_rodada_parada_no_limite_repassa_o_motivo(tmp_path, monkeypatch, tool):
     out = _output(tmp_path, LIMITE_018, simulation={"status": "partial"})
     env = _tools(tmp_path, monkeypatch, out)[tool]()
-    assert env["treino"] == {
+    assert env["training"] == {
         "status": "complete",
         "termination_reason": "iteration_limit",
         "converged_at": None,
         "iterations": 5,
     }
-    assert env["simulacao"] == {"status": "partial"}
+    assert env["simulation"] == {"status": "partial"}
 
 
 @pytest.mark.parametrize("tool", [0, 1], ids=["run_status", "results_status"])
@@ -83,23 +83,23 @@ def test_metadata_antigo_sem_os_campos_vira_null(tmp_path, monkeypatch, tool):
     out = _output(tmp_path, SEM_CAMPOS)
     env = _tools(tmp_path, monkeypatch, out)[tool]()
     assert env["status"] == "ok"
-    assert env["treino"] == {
+    assert env["training"] == {
         "status": "complete",
         "termination_reason": None,
         "converged_at": None,
         "iterations": 5,
     }
-    assert "simulacao" not in env
+    assert "simulation" not in env
 
 
 def test_sem_metadata_o_run_status_nao_ganha_campos(tmp_path, monkeypatch):
     out = _output(tmp_path, None)
     env = _tools(tmp_path, monkeypatch, out)[0]()
     assert env["status"] == "ok"
-    assert "treino" not in env and "simulacao" not in env
+    assert "training" not in env and "simulation" not in env
 
 
 def test_metadata_sendo_gravado_nao_derruba_o_run_status(tmp_path, monkeypatch):
     out = _output(tmp_path, '{"status": "comp')
     env = _tools(tmp_path, monkeypatch, out)[0]()
-    assert env["status"] == "ok" and "treino" not in env
+    assert env["status"] == "ok" and "training" not in env
