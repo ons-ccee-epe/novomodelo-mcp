@@ -6,7 +6,11 @@ import json
 import re
 from typing import Any
 
-from ..adapters.budget import fit_to_budget, response_bytes  # noqa: F401 - reexporta para as tools
+from ..adapters.budget import (  # noqa: F401 - reexporta para as tools
+    fit_to_budget,
+    response_bytes,
+    shrink_tables_to_budget,
+)
 from ..config import Settings
 
 
@@ -48,6 +52,11 @@ def cap_envelope(envelope: dict[str, Any], settings: Settings) -> dict[str, Any]
                 f"({settings.max_summary_chars}); consulte os artefatos gerados."
             )
     return envelope
+
+
+def cap_bridge_envelope(envelope: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    """`cap_envelope` e, em seguida, o teto de tamanho nas tabelas dos diagnósticos do bridge."""
+    return shrink_tables_to_budget(cap_envelope(envelope, settings), settings)
 
 
 _VARIABLE_PARTS = re.compile(r"'[^']*'|\"[^\"]*\"|`[^`]*`|\d+(?:\.\d+)?")

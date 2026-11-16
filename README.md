@@ -256,7 +256,7 @@ Todas usam o prefixo `NOVOMODELO_MCP_`.
 | `NOVOMODELO_MCP_TIMEOUT` | `900` | timeout (s) por chamada de CLI |
 | `NOVOMODELO_MCP_MAX_DIAGNOSTICS` | `50` | teto de itens de diagnóstico |
 | `NOVOMODELO_MCP_MAX_SUMMARY_CHARS` | `20000` | teto de tamanho do `summary` |
-| `NOVOMODELO_MCP_MAX_RESPONSE_KB` | `50` | teto de tamanho de uma resposta com linhas ou listas (`results_query`, `deck_sql`, `deck_read_parquet`, `results_convergence`, `results_policy`, `results_stochastic`, `case_summary`); acima dele as linhas são cortadas, com `size_truncation` |
+| `NOVOMODELO_MCP_MAX_RESPONSE_KB` | `50` | teto de tamanho de uma resposta com linhas ou listas (`results_query`, `deck_sql`, `deck_read_parquet`, `results_convergence`, `results_policy`, `results_stochastic`, `case_summary` e as tools `bridge_*`); acima dele as linhas são cortadas, com `size_truncation`; nas tools `bridge_*`, são as linhas das tabelas dos diagnósticos, a maior tabela primeiro, e cada tabela cortada traz `truncated` e `rows_total` |
 | `NOVOMODELO_MCP_MAX_READ_BYTES` | `5000000` | teto de bytes do que é carregado inteiro na memória: leitura de JSON e `deck_describe_parquet`/`deck_edit_parquet` (pasta ou parquet maior é recusado e aponta o `deck_sql`) |
 | `NOVOMODELO_MCP_STATE_DIR` | por SO (ver abaixo) | estado persistente: runs assíncronos (`jobs/`) e calibração (`calibration.json`) |
 | `NOVOMODELO_MCP_MAX_JOBS` | `1` | runs simultâneos permitidos pelo `run_start` |

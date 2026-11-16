@@ -72,6 +72,22 @@ def _lists(obj: Any) -> list[tuple[dict[str, Any], str]]:
     return found
 
 
+def _keep_prefix_that_fits(
+    out: dict[str, Any], owner: dict[str, Any], key: str, budget: int
+) -> None:
+    """Deixa em `owner[key]` o maior começo da lista com o qual `out` cabe em `budget`."""
+    rows = owner[key]
+    lo, hi = 0, len(rows)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        owner[key] = rows[:mid]
+        if response_bytes(out) <= budget:
+            lo = mid
+        else:
+            hi = mid - 1
+    owner[key] = rows[:lo]
+
+
 def shrink_to_budget(envelope: dict[str, Any], settings: Settings) -> dict[str, Any]:
     """Encolhe a maior lista aninhada até a resposta caber em `max_response_kb`.
 
@@ -93,16 +109,42 @@ def shrink_to_budget(envelope: dict[str, Any], settings: Settings) -> dict[str, 
         if not candidatas:
             break
         dono, k = max(candidatas, key=lambda c: response_bytes(c[0][c[1]]))
-        rows = dono[k]
-        lo, hi = 0, len(rows)
-        while lo < hi:
-            mid = (lo + hi + 1) // 2
-            dono[k] = rows[:mid]
-            if response_bytes(out) <= budget:
-                lo = mid
-            else:
-                hi = mid - 1
-        dono[k] = rows[:lo]
         dono["truncated"] = True
+        _keep_prefix_that_fits(out, dono, k, budget)
         cortadas.add(id(dono[k]))
+    return out
+
+
+def _diagnostic_tables(envelope: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        d["table"]
+        for d in envelope.get("diagnostics") or []
+        if isinstance(d, dict)
+        and isinstance(d.get("table"), dict)
+        and isinstance(d["table"].get("rows"), list)
+    ]
+
+
+def shrink_tables_to_budget(envelope: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    """Encolhe as tabelas dos diagnósticos do bridge até a resposta caber em `max_response_kb`.
+
+    A maior tabela perde as últimas linhas primeiro; cada tabela cortada ganha `truncated`
+    e `rows_total`, e todo diagnóstico continua na resposta. Se cortar as tabelas não
+    basta, o `shrink_to_budget` corta a lista de diagnósticos.
+    """
+    budget = settings.max_response_kb * 1024
+    if response_bytes(envelope) <= budget:
+        return envelope
+    out = copy.deepcopy(envelope)
+    out["size_truncation"] = {"limit_kb": settings.max_response_kb}
+    cortadas: set[int] = set()
+    while response_bytes(out) > budget:
+        candidatas = [t for t in _diagnostic_tables(out) if t["rows"] and id(t) not in cortadas]
+        if not candidatas:
+            return shrink_to_budget(out, settings)
+        table = max(candidatas, key=lambda t: response_bytes(t["rows"]))
+        table["truncated"] = True
+        table["rows_total"] = len(table["rows"])
+        _keep_prefix_that_fits(out, table, "rows", budget)
+        cortadas.add(id(table))
     return out

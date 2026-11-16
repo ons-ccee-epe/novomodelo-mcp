@@ -90,6 +90,12 @@ só do MCP vira `X.Y.Z.postN`.
   site e a página em pt-BR. Ele lê a página em inglês, que é a fonte, e diz em `note` qual
   página leu e como citá-la.
 
+- As respostas das tools do bridge cabem no teto `NOVOMODELO_MCP_MAX_RESPONSE_KB`: as tabelas
+  dos diagnósticos perdem as últimas linhas, a maior tabela primeiro, e todo diagnóstico
+  continua na resposta. Cada tabela cortada traz `truncated` e `rows_total`, e a resposta
+  traz `size_truncation`. Só quando cortar as tabelas não basta a lista de diagnósticos
+  é cortada.
+
 ### Fixed
 
 - Toda resposta de erro traz `exit_code` e `diagnostics`. Alguns erros do `deck_edit_json`,

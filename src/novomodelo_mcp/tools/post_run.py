@@ -13,7 +13,7 @@ from ..adapters.envelope import error
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .annotations import WRITES
-from .shaping import attach_artifact, cap_envelope
+from .shaping import attach_artifact, cap_bridge_envelope
 
 #: Vocabulário do `--format` do bridge, publicado como `enum` no schema da tool.
 FormatoCompare = Literal["console", "html", "csv", "parquet", "json", "all"]
@@ -41,7 +41,7 @@ def _compare(
     # compare sempre sai com código 0; o veredito está no envelope, não no exit.
     if fmt == "html" and out_dir:
         attach_artifact(env, "report_dir", out_dir)
-    return cap_envelope(env, settings)
+    return cap_bridge_envelope(env, settings)
 
 
 def register_post_run(mcp, settings: Settings) -> None:
@@ -111,4 +111,4 @@ def register_post_run(mcp, settings: Settings) -> None:
         env = run_bridge(argv, settings=settings)
         if env.get("exit_code") == 0:
             attach_artifact(env, "dashboard", output or str(Path(case_dir) / "dashboard.html"))
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)
