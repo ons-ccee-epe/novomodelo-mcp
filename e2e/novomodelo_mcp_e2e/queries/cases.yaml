@@ -286,6 +286,16 @@ cases:
     error_contains: "seção inexistente"
   tags: [docs, read, error]
 
+- id: docs-read-link-copiado
+  query: Abra o link /en/math/risk-measures/#2-conditional-value-at-risk-cvar das docs do novomodelo e me resuma essa seção
+  expected:
+    uses_mcp: true
+    tool: docs_read
+    status: ok
+    validation:
+      response_contains: ["CVaR"]
+  tags: [docs, read, link]
+
 # ============================================================================
 # RESULTS - results_status, results_convergence, results_query,
 #           results_list_entities, results_policy, results_stochastic

@@ -560,6 +560,33 @@ def test_bridge_check_newave(cliente, caso_bridge):
     _tem_status(cliente.chamar("bridge_check_newave", {"src": str(_caso(caso_bridge, "newave"))}))
 
 
+def _tamanho(envelope: dict) -> int:
+    return len(json.dumps(envelope, ensure_ascii=False, indent=2, default=str).encode("utf-8"))
+
+
+def test_bridge_check_com_teto_baixo_cabe_e_mantem_os_diagnosticos(
+    request, ws, cliente, caso_bridge
+):
+    argumentos = {"src": str(_caso(caso_bridge, "newave"))}
+    completo = cliente.chamar("bridge_check_newave", argumentos)
+    tem_tabela = any(
+        isinstance(d, dict) and isinstance(d.get("table"), dict)
+        for d in completo.get("diagnostics") or []
+    )
+    if _tamanho(completo) <= 2 * 1024 or not tem_tabela:
+        pytest.skip("o deck não produz tabela de diagnóstico maior que o teto")
+    parametros = _parametros(request.config, ws)
+    parametros.env = {**(parametros.env or {}), "NOVOMODELO_MCP_MAX_RESPONSE_KB": "2"}
+    pequeno = ClienteMCP(parametros)
+    try:
+        cortado = pequeno.chamar("bridge_check_newave", argumentos)
+    finally:
+        pequeno.fechar()
+    assert "size_truncation" in cortado, sorted(cortado)
+    assert len(cortado["diagnostics"]) == len(completo["diagnostics"])
+    assert any(d.get("table", {}).get("truncated") for d in cortado["diagnostics"])
+
+
 def test_bridge_convert_newave(cliente, caso_bridge, rascunho):
     src = _caso(caso_bridge, "newave")
     argumentos = {"src": str(src), "dst": str(rascunho / "newave"), "validate": True}
