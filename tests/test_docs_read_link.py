@@ -28,6 +28,10 @@ FPHA text.
 def settings(tmp_path):
     (tmp_path / "math").mkdir()
     (tmp_path / "math" / "hydro.md").write_text(PAGINA, encoding="utf-8")
+    (tmp_path / "energy").mkdir()
+    (tmp_path / "energy" / "balance.md").write_text(
+        "---\ntitle: Balance\ndescription: Desc.\n---\n\nBalance text.\n", encoding="utf-8"
+    )
     return dataclasses.replace(load_settings(), docs_dir=str(tmp_path), max_summary_chars=20000)
 
 
@@ -62,6 +66,12 @@ def test_pagina_em_portugues_le_a_fonte_em_ingles(settings, pagina):
     assert "inglês" in env["note"]
 
 
+def test_pagina_que_comeca_com_en_sem_barra_nao_perde_o_prefixo(settings):
+    env = REF.read_doc(settings, "energy/balance", 20000)
+    assert env["status"] == "ok" and env["page"] == "energy/balance", env
+    assert "note" not in env
+
+
 def test_ancora_do_link_vira_a_secao(settings):
     env = REF.read_doc(settings, "/en/math/hydro/#2-constant-productivity", 20000)
     assert env["status"] == "ok" and env["section"] == "2-constant-productivity"
@@ -73,7 +83,9 @@ def test_secao_informada_vale_mais_que_a_ancora(settings):
     assert env["status"] == "ok" and "FPHA text." in env["content"]
 
 
-@pytest.mark.parametrize("pagina", ["../../etc/passwd", "/en/../../etc/passwd", "en/../../x"])
+@pytest.mark.parametrize(
+    "pagina", ["../../etc/passwd", "/en/../../etc/passwd", "en/../../x", "docs/en/../../../x/#a"]
+)
 def test_continua_recusando_o_que_sai_da_raiz(settings, pagina):
     env = REF.read_doc(settings, pagina, 20000)
     assert env["status"] == "error" and env["exit_code"] == 13
