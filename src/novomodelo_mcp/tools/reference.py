@@ -56,6 +56,9 @@ def register_reference(mcp, settings: Settings) -> None:
     def docs_read(page: str | None = None, section: str | None = None) -> dict[str, Any]:
         """Lê uma página das docs embutidas (ex.: 'reference/cli-reference').
 
+        `page` também aceita o link como as páginas o trazem (`/en/running/x/#ancora`),
+        o endereço do site e a página em pt-BR: lê a página em inglês e diz isso em `note`.
+
         `section`: âncora (a `section` que o docs_search devolve) ou título; devolve só a
         seção, com as subseções. Seção inexistente → erro com a lista de seções.
         Sem `page`: a lista de páginas, como o docs_list.

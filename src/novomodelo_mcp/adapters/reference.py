@@ -18,6 +18,7 @@ import unicodedata
 from importlib import resources
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from ..config import Settings
 from .discovery import find_novomodelo
@@ -190,6 +191,39 @@ def list_docs(settings: Settings, prefix: str | None = None) -> dict[str, Any]:
     }
 
 
+def _page_id(page: str) -> tuple[str, str | None, str | None]:
+    """O identificador da página citada como link, endereço do site ou página em pt-BR.
+
+    Devolve o identificador, a âncora do link e a nota que explica a leitura (sem nota
+    quando `page` já é o identificador). O resultado ainda passa pelo guard da raiz.
+    """
+    texto = page.strip()
+    url = urlsplit(texto)
+    if url.scheme in ("http", "https"):
+        path, anchor = url.path, url.fragment or None
+    else:
+        path, _, anchor = texto.partition("#")
+        anchor = anchor or None
+    parts = [p for p in path.split("/") if p]
+    pt_br = bool(parts) and parts[0] == "docs"
+    if pt_br:
+        parts = parts[1:]
+    if parts and parts[0] in ("en", "pt-br"):
+        pt_br = parts[0] == "pt-br"
+        parts = parts[1:]
+    pid = "/".join(parts)
+    if pid == page:
+        return pid, anchor, None
+    if pt_br:
+        nota = (
+            f"`{page}` é uma página em pt-BR; lida a página em inglês `{pid}`, a fonte das "
+            f"docs: cite `{pid}#<seção>`."
+        )
+    else:
+        nota = f"`{page}` lido como a página `{pid}`: cite `{pid}#<seção>`."
+    return pid, anchor, nota
+
+
 def read_doc(
     settings: Settings, page: str, max_chars: int, section: str | None = None
 ) -> dict[str, Any]:
@@ -197,14 +231,17 @@ def read_doc(
     if root is None:
         return _docs_unavailable(settings)
     base = Path(root).resolve()
+    cited = page
+    page, anchor, note = _page_id(page)
+    section = section or anchor
     # conter antes de testar a existência: a ordem inversa revela se um arquivo
     # existe fora da raiz (respostas diferentes para "fora" e "inexistente").
     candidates = [c.resolve() for c in (base / page, base / f"{page}.md", base / f"{page}.mdx")]
-    if not all(_within(c, base) for c in candidates):
-        return error(13, f"pagina fora do docs root: {page}")
+    if not page or not all(_within(c, base) for c in candidates):
+        return error(13, f"pagina fora do docs root: {cited}")
     tr = next((c for c in candidates if c.is_file()), None)
     if tr is None:
-        return error(2, f"pagina inexistente: {page}")
+        return error(2, f"pagina inexistente: {cited}")
     text = resolve_mdx(tr)
     extra = {}
     if section:
@@ -222,6 +259,7 @@ def read_doc(
         "status": "ok",
         "page": page,
         **extra,
+        **({"note": note} if note else {}),
         "path": str(tr),
         "truncated": truncated,
         "content": text[:max_chars] + ("\n... [truncado]" if truncated else ""),

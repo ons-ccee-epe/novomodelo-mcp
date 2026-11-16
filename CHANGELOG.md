@@ -85,6 +85,11 @@ só do MCP vira `X.Y.Z.postN`.
   anteriores não instalavam um servidor funcional (o mcp antes da 1.11 nem importa com o
   pydantic atual).
 
+- O `docs_read` aceita a página como as docs a citam: o link de dentro de uma página
+  (`/en/running/configuration/#training`, com a âncora virando a seção), o endereço do
+  site e a página em pt-BR. Ele lê a página em inglês, que é a fonte, e diz em `note` qual
+  página leu e como citá-la.
+
 ### Fixed
 
 - Toda resposta de erro traz `exit_code` e `diagnostics`. Alguns erros do `deck_edit_json`,

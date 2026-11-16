@@ -314,6 +314,12 @@ def test_docs_search_termo_em_portugues(cliente):
     assert "Inflow" in (e.get("glossary_terms") or []), e.get("glossary_terms")
 
 
+def test_docs_read_segue_o_link_da_pagina(cliente):
+    e = cliente.chamar("docs_read", {"page": "/en/reference/cli-reference/"})
+    _ok(e)
+    assert e["page"] == "reference/cli-reference" and "reference/cli-reference" in e["note"], e
+
+
 def test_docs_read_recusa_traversal(cliente):
     _recusa(cliente.chamar("docs_read", {"page": "../../../../etc/hosts"}))
 
