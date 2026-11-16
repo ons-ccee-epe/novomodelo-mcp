@@ -38,7 +38,8 @@ UPDATE_TTL_S = 6 * 3600
 NOTES_MAX_LINES = 6
 NOTES_MAX_LINE_CHARS = 200
 NOTES_MAX_CHARS = 1200
-_NOTES_SECTIONS = ("changed", "fixed")
+_NOTES_SECTIONS = ("changed", "removed", "fixed")
+_BREAKING = "BREAKING:"
 _MAX_BYTES = 64 * 1024 * 1024
 
 #: (host, prefixo de caminho) permitidos; o CDN do GitHub só como destino de redirecionamento.
@@ -338,26 +339,33 @@ def _shorten(text: str, limit: int) -> str:
 
 
 def release_changes(body: str | None) -> list[str]:
-    """As linhas de "Changed" e "Fixed" das notas do release, as BREAKING primeiro.
+    """As linhas de "Changed", "Removed" e "Fixed" das notas do release, e antes delas as
+    BREAKING de qualquer seção.
 
-    Cada item vira uma linha (as continuações são juntadas), sem o negrito do markdown,
-    com teto de linhas e de caracteres; o que sobra vira "(mais N nas notas)".
+    Um título mais fundo que o da seção (o `####` de um tema) continua nela. Cada item vira
+    uma linha (as continuações são juntadas), sem o negrito do markdown; BREAKING é o item
+    que começa com `BREAKING:`. Teto de linhas e de caracteres; o que sobra vira
+    "(mais N nas notas)".
     """
-    items: list[str] = []
-    section = None
+    found: list[tuple[str | None, str]] = []
+    section, level, in_item = None, 0, False
     for raw in (body or "").splitlines():
         line = raw.strip()
-        if heading := re.match(r"^#+\s*(.+)$", line):
-            section = heading.group(1).strip().lower()
+        if heading := re.match(r"^(#+)\s*(.+)$", line):
+            if section not in _NOTES_SECTIONS or len(heading[1]) <= level:
+                section, level = heading[2].strip().lower(), len(heading[1])
+            in_item = False
             continue
-        if section not in _NOTES_SECTIONS or not line:
+        if not line:
             continue
         if re.match(r"^[-*]\s+", raw):
-            items.append(re.sub(r"^[-*]\s+", "", line))
-        elif items:
-            items[-1] += " " + line
-    items = [i.replace("**", "") for i in items]
-    items.sort(key=lambda i: "BREAKING" not in i)
+            found.append((section, re.sub(r"^[-*]\s+", "", line).replace("**", "")))
+            in_item = True
+        elif in_item:
+            found[-1] = (found[-1][0], f"{found[-1][1]} {line.replace('**', '')}")
+    items = [text for _, text in found if text.startswith(_BREAKING)] + [
+        text for sec, text in found if sec in _NOTES_SECTIONS and not text.startswith(_BREAKING)
+    ]
     lines: list[str] = []
     for item in items:
         line = _shorten(item, NOTES_MAX_LINE_CHARS)

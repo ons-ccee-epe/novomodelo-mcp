@@ -9,6 +9,13 @@ só do MCP vira `X.Y.Z.postN`.
 
 ## [Unreleased]
 
+### Changed
+
+- O `server_info` mostra também as entradas de `Removed` e as dos temas `####` das notas
+  do novomodelo e do bridge, e põe antes de todas as BREAKING de qualquer seção. BREAKING
+  é o item que começa com `BREAKING:`; a palavra no meio do texto não conta mais.
+- As notas de cada release do MCP no GitHub trazem a seção da versão no `CHANGELOG.md`.
+
 ## [0.20.0] - 2026-11-04
 
 ### Changed

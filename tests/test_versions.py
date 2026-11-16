@@ -482,6 +482,64 @@ def test_mudancas_tem_teto_de_linhas_e_de_caracteres():
     assert V.release_changes("") == [] and V.release_changes(None) == []
 
 
+NOTAS_COM_TEMAS = """## [0.21.0] - 2026-11-20
+
+### Added
+
+- Uma tool nova.
+- **BREAKING:** o `case_init` grava o deck em `dst`, não mais na pasta
+  corrente.
+
+#### Leitura
+
+- Um item novo de leitura.
+
+### Changed
+
+#### Teto das respostas
+
+- As tabelas do bridge cabem no teto.
+- Um item que fala de BREAKING no meio não é BREAKING.
+
+### Removed
+
+- O `deck_old` sai.
+
+### Fixed
+
+Um parágrafo que não é item.
+
+- O `docs_read` abre o link.
+"""
+
+
+def test_mudancas_leem_os_temas_e_o_removed_com_as_breaking_de_qualquer_secao_primeiro():
+    assert V.release_changes(NOTAS_COM_TEMAS) == [
+        "BREAKING: o `case_init` grava o deck em `dst`, não mais na pasta corrente.",
+        "As tabelas do bridge cabem no teto.",
+        "Um item que fala de BREAKING no meio não é BREAKING.",
+        "O `deck_old` sai.",
+        "O `docs_read` abre o link.",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("item", "breaking"),
+    [
+        ("**BREAKING:** x", True),
+        ("BREAKING: x", True),
+        ("**BREAKING**: x", True),
+        ("Breaking: x", False),
+        ("BREAKING x", False),
+        ("x, BREAKING: y", False),
+    ],
+)
+def test_breaking_so_pelo_prefixo_exato(item, breaking):
+    corpo = f"### Added\n\n- {item}\n\n### Fixed\n\n- corrigido\n"
+    esperado = [item.replace("**", ""), "corrigido"] if breaking else ["corrigido"]
+    assert V.release_changes(corpo) == esperado
+
+
 def test_versao_nova_traz_as_mudancas_e_o_link_das_notas(pecas, monkeypatch):
     _respostas(monkeypatch)
     nova = V.update_check(object())
