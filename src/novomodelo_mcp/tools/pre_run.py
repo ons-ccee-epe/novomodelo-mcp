@@ -13,7 +13,7 @@ from ..adapters.novomodelo import case_summary_binding, validate_deck_binding, v
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .annotations import READ_ONLY, WRITES
-from .shaping import attach_artifact, cap_envelope, group_diagnostics
+from .shaping import attach_artifact, cap_bridge_envelope, cap_envelope, group_diagnostics
 
 
 def _force_gate(force: bool, dry_run: bool, settings: Settings) -> dict | None:
@@ -41,7 +41,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         if err := ensure_in_workspace(src, settings=settings):
             return err
         env = run_bridge(["check", "newave", src], settings=settings)
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)
 
     @mcp.tool(annotations=WRITES)
     def bridge_convert_newave(
@@ -72,7 +72,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         env = run_bridge(argv, settings=settings)
         if env.get("exit_code") == 0 and not dry_run:
             attach_artifact(env, "deck", dst)
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
     def case_validate(case_dir: str, output_dir: str | None = None) -> dict:
@@ -139,7 +139,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         if err := ensure_in_workspace(src, settings=settings):
             return err
         env = run_bridge(["check", "decomp", src], settings=settings)
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)
 
     @mcp.tool(annotations=WRITES)
     def bridge_convert_decomp(
@@ -174,4 +174,4 @@ def register_pre_run(mcp, settings: Settings) -> None:
         env = run_bridge(argv, settings=settings)
         if env.get("exit_code") == 0 and not dry_run:
             attach_artifact(env, "deck", dst)
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)

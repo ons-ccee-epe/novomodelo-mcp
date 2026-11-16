@@ -9,6 +9,14 @@ só do MCP vira `X.Y.Z.postN`.
 
 ## [Unreleased]
 
+### Changed
+
+- As respostas das tools do bridge cabem no teto `NOVOMODELO_MCP_MAX_RESPONSE_KB`: as tabelas
+  dos diagnósticos perdem as últimas linhas, a maior tabela primeiro, e todo diagnóstico
+  continua na resposta. Cada tabela cortada traz `truncado` e `linhas_total`, e a resposta
+  traz `cortado_por_tamanho`. Só quando cortar as tabelas não basta a lista de diagnósticos
+  é cortada.
+
 ## [0.20.0] - 2026-11-04
 
 ### Changed
