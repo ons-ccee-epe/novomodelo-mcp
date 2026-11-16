@@ -165,7 +165,8 @@ def register_deck(mcp, settings: Settings) -> None:
     ) -> dict[str, Any]:
         """Edita valores de um JSON do deck por caminho, DENTRO do contrato.
 
-        `changes`: lista de {"path": "training.stopping_rules[0].limit", "value": 80}.
+        `changes`: lista de {"path": "modeling.inflow_non_negativity.method", "value": "none"}.
+        Para forward passes, limite de iterações e cenários da simulação, use o run_apply.
         Valida contra o JSON Schema oficial da versão instalada (variável
         `NOVOMODELO_MCP_SCHEMAS_DIR`, senão `novomodelo schema export`, senão os schemas
         embutidos); backup em `<arquivo>.bak` + escrita atômica. `dry_run` não grava.

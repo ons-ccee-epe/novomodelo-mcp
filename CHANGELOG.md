@@ -101,6 +101,11 @@ só do MCP vira `X.Y.Z.postN`.
   é o item que começa com `BREAKING:`; a palavra no meio do texto não conta mais.
 - As notas de cada release do MCP no GitHub trazem a seção da versão no `CHANGELOG.md`.
 
+- As descrições do `run_apply` e do `deck_edit_json` dizem que forward passes, limite de
+  iterações e cenários da simulação se mudam pelo `run_apply`, depois do `run_plan`. O
+  exemplo do `deck_edit_json` era o limite de iterações, e o agente às vezes editava o
+  `config.json` à mão em vez de usar o `run_apply`.
+
 ### Fixed
 
 - Toda resposta de erro traz `exit_code` e `diagnostics`. Alguns erros do `deck_edit_json`,

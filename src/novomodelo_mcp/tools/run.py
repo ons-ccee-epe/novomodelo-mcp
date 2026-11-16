@@ -228,6 +228,9 @@ def register_run(mcp, settings: Settings) -> None:
     ) -> dict[str, Any]:
         """Aplica knobs de execução no config.json do caso (só config; nada mais).
 
+        É a tool para mudar forward passes, limite de iterações e cenários da simulação:
+        não edite esses campos com o deck_edit_json. Chame o run_plan antes para saber
+        os valores que cabem nesta máquina.
         `overrides`: {"forward_passes": 2, "iteration_limit": 3,
         "simulation_scenarios": 20, "simulation_enabled": true} — tipicamente o
         `apply_overrides` devolvido pelo run_plan. Via deck_io.edit_json:
