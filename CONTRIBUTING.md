@@ -202,9 +202,17 @@ no `versions.json`):
 5. Cada opção nova das CLIs classificada em `tests/surface.toml`; confira com
    `uv run pytest tests/test_surface_parity.py --executaveis-reais` contra o novomodelo e
    o bridge `X.Y.Z` instalados.
-6. As entradas de `Unreleased` do `CHANGELOG.md` sob a versão nova.
+6. As entradas de `Unreleased` do `CHANGELOG.md` sob `## [X.Y.Z] - AAAA-MM-DD`: essa
+   seção é a nota do release do GitHub (`scripts/notas_da_release.py`).
 
 Uma correção só do MCP vira `X.Y.Z.postN`.
+
+Cada versão do `CHANGELOG.md` agrupa as entradas em `### Added`, `### Changed`,
+`### Removed` e `### Fixed`, com temas opcionais em `####`, em português. Cada entrada é
+um item plano, e a primeira frase se sustenta sozinha dentro do teto por linha do
+`server_info` (`NOTES_MAX_LINE_CHARS`). Em cada grupo vêm primeiro as BREAKING (o item
+começa com `**BREAKING:**`), depois as que mudam resultados e por fim o resto. É o formato
+que o `server_info` lê nas notas do novomodelo e do bridge (`release_changes`).
 
 ## Release
 
@@ -230,8 +238,9 @@ correção sai como `X.Y.Z.postN`.
 
 `.github/workflows/release.yml`:
 
-1. confere que a tag bate com a `version` e que o commit dela está na `main`, e as docs
-   embutidas contra os commits gravados no manifesto;
+1. confere que a tag bate com a `version` e que o commit dela está na `main`, tira as
+   notas do release da seção da versão no `CHANGELOG.md` (sem ela, para aqui) e confere
+   as docs embutidas contra os commits gravados no manifesto;
 2. gera o wheel, o sdist e o `SHA256SUMS` dos dois, roda os testes contra o wheel
    instalado (e não contra o `src/`), e confere que toda dependência tem wheel em cada
    alvo e versão do Python suportados (`scripts/conferir_wheels.sh`): quem instala
@@ -240,8 +249,8 @@ correção sai como `X.Y.Z.postN`.
    arquitetura e versão do Python suportados, e confere pelo stdio a versão anunciada, as
    tools e o `server_info` (`scripts/conferir_instalacao.py`);
 4. só no repositório público, publica no PyPI por trusted publishing, pelo environment
-   `pypi`, e anexa os arquivos ao release do GitHub. No repositório de origem, a tag roda
-   todo o resto e serve de conferência.
+   `pypi`, e cria o release do GitHub com os arquivos e essas notas. No repositório de
+   origem, a tag roda todo o resto e serve de conferência.
 
 Para ensaiar sem publicar, faça push numa branch `ensaio/<nome>` (ou use "Run workflow"
 na aba Actions): os arquivos ficam como artefato da execução.
@@ -250,6 +259,7 @@ A decisão de go/no-go da bateria e2e (`e2e/README.md`) é consultiva: informa q
 tag, mas não bloqueia o release, e o `release.yml` não roda a bateria.
 
 Se a organização não permitir `contents: write` ao `GITHUB_TOKEN`, o job do release do
-GitHub falha e o resto continua valendo. Nesse caso, baixe o artefato da execução e
-anexe à mão: `gh release create vX.Y.Z novomodelo_mcp-*.whl novomodelo_mcp-*.tar.gz
-SHA256SUMS --title "novomodelo-mcp X.Y.Z"`.
+GitHub falha e o resto continua valendo. Nesse caso, baixe os artefatos da execução (o
+pacote e o `notas.md` de `notas-da-release-X.Y.Z`) e crie o release à mão:
+`gh release create vX.Y.Z novomodelo_mcp-*.whl novomodelo_mcp-*.tar.gz SHA256SUMS
+--title "novomodelo-mcp X.Y.Z" --notes-file notas.md`.

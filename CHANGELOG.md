@@ -96,6 +96,11 @@ só do MCP vira `X.Y.Z.postN`.
   traz `size_truncation`. Só quando cortar as tabelas não basta a lista de diagnósticos
   é cortada.
 
+- O `server_info` mostra também as entradas de `Removed` e as dos temas `####` das notas
+  do novomodelo e do bridge, e põe antes de todas as BREAKING de qualquer seção. BREAKING
+  é o item que começa com `BREAKING:`; a palavra no meio do texto não conta mais.
+- As notas de cada release do MCP no GitHub trazem a seção da versão no `CHANGELOG.md`.
+
 ### Fixed
 
 - Toda resposta de erro traz `exit_code` e `diagnostics`. Alguns erros do `deck_edit_json`,

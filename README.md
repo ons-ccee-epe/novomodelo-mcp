@@ -223,8 +223,9 @@ do MCP (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo `install_
 e apenas nestes domínios: `github.com/ons-ccee-epe/*`, `api.github.com/repos/ons-ccee-epe/*`,
 `pypi.org/pypi/novomodelo-bridge/*`, `pypi.org/pypi/novomodelo-mcp/*` e, como destino de
 download, `release-assets.githubusercontent.com`. Junto com a versão nova vêm as mudanças
-dela (as seções "Changed" e "Fixed" das notas da release, as BREAKING primeiro, com teto de
-linhas) e o link das notas. O HTTPS usa os certificados do sistema (`truststore`), o que
+dela (as seções "Changed", "Removed" e "Fixed" das notas da release, com os temas `####`
+de cada uma, e antes delas as BREAKING de qualquer seção, com teto de linhas) e o link das
+notas. O HTTPS usa os certificados do sistema (`truststore`), o que
 permite atravessar proxy corporativo. Sem rede, a resposta diz que não foi possível
 verificar e onde conferir. Documentação e schemas são embutidos e não usam a rede.
 
