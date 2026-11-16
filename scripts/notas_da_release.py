@@ -11,6 +11,7 @@ Uso (a partir do repositório):
 from __future__ import annotations
 
 import argparse
+import io
 import sys
 from pathlib import Path
 
@@ -27,6 +28,10 @@ def release_notes(versao: str, secao: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # As notas são Markdown em UTF-8; no Windows a saída padrão seria cp1252.
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         description="Notas do release do GitHub, tiradas do CHANGELOG.md."
     )
