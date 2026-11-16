@@ -9,6 +9,13 @@ só do MCP vira `X.Y.Z.postN`.
 
 ## [Unreleased]
 
+### Fixed
+
+- O `docs_read` abre a página pelo caminho de um link copiado das próprias docs, como
+  `/en/math/cut-management/#32-backward-pass`. Ele aceita o link com ou sem o prefixo do site
+  (`/docs/en/`) e com a barra no fim, e a âncora do link vale como `secao` quando ela não é
+  passada.
+
 ## [0.20.0] - 2026-11-04
 
 ### Changed

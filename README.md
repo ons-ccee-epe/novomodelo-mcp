@@ -142,7 +142,7 @@ O cliente prefixa cada tool com o nome do servidor (ex.: `mcp__novomodelo__case_
 **Referência**
 - `schema_list()` / `schema_get(tipo)`: JSON Schemas de entrada; também no resource `novomodelo://schema/{tipo}`
 - `docs_list(section)`: páginas das docs embutidas, com título e descrição
-- `docs_read(page, secao)`: uma página das docs embutidas; com `secao` (âncora devolvida pelo `docs_search`, ou título), só aquela seção; sem `page`, a lista de páginas (a do `docs_list`)
+- `docs_read(page, secao)`: uma página das docs embutidas; com `secao` (âncora devolvida pelo `docs_search`, ou título), só aquela seção; sem `page`, a lista de páginas (a do `docs_list`). `page` aceita também o caminho de um link das páginas, como `/en/math/cut-management/#32-backward-pass`, e a âncora vale como `secao`
 - `docs_search(consulta, k)`: busca por palavra nas docs embutidas (de preferência em inglês; os termos em português do glossário das docs são traduzidos); devolve página, seção e trecho
 
 **Solver**

@@ -195,10 +195,24 @@ def list_docs(settings: Settings, section: str | None = None) -> dict:
     }
 
 
+def page_and_anchor(link: str) -> tuple[str, str | None]:
+    """Id da página e âncora de um link das páginas, que segue o site (`/docs/en/<id>/#<âncora>`).
+
+    `/en/math/cut-management/#32-backward-pass` → `("math/cut-management", "32-backward-pass")`.
+    """
+    path, _, anchor = link.partition("#")
+    page = path.strip("/")
+    for prefix in ("docs/", "en/"):
+        page = page.removeprefix(prefix)
+    return page, anchor or None
+
+
 def read_doc(settings: Settings, page: str, max_chars: int, section: str | None = None) -> dict:
     root = docs_root(settings)
     if root is None:
         return _docs_unavailable(settings)
+    page, anchor = page_and_anchor(page)
+    section = section or anchor
     base = Path(root).resolve()
     # conter antes de testar a existência: a ordem inversa revela se um arquivo
     # existe fora da raiz (respostas diferentes para "fora" e "inexistente").

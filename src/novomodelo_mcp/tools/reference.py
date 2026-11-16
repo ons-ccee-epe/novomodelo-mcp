@@ -53,6 +53,8 @@ def register_reference(mcp, settings: Settings) -> None:
     def docs_read(page: str | None = None, secao: str | None = None) -> dict:
         """Lê uma página das docs embutidas (ex.: 'reference/cli-reference').
 
+        `page` aceita também o caminho de um link das páginas
+        (`/en/math/cut-management/#32-backward-pass`); a âncora do link vale como `secao`.
         `secao`: âncora (a `secao` que o docs_search devolve) ou título; devolve só a
         seção, com as subseções. Seção inexistente → erro com a lista de seções.
         Sem `page`: a lista de páginas, como o docs_list.
