@@ -1,0 +1,34 @@
+---
+title: Thermal plants
+description: How Novomodelo treats thermal plants — variable cost, minimum generation and anticipated dispatch.
+---
+
+## Why it matters
+
+## Generation range and anticipated dispatch
+
+## What the model decides
+
+## What you provide
+
+- The bus where the generation is injected.
+- Minimum generation (inflexibility) and maximum generation, in MW. These limits can vary by stage and by block.
+- The CVU, in \$/MWh (fuel + O&M), which can also vary by stage and by block.
+- Entry and exit stages, when the plant does not exist throughout the study.
+- For anticipated dispatch, the lead, given as a number of stages or in hours (only one of the two).
+- For anticipated dispatch, the commitments the plant already decided before the study, in the initial conditions, with the committed power in MW for each date window, including zero power.
+
+## Anticipated dispatch (LNG)
+
+A plant can be flagged as anticipated. It decides the commitment of each delivery at a stage before its delivery stage, and the plant's generation at that stage must match the commitment. Plants without the flag use the standard thermal model.
+
+- **Decision stage.** The lead fixes the stage at which each delivery is decided. A delivery decided within its own stage, because the physical lead is shorter than the duration of the delivery stage, is not anticipated: at that stage the plant dispatches as an ordinary thermal.
+- **Commitment ring.** Every commitment decided but not yet delivered is model state: the plant holds it in its commitment ring, in a ring slot, from the decision stage to the delivery stage. Anticipated thermals are the only non-hydro elements with state variables.
+- **Delivery.** The commitment is carried unchanged through the intermediate stages and delivered at the delivery stage. Its limits are the plant's generation limits at that stage, and it is zero when the plant is out of operation there.
+- **Cost.** The commitment is charged at the decision stage and discounted from the delivery stage. The plant's per-block generation has no cost at a stage where it delivers a commitment, so the same energy is priced only once.
+- **Before the study.** Deliveries decided before the study and falling within it seed their ring slots at the first stage. Those beyond the horizon are fixed commitments, priced only by the terminal boundary.
+- **Beyond the horizon.** A delivery beyond the horizon can only be decided in the study when the case declares a post-study schedule that reaches it.
+
+## Go deeper
+
+## For those who run the model

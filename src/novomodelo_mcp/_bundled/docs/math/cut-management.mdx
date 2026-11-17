@@ -7,6 +7,8 @@ description: Complete Benders cut lifecycle — cut definition, reduced-cost ext
 
 This chapter defines the complete Benders cut lifecycle in Novomodelo: what cuts represent mathematically, how cut coefficients relate to LP dual variables, how per-scenario cuts are aggregated into a single cut, under what conditions cuts are valid, and what selection methods are available to control cut pool growth.
 
+For the entity view of this chapter, see [Water value and future cost](/en/entities/water-value/).
+
 ## 1. Cut Definition
 
 A **Benders cut** at stage $t-1$ is a linear inequality that provides a lower bound on the cost-to-go function $V_t(x)$ under the validity conditions of [§4](#4-cut-validity):
@@ -22,24 +24,25 @@ where:
 - $x$ is the vector of the state components the cut projects onto, and $\beta$ the vector of their cut coefficients, one per component
 - $\beta^v_h$ is the storage coefficient for hydro $h$ (marginal value of water)
 - $\beta^{lag}_{h,\ell}$ is the AR lag coefficient for hydro $h$, lag $\ell$ (marginal value of inflow history)
-- $v_h$, $a_{h,\ell}$ are the storage and AR-lag state variables (see [State Augmentation §1](/math/state-augmentation#1-state-vector))
+- $v_h$, $a_{h,\ell}$ are the storage and AR-lag state variables (see [State Augmentation §1](/en/math/state-augmentation#1-state-vector))
 
-The cut carries a coefficient for each **enabled** state dimension: the storage $v_h$ and the inflow lags $a_{h,\ell}$ when the stage's projection selection keeps them ([State Augmentation §7](/math/state-augmentation#7-cut-state-projection)), and the in-transit travel-time buckets and commitment-ring slots, when present, always. A cut is stored densely over the components it projects onto: every such component carries a coefficient in every cut, read from the reduced cost of its pinned column (§2), and a coefficient may be zero; the cut's LP row omits the components whose coefficient is structurally zero.
+The cut carries a coefficient for each **enabled** state dimension: the storage $v_h$ and the inflow lags $a_{h,\ell}$ when the stage's projection selection keeps them ([State Augmentation §7](/en/math/state-augmentation#7-cut-state-projection)), and the in-transit travel-time buckets and commitment-ring slots, when present, always. A cut is stored densely over the components it projects onto: every such component carries a coefficient in every cut, computed from the solve (§2), and a coefficient may be zero. In the stage LP, the cut row carries the storage, bucket and ring-slot terms as entries on the outgoing columns and evaluates the inflow-lag terms on its right-hand side, because the inflow lags are not LP columns ([PAR(p) Folding §3](/en/math/par-folding#3-the-cut-right-hand-side)); the row omits the entries whose coefficient is structurally zero.
 
 Novomodelo adds cuts monotonically across iterations: an active cut is never removed from the lower-bound LP within a training run. Because the cut set only grows, the lower-bound estimate is non-decreasing across iterations of a training run. This is a methodology-level guarantee — the outer approximation of the value function can only become tighter iteration by iteration.
 
 ## 2. Reduced-Cost Extraction
 
-After solving the stage $t$ subproblem for trial state $\hat{x}_{t-1}$ and scenario $\omega_t$, the cut coefficients are derived from the LP **reduced costs** of the pinned incoming-state columns — the columns whose lower and upper bounds were set equal to the incoming state value (see [State Augmentation §2](/math/state-augmentation#2-pinning-by-column-bounds)).
+After solving the stage $t$ subproblem for trial state $\hat{x}_{t-1}$ and scenario $\omega_t$, the coefficients on the storage, the in-transit buckets and the commitment-ring slots are derived from the LP **reduced costs** of the pinned incoming-state columns — the columns whose lower and upper bounds were set equal to the incoming state value (see [State Augmentation §2](/en/math/state-augmentation#2-pinning-by-column-bounds)). The inflow lags are not LP columns, and their coefficients come from the duals of the solve by the chain rule (below).
 
-Both storage and inflow lags use the same pattern: an incoming-state LP variable is pinned to the trial value by equal column bounds, and the reduced cost of that column gives the cut coefficient directly:
+An incoming-state LP variable is pinned to the trial value by equal column bounds, and the reduced cost of that column gives the cut coefficient directly:
 
 | Pinned column                  | Reduced cost             | Cut coefficient                                                    | Units     |
 | ------------------------------ | ------------------------ | ------------------------------------------------------------------ | --------- |
 | Incoming storage (hydro $h$)   | $\bar{c}^{in}_h$         | $\beta^v_{t,h} = \bar{c}^{in}_h / d^{col}_h$                         | \$/hm³    |
-| AR lag (hydro $h$, lag $\ell$) | $\bar{c}^{lag}_{h,\ell}$ | $\beta^{lag}_{t,h,\ell} = \bar{c}^{lag}_{h,\ell} / d^{col}_{h,\ell}$ | \$/(m³/s) |
 
-where $d^{col}$ is the per-column prescaler factor that unscales the reduced cost; a further factor $K$ converts to original cost units at the reporting boundary (see [LP Layout and Scaling §2](/math/lp-layout-and-scaling#2-lp-scaling)). When the study has in-transit water or anticipated thermals, each incoming bucket column and each incoming commitment-ring slot column contributes one coefficient by the same rule; the coefficient multiplies the matching outgoing column of the cut's stage ([State Augmentation §3](/math/state-augmentation#3-outgoing-state-and-the-cut-row); [State Augmentation — Ring-Slot Cut Coefficient](/math/state-augmentation#ring-slot-cut-coefficient)).
+where $d^{col}$ is the per-column prescaler factor that unscales the reduced cost; a further factor $K$ converts to original cost units at the reporting boundary (see [LP Layout and Scaling §2](/en/math/lp-layout-and-scaling#2-lp-scaling)). When the study has in-transit water or anticipated thermals, each incoming bucket column and each incoming commitment-ring slot column contributes one coefficient by the same rule; the coefficient multiplies the matching outgoing column of the cut's stage ([State Augmentation §3](/en/math/state-augmentation#3-outgoing-state-and-the-cut-row); [State Augmentation — Ring-Slot Cut Coefficient](/en/math/state-augmentation#ring-slot-cut-coefficient)).
+
+**Inflow-lag coefficients.** The incoming inflow lags reach the stage LP only through right-hand sides: through the realized inflow $\hat{z}_h$, which the water balance and the other rows that read the inflow take as a constant ([PAR(p) Folding §2](/en/math/par-folding#2-the-realized-inflow-outside-the-lp)), and through the lag terms of the cut rows. The coefficient $\beta^{lag}_{t,h,\ell}$, in \$/(m³/s), is the derivative of $Q_t$ along both routes, computed from the unscaled row duals by the chain rule ([PAR(p) Folding §4](/en/math/par-folding#4-the-inflow-lag-coefficients-by-the-chain-rule)). In exact arithmetic it equals the reduced cost of the pinned lag column of the formulation that writes the PAR(p) model as rows of the LP ([PAR(p) Folding §5](/en/math/par-folding#5-exactness-and-limits)).
 
 The cut intercept ensures the cut passes through the trial point:
 
@@ -47,25 +50,25 @@ $$
 \beta_{0,t} = Q_t(\hat{x}_{t-1}, \omega_t) - \beta_t^{\top} \hat{x}_{t-1}
 $$
 
-where $Q_t(\hat{x}_{t-1}, \omega_t)$ is the optimal objective value of the stage $t$ subproblem and the product $\beta_t^{\top} \hat{x}_{t-1}$ runs over the components the cut projects onto (§1), each coefficient paired with the trial value of its own component: storage and inflow lags when the stage keeps them, buckets and ring slots always. A component the cut projects out contributes no product term; its linear term at the trial value is folded into the intercept ([§4](#4-cut-validity), condition 4). The trial state $\hat{x}_{t-1}$ this intercept is anchored at is the canonicalized (read-back-clamped) outgoing state of the previous stage's forward solve — its LP primal projected onto its admissible bounds — so the pinned incoming-state columns and the intercept share one in-box anchor (see [SDDP Algorithm §3.1](/math/sddp-algorithm#31-forward-pass)).
+where $Q_t(\hat{x}_{t-1}, \omega_t)$ is the optimal objective value of the stage $t$ subproblem and the product $\beta_t^{\top} \hat{x}_{t-1}$ runs over the components the cut projects onto (§1), each coefficient paired with the trial value of its own component: storage and inflow lags when the stage keeps them, buckets and ring slots always. A component the cut projects out contributes no product term; its linear term at the trial value is folded into the intercept ([§4](#4-cut-validity), condition 4). The trial state $\hat{x}_{t-1}$ this intercept is anchored at is the canonicalized (read-back-clamped) outgoing state of the previous stage's forward solve — its LP primal projected onto its admissible bounds — so the pinned incoming-state columns and the intercept share one in-box anchor (see [SDDP Algorithm §3.1](/en/math/sddp-algorithm#31-forward-pass)).
 
-**Sign convention**: By the LP envelope theorem, $\partial Q_t / \partial \hat{x}_j = \beta_j$, the sensitivity of the optimal value to the pinned incoming state. For a column pinned at $\underline{x}_j = \bar{x}_j = \hat{x}_j$, that sensitivity is exactly the column's reduced cost — equal, by KKT parity, to the multiplier the equivalent equality row $x^{in}_j = \hat{x}_j$ would have carried — so the cut coefficient is taken directly from the reduced cost with no sign flip (after the per-column unscaling above). The reduced cost automatically captures all downstream effects: for storage, this includes contributions from the water balance, FPHA hyperplanes, the evaporation row, and any generic constraints that reference the incoming storage variable $v^{in}_h$ (see [LP Formulation](/math/lp-formulation)).
+**Sign convention**: By LP duality, the optimal value $Q_t$ is convex and piecewise linear in the incoming state, and the vector $\beta$ read at an optimal basis is a subgradient of it at $\hat{x}$: $Q_t(x) \geq Q_t(\hat{x}) + \beta^\top (x - \hat{x})$ for every incoming state $x$. Where $Q_t$ is differentiable at $\hat{x}$, $\beta_j = \partial Q_t / \partial \hat{x}_j$; where the stage LP has several optimal dual solutions, $Q_t$ can have a kink at $\hat{x}$, and $\beta$ is the subgradient the terminating basis gives. For a column pinned at $\underline{x}_j = \bar{x}_j = \hat{x}_j$, the reduced cost is that subgradient's component $j$ — equal, by KKT parity, to the multiplier the equivalent equality row $x^{in}_j = \hat{x}_j$ would have carried — so the cut coefficient is taken directly from the reduced cost with no sign flip (after the per-column unscaling above). The reduced cost automatically captures all downstream effects: for storage, this includes contributions from the water balance, FPHA hyperplanes, the evaporation row, and any generic constraints that reference the incoming storage variable $v^{in}_h$ (see [LP Formulation](/en/math/lp-formulation)). For an inflow lag, the chain rule sums the effects along the two routes by which the lag reaches the LP, the rows that read the realized inflow and the lag terms of the cut rows.
 
 **Storage coefficient sign**: more incoming storage lowers $Q_t$ wherever the extra water displaces thermal generation or deficit, in this stage or a later one, so the storage coefficient is non-positive there; it can turn positive where the extra water can only leave the reservoir at a cost, such as a spillage cost or an outflow-limit penalty.
 
 :::note[Design note]
-Pinning an incoming-state column to the trial value and reading its reduced cost gives the sensitivity directly. Novomodelo realises it through **column bounds** rather than an equality row: a bound-pinned column's reduced cost is the sensitivity, which removes the $N(1+P^{\max})$ redundant equality rows per stage, plus one per bucket and ring slot, while keeping the property that one value per state coordinate captures all downstream effects automatically. See [State Augmentation §2](/math/state-augmentation#2-pinning-by-column-bounds).
+Pinning an incoming-state column to the trial value and reading its reduced cost gives the sensitivity directly. Novomodelo realises it through **column bounds** rather than an equality row: a bound-pinned column's reduced cost is the sensitivity, which removes the $N$ redundant equality rows per stage, one per hydro storage, plus one per bucket and ring slot, while keeping the property that one value per state coordinate captures all downstream effects automatically. The inflow lags need neither a column nor a row: they reach the LP through right-hand sides ([PAR(p) Folding](/en/math/par-folding)). See [State Augmentation §2](/en/math/state-augmentation#2-pinning-by-column-bounds).
 :::
 
 ### Cut dimension: the enabled state subset
 
-Each stage's cuts project onto the state components its selection keeps — the storage and the inflow lags as each stage selects them, the in-transit buckets and the commitment-ring slots always — as defined in [State Augmentation §7](/math/state-augmentation#7-cut-state-projection).
+Each stage's cuts project onto the state components its selection keeps — the storage and the inflow lags as each stage selects them, the in-transit buckets and the commitment-ring slots always — as defined in [State Augmentation §7](/en/math/state-augmentation#7-cut-state-projection).
 
 In a multi-rank run each stage's cut synchronization derives its wire layout from that stage's own cut dimension. The Configure tab under [Implementation in Novomodelo](#implementation-in-novomodelo) lists the per-stage field.
 
 ## 3. Single-Cut Aggregation
 
-In the single-cut formulation, the per-outcome cuts of the backward pass are aggregated into one cut per trial point. The cut of a policy-graph node $n$ ([Policy Graphs](/math/policy-graphs)) aggregates over the pairs $(n', \omega)$ formed by every child $n'$ of $n$ and every opening $\omega \in \Omega_{n'}$ of that child, each pair weighted by the product $P(n \to n')\, p_{n'}(\omega)$ of the transition probability from $n$ to $n'$ and the probability of opening $\omega$ within $n'$. Under the expectation, the aggregated cut is the expectation of the per-pair cuts under that joint law:
+In the single-cut formulation, the per-outcome cuts of the backward pass are aggregated into one cut per trial point. The cut of a policy-graph node $n$ ([Policy Graphs](/en/math/policy-graphs)) aggregates over the pairs $(n', \omega)$ formed by every child $n'$ of $n$ and every opening $\omega \in \Omega_{n'}$ of that child, each pair weighted by the product $P(n \to n')\, p_{n'}(\omega)$ of the transition probability from $n$ to $n'$ and the probability of opening $\omega$ within $n'$. Under the expectation, the aggregated cut is the expectation of the per-pair cuts under that joint law:
 
 $$
 \bar{\beta}_0 = \sum_{(n', \omega)} P(n \to n')\, p_{n'}(\omega)\, \beta_0(n', \omega)
@@ -75,22 +78,22 @@ $$
 \bar{\beta} = \sum_{(n', \omega)} P(n \to n')\, p_{n'}(\omega)\, \beta(n', \omega)
 $$
 
-where $\beta_0(n', \omega)$ and $\beta(n', \omega)$ are the intercept and the coefficient vector of the cut read from child $n'$'s subproblem under opening $\omega$ at the trial point (§2). The coefficient sum is a vector sum over every component the cut projects onto (§1): the storage and the inflow lags when the projection keeps them, and the in-transit buckets and the commitment-ring slots always. Under a risk measure, the products $P(n \to n')\, p_{n'}(\omega)$ are replaced by the risk-adjusted probabilities of [Risk Measures](/math/risk-measures), computed on that same joint law: the risk measure of node $n$'s stage acts once on all the pairs together, never on each child's openings separately with the results then averaged across the children.
+where $\beta_0(n', \omega)$ and $\beta(n', \omega)$ are the intercept and the coefficient vector of the cut read from child $n'$'s subproblem under opening $\omega$ at the trial point (§2). The coefficient sum is a vector sum over every component the cut projects onto (§1): the storage and the inflow lags when the projection keeps them, and the in-transit buckets and the commitment-ring slots always. Under a risk measure, the products $P(n \to n')\, p_{n'}(\omega)$ are replaced by the risk-adjusted probabilities of [Risk Measures](/en/math/risk-measures), computed on that same joint law: the risk measure of node $n$'s stage acts once on all the pairs together, never on each child's openings separately with the results then averaged across the children.
 
 On the stage chain every non-leaf node has a single child, reached with probability $1$, so the pairs are the openings $\omega \in \Omega_t$ of stage $t$ and their weights are the uniform $p(\omega)$: the aggregation runs over one stage's openings.
 
 :::note[Opening tree correspondence]
-The per-pair cuts $\beta_0(n', \omega)$, $\beta(n', \omega)$ correspond to the openings of each child: the noise vectors the **fixed opening tree** — a pre-generated set of branchings created once before training begins — holds for the child, or the single externally supplied realization of a child that carries one. The backward pass always evaluates every opening of every child, so the weights are uniform within each child's openings, $p_{n'}(\omega) = 1/|\Omega_{n'}|$, which on the stage chain is $p(\omega) = 1/N_{\text{openings}}$. See [Scenario Generation](/math/scenario-generation).
+The per-pair cuts $\beta_0(n', \omega)$, $\beta(n', \omega)$ correspond to the openings of each child: the noise vectors the **fixed opening tree** — a pre-generated set of branchings created once before training begins — holds for the child, or the single externally supplied realization of a child that carries one. The backward pass always evaluates every opening of every child, so the weights are uniform within each child's openings, $p_{n'}(\omega) = 1/|\Omega_{n'}|$, which on the stage chain is $p(\omega) = 1/N_{\text{openings}}$. See [Scenario Generation](/en/math/scenario-generation).
 :::
 
 The aggregated cut $(\bar{\beta}_0, \bar{\beta})$ is added to node $n$'s cut pool, which on the stage chain is the cut pool of stage $t-1$.
 
 :::note[Discount factor]
-When the problem uses stage-dependent discount rates, discounting is applied to the $\theta$ variable in the stage $t-1$ objective function (i.e., $d_{t-1 \to t} \cdot \theta$), rather than scaling the cut coefficients directly. This is simpler — the cuts remain unmodified and the discount factor appears only in the objective. See [Discount Rate Formulation](/math/discount-rate) for the discounted Bellman equation and how discount factors interact with cut generation.
+When the problem uses stage-dependent discount rates, discounting is applied to the $\theta$ variable in the stage $t-1$ objective function (i.e., $d_{t-1 \to t} \cdot \theta$), rather than scaling the cut coefficients directly. This is simpler — the cuts remain unmodified and the discount factor appears only in the objective. See [Discount Rate Formulation](/en/math/discount-rate) for the discounted Bellman equation and how discount factors interact with cut generation.
 :::
 
 :::note[Multi-cut formulation]
-Novomodelo implements the single-cut formulation above, with one future-cost variable per stage; it implements no multi-cut variant.
+Novomodelo implements the single-cut formulation above, with one future-cost variable per stage; it implements no multi-cut variant, the method of [Birge & Louveaux (1988)](/en/reference/bibliography/#sddp-foundations) that keeps one cut per outcome.
 :::
 
 ## 4. Cut Validity
@@ -106,9 +109,9 @@ Here $\beta_i$ is read as zero on every component the cut projects out, so the c
 **Validity conditions**: The cuts generated by SDDP are valid under:
 
 1. **Convexity of the cost-to-go in the incoming state** — the incoming state enters each stage problem affinely, through the bounds of its pinned columns; [Tier 1](#tier-1-valid-lower-bound) names what breaks it.
-2. **Relatively complete recourse** — feasibility for all states and scenarios. In Novomodelo, this is guaranteed by the recourse slack system (Category 1 penalties): every constraint that could be violated by exogenous uncertainty has a penalty slack variable, ensuring the LP is always feasible. See [Penalty System](/math/penalty-system).
-3. **Correct sensitivity extraction** — the reduced costs used as cut coefficients must come from an optimal LP solution (not an infeasible or unbounded one)
-4. **Cuts span every state component the cost-to-go depends on** — the intercept absorbs the contribution of every component the cut projects out ([State Augmentation §7](/math/state-augmentation#7-cut-state-projection)), at its trial value, so the cut is guaranteed to lie below the cost-to-go only on the slice through the trial point where those components keep their trial values. When the cost-to-go depends on such a component, as it depends on the inflow lags under a PAR model with lag terms, $\underline{z}^k$ is not guaranteed to be a lower bound and the gap is not a certificate.
+2. **Relatively complete recourse** — feasibility for all states and scenarios. In Novomodelo, the recourse slack system (Category 1 penalties) provides it for every case that meets the [complete-recourse precondition](/en/math/penalty-system#complete-recourse-precondition).
+3. **Correct sensitivity extraction** — the reduced costs and row duals that give the cut coefficients must come from an optimal LP solution (not an infeasible or unbounded one)
+4. **Cuts span every state component the cost-to-go depends on** — the intercept absorbs the contribution of every component the cut projects out ([State Augmentation §7](/en/math/state-augmentation#7-cut-state-projection)), at its trial value, so the cut is guaranteed to lie below the cost-to-go only on the slice through the trial point where those components keep their trial values. When the cost-to-go depends on such a component, as it depends on the inflow lags under a PAR model with lag terms, $\underline{z}^k$ is not guaranteed to be a lower bound and the gap is not a certificate.
 
 ### When Bounds and Certificates Hold
 
@@ -122,18 +125,18 @@ Three guarantees attach to the bounds SDDP reports, each under its own hypothese
 
 #### Tier 1: Valid Lower Bound
 
-At every iteration $k$, $\underline{z}^k$ is at most the optimal value of the model as trained, under the nested risk-adjusted objective of [Risk Measures](/math/risk-measures). It rests on these hypotheses:
+At every iteration $k$, $\underline{z}^k$ is at most the optimal value of the model as trained, under the nested risk-adjusted objective of [Risk Measures](/en/math/risk-measures). It rests on these hypotheses:
 
-- **Convexity.** The cost-to-go of every stage is convex in the incoming state: the incoming state enters each stage problem affinely, through the bounds of its pinned columns. The truncation methods of [Inflow Non-Negativity Solution Methods §7](/math/inflow-nonnegativity#7-truncation-and-the-lower-bound) break this in the inflow-lag components under a PAR model with lag terms (an order above zero or an annual component), because the correction they apply, the truncation amount $\max(0, -a_h)$ of the raw realization $a_h$, is a non-affine function of the realization and so of the trial point's lags; keeping the lag components in the cut does not restore it. Each cut lies below the stage problem with the correction frozen at its own trial point, but away from that point it can lie above the cost-to-go, and the lower bound can exceed the upper bound. Without a non-negativity method, or with the penalty method, the inflow stays affine in the lags.
-- **Relatively complete recourse.** Every stage problem is feasible for every incoming state and realization, which the penalty slacks of [Penalty System](/math/penalty-system) provide.
+- **Convexity.** The cost-to-go of every stage is convex in the incoming state: the incoming state enters each stage problem affinely, through the bounds of its pinned columns and, for the inflow lags, the right-hand sides of the rows that read the realized inflow and of the cut rows. The truncation methods of [Inflow Non-Negativity Solution Methods §7](/en/math/inflow-nonnegativity#7-truncation-and-the-lower-bound) break this in the inflow-lag components under a PAR model with lag terms (an order above zero or an annual component), because the correction they apply, the truncation amount $\max(0, -a_h)$ of the raw realization $a_h$, is a non-affine function of the realization and so of the trial point's lags; keeping the lag components in the cut does not restore it. Each cut lies below the stage problem with the correction frozen at its own trial point, but away from that point it can lie above the cost-to-go, and the lower bound can exceed the upper bound. Without a non-negativity method, or with the penalty method, the inflow stays affine in the lags.
+- **Relatively complete recourse.** Every stage problem is feasible for every incoming state and realization, which the penalty slacks of [Penalty System](/en/math/penalty-system) provide under its [complete-recourse precondition](/en/math/penalty-system#complete-recourse-precondition).
 - **Exact cuts.** Every cut is exact at its trial point and below the risk-adjusted cost-to-go everywhere: the backward pass solves the stage problem of every successor–opening pair to optimality and combines their cuts with probabilities from the risk set of the stage's coherent risk measure that attain that measure at the trial point.
-- **Full state span.** The cuts span every state component the cost-to-go depends on. When a component the cost-to-go depends on is projected out of the cut ([State Augmentation §7](/math/state-augmentation#7-cut-state-projection)), the cut is guaranteed to lie below the cost-to-go only where that component equals its trial value.
+- **Full state span.** The cuts span every state component the cost-to-go depends on. When a component the cost-to-go depends on is projected out of the cut ([State Augmentation §7](/en/math/state-augmentation#7-cut-state-projection)), the cut is guaranteed to lie below the cost-to-go only where that component equals its trial value. In a study whose lag periods span several stages, the cost-to-go inside an open period also depends on the period's partial sum, which is not a state component, so the cuts are guaranteed to lie below it only where that partial sum is the same on every path ([Multi-Resolution Studies §2.1](/en/math/multi-resolution-studies#21-the-lags-the-cuts-read)).
 - **Non-negative cost-to-go.** The cost-to-go of every stage is non-negative. The future-cost variable $\theta$ is bounded below by zero, so the approximation lies below the cost-to-go only where that cost-to-go is non-negative.
-- **Fixed terminal function.** The terminal function is fixed for the whole run: zero, or an imported terminal boundary ([Post-Study Boundary & Chained Studies](/math/post-study-boundary)).
+- **Fixed terminal function.** The terminal function is fixed for the whole run: zero, or an imported terminal boundary ([Post-Study Boundary & Chained Studies](/en/math/post-study-boundary)).
 
 #### Tier 2: Convergence
 
-Under an expectation measure at every stage, $\underline{z}^k$ converges to the optimal value of the model as trained with probability 1. It requires the hypotheses below; [§9](#9-convergence-guarantee) states the theorem, which is proved for that case. Under a risk-averse measure at any stage, Tier 1 still bounds the optimal value from below, but the cited theorem does not establish the convergence of $\underline{z}^k$.
+Under an expectation measure at every stage, $\underline{z}^k$ converges to the optimal value of the model as trained with probability 1. It requires the hypotheses below; [§9](#9-convergence-guarantee) states the theorem, which is proved for that case. Under a risk-averse measure at any stage, Tier 1 still bounds the optimal value from below, but the cited theorem does not establish the convergence of $\underline{z}^k$. The convergence of risk-averse SDDP without cut selection is proved under the hypotheses of [Guigues & Römisch (2012)](/en/reference/bibliography/#cut-management-and-convergence), [Philpott, de Matos & Finardi (2013)](/en/reference/bibliography/#risk-measures) and [Guigues (2016)](/en/reference/bibliography/#cut-management-and-convergence); this page states no convergence result for the risk-averse case.
 
 - Tier 1 holds, and every node has finitely many openings.
 - The forward pass either draws the backward pass's own scenario paths, each with positive probability, or enumerates them. A forward pass that draws from another distribution, such as out-of-sample noise, historical records or external scenarios, is outside the theorem's hypotheses.
@@ -147,13 +150,13 @@ Three features of cut selection on this page leave the last hypothesis:
 
 #### Tier 3: Gap Certificate
 
-$\bar{z}^k - \underline{z}^k$ bounds from above the optimality gap of the policy, the difference between the policy's risk-adjusted cost and the optimal value. It requires Tier 1 and an exact upper bound on the same tree under the same measure: an enumerated forward pass, which evaluates the policy on every path of the tree the backward pass uses, and a measure uniform across stages, either expectation at every stage or one CVaR measure, with the same risk-aversion weight and tail fraction, at every stage; a stage whose risk-aversion weight is zero is the expectation whatever its tail fraction. A sampled, out-of-sample, historical or external estimate is not a certificate: it carries sampling error or evaluates another distribution, and it can fall below $\underline{z}^k$. See [Optimality gap](/math/stopping-rules#optimality-gap) for the gap and [Upper Bound Evaluation](/math/upper-bound-evaluation) for the exact bound.
+$\bar{z}^k - \underline{z}^k$ bounds from above the optimality gap of the policy, the difference between the policy's risk-adjusted cost and the optimal value. It requires Tier 1 and an exact upper bound on the same tree under the same measure: an enumerated forward pass, which evaluates the policy on every path of the tree the backward pass uses, and a measure uniform across stages, either expectation at every stage or one CVaR measure, with the same risk-aversion weight and tail fraction, at every stage; a stage whose risk-aversion weight is zero is the expectation whatever its tail fraction. A sampled, out-of-sample, historical or external estimate is not a certificate: it carries sampling error or evaluates another distribution, and it can fall below $\underline{z}^k$. See [Optimality gap](/en/math/stopping-rules#optimality-gap) for the gap and [Upper Bound Evaluation](/en/math/upper-bound-evaluation) for the exact bound.
 
 ## 5. Cut Growth and Selection Motivation
 
 The number of cuts grows as $\mathcal{O}(\text{iterations} \times N_{\text{forward\_passes}})$. Many older cuts become redundant as newer, tighter cuts are generated. Without selection, the number of cut rows the LP carries grows linearly with iteration count.
 
-**Append-only pool with stable slots**: Cuts are never deleted. Every cut ever generated is retained for the lifetime of the run at a **stable, deterministic slot index** — the slot is a fixed function of the iteration and forward-pass index, which is what makes the cut order reproducible across runs and rank counts (see [Determinism & Provenance](/math/determinism-guarantees)). The pool is never compacted.
+**Append-only pool with stable slots**: Cuts are never deleted. Every cut ever generated is retained for the lifetime of the run at a **stable, deterministic slot index** — the slot is a fixed function of the iteration and forward-pass index, which is what makes the cut order reproducible across runs and rank counts (see [Determinism & Provenance](/en/math/determinism-guarantees)). The pool is never compacted.
 
 **Deactivation mechanism** (Level 1 selection and the active-cut cap): deactivation is a pool activity flag on a stable slot — it mutates no LP row or bound. A deactivated cut keeps its slot but is excluded from the per-iteration template rebake, so only active cuts are encoded as LP rows on each forward/backward solve. The persistent lower-bound LP is **append-only**: its cut rows are never removed (so the lower bound stays monotone), and each row keeps constraining once appended. Because the slot index is preserved, **reactivation is exact**: a cut that selection later restores is re-baked into the template at the same slot, with the coefficients it was generated with.
 
@@ -175,13 +178,13 @@ $$
 \text{owner}(\hat{x}) = \min \left\{ i \in \mathcal{L} : \beta_{0,i} + \beta_i^\top \hat{x} = V^*(\hat{x}) \right\}
 $$
 
-A cut at the per-state maximum is the one the future-cost variable $\theta$ rests on at $\hat{x}$, so a cut that owns a state is the value-evaluation counterpart of a binding cut there. Because slot order follows generation order, the lowest slot is the oldest of the tied cuts.
+A cut at the per-state maximum is the one the future-cost variable $\theta$ rests on at $\hat{x}$, so a cut that owns a state is the value-evaluation counterpart of a binding cut there. Because slot order follows generation order, the lowest slot is the oldest of the tied cuts: keeping only the oldest of the tied cuts is the Limited-Memory Level 1 (LML1) rule of [Guigues (2017)](/en/reference/bibliography/#cut-management-and-convergence).
 
 Binding at an LP solution is a different quantity: a cut row **binds** in a solve when its dual multiplier exceeds a threshold (§10). That record is read only by the active-cut cap (§5) and by the seed window of the dynamic method (§8.1); it plays no part in ownership.
 
 ## 7. Level 1 Selection
 
-Level 1 selection follows Level 1 of [de Matos, Philpott & Finardi (2015)](/reference/bibliography/#cut-management-and-convergence): each stored trial state has one owner (§6), and a selection run keeps the cuts that own a state. It scores the pool of every node strictly between the first stage and the last; the first stage's pool and the shared terminal pool are never selected.
+Level 1 selection follows Level 1 of [de Matos, Philpott & Finardi (2015)](/en/reference/bibliography/#cut-management-and-convergence), with the tie rule of Limited-Memory Level 1 ([Guigues, 2017](/en/reference/bibliography/#cut-management-and-convergence)): each stored trial state has one owner (§6), and a selection run keeps the cuts that own a state. It scores the pool of every node strictly between the first stage and the last; the first stage's pool and the shared terminal pool are never selected.
 
 **The rule.** Every $n_{\text{sel}}$ iterations, after the backward pass:
 
@@ -190,7 +193,7 @@ Level 1 selection follows Level 1 of [de Matos, Philpott & Finardi (2015)](/refe
 - A cut of the current iteration is judged like any other: there is no exemption.
 - A loaded cut with no stored trial state keeps the activity it was loaded with; while active it competes for ownership and can keep a tied cut at a higher slot inactive.
 
-No cut value is compared against a tolerance, so the active set after a pass is a function of the stored states and the cut coefficients alone. The pass is bit-deterministic regardless of thread count and rank count (see [Determinism & Provenance](/math/determinism-guarantees)).
+No cut value is compared against a tolerance, so the active set after a pass is a function of the stored states and the cut coefficients alone. The pass is bit-deterministic regardless of thread count and rank count (see [Determinism & Provenance](/en/math/determinism-guarantees)).
 
 **Stored states and the window.** Every cut the run generates in a selected pool is scored: the pool stores the trial state the cut was computed at. A loaded cut is scored when the policy it comes from records it so, and it then competes at the stored states, its own stored state included when the policy holds one. By default a run keeps the trial states of the whole run, so the memory they take grows with the cut count. With a window of $w$ iterations, a selection run of iteration $k$ keeps only the trial states of the cuts generated after iteration $k - w$ and drops the older ones; a state loaded with a cut from another run counts as one from before the run's first iteration. The window is at least $n_{\text{sel}}$, so every state is scored at least once before it can be dropped. A window drops states, never cuts: a cut whose state was dropped stays scored and still competes at the states that remain.
 
@@ -200,13 +203,13 @@ No cut value is compared against a tolerance, so the active set after a pass is 
 
 1. The first stage's pool is never selected.
 2. Selection runs every $n_{\text{sel}}$ iterations, not each time a cut is added.
-3. The paper names no rule for an exact tie; the lowest slot is Novomodelo's choice.
+3. The paper names no rule for an exact tie; the lowest slot, the oldest of the tied cuts, is the rule of LML1 ([Guigues, 2017](/en/reference/bibliography/#cut-management-and-convergence)).
 
 **Cost**: $\mathcal{O}(|\text{new cuts}| \times |\text{stored states}| + |\text{cuts}| \times |\text{new states}|)$ multiply-adds per pool and pass: the ownership record is updated incrementally, evaluating the cuts and states written since the previous pass against the others as a blocked matrix product.
 
 ## 8. The Dynamic Method
 
-The dynamic method is Novomodelo's own lazy row generation; it is not the Dynamic Cut Selection of [de Matos, Philpott & Finardi (2015)](/reference/bibliography/#cut-management-and-convergence). It is **mutually exclusive** with Level 1 selection, and it is **inadmissible under an enumerated forward pass**: the pairing is rejected at study setup with a named validation error, whose reason the Implementation notes tab under [Implementation in Novomodelo](#implementation-in-novomodelo) gives. It never deactivates cuts from the pool — it keeps the pool entirely append-only and controls only **which cuts are resident in each stage LP** at solve time.
+The dynamic method is Novomodelo's own lazy row generation; it is not the Dynamic Cut Selection of [de Matos, Philpott & Finardi (2015)](/en/reference/bibliography/#cut-management-and-convergence). It is **mutually exclusive** with Level 1 selection, and it is **inadmissible under an enumerated forward pass**: the pairing is rejected at study setup with a named validation error, whose reason the Implementation notes tab under [Implementation in Novomodelo](#implementation-in-novomodelo) gives. It never deactivates cuts from the pool — it keeps the pool entirely append-only and controls only **which cuts are resident in each stage LP** at solve time.
 
 **Motivation**: when a stage's pool is large, solving each stage LP with every active cut dominates the run time. The dynamic method keeps the whole pool and solves each LP with a small **resident subset** of it, grown until no candidate cut is violated at the solution, so a solve returns the optimum over its candidates up to the violation tolerance; when every active cut is a candidate (§8.2), that is the optimum with every active cut. It pairs only with a sampled forward pass, as the setup check above enforces.
 
@@ -216,12 +219,12 @@ From the iteration at which the lazy loop starts, each training solve for one (s
 
 1. **Seed the resident set** with the active cuts whose last binding was at most $k_2$ iterations ago (the _seed window_; a cut that has not yet bound counts from the iteration that generated it), plus every cut generated in the current iteration. The seed is derived only from synchronized per-slot pool metadata, the iteration each cut last bound and the iteration it was generated, never from a per-worker solve trace. This makes the seed bit-identical across thread and MPI-rank counts.
 
-2. **Solve** the stage LP with the current resident set. Let $x^*$ be the optimal state vector and $\theta^*$ the optimal future-cost value.
+2. **Solve** the stage LP with the current resident set. Let $x^*$ be the optimal values of the outgoing-state columns and $\theta^*$ the optimal future-cost value.
 
-3. **Score the omitted (non-resident) candidate cuts.** Cut coefficients are stored in raw (unscaled) space while the LP solves in scaled space, so both $\theta^*$ and each state column must first be unscaled: each scaled value $x_{\text{scaled}}$ is multiplied by its column scaling factor, the $d^{col}$ of §2, to give $x_{\text{raw}}$. For candidate cut $i$ with intercept $\beta_{0,i}$ and slope $\beta_i$, the future-cost floor it would impose at $x^*$ is
+3. **Score the omitted (non-resident) candidate cuts.** Cut coefficients are stored in raw (unscaled) space while the LP solves in scaled space, so both $\theta^*$ and each state column must first be unscaled: each scaled value $x_{\text{scaled}}$ is multiplied by its column scaling factor, the $d^{col}$ of §2, to give $x_{\text{raw}}$. For candidate cut $i$ with right-hand side $R_i$, which carries its intercept and its inflow-lag terms ([PAR(p) Folding §3](/en/math/par-folding#3-the-cut-right-hand-side)), and coefficients $\beta_i$ on the outgoing-state columns, the future-cost floor it would impose at $x^*$ is
 
    $$
-   f_i = \beta_{0,i} + \beta_i^\top x^*_{\text{raw}}
+   f_i = R_i + \beta_i^\top x^*_{\text{raw}}
    $$
 
    The candidate is **violated** iff
@@ -230,7 +233,7 @@ From the iteration at which the lazy loop starts, each training solve for one (s
    f_i - \theta^*_{\text{raw}} > \varepsilon_{\text{viol}} \cdot \max\left(\lvert \theta^*_{\text{raw}} \rvert, \lvert f_i \rvert\right)
    $$
 
-   (strict), with $\varepsilon_{\text{viol}} \in (0, 1)$ a **relative** tolerance. This follows from the cut-row convention $-\beta^\top x + \theta \ge \beta_0$.
+   (strict), with $\varepsilon_{\text{viol}} \in (0, 1)$ a **relative** tolerance. This follows from the cut-row convention $\theta - \beta^\top x \ge R_i$.
 
 4. **Add the top $n_{\text{adic}}$** most-violated candidates (sorted by $f_i - \theta^*_{\text{raw}}$ descending, ties broken by ascending slot id). Re-solve, from the retained basis when the phase warm-starts (§8.4), and return to step 2.
 
@@ -248,7 +251,7 @@ Rounds that add at most $n_{\text{adic}}$ cuts each run up to a fixed round coun
 
 The loop runs in the **backward pass** and the **forward pass** of training, and in both it runs to the stop of §8.1 step 5 — no earlier stop — to avoid trajectory drift: an earlier stop in the forward pass would shift the states the backward pass visits, producing policy drift. A simulation solve seeds the resident set with every active cut, so the windows $k_1$ and $k_2$ apply to training only.
 
-In a phase that warm-starts, each inner re-solve adds only a few rows and restarts from the basis the previous solve left, so the bounded loop stays cheap; in a phase that starts cold, every inner re-solve starts cold as well ([LP Warm-Start](/math/lp-warm-start)). The stored basis of [LP Warm-Start](/math/lp-warm-start) is not applied to a solve of the dynamic method: the first solve of each stage LP starts without a stored basis, and in a warm-starting backward pass the later openings of a trial point re-solve warm from the LP the previous opening left.
+In a phase that warm-starts, each inner re-solve adds only a few rows and restarts from the basis the previous solve left, so the bounded loop stays cheap; in a phase that starts cold, every inner re-solve starts cold as well ([LP Warm-Start](/en/math/lp-warm-start)). The stored basis of [LP Warm-Start](/en/math/lp-warm-start) is not applied to a solve of the dynamic method: the first solve of each stage LP starts without a stored basis, and in a warm-starting backward pass the later openings of a trial point re-solve warm from the LP the previous opening left.
 
 ### 8.5 Zero seed window
 
@@ -263,15 +266,15 @@ The resident-set selection is bit-identical across thread and MPI-rank counts:
 - Candidate scoring uses a bit-deterministic batched matrix product.
 - The violation sort uses a total ordering with an ascending-slot tie-break, making the top-$n_{\text{adic}}$ selection stable.
 
-See [Determinism & Provenance](/math/determinism-guarantees).
+See [Determinism & Provenance](/en/math/determinism-guarantees).
 
 ## 9. Convergence Guarantee
 
-**Theorem** ([Bandarra & Guigues, 2021](/reference/bibliography/#cut-management-and-convergence)): For an expectation objective at every stage, SDDP with finitely many scenarios and Level 1 or Limited-Memory Level 1 cut selection, applied at every iteration and evaluated over every trial point, reaches an optimal first-stage solution after finitely many iterations with probability 1.
+**Theorem** ([Bandarra & Guigues, 2021](/en/reference/bibliography/#cut-management-and-convergence)): For an expectation objective at every stage, SDDP with finitely many scenarios and Level 1 or Limited-Memory Level 1 cut selection, applied at every iteration and evaluated over every trial point, reaches an optimal first-stage solution after finitely many iterations with probability 1.
 
 **Key insight**: Removing cuts that are never at the maximum at any trial point does not change the outer approximation at those points, and the convergence argument uses the approximation only there. With finitely many scenarios, only finitely many distinct cuts and trial points can arise, each read from a basic solution of a stage problem, so the argument needs no density of the trial points: convergence is reached after finitely many iterations.
 
-**Level 1 selection as Novomodelo runs it** departs from the rule the theorem covers: it runs every $n_{\text{sel}}$ iterations, leaves the first stage's pool unselected, resolves an exact tie by the lowest slot, and, with a window, scores only the trial states inside it (§7). No convergence result is claimed for it, and de Matos, Philpott & Finardi (2015) state none for their Level 1.
+**Level 1 selection as Novomodelo runs it** resolves an exact tie as LML1 does, keeping the oldest of the tied cuts (§6), and departs from the rule the theorem covers in three ways: it runs every $n_{\text{sel}}$ iterations, leaves the first stage's pool unselected, and, with a window, scores only the trial states inside it (§7). No convergence result is claimed for it, and de Matos, Philpott & Finardi (2015) state none for their Level 1.
 
 **The dynamic method and exactness**: a solve of the dynamic method returns, at §8.1 step 5, the optimum over its candidates up to the relative violation tolerance. With $k_1 = \infty$ the candidates are every active cut, and since the method deactivates no cut, the active cuts are the pool, bar loaded cuts that a source run left inactive. A finite $k_1$ sacrifices this.
 
@@ -279,7 +282,7 @@ See [Determinism & Provenance](/math/determinism-guarantees).
 
 ## 10. Selection Parameters
 
-The table maps each key of the `training.cut_selection` object to its symbol on this page, where it has one, and to the methods that read it; [`training.cut_selection`](/running/configuration/#trainingcut_selection) gives each key's type, default and constraints.
+The table maps each key of the `training.cut_selection` object to its symbol on this page, where it has one, and to the methods that read it; [`training.cut_selection`](/en/running/configuration/#trainingcut_selection) gives each key's type, default and constraints.
 
 | Math symbol                 | Config key                        | Applies to                         |
 | --------------------------- | --------------------------------- | ---------------------------------- |
@@ -330,17 +333,17 @@ active rows generated by the run:
 }
 ```
 
-[`training.cut_selection`](/running/configuration/#trainingcut_selection) lists
+[`training.cut_selection`](/en/running/configuration/#trainingcut_selection) lists
 every field, default and method parameter, and the pairings refused at load;
-[Cut Management Pipeline](/running/performance/#cut-management-pipeline)
+[Cut Management Pipeline](/en/running/performance/#cut-management-pipeline)
 describes the budget pass. Which rows the post-training simulation loads is a
-separate key, [`simulation.cut_set`](/running/configuration/#simulation).
+separate key, [`simulation.cut_set`](/en/running/configuration/#simulation).
 
 ### `stages[].state_variables` — Cut Projection
 
 Each study stage selects which incoming-state dimensions its cuts project onto —
 the cut-state projection of
-[State Augmentation §7](/math/state-augmentation#7-cut-state-projection).
+[State Augmentation §7](/en/math/state-augmentation#7-cut-state-projection).
 
 | Field         | Type    | Default | Description |
 | ------------- | ------- | ------- | ----------- |
@@ -358,10 +361,10 @@ have no field.
 A study that supplies AR coefficients of order above zero
 (`scenarios/inflow_ar_coefficients.parquet`) but has `inflow_lags` set to
 `false` on every study stage, explicitly or by default, draws a
-[`ModelQuality`](/reference/error-codes/#modelquality) validation warning that
+[`ModelQuality`](/en/reference/error-codes/#modelquality) validation warning that
 does not block the run; a PAR model estimated from the inflow history never
 draws it, because the check runs on the supplied table before estimation. With
-the lags projected out, the lag columns are still pinned for the AR dynamics,
+the lags projected out, the lags still give the realized inflow,
 but no cut generated in training carries their coefficients (cuts imported from
 a boundary policy can).
 
@@ -373,18 +376,16 @@ stage:
 ```
 
 The full `stages[]` entry is listed under
-[`stages.json`](/reference/case-format/stages/#stagesjson).
+[`stages.json`](/en/reference/case-format/stages/#stagesjson).
 
 **Inputs & Outputs**
 
 This is a topic-scoped index of the files cut management touches. Cuts have
 no case-directory input file of their own — the only configuration surface is
-`training.cut_selection` in `config.json` (see [its configuration entry](/running/configuration/#trainingcut_selection)). The topic's
+`training.cut_selection` in `config.json` (see [its configuration entry](/en/running/configuration/#trainingcut_selection)). The topic's
 I/O surface is the **policy checkpoint**: the FlatBuffers `.bin` files that
 persist the cut pool between runs. This tab names that surface and its role;
-it does not repeat the field-by-field record layout, which is owned by the
-Reference corpus ([Case Format](/reference/case-format/)
-and [Output Format](/reference/output/) pages).
+it does not repeat the field-by-field record layout, which is owned by the [Case Format](/en/reference/case-format/) and [Output Format](/en/reference/output/) pages.
 
 ### Inputs
 
@@ -399,10 +400,10 @@ There is no case-directory input file for cuts. Two input paths re-read a
   the checkpoint holds them, the stored trial states (`policy/states/NNN.bin`).
   The load
   applies the
-  [Policy Load Contract](/running/policy-management/#policy-load-contract),
+  [Policy Load Contract](/en/running/policy-management/#policy-load-contract),
   which requires the running novomodelo version to have written the checkpoint
-  ([version gate](/running/policy-management/#version-gate)) and leaves out any stored basis that does not fit its stage LP
-  ([stored-basis gate](/running/policy-management/#stored-basis-gate)).
+  ([version gate](/en/running/policy-management/#version-gate)) and leaves out any stored basis that does not fit its stage LP
+  ([stored-basis gate](/en/running/policy-management/#stored-basis-gate)).
   See Implementation notes for how a warm-started cut is tracked once it is back
   in the pool.
 - **Boundary source** — when `policy.boundary.path` is set, Novomodelo loads a
@@ -411,25 +412,24 @@ There is no case-directory input file for cuts. Two input paths re-read a
   terminal boundary date and reconciled onto the current state — lenient by
   default (surplus source slots dropped and reported), strict-rejectable. The
   boundary checkpoint must also come from the running novomodelo version
-  ([Compatibility requirements](/running/policy-management/#compatibility-requirements)
+  ([Compatibility requirements](/en/running/policy-management/#compatibility-requirements)
   lists the check order).
-  See [Post-Study Boundary & Chained Studies](/math/post-study-boundary) and
-  [Policy Management — Boundary Cuts](/running/policy-management/#boundary-cuts).
+  See [Post-Study Boundary & Chained Studies](/en/math/post-study-boundary) and
+  [Policy Management — Boundary Cuts](/en/running/policy-management/#boundary-cuts).
 
 ### Outputs
 
 | File                          | Role |
 | ----------------------------- | ---- |
-| `policy/cuts/NNN.bin`   | One FlatBuffers binary per **pool** (`NNN` is the pool id — on a plain stage chain the 0-based stage position, which is not the declared stage id; on a branching graph the pool id differs from the stage position), root table `StageCuts`: every cut's slot, intercept, coefficient vector, active flag, whether its trial state was stored, and its binding counters, with the pool's cost-scale factor. The coefficient vector is a bare `float64[]`; each position maps to a state variable via the per-slot entity manifest embedded in the same file (see the [Output Format](/reference/output/) reference). Written every training run and re-read on the next warm-start, resume, or simulation-only run (see Inputs above). |
-| `policy/basis/NNN.bin`  | One per node (`NNN` is the node position), root table `StageBasis`: one stored LP basis per forward-pass scenario, each with its column and row statuses and the pool slot of every cut row it holds. Re-read on the next warm-start, resume, or simulation-only run, behind the [stored-basis gate](/running/policy-management/#stored-basis-gate). |
-| `policy/states/NNN.bin` | One per pool that stores trial states (`NNN` is the pool id), keyed by the slot of the cut written at each state. Written when the run selects with `level1` or sets [`exports.states`](/running/configuration/#exports); read on resume and warm start. |
+| `policy/cuts/NNN.bin`   | One FlatBuffers binary per **pool** (`NNN` is the pool id — on a plain stage chain the 0-based stage position, which is not the declared stage id; on a branching graph the pool id differs from the stage position), root table `StageCuts`: every cut's slot, intercept, coefficient vector, active flag, whether its trial state was stored, and its binding counters, with the pool's cost-scale factor. The coefficient vector is a bare `float64[]`; each position maps to a state variable via the per-slot entity manifest embedded in the same file (see the [Output Format](/en/reference/output/) reference). Written every training run and re-read on the next warm-start, resume, or simulation-only run (see Inputs above). |
+| `policy/basis/NNN.bin`  | One per node (`NNN` is the node position), root table `StageBasis`: one stored LP basis per forward-pass scenario, each with its column and row statuses and the pool slot of every cut row it holds. Re-read on the next warm-start, resume, or simulation-only run, behind the [stored-basis gate](/en/running/policy-management/#stored-basis-gate). |
+| `policy/states/NNN.bin` | One per pool that stores trial states (`NNN` is the pool id), keyed by the slot of the cut written at each state. Written when the run selects with `level1` or sets [`exports.states`](/en/running/configuration/#exports); read on resume and warm start. |
 
 For the complete field-by-field record layout (`AffinePiece`, `StageCuts`, `StageBasis`, `StageStates`) and the
 checkpoint-wide `policy/manifest.bin` summary, see the
-[Output Format](/reference/output/) reference page in the Reference
-corpus. For the schema file itself and per-language `flatc` codegen
+[Output Format](/en/reference/output/) reference page. For the schema file itself and per-language `flatc` codegen
 recipes (Python, C++, TypeScript, …) to read a checkpoint outside Novomodelo, see
-the [FlatBuffers Policy Schema](/reference/flatbuffers-schema/) reference page.
+the [FlatBuffers Policy Schema](/en/reference/flatbuffers-schema/) reference page.
 
 **Implementation notes**
 
@@ -439,25 +439,31 @@ for the derivations rather than restating them.
 
 ### Reduced-cost unscaling divides by the column scale
 
-Methodology §2 derives each cut coefficient from the reduced cost of a pinned
-incoming-state column, unscaled by that column's prescaler factor. In code
-terms the unscaling step is a **division**:
+Methodology §2 derives each storage, bucket and ring-slot cut coefficient from
+the reduced cost of a pinned incoming-state column, unscaled by that column's
+prescaler factor. In code terms the unscaling step is a **division**:
 `coefficient = reduced_cost / col_scale[col]` (empty `col_scale` ⇒ the raw
 reduced cost, unscaled).
+
+The inflow-lag coefficients have no column. The chain rule
+([PAR(p) Folding §4](/en/math/par-folding#4-the-inflow-lag-coefficients-by-the-chain-rule))
+reads the dual of each row that reads the realized inflow unscaled by a
+**multiplication**, `dual_raw = row_scale[row] * dual` (empty `row_scale` ⇒ the
+raw dual), so the lag coefficients it forms need no further unscaling.
 
 ### Storage-only cut projection
 
 With the inflow lags projected out of the cuts on a stage under a PAR model
 with lag terms, $\underline{z}^k$ is not guaranteed to be a lower bound on the optimal
 value of the model as trained, and the gap is not a certificate
-([condition 4](/math/cut-management#4-cut-validity)). Projecting the cuts onto
+([condition 4](/en/math/cut-management#4-cut-validity)). Projecting the cuts onto
 the inflow lags as well, with storage kept, on every stage satisfies
 condition 4; the remaining hypotheses are those of
-[Tier 1](/math/cut-management#tier-1-valid-lower-bound). The projection is
+[Tier 1](/en/math/cut-management#tier-1-valid-lower-bound). The projection is
 chosen per stage: the key and its default are in
 [`stages[].state_variables`](#stagesstate_variables--cut-projection) of the
 Configure tab, and the components each selection projects onto are in
-[State Augmentation §7](/math/state-augmentation#7-cut-state-projection).
+[State Augmentation §7](/en/math/state-augmentation#7-cut-state-projection).
 
 ### Checkpoints store cuts in the writing study's scaled units
 
@@ -470,7 +476,7 @@ included, reproduces the pool exactly. At another factor every value becomes
 the `col_scale` reduced-cost unscaling above: `col_scale` is a per-column LP
 prescaler applied inside a single solve, while the cost-scale factor is the
 global objective scaling of a study. See [Policy Management — Cost-Scale
-Canonicalization](/running/policy-management/#cost-scale-canonicalization)
+Canonicalization](/en/running/policy-management/#cost-scale-canonicalization)
 for the load-time rule.
 
 ### Append-only pool, deterministic slots
@@ -527,7 +533,7 @@ between the root and the terminal pool:
    the active cuts, so an evicted cut would never be a candidate again, and
    with an enumerated forward pass, whose backward records no binding, so
    eviction would follow generation order alone.
-   [Stage 2: Budget Enforcement](/running/performance/#stage-2-budget-enforcement)
+   [Stage 2: Budget Enforcement](/en/running/performance/#stage-2-budget-enforcement)
    gives the eviction order.
 
 ### The dynamic method is lazy, not a deactivation pass
@@ -541,7 +547,7 @@ is lifted and every violated candidate is added in each round until none is
 left, so a solve always returns the optimum over the candidates up to the
 violation tolerance and needs no closing solve. Each solve that reaches the 50th
 round with a candidate still violated is counted in the `lazy_round_cap_hits`
-column of [`training/convergence.parquet`](/reference/output/training/#trainingconvergenceparquet).
+column of [`training/convergence.parquet`](/en/reference/output/training/#trainingconvergenceparquet).
 The simulation seeds every active cut, so its lazy solve adds none.
 
 The dynamic method is refused at setup under an enumerated forward pass
@@ -558,16 +564,17 @@ windowed as they were in it.
 
 ## Cross-References
 
-- [LP Formulation](/math/lp-formulation) — Benders cut constraints in the LP
-- [State Augmentation](/math/state-augmentation) — Column-bound state pinning whose reduced costs give cut coefficients; cut-state projection onto the state components each stage selects
-- [LP Warm-Start](/math/lp-warm-start) — Stored-basis warm-start of stage solves; a solve of the dynamic method does not apply it (§8.4)
-- [PAR(p) Inflow Model](/math/par-inflow-model) — AR lag state variables that appear in cut coefficients
-- [SDDP Algorithm](/math/sddp-algorithm) — Forward/backward pass structure that drives cut generation
-- [Scenario Generation](/math/scenario-generation) — Fixed opening tree that defines backward pass branchings; sampling scheme abstraction
-- [Penalty System](/math/penalty-system) — Recourse slacks that guarantee relatively complete recourse (cut validity condition)
-- [Stopping Rules](/math/stopping-rules) — Convergence criteria that depend on cut quality
-- [Discount Rate Formulation](/math/discount-rate) — Discount factor scaling in cut aggregation
-- [Risk Measures](/math/risk-measures) — Risk-averse cut generation (CVaR modifies aggregation weights)
-- [Block Formulation Variants](/math/block-formulations) — Block structure that affects how per-block duals contribute to cut coefficients
-- [Determinism & Provenance](/math/determinism-guarantees) — Bit-identical results across thread and MPI-rank counts, including the resident-set seeding of the dynamic method
-- **Running Novomodelo:** [Policy Management](/running/policy-management/) — the software guide for persisting and reloading this cut pool across runs.
+- [LP Formulation](/en/math/lp-formulation) — Benders cut constraints in the LP
+- [State Augmentation](/en/math/state-augmentation) — Column-bound state pinning whose reduced costs give the storage, bucket and ring-slot cut coefficients; cut-state projection onto the state components each stage selects
+- [LP Warm-Start](/en/math/lp-warm-start) — Stored-basis warm-start of stage solves; a solve of the dynamic method does not apply it (§8.4)
+- [PAR(p) Inflow Model](/en/math/par-inflow-model) — AR lag state variables that appear in cut coefficients
+- [PAR(p) Folding](/en/math/par-folding) — the inflow-lag terms on the cut right-hand side and their coefficients by the chain rule
+- [SDDP Algorithm](/en/math/sddp-algorithm) — Forward/backward pass structure that drives cut generation
+- [Scenario Generation](/en/math/scenario-generation) — Fixed opening tree that defines backward pass branchings; sampling scheme abstraction
+- [Penalty System](/en/math/penalty-system) — Recourse slacks and the precondition under which they give relatively complete recourse (cut validity condition)
+- [Stopping Rules](/en/math/stopping-rules) — Convergence criteria that depend on cut quality
+- [Discount Rate Formulation](/en/math/discount-rate) — Discount factor scaling in cut aggregation
+- [Risk Measures](/en/math/risk-measures) — Risk-averse cut generation (CVaR modifies aggregation weights)
+- [Block Formulation Variants](/en/math/block-formulations) — Block structure that affects how per-block duals contribute to cut coefficients
+- [Determinism & Provenance](/en/math/determinism-guarantees) — Bit-identical results across thread and MPI-rank counts, including the resident-set seeding of the dynamic method
+- **Running Novomodelo:** [Policy Management](/en/running/policy-management/) — the software guide for persisting and reloading this cut pool across runs.

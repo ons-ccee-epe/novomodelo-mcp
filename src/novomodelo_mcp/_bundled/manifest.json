@@ -1,13 +1,14 @@
 {
- "docs_versao": "0.20.0",
- "docs_commit": "a51014e43dd3c5fbe56c6c2528dd84f03546087f",
- "gerado_em": "2026-11-04T10:32:01Z",
- "paginas": 68,
- "secoes": 1289,
+ "docs_versao": "0.21.0",
+ "docs_commit": "0a46afe9d4dd8288ed114e1aaf932ded4e0ed4dc",
+ "gerado_em": "2026-11-17T13:20:35Z",
+ "paginas": 86,
+ "secoes": 1398,
  "changelogs": {
   "novomodelo": {
-   "commit": "55a2181eaba612d4f5d84d2731120356713e230d",
+   "commit": "b4197620a9f8c3d76bc6bf1153d98468a8bf1826",
    "versoes": [
+    "0.21.0",
     "0.20.0",
     "0.19.1",
     "0.19.0",
@@ -16,8 +17,9 @@
    ]
   },
   "novomodelo-bridge": {
-   "commit": "832775bdb5f65ffff3ab2938f281d6e90cbea933",
+   "commit": "af9ec9dc83ba80667006c95e4cdc3060cdaaa4e1",
    "versoes": [
+    "0.21.0",
     "0.20.0",
     "0.19.1",
     "0.19.0",

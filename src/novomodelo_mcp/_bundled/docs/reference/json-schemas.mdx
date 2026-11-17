@@ -9,11 +9,11 @@ setting at the appropriate file to get autocompletion, hover documentation,
 and inline error highlighting while authoring case inputs.
 
 For a complete description of each file's fields and validation rules, see
-the [Case Format](/reference/case-format/) reference page.
+the [Case Format](/en/reference/case-format/) reference page.
 
 :::note[`operational_start_date`]
 Every `system/*` entity registry schema requires an `operational_start_date`
-field; [Case Format — Shared entity fields](/reference/case-format/#shared-entity-fields)
+field; [Case Format — Shared entity fields](/en/reference/case-format/#shared-entity-fields)
 states its format and its role in the canonical entity order.
 :::
 
@@ -98,12 +98,12 @@ file pattern.
 These schemas are generated in the `novomodelo` repository from the `novomodelo-io`
 Rust types — the Rust types are the ground truth, and the schema files are
 their generated output, licensed Apache-2.0. This site vendors the copy
-generated at novomodelo `v0.20.0` under `public/schemas/` so the files
+generated at novomodelo `v0.21.0` under `public/schemas/` so the files
 have a stable URL to serve from and to link to.
 
 Do not hand-edit any vendored schema file. When `novomodelo` regenerates the
 schemas (after a change to a `novomodelo-io` input type), re-vendor the committed
-copy here with (the command reads the `v0.20.0` tag by default; `-- --ref <tag>`
+copy here with (the command reads the `v0.21.0` tag by default; `-- --ref <tag>`
 selects another):
 
 ```bash

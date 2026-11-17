@@ -9,20 +9,10 @@ só do MCP vira `X.Y.Z.postN`.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-17
+
 ### Changed
 
-- **Para quem atualiza da 0.20:** `uv tool upgrade novomodelo-mcp` e fechar e abrir o
-  cliente. O agente lê os nomes novos do servidor a cada conversa, e a lista de tools de
-  leitura que o `configurar` libera no cliente é a mesma: nenhuma delas muda de nome.
-  Precisa agir só quem:
-  - liberou à mão `incluir_pastas` ou `instalar_novomodelo` no cliente: troque pelos
-    nomes novos;
-  - tem script, integração ou instruções próprias que chamam as tools ou leem as
-    respostas pelos nomes antigos: veja as tabelas abaixo;
-  - quer a citação como `page#section` na linha que o `configurar --instrucoes` gravou no
-    `~/.claude/CLAUDE.md`: apague a linha marcada com `<!-- novomodelo-mcp -->` e rode o
-    `configurar --instrucoes` de novo. A linha antiga continua funcionando. No Kiro, o
-    `configurar --instrucoes` regrava o arquivo inteiro.
 - **BREAKING:** as chaves que o próprio MCP escreve nas respostas passam a ser em inglês.
   O texto para pessoas (mensagens, `diagnostics`, avisos, docstrings) continua em
   português. Não mudam as chaves repassadas das CLIs e do `novomodelo-python`, as do
@@ -59,7 +49,6 @@ só do MCP vira `X.Y.Z.postN`.
   | `docs_list`                                  | `itens` [{`pagina`, `titulo`, `descricao`}]                                                                                              | `items` [{`page`, `title`, `description`}]                                                                                                        |
   | `docs_read`                                  | `secao`, `titulo`; sem `page`, `aviso`; seção inexistente, `secoes` [{`titulo`, `ancora`}]                                               | `section`, `title`; `note`; `sections` [{`title`, `anchor`}]                                                                                      |
   | `docs_search`                                | `consulta_usada`, `termos_do_glossario`, `resultados` [{`pagina`, `secao`, `titulo`, `trecho`}]                                          | `query_used`, `glossary_terms`, `results` [{`page`, `section`, `title`, `snippet`}]                                                               |
-
 - **BREAKING:** as tools `incluir_pastas` e `instalar_novomodelo` passam a se chamar
   `include_folders` e `install_novomodelo`, e os parâmetros em português passam ao
   inglês. Uma lista de liberação do cliente feita à mão com os nomes antigos precisa ser
@@ -79,28 +68,34 @@ só do MCP vira `X.Y.Z.postN`.
   | `docs_search`                                | `consulta`                               | `query`                  |
   | `docs_read`                                  | `secao`                                  | `section`                |
   | `docs_list`                                  | `section` (prefixo do caminho da página) | `prefix`                 |
-
+- O MCP pareia com o novomodelo 0.21.0 e o novomodelo-bridge 0.21.0. As docs embutidas
+  são as da 0.21.0, e as páginas `changelog/novomodelo` e `changelog/novomodelo-bridge`
+  trazem a seção da 0.21.0.
+- **Para quem atualiza da 0.20:** `uv tool upgrade novomodelo-mcp` e fechar e abrir o
+  cliente basta: o agente lê os nomes novos do servidor a cada conversa, e a lista de tools
+  de leitura que o `configurar` libera é a mesma. Só precisa agir quem liberou à mão
+  `incluir_pastas` ou `instalar_novomodelo` no cliente (troque pelos nomes novos) ou tem
+  script, integração ou instruções próprias com os nomes antigos (veja as tabelas acima).
+  A linha que o `configurar --instrucoes` gravou no `~/.claude/CLAUDE.md` continua
+  funcionando; para a citação como `page#section`, apague a linha marcada com
+  `<!-- novomodelo-mcp -->` e rode o `configurar --instrucoes` de novo.
 - As versões mínimas das dependências passam a ser as que a CI testa: mcp 1.30.0,
   polars 2.1.0, jsonschema 4.26.0, duckdb 2.0.0 e truststore 0.10.5. As mínimas
   anteriores não instalavam um servidor funcional (o mcp antes da 1.11 nem importa com o
   pydantic atual).
-
 - O `docs_read` aceita a página como as docs a citam: o link de dentro de uma página
   (`/en/running/configuration/#training`, com a âncora virando a seção), o endereço do
   site e a página em pt-BR. Ele lê a página em inglês, que é a fonte, e diz em `note` qual
   página leu e como citá-la.
-
 - As respostas das tools do bridge cabem no teto `NOVOMODELO_MCP_MAX_RESPONSE_KB`: as tabelas
   dos diagnósticos perdem as últimas linhas, a maior tabela primeiro, e todo diagnóstico
   continua na resposta. Cada tabela cortada traz `truncated` e `rows_total`, e a resposta
   traz `size_truncation`. Só quando cortar as tabelas não basta a lista de diagnósticos
   é cortada.
-
 - O `server_info` mostra também as entradas de `Removed` e as dos temas `####` das notas
   do novomodelo e do bridge, e põe antes de todas as BREAKING de qualquer seção. BREAKING
   é o item que começa com `BREAKING:`; a palavra no meio do texto não conta mais.
 - As notas de cada release do MCP no GitHub trazem a seção da versão no `CHANGELOG.md`.
-
 - As descrições do `run_apply` e do `deck_edit_json` dizem que forward passes, limite de
   iterações e cenários da simulação se mudam pelo `run_apply`, depois do `run_plan`. O
   exemplo do `deck_edit_json` era o limite de iterações, e o agente às vezes editava o
