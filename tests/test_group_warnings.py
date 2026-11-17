@@ -31,33 +31,33 @@ def _repetidos():
 
 def test_mensagens_que_so_diferem_nos_numeros_formam_um_grupo():
     out = group_diagnostics(_repetidos(), max_groups=50)
-    assert [(g["kind"], g["count"]) for g in out["grupos"]] == [("hydro", 490), ("stage", 6)]
-    assert out["total"] == 496 and out["grupos_total"] == 2
-    assert out["grupos_truncados"] is False
-    hidro = out["grupos"][0]
-    assert hidro["mensagem_modelo"] == "usina … sem curva de …"
-    assert len(hidro["exemplos"]) == 3
-    assert hidro["exemplos"][0]["entity"] == "hydro 0"
+    assert [(g["kind"], g["count"]) for g in out["groups"]] == [("hydro", 490), ("stage", 6)]
+    assert out["total"] == 496 and out["groups_total"] == 2
+    assert out["groups_truncated"] is False
+    hidro = out["groups"][0]
+    assert hidro["message_template"] == "usina … sem curva de …"
+    assert len(hidro["examples"]) == 3
+    assert hidro["examples"][0]["entity"] == "hydro 0"
 
 
 def test_mesmo_texto_com_kind_diferente_fica_em_grupos_separados():
     items = [{"kind": "a", "message": "x 1"}, {"kind": "b", "message": "x 2"}]
-    assert group_diagnostics(items, max_groups=10)["grupos_total"] == 2
+    assert group_diagnostics(items, max_groups=10)["groups_total"] == 2
 
 
 def test_teto_de_grupos_preserva_a_contagem():
     items = [{"kind": f"k{i}", "message": "m"} for i in range(7)] + ["texto solto 3"] * 5
     out = group_diagnostics(items, max_groups=3)
-    assert len(out["grupos"]) == 3
-    assert out["grupos_truncados"] is True and out["grupos_total"] == 8
-    assert out["grupos"][0]["count"] == 5
-    assert out["grupos"][0]["mensagem_modelo"] == "texto solto …"
+    assert len(out["groups"]) == 3
+    assert out["groups_truncated"] is True and out["groups_total"] == 8
+    assert out["groups"][0]["count"] == 5
+    assert out["groups"][0]["message_template"] == "texto solto …"
     assert out["total"] == len(items)
 
 
 def test_soma_das_contagens_e_o_total():
     out = group_diagnostics(_repetidos(), max_groups=1000)
-    assert sum(g["count"] for g in out["grupos"]) == out["total"] == 496
+    assert sum(g["count"] for g in out["groups"]) == out["total"] == 496
 
 
 class _CaptureMCP:
@@ -91,8 +91,8 @@ def test_case_validate_agrupa_avisos_e_mantem_erros_um_a_um(tmp_path, monkeypatc
     mcp = _CaptureMCP()
     pre_run.register_pre_run(mcp, settings)
     env = mcp.tools["case_validate"](str(tmp_path))
-    assert env["warnings_agrupados"] is True
-    assert env["warnings_total"] == 496 and env["warnings_grupos_total"] == 2
+    assert env["warnings_grouped"] is True
+    assert env["warnings_total"] == 496 and env["warnings_groups_total"] == 2
     assert [g["count"] for g in env["warnings"]] == [490, 6]
     assert len(env["errors"]) == 50 and env["errors_total"] == 60
     assert env["errors_truncated"] is True

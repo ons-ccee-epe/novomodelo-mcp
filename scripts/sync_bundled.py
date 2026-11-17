@@ -88,6 +88,14 @@ def changelog_versions(texto: str, desde: str = CHANGELOG_DESDE) -> list[str]:
     return [versao for versao, _, _ in _secoes_de_versao(texto, desde)]
 
 
+def version_section(texto: str, versao: str) -> str | None:
+    """O corpo da seção `## [versao]`, sem o título; None sem a seção ou com ela vazia."""
+    for v, _, corpo in _secoes_de_versao(texto, versao):
+        if v == versao:
+            return "\n".join(corpo).strip() or None
+    return None
+
+
 def _docs_version(source: Path) -> str | None:
     try:
         latest = json.loads((source / "versions.json").read_text(encoding="utf-8"))["latest"]

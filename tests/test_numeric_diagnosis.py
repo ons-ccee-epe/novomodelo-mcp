@@ -108,35 +108,35 @@ def test_job_falhou_com_razao_1e22_tem_diagnostico_heuristico(tmp_path, monkeypa
     report["stages"][0]["pre_scaling"]["matrix_coeff_ratio"] = 1e22
     out = _output(tmp_path, META_ERRO, report)
     env = _tools(tmp_path, monkeypatch, out, "failed")[0]()
-    d = env["diagnostico_heuristico"]
-    assert d["nota"].startswith("Heurística") and d["razao"] == 1e22 and d["estagio"] == 0
+    d = env["heuristic_diagnosis"]
+    assert d["note"].startswith("Heurística") and d["ratio"] == 1e22 and d["stage"] == 0
 
 
 @pytest.mark.parametrize("tool", [0, 1], ids=["run_status", "results_status"])
 def test_numeros_do_executavel_saem_identicos(tmp_path, monkeypatch, tool):
     out = _output(tmp_path, META_ERRO, REAL_FALHOU)
     env = _tools(tmp_path, monkeypatch, out, "failed")[tool]()
-    assert env["escalonamento"] == {
-        "razao_pre": 4.851599579683936e23,
-        "razao_pos": 80432641056.08427,
-        "estagio": 0,
-        "faixa": [1.5335148496497908e-21, 744.0],
+    assert env["scaling"] == {
+        "pre_ratio": 4.851599579683936e23,
+        "post_ratio": 80432641056.08427,
+        "stage": 0,
+        "range": [1.5335148496497908e-21, 744.0],
     }
-    assert env["diagnostico_heuristico"]["faixa"] == [1.5335148496497908e-21, 744.0]
+    assert env["heuristic_diagnosis"]["range"] == [1.5335148496497908e-21, 744.0]
 
 
 def test_falhou_abaixo_do_limiar_mostra_a_razao_sem_nota(tmp_path, monkeypatch):
     out = _output(tmp_path, META_ERRO, CONVERGIU)
     env = _tools(tmp_path, monkeypatch, out, "failed")[0]()
-    assert env["escalonamento"]["razao_pre"] == 1353501916.09
-    assert "diagnostico_heuristico" not in env
+    assert env["scaling"]["pre_ratio"] == 1353501916.09
+    assert "heuristic_diagnosis" not in env
 
 
 @pytest.mark.parametrize("tool", [0, 1], ids=["run_status", "results_status"])
 def test_run_que_nao_falhou_nao_tem_diagnostico(tmp_path, monkeypatch, tool):
     out = _output(tmp_path, META_LIMITE, REAL_FALHOU)
     env = _tools(tmp_path, monkeypatch, out, "succeeded")[tool]()
-    assert "escalonamento" not in env and "diagnostico_heuristico" not in env
+    assert "scaling" not in env and "heuristic_diagnosis" not in env
 
 
 @pytest.mark.parametrize("report", [None, "{quebrado"], ids=["ausente", "corrompido"])
@@ -146,7 +146,7 @@ def test_relatorio_ausente_ou_corrompido_sem_diagnostico_e_sem_excecao(
     out = _output(tmp_path, META_ERRO, report)
     env = _tools(tmp_path, monkeypatch, out, "failed")[0]()
     assert env["status"] == "ok"
-    assert "escalonamento" not in env and "diagnostico_heuristico" not in env
+    assert "scaling" not in env and "heuristic_diagnosis" not in env
 
 
 def test_o_caso_nao_e_alterado(tmp_path, monkeypatch):

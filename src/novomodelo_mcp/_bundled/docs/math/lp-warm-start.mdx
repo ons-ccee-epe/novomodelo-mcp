@@ -17,7 +17,7 @@ policy by a warm-start or resume run — align to the current LP.
 
 ## 1. The Repeated-LP Problem
 
-The [SDDP Algorithm](/math/sddp-algorithm) backward pass solves, at each stage,
+The [SDDP Algorithm](/en/math/sddp-algorithm) backward pass solves, at each stage,
 one LP per opening per trial point per iteration. Across a training run these
 LPs are not independent: the LP at stage $t$ in iteration $k+1$ differs from the
 LP at stage $t$ in iteration $k$ only in two ways — the active cut set has
@@ -44,7 +44,7 @@ solves at the same stage are very similar.
 ## 2. Per-(Scenario, Node) Basis Store
 
 Novomodelo keeps a basis store keyed by `(scenario, node)`: the scenario identifies a
-trial point, and the node is a node of the [policy graph](/math/policy-graphs);
+trial point, and the node is a node of the [policy graph](/en/math/policy-graphs);
 on a stage chain (one node per stage) a node is a stage. The store holds at most
 one captured basis — the partition of variables and constraints into basic and
 non-basic — for each trial point at each node.
@@ -97,7 +97,7 @@ The basis a solve starts from therefore depends on the order in which its
 chain's openings are solved. That order is fixed in advance, and it changes the
 starting basis, never the validity of a cut, since every optimal basis of an
 opening's LP yields a valid cut;
-[Determinism & Provenance §3](/math/determinism-guarantees#3-methodology-mechanisms)
+[Determinism & Provenance §3](/en/math/determinism-guarantees#3-methodology-mechanisms)
 sets out how the fixed order keeps the run reproducible.
 
 A warm-start or resume run seeds the store from the saved bases, one per trial
@@ -120,7 +120,7 @@ The relevant change is cut-set growth: each
 iteration adds one new cut per trial point at every stage except the last. The
 cut pool and the persistent lower-bound LP are append-only, while each
 iteration's stage template carries the active cuts only (deactivation is covered
-at the end of this section; see [Cut Management](/math/cut-management) for the
+at the end of this section; see [Cut Management](/en/math/cut-management) for the
 append-only monotonicity guarantee). A new cut adds one constraint row to the
 LP.
 
@@ -148,14 +148,14 @@ retained in the append-only pool, and reactivation re-bakes the cut at that same
 slot. Because the active set can change this way, a stored basis cannot be
 replayed by row position; the slot-identity reconstruction of §4 reconciles it
 to the current active set, which is what keeps warm-starting valid across
-deactivation and reactivation. See [Cut Management](/math/cut-management) for the
+deactivation and reactivation. See [Cut Management](/en/math/cut-management) for the
 full deactivation mechanism, including the separate persistent-lower-bound-LP
 route, which is **append-only** — its cut rows are never removed, so
 deactivation changes nothing there and the lower bound stays monotone.
 
 ## 4. Cut-Aware Basis Reconstruction by Slot Identity
 
-Between solves, cut selection (see [Cut Management](/math/cut-management))
+Between solves, cut selection (see [Cut Management](/en/math/cut-management))
 deactivates and reactivates cuts and the backward pass appends new ones, so the
 set of active cut rows in the stage LP **churns** from one iteration to the
 next. A stored basis records a status for each row it contained; if those
@@ -164,7 +164,7 @@ would misalign — and the solver would warm-start from a corrupted basis or fal
 back to a cold start.
 
 Novomodelo avoids this by reconciling on **slot identity**, not position. The cut
-pool assigns every cut a stable slot index (see [Cut Management §5](/math/cut-management)),
+pool assigns every cut a stable slot index (see [Cut Management §5](/en/math/cut-management)),
 and a stored basis carries, for each cut row it held, the pool slot that
 generated it. To reconstruct a basis for the current LP:
 
@@ -224,7 +224,7 @@ use the store at runtime.
 **Implementation notes**
 
 Non-normative software behavior for LP warm-start — what Novomodelo does at runtime,
-beyond the methodology of [LP Warm-Start](/math/lp-warm-start). This tab
+beyond the methodology of [LP Warm-Start](/en/math/lp-warm-start). This tab
 references the methodology body for the hand-off and the reconstruction rather
 than restating them.
 
@@ -252,7 +252,7 @@ that phase's profile has `use_warm_start: true` (see
 
 A cold solve can stop at a different optimal vertex from a warm one, with the
 same optimal value
-([Determinism & Provenance §3](/math/determinism-guarantees#3-methodology-mechanisms)),
+([Determinism & Provenance §3](/en/math/determinism-guarantees#3-methodology-mechanisms)),
 so a run's trial points, its cuts, its final lower bound and its simulated duals
 can differ between the two settings.
 
@@ -273,7 +273,7 @@ of their own, because each successor loads its own LP.
 The default `by_scenario` scheduler solves a trial point's openings at a
 successor node as one chain. The `by_node` scheduler
 (`training.parallelism.backward_scheduler`; see
-[By-Node Scheduling](/running/performance/#by-node-scheduling)) splits them into
+[By-Node Scheduling](/en/running/performance/#by-node-scheduling)) splits them into
 opening blocks and solves each block as a chain of its own. Each block's
 first-solved opening reads the basis that the forward pass captured in the slot
 (the forward capture). Under `by_node` the backward pass stores nothing, so the
@@ -281,7 +281,7 @@ slot keeps the forward capture, which is the basis the next iteration's forward
 solve is offered.
 
 However, under an enumerated forward pass
-([`training.selection`](/running/configuration/#trainingselection)), the forward
+([`training.selection`](/en/running/configuration/#trainingselection)), the forward
 pass solves each node once per iteration and stores that solve's basis in one
 slot for the node, which the next iteration's forward solve at the node is
 offered.
@@ -300,7 +300,7 @@ the first iteration's forward solves start cold whatever the phase setting. An
 infeasible forward solve clears its slot.
 
 While the dynamic method of cut selection
-([Cut Management §8](/math/cut-management#8-the-dynamic-method)) is active, no
+([Cut Management §8](/en/math/cut-management#8-the-dynamic-method)) is active, no
 solve reads or writes the store. The forward pass leaves its slot untouched,
 and every solve's initial LP starts without a stored basis; in a warm-starting
 phase the later openings of a backward chain, and each re-solve after the
@@ -322,7 +322,7 @@ checkpoint may have run fewer forward passes. A slot left empty starts its first
 solve cold and then reuses its own captures. Outside the dynamic method, the
 first iteration's seeded solves of a warm-starting phase start through the
 reconstruction of
-[§4](/math/lp-warm-start#4-cut-aware-basis-reconstruction-by-slot-identity); a
+[§4](/en/math/lp-warm-start#4-cut-aware-basis-reconstruction-by-slot-identity); a
 fresh run has nothing to seed. Under the default HiGHS forward profile the
 forward solves warm-start, so on a stage chain, where every trial point visits
 every node, the checkpoint bases seed the first iteration's forward solves, and
@@ -348,7 +348,7 @@ current stage LP's, its row count equals the LP's template rows plus its
 recorded cut rows, its basic count equals its row count, and every cut-row slot
 it records holds a loaded cut. A basis that fails is left out, and the load
 reports how many were left out and why the first failed (see
-[Stored-basis gate](/running/policy-management/#stored-basis-gate)). An
+[Stored-basis gate](/en/running/policy-management/#stored-basis-gate)). An
 admitted basis keeps the statuses of its recorded cut rows, matched to the
 loaded pool by slot; a current cut row it does not record starts BASIC. Either
 way only the basis the warm start begins from changes, never the optimal value
@@ -380,7 +380,7 @@ When the backward phase warm-starts, as it does by default, a backward-pass
 solve after the first iteration costs mainly the dual simplex
 work that restores optimality from the reused basis, once that basis is
 reconciled to the current cut set
-([§4](/math/lp-warm-start#4-cut-aware-basis-reconstruction-by-slot-identity)),
+([§4](/en/math/lp-warm-start#4-cut-aware-basis-reconstruction-by-slot-identity)),
 rather than Phase-I feasibility work from a cold start.
 
 ### Turning warm-start off
@@ -395,22 +395,22 @@ forward and backward settings are diagnostic, not production options: comparing
 a cold pass with a warm one isolates the warm-start contribution to
 training-run performance. Per-phase profile overrides are HiGHS-only; the CLP
 backend rejects a set field at setup; see
-[`training.solver`](/running/configuration/#trainingsolver).
+[`training.solver`](/en/running/configuration/#trainingsolver).
 
 ## Cross-References
 
-- [Cut Management](/math/cut-management) — The append-only cut lifecycle with
+- [Cut Management](/en/math/cut-management) — The append-only cut lifecycle with
   stable slot indices that drives cut-set changes and underpins slot-identity
   reconstruction; cut deactivation mechanism and selection strategies that
   determine how frequently the cut pool changes.
-- [SDDP Algorithm](/math/sddp-algorithm) — The iteration loop in which the
+- [SDDP Algorithm](/en/math/sddp-algorithm) — The iteration loop in which the
   forward and backward passes share the basis store; forward and backward pass
   structure, how each stage's openings are visited, and the synchronization
   barriers that separate stages.
-- [Policy Graphs](/math/policy-graphs) — The nodes that key the basis store, and
+- [Policy Graphs](/en/math/policy-graphs) — The nodes that key the basis store, and
   the stages they map to.
-- [Determinism & Provenance](/math/determinism-guarantees) — The deterministic
+- [Determinism & Provenance](/en/math/determinism-guarantees) — The deterministic
   pinning of the chain order described in
-  [Determinism & Provenance §3](/math/determinism-guarantees#3-methodology-mechanisms),
+  [Determinism & Provenance §3](/en/math/determinism-guarantees#3-methodology-mechanisms),
   which is what keeps warm-starting compatible with bit-identical
   reproducibility across runs.

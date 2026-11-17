@@ -1,0 +1,33 @@
+---
+title: Energy contracts
+description: How Novomodelo treats energy contracts — one-directional imports and exports at a bus, with contracted bounds, a price per MWh and take-or-pay floors.
+---
+
+## Why it matters
+
+## Import in, export out
+
+## What the model decides
+
+## What you provide
+
+- The bus where the power is injected (import) or withdrawn (export).
+- The contract type: import or export.
+- The price per MWh: positive for an import, negative for an export.
+- The minimum and maximum power, in MW. Use zero as the minimum unless a take-or-pay floor applies.
+- Entry and exit stages, when the contract does not exist throughout the study.
+- Optionally, bounds and prices that vary by stage and, if you wish, by block, which replace those of the registry.
+
+The contracts file is optional: when it is absent, no contracts are modelled.
+
+## Stateless
+
+A contract carries no state variable and contributes nothing to the Benders cuts.
+
+## In the results
+
+Each contract and block reports its power in MW, its energy in MWh, its price and its total cost, positive for imports and negative for exports. The stage cost breakdown has a column with the contract cost, with the same signs.
+
+## Go deeper
+
+## For those who run the model

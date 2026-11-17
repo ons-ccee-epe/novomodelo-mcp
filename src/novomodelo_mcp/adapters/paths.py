@@ -5,7 +5,7 @@ offline, o servidor lê/escreve com os privilégios do usuário. Este guard trat
 entrada como não confiável.
 
 - Raízes: `NOVOMODELO_MCP_WORKSPACE` (separadas por os.pathsep) mais as pastas que o
-  usuário aprovou em `incluir_pastas` (`pastas.json` no state dir, relido a cada chamada).
+  usuário aprovou em `include_folders` (`pastas.json` no state dir, relido a cada chamada).
 - Sem `NOVOMODELO_MCP_WORKSPACE`: opera irrestrito (o `server_info` sinaliza isso).
 - Com raiz(es): qualquer caminho fora delas é RECUSADO (fail-closed). `resolve()`
   neutraliza symlinks e `..`. `pastas.json` ilegível vale como lista vazia, nunca
@@ -19,6 +19,7 @@ import inspect
 import json
 import os
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -29,13 +30,13 @@ from .state import atomic_write_text, default_state_dir, file_lock
 NAO_CONTORNE = (
     "Caminho fora da pasta de trabalho: não leia esse caminho por outras ferramentas "
     "(leitura de arquivo, terminal, outro MCP). Pergunte ao usuário se pode incluir a "
-    "pasta (`pasta_sugerida` da recusa); com o sim, chame `incluir_pastas` com todas as "
+    "pasta (`suggested_folder` da recusa); com o sim, chame `include_folders` com todas as "
     "pastas de uma vez e tente de novo. Não peça ao usuário para rodar comandos."
 )
 
 AVISO_NA_TOOL = (
     "Caminho fora da pasta de trabalho é recusado: não contorne com outras ferramentas; "
-    "pergunte ao usuário e inclua a pasta com `incluir_pastas`."
+    "pergunte ao usuário e inclua a pasta com `include_folders`."
 )
 
 #: Parâmetros de tool que recebem caminho e passam pelo guard.
@@ -63,7 +64,7 @@ _CONFIG_DIRS = frozenset({"appdata", "library"})
 _PASTAS_FILE = "pastas.json"
 
 
-def _resolve_all(parts: list[str]) -> list[Path]:
+def _resolve_all(parts: Iterable[str]) -> list[Path]:
     roots: list[Path] = []
     for part in parts:
         part = part.strip()
@@ -86,7 +87,7 @@ def _pastas_path(settings: Settings) -> Path:
 
 
 def included_roots(settings: Settings) -> list[Path]:
-    """As pastas aprovadas em `incluir_pastas`; arquivo ausente ou ilegível → []."""
+    """As pastas aprovadas em `include_folders`; arquivo ausente ou ilegível → []."""
     try:
         data = json.loads(_pastas_path(settings).read_text(encoding="utf-8"))
         pastas = data["pastas"]
@@ -124,7 +125,7 @@ def refuse_outside(text: str, resolved: Path, roots: list[Path]) -> dict[str, An
     env = error(
         13,
         f"caminho fora do workspace permitido: {text}",
-        pasta_sugerida=str(suggested_folder(resolved)),
+        suggested_folder=str(suggested_folder(resolved)),
     )
     env["diagnostics"] += [NAO_CONTORNE, f"raizes: {[str(r) for r in roots]}"]
     return env
@@ -135,7 +136,7 @@ def refuse_outside(text: str, resolved: Path, roots: list[Path]) -> dict[str, An
 _URL = re.compile(r"^\s*[A-Za-z][A-Za-z0-9+.\-]+://")
 
 
-def ensure_in_workspace(*paths: str | None, settings: Settings) -> dict | None:
+def ensure_in_workspace(*paths: str | None, settings: Settings) -> dict[str, Any] | None:
     """None se todos os caminhos estão dentro da raiz (ou se não há raiz);
     senão, um envelope de erro. Chamada no topo de toda tool que recebe caminho.
     """
@@ -182,29 +183,29 @@ def forbidden_reason(folder: Path, settings: Settings) -> str | None:
     return None
 
 
-def include_folders(pastas: list[str], settings: Settings) -> dict[str, Any]:
+def include_folders(folders: list[str], settings: Settings) -> dict[str, Any]:
     """Acrescenta pastas às raízes (em `pastas.json`); cada pasta é aceita ou recusada com motivo."""
-    if not pastas:
-        return error(22, "informe ao menos uma pasta em `pastas`")
+    if not folders:
+        return error(22, "informe ao menos uma pasta em `folders`")
     if not configured_roots(settings):
         return {
             "status": "ok",
-            "incluidas": [],
-            "aviso": "sem pasta de trabalho definida "
+            "included": [],
+            "note": "sem pasta de trabalho definida "
             "(NOVOMODELO_MCP_WORKSPACE): todas as pastas já são aceitas; nada foi gravado",
         }
     roots = allowed_roots(settings)
     incluidas, ja, recusadas = [], [], []
-    for texto in pastas:
+    for texto in folders:
         try:
             folder = Path(texto).expanduser().resolve()
         except OSError as exc:
-            recusadas.append({"pasta": texto, "motivo": f"caminho inválido ({exc})"})
+            recusadas.append({"folder": texto, "reason": f"caminho inválido ({exc})"})
             continue
         if any(_within(folder, r) for r in roots):
             ja.append(str(folder))
         elif motivo := forbidden_reason(folder, settings):
-            recusadas.append({"pasta": texto, "motivo": motivo})
+            recusadas.append({"folder": texto, "reason": motivo})
         elif str(folder) not in incluidas:
             incluidas.append(str(folder))
     if incluidas:
@@ -216,13 +217,13 @@ def include_folders(pastas: list[str], settings: Settings) -> dict[str, Any]:
             atomic_write_text(path, json.dumps({"pastas": novas}, indent=2, ensure_ascii=False))
     raizes = [str(r) for r in allowed_roots(settings)]
     if not incluidas and not ja:
-        return error(22, "nenhuma pasta foi incluída", recusadas=recusadas, raizes=raizes)
+        return error(22, "nenhuma pasta foi incluída", refused=recusadas, roots=raizes)
     return {
         "status": "ok",
-        "incluidas": incluidas,
-        "ja_incluidas": ja,
-        "recusadas": recusadas,
-        "raizes": raizes,
+        "included": incluidas,
+        "already_included": ja,
+        "refused": recusadas,
+        "roots": raizes,
     }
 
 

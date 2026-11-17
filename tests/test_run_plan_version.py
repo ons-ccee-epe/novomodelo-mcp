@@ -49,12 +49,14 @@ V18 = _point("run-018", "0.18.0", "2026-10-01T00:00:00Z")
 
 def test_so_entram_os_pontos_da_versao_instalada():
     ref = runtime.select_reference([V17, V18], DIMS, "sig", version="v0.18.0")
+    assert ref is not None
     assert [p["source"] for p in ref["points"]] == ["run-018"]
     assert not ref.get("version_mismatch")
 
 
 def test_sem_ponto_da_versao_usa_os_outros_e_marca_a_diferenca():
     ref = runtime.select_reference([V17], DIMS, "sig", version="0.18.0")
+    assert ref is not None
     assert [p["source"] for p in ref["points"]] == ["run-017"]
     assert ref["version_mismatch"] is True and ref["versions_used"] == ["0.17.0"]
 
@@ -62,6 +64,7 @@ def test_sem_ponto_da_versao_usa_os_outros_e_marca_a_diferenca():
 def test_ponto_sem_versao_so_entra_na_falta_da_mesma_versao():
     unknown = _point("run-antigo", None, "2026-10-11T00:00:00Z")
     ref = runtime.select_reference([unknown, V18], DIMS, "sig", version="0.18.0")
+    assert ref is not None
     assert [p["source"] for p in ref["points"]] == ["run-018"]
 
 
@@ -77,9 +80,13 @@ def test_point_from_run_so_le_software_version():
         "solve_stats": {"total_lp_solves": 100},
         "versao_antiga": "0.17.0",
     }
-    assert runtime.point_from_run(meta)["software_version"] is None
+    point = runtime.point_from_run(meta)
+    assert point is not None
+    assert point["software_version"] is None
     meta["software_version"] = "0.18.0"
-    assert runtime.point_from_run(meta)["software_version"] == "0.18.0"
+    point = runtime.point_from_run(meta)
+    assert point is not None
+    assert point["software_version"] == "0.18.0"
 
 
 def test_plano_avisa_quando_a_referencia_e_de_outra_versao(tmp_path, monkeypatch):

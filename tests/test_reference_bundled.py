@@ -44,7 +44,7 @@ def test_schema_list_offline_uses_bundled(offline_settings):
 def test_schema_get_offline_returns_valid_json(offline_settings):
     r = R.read_schema(offline_settings, "hydros")
     assert r["status"] == "ok"
-    assert r["tipo"] == "hydros"
+    assert r["type"] == "hydros"
     assert isinstance(r["schema"], dict) and r["schema"], "schema vazio/invalido"
 
 

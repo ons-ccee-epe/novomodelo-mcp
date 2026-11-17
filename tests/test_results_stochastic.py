@@ -3,12 +3,15 @@
 import dataclasses
 import sys
 import types
+from typing import Any
 
 import pytest
 
 from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
+
+from ._fakes import install_fake_novomodelo
 
 np = pytest.importorskip("numpy")
 
@@ -49,7 +52,7 @@ class _Stochastic:
 
 @pytest.fixture
 def tool(monkeypatch, tmp_path):
-    estado = {"erro": None, "chamadas": []}
+    estado: dict[str, Any] = {"erro": None, "chamadas": []}
 
     def load_stochastic(output_dir):
         estado["chamadas"].append(output_dir)
@@ -58,10 +61,9 @@ def tool(monkeypatch, tmp_path):
         return _Stochastic()
 
     monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
-    pkg = types.ModuleType("novomodelo")
-    pkg.results = types.SimpleNamespace(load_stochastic=load_stochastic)
-    monkeypatch.setitem(sys.modules, "novomodelo", pkg)
-    monkeypatch.setitem(sys.modules, "novomodelo.results", pkg.results)
+    install_fake_novomodelo(
+        monkeypatch, results=types.SimpleNamespace(load_stochastic=load_stochastic)
+    )
     ws = tmp_path / "ws"
     (ws / "output").mkdir(parents=True)
     mcp = _CaptureMCP()
@@ -73,33 +75,33 @@ def test_par_filtrado_por_usina_e_estagio(tool):
     fn, out, _ = tool
     env = fn(out, hydro_id=1, stage=2)
     assert env["status"] == "ok"
-    assert env["par"]["linhas"] == [
+    assert env["par"]["rows"] == [
         {"hydro_id": 1, "stage_id": 2, "lag": 1, "coefficient": 0.1},
         {"hydro_id": 1, "stage_id": 2, "lag": 2, "coefficient": 0.2},
     ]
-    assert env["par"]["total"] == 2 and env["par"]["truncado"] is False
+    assert env["par"]["total"] == 2 and env["par"]["truncated"] is False
 
 
 def test_par_sem_filtro_respeita_o_teto(tool):
     fn, out, _ = tool
     env = fn(out)
-    assert len(env["par"]["linhas"]) == 5
-    assert env["par"]["total"] == 3 * 4 * 2 and env["par"]["truncado"] is True
-    assert "aberturas" not in env
+    assert len(env["par"]["rows"]) == 5
+    assert env["par"]["total"] == 3 * 4 * 2 and env["par"]["truncated"] is True
+    assert "openings" not in env
 
 
 def test_arvore_de_aberturas_do_estagio_com_teto(tool):
     fn, out, _ = tool
-    env = fn(out, aberturas_do_estagio=0)
-    arv = env["aberturas"]
-    assert arv["estagio"] == 0 and arv["n_aberturas"] == 20 and arv["dim"] == 3
-    assert len(arv["linhas"]) == 5 and arv["truncado"] is True
-    assert arv["linhas"][0] == [0.0, 1.0, 2.0]
+    env = fn(out, openings_stage=0)
+    arv = env["openings"]
+    assert arv["stage"] == 0 and arv["n_openings"] == 20 and arv["dim"] == 3
+    assert len(arv["rows"]) == 5 and arv["truncated"] is True
+    assert arv["rows"][0] == [0.0, 1.0, 2.0]
 
 
 def test_estagio_inexistente_na_arvore_e_erro_22(tool):
     fn, out, _ = tool
-    env = fn(out, aberturas_do_estagio=99)
+    env = fn(out, openings_stage=99)
     assert env["status"] == "error" and env["exit_code"] == 22
 
 

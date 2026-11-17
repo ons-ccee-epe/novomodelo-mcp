@@ -28,7 +28,7 @@ _PROGRAMS = {"claude-desktop": (), "claude-code": ("claude",), "kiro": ("kiro", 
 INSTRUCTIONS_MARK = "<!-- novomodelo-mcp -->"
 INSTRUCTIONS_LINE = (
     "Para perguntas sobre a metodologia do novomodelo, use o MCP novomodelo: "
-    "`docs_search` (em inglês) e `docs_read`, citando `pagina#secao`."
+    "`docs_search` (em inglês) e `docs_read`, citando `page#section`."
 )
 
 
@@ -133,7 +133,7 @@ def _load(path: Path) -> dict[str, Any]:
 
 
 def _with_server(data: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
-    servers = data.get("mcpServers") if isinstance(data.get("mcpServers"), dict) else {}
+    servers = raw if isinstance(raw := data.get("mcpServers"), dict) else {}
     return {**data, "mcpServers": {**servers, SERVER_NAME: entry}}
 
 
@@ -143,7 +143,7 @@ def allow_rules(tools: list[str]) -> list[str]:
 
 
 def _with_allow(data: dict[str, Any], rules: list[str]) -> dict[str, Any]:
-    perms = data.get("permissions") if isinstance(data.get("permissions"), dict) else {}
+    perms = raw if isinstance(raw := data.get("permissions"), dict) else {}
     allow = list(perms.get("allow") or [])
     allow += [r for r in rules if r not in allow]
     return {**data, "permissions": {**perms, "allow": allow}}

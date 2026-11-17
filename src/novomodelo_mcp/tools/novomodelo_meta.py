@@ -5,6 +5,8 @@ Cada função envelopa exatamente um subcomando `novomodelo`. Zero regra de neg�
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..adapters import installer
 from ..adapters.envelope import as_error
 from ..adapters.novomodelo import run_novomodelo, version_cli
@@ -18,7 +20,7 @@ def register_novomodelo_meta(mcp, settings: Settings) -> None:
     """Registra a Version_Tool (e a Schema_Export_Tool) no servidor `mcp`."""
 
     @mcp.tool(annotations=READ_ONLY)
-    def solver_version() -> dict:
+    def solver_version() -> dict[str, Any]:
         """Versão do NOVOMODELO, backend do solver e info de build (envelopa `novomodelo version`).
 
         Sem parâmetros e sem caminho. `novomodelo version` emite texto (não aceita
@@ -33,24 +35,26 @@ def register_novomodelo_meta(mcp, settings: Settings) -> None:
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=DESTRUCTIVE_NET)
-    def instalar_novomodelo(confirmar: bool = False, pasta: str | None = None) -> dict:
+    def install_novomodelo(confirm: bool = False, install_dir: str | None = None) -> dict[str, Any]:
         """Instala o executável `novomodelo` oficial, na versão que este MCP espera.
 
-        Sem `confirmar=True`, só mostra o plano: URL do instalador do release
+        Sem `confirm=True`, só mostra o plano: URL do instalador do release
         oficial, SHA-256 esperado, pasta de destino e o comando manual; nada é
-        baixado. Com `confirmar=True`, baixa o instalador, confere o SHA-256,
-        executa e confirma com `novomodelo version`. `pasta` (absoluta, opcional):
-        raiz da instalação (o binário fica em `<pasta>/bin`); padrão `~/.cargo`.
+        baixado. Com `confirm=True`, baixa o instalador, confere o SHA-256,
+        executa e confirma com `novomodelo version`. `install_dir` (absoluta, opcional):
+        raiz da instalação (o binário fica em `<install_dir>/bin`); padrão `~/.cargo`.
         O instalador oficial acrescenta a pasta ao PATH do perfil do shell. Sem
-        rede, devolve `aviso_rede` com o comando manual.
+        rede, devolve `network_warning` com o comando manual.
         """
         try:
-            return cap_envelope(installer.install(confirmar=confirmar, pasta=pasta), settings)
+            return cap_envelope(
+                installer.install(confirm=confirm, install_dir=install_dir), settings
+            )
         except Exception as exc:  # noqa: BLE001 - never-raise: exceção vira Error_Envelope, não derruba o stdio
             return as_error(exc)
 
     @mcp.tool(annotations=WRITES)
-    def schema_export(output_dir: str | None = None) -> dict:
+    def schema_export(output_dir: str | None = None) -> dict[str, Any]:
         """Exporta os JSON Schemas de entrada do NOVOMODELO (envelopa `novomodelo schema export`).
 
         `output_dir` (opcional): pasta de destino, confinada ao workspace. Quando o

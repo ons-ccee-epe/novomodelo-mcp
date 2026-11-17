@@ -1,12 +1,13 @@
 """`case_validate(output_dir)` chega à biblioteca (`output_dir=`) e ao CLI de reserva (`--output`)."""
 
 import dataclasses
-import sys
 import types
 
 import novomodelo_mcp.adapters.novomodelo as adapter
 import novomodelo_mcp.tools.pre_run as pre_run
 from novomodelo_mcp.config import load_settings
+
+from ._fakes import install_fake_novomodelo
 
 
 class _CaptureMCP:
@@ -28,12 +29,7 @@ def _fake_library(monkeypatch):
         calls.append({"path": path, "config_overrides": config_overrides, **kwargs})
         return {"valid": True, "errors": [], "warnings": []}
 
-    io = types.ModuleType("novomodelo.io")
-    io.validate = validate
-    pkg = types.ModuleType("novomodelo")
-    pkg.io = io
-    monkeypatch.setitem(sys.modules, "novomodelo", pkg)
-    monkeypatch.setitem(sys.modules, "novomodelo.io", io)
+    install_fake_novomodelo(monkeypatch, io=types.SimpleNamespace(validate=validate))
     return calls
 
 

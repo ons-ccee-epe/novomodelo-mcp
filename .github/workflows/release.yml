@@ -1,9 +1,9 @@
 name: Release
 
-# Tag `v<versão>` (a do pyproject) num commit da main: confere as docs embutidas, gera o
-# wheel e o sdist, roda os testes contra o wheel, confere a instalação limpa em cada alvo e
-# versão do Python suportados e, só no repositório público, publica no PyPI e no release
-# do GitHub.
+# Tag `v<versão>` (a do pyproject) num commit da main: tira as notas do release da seção
+# da versão no CHANGELOG.md, confere as docs embutidas, gera o wheel e o sdist, roda os
+# testes contra o wheel, confere a instalação limpa em cada alvo e versão do Python
+# suportados e, só no repositório público, publica no PyPI e no release do GitHub.
 # O ensaio faz tudo, menos publicar (os arquivos ficam como artefato da execução): push
 # numa branch `ensaio/**`, ou `workflow_dispatch`, que o GitHub só oferece depois que
 # este arquivo estiver na branch padrão.
@@ -49,6 +49,12 @@ jobs:
             echo "::error::a tag $GITHUB_REF_NAME não bate com a versão do pyproject ($version)"
             exit 1
           fi
+
+      # Fora do checkout: o sdist leva os arquivos soltos da pasta.
+      - name: Notas do release (a seção da versão no CHANGELOG.md)
+        env:
+          VERSAO: ${{ steps.versao.outputs.version }}
+        run: python3 scripts/notas_da_release.py "$VERSAO" > "$RUNNER_TEMP/notas.md"
 
       # O sync leva ao público toda tag, aponte ela para onde for, e o PyPI não aceita
       # a mesma versão duas vezes: só sai versão de commit que está na main.
@@ -125,16 +131,22 @@ jobs:
       - name: Toda dependência tem wheel em cada alvo e versão do Python
         run: scripts/conferir_wheels.sh dist/novomodelo_mcp-${{ steps.versao.outputs.version }}-py3-none-any.whl
 
-      - name: Sdist sem regras de agente, caches nem checkouts
+      - name: Sdist sem regras de agente, caches, checkouts nem a bateria e2e
         run: |
           sobra=$(tar -tzf dist/*.tar.gz | cut -d/ -f2 | sort -u \
-            | grep -E '^([._]|CLAUDE\.md$|AGENTS\.md$)' | grep -vx '.gitignore' || true)
+            | grep -E '^([._]|e2e$|CLAUDE\.md$|AGENTS\.md$)' | grep -vx '.gitignore' || true)
           if [ -n "$sobra" ]; then echo "::error::no sdist: $sobra"; exit 1; fi
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: novomodelo-mcp-${{ steps.versao.outputs.version }}
           path: dist/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: notas-da-release-${{ steps.versao.outputs.version }}
+          path: ${{ runner.temp }}/notas.md
           if-no-files-found: error
 
   instalacao:
@@ -229,6 +241,11 @@ jobs:
           name: novomodelo-mcp-${{ needs.build.outputs.version }}
           path: dist
 
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: notas-da-release-${{ needs.build.outputs.version }}
+          path: ${{ runner.temp }}/notas
+
       - name: gh release create
         env:
           GH_TOKEN: ${{ github.token }}
@@ -236,6 +253,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/*
           --repo "$GITHUB_REPOSITORY"
           --title "novomodelo-mcp ${{ needs.build.outputs.version }}"
-          --notes "MCP do novomodelo ${{ needs.build.outputs.version }}. Instale com
-          \`uv tool install novomodelo-mcp==${{ needs.build.outputs.version }}\`, ou o wheel
-          deste release, e confira os arquivos com o SHA256SUMS."
+          --notes-file "$RUNNER_TEMP/notas/notas.md"

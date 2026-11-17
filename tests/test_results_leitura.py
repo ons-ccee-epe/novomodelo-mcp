@@ -3,6 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from novomodelo_mcp.adapters import results as R
 
@@ -47,28 +48,34 @@ def _caso_com_rodada(d):
     return caso
 
 
+def _rodadas_acima(pasta: Path) -> dict[str, Any]:
+    env = R.folder_above_runs(str(pasta))
+    assert env is not None
+    return env
+
+
 def test_pasta_do_caso_e_recusada_apontando_a_rodada():
     with tempfile.TemporaryDirectory() as d:
         caso = _caso_com_rodada(d)
         env = R.read_metadata(str(caso))
         assert env["status"] == "error" and env["exit_code"] == 2, env
-        assert env["output_sugerido"] == str(caso / "output"), env
+        assert env["suggested_output"] == str(caso / "output"), env
 
 
 def test_rodada_com_qualquer_nome_e_mais_funda_e_achada():
     with tempfile.TemporaryDirectory() as d:
         rodada = _rodada(Path(d) / "estudo" / "caso-a" / "rodadas" / "teste 1")
-        env = R.folder_above_runs(str(Path(d) / "estudo"))
-        assert env["output_sugerido"] == str(rodada), env
+        env = _rodadas_acima(Path(d) / "estudo")
+        assert env["suggested_output"] == str(rodada), env
 
 
 def test_varias_rodadas_sao_listadas_sem_sugerir_nenhuma():
     with tempfile.TemporaryDirectory() as d:
         caso = _caso_com_rodada(d)
         _rodada(caso / "output-teste")
-        env = R.folder_above_runs(str(caso))
-        assert "output_sugerido" not in env, env
-        assert env["rodadas"] == [str(caso / "output"), str(caso / "output-teste")], env
+        env = _rodadas_acima(caso)
+        assert "suggested_output" not in env, env
+        assert env["runs"] == [str(caso / "output"), str(caso / "output-teste")], env
         assert any("pergunte ao usuário" in m for m in env["diagnostics"]), env
 
 
@@ -76,7 +83,7 @@ def test_busca_nao_entra_dentro_de_uma_rodada():
     with tempfile.TemporaryDirectory() as d:
         caso = _caso_com_rodada(d)
         _rodada(caso / "output" / "simulation" / "copia")
-        assert R.folder_above_runs(str(caso))["rodadas"] == [str(caso / "output")]
+        assert _rodadas_acima(caso)["runs"] == [str(caso / "output")]
 
 
 def test_pasta_da_rodada_nao_e_recusada():

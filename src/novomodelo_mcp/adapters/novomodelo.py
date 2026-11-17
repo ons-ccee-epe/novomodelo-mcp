@@ -14,7 +14,7 @@ from typing import Any
 from ..config import Settings, load_settings
 from ..names import BINDING_DIST, SOLVER_CLI
 from .discovery import find_novomodelo
-from .envelope import MAX_DETAIL_CHARS
+from .envelope import MAX_DETAIL_CHARS, as_error
 from .envelope import error as _error
 from .obs import log
 from .subproc import NO_WINDOW
@@ -59,31 +59,31 @@ def run_novomodelo(
     except OSError as exc:
         return _error(-1, f"erro ao executar novomodelo: {exc}")
 
-    text = (proc.stdout or "").strip()
-    env: dict[str, Any]
-    if not parse_json:
-        env = {
-            "status": "ok" if proc.returncode == 0 else "error",
-            "stdout": text[:MAX_DETAIL_CHARS],
-            "stderr": (proc.stderr or "").strip()[:MAX_DETAIL_CHARS],
-            "diagnostics": [],
-        }
-    elif not text:
-        env = {
-            "status": "ok" if proc.returncode == 0 else "error",
-            "diagnostics": [(proc.stderr or "")[:MAX_DETAIL_CHARS]] if proc.stderr else [],
-        }
-    else:
-        try:
-            env = json.loads(text)
-        except json.JSONDecodeError:
-            env = {
-                "status": "error",
-                "diagnostics": ["saída não-JSON da CLI", text[:MAX_DETAIL_CHARS]],
-            }
+    env = _interpret(proc, parse_json=parse_json)
     env["exit_code"] = proc.returncode
     log(settings, "novomodelo.done", exit_code=env.get("exit_code"), status=env.get("status"))
     return env
+
+
+def _interpret(proc: subprocess.CompletedProcess, *, parse_json: bool) -> dict[str, Any]:
+    text = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    failed = proc.returncode != 0
+    if not parse_json:
+        streams = {"stdout": text[:MAX_DETAIL_CHARS], "stderr": stderr[:MAX_DETAIL_CHARS]}
+        if failed:
+            return _error(
+                proc.returncode, f"{SOLVER_CLI} encerrou com código {proc.returncode}", **streams
+            )
+        return {"status": "ok", **streams, "diagnostics": []}
+    if not text:
+        if failed:
+            return _error(proc.returncode, "saída vazia da CLI", stderr)
+        return {"status": "ok", "diagnostics": [stderr[:MAX_DETAIL_CHARS]] if stderr else []}
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return _error(proc.returncode, "saída não-JSON da CLI", text)
 
 
 def validate_deck_binding(
@@ -102,36 +102,41 @@ def validate_deck_binding(
     except ImportError:
         return _error(127, f"{BINDING_DIST} ausente no venv; rode: uv sync --system-certs")
     try:
-        report = _cio.validate(case_dir, **({"output_dir": output_dir} if output_dir else {}))
+        report = (
+            _cio.validate(case_dir, output_dir=output_dir)
+            if output_dir
+            else _cio.validate(case_dir)
+        )
     except FileNotFoundError as exc:
         return _error(2, f"caso nao encontrado: {exc}")
     except Exception as exc:  # noqa: BLE001 - repassa como erro, nao derruba o servidor
-        return {"status": "error", "exit_code": 1, "diagnostics": [f"{type(exc).__name__}: {exc}"]}
+        return as_error(exc)
     if not isinstance(report, dict):
         return {"status": "ok", "exit_code": 0, "report": report}
     valid = bool(report.get("valid", True))
     errors = report.get("errors", []) or []
     warnings = report.get("warnings", []) or []
-    return {
-        "status": "ok" if valid else "error",
-        "exit_code": 0 if valid else 1,
+    fields = {
         "valid": valid,
         "n_errors": len(errors),
         "n_warnings": len(warnings),
         "errors": errors,
         "warnings": warnings,
     }
+    if not valid:
+        return _error(1, f"o caso não passou na validação ({len(errors)} erro(s))", **fields)
+    return {"status": "ok", "exit_code": 0, **fields}
 
 
-#: Nome na resposta → (atributo de contagem do `model.System`, lista de itens).
+#: Lista do `model.System` (o nome na resposta) → atributo de contagem, se houver.
 _SYSTEM_KINDS = {
-    "barras": ("n_buses", "buses"),
-    "linhas": ("n_lines", "lines"),
-    "hidros": ("n_hydros", "hydros"),
-    "termicas": ("n_thermals", "thermals"),
-    "contratos": (None, "contracts"),
-    "bombeamento": (None, "pumping_stations"),
-    "fontes_nao_controlaveis": (None, "non_controllable_sources"),
+    "buses": "n_buses",
+    "lines": "n_lines",
+    "hydros": "n_hydros",
+    "thermals": "n_thermals",
+    "contracts": None,
+    "pumping_stations": None,
+    "non_controllable_sources": None,
 }
 
 
@@ -154,15 +159,15 @@ def case_summary_binding(
         return _error(1, "o novomodelo não conseguiu ler o caso", f"{type(exc).__name__}: {exc}")
     counts: dict[str, Any] = {}
     items: dict[str, Any] = {}
-    for kind, (count_attr, list_attr) in _SYSTEM_KINDS.items():
-        entries = list(getattr(system, list_attr, None) or [])
+    for kind, count_attr in _SYSTEM_KINDS.items():
+        entries = list(getattr(system, kind, None) or [])
         counts[kind] = getattr(system, count_attr) if count_attr else len(entries)
         items[kind] = {
-            "lista": [{"id": e.id, "name": e.name} for e in entries[:max_items]],
-            "truncado": len(entries) > max_items,
+            "entries": [{"id": e.id, "name": e.name} for e in entries[:max_items]],
+            "truncated": len(entries) > max_items,
         }
-    counts["estagios"] = getattr(system, "n_stages", None)
-    return {"status": "ok", "exit_code": 0, "contagens": counts, "itens": items}
+    counts["stages"] = getattr(system, "n_stages", None)
+    return {"status": "ok", "exit_code": 0, "counts": counts, "items": items}
 
 
 def validate_deck_cli(
@@ -208,16 +213,19 @@ def validate_deck_cli(
 
     cap = settings.max_summary_chars
     truncated = len(text) > cap
-    report = text[:cap] + ("\n... [relatorio truncado]" if truncated else "")
-
-    return {
-        "status": "ok" if proc.returncode == 0 else "error",
-        "exit_code": proc.returncode,
+    fields = {
         "errors": _count(r"(\d+)\s+error"),
         "warnings": _count(r"(\d+)\s+warning"),
         "report_truncated": truncated,
-        "report": report,
+        "report": text[:cap] + ("\n... [relatorio truncado]" if truncated else ""),
     }
+    if proc.returncode != 0:
+        return _error(
+            proc.returncode,
+            f"{SOLVER_CLI} validate encerrou com código {proc.returncode}; veja `report`",
+            **fields,
+        )
+    return {"status": "ok", "exit_code": 0, **fields}
 
 
 def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
@@ -252,8 +260,9 @@ def version_cli(*, settings: Settings | None = None) -> dict[str, Any]:
 
     stdout = (proc.stdout or "").strip()
     if proc.returncode != 0:
-        detail = (proc.stderr or stdout or "")[:MAX_DETAIL_CHARS]
-        return _error(proc.returncode, "novomodelo version encerrou com erro", detail)
+        return _error(
+            proc.returncode, "novomodelo version encerrou com erro", proc.stderr or stdout or ""
+        )
 
     fields: dict[str, Any] = {}
     lines = stdout.splitlines()

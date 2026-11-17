@@ -51,4 +51,4 @@ def test_primeira_tool_sem_rede_responde(monkeypatch):
     versions._UPDATE.clear()
     tools = {t.name: t.fn for t in S.build_server()._tool_manager.list_tools()}
     assert tools["docs_list"]()["status"] == "ok"
-    assert "versao_nova" in tools["server_info"]()
+    assert "new_version" in tools["server_info"]()

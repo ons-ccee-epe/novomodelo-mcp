@@ -6,6 +6,8 @@ resultado moldado ao teto de saída. Sem regra de negócio.
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..adapters import budget
 from ..adapters import results as R
 from ..adapters.paths import ensure_in_workspace
@@ -18,15 +20,15 @@ def register_results(mcp, settings: Settings) -> None:
     """Registra as tools de leitura de resultados no servidor `mcp`."""
 
     @mcp.tool(annotations=READ_ONLY)
-    def results_status(output_dir: str) -> dict:
+    def results_status(output_dir: str) -> dict[str, Any]:
         """Status, bounds e convergência de um run (o primeiro check pós-rodada).
 
         Lê `training/metadata.json` e, se houver, `simulation/metadata.json`.
         Devolve run_status, bounds (lower/upper), gap final, iterações, duração,
         dimensões do problema e o custo esperado da simulação (quando rodou).
-        `_SUCCESS` só indica que a saída foi gravada; veja `treino.termination_reason`
-        e `treino.converged_at` para saber se convergiu. Se o run falhou,
-        `escalonamento` e, se for o caso, `diagnostico_heuristico` (ver run_status).
+        `_SUCCESS` só indica que a saída foi gravada; veja `training.termination_reason`
+        e `training.converged_at` para saber se convergiu. Se o run falhou,
+        `scaling` e, se for o caso, `heuristic_diagnosis` (ver run_status).
         """
         if err := ensure_in_workspace(output_dir, settings=settings):
             return err
@@ -35,6 +37,7 @@ def register_results(mcp, settings: Settings) -> None:
             return env
         t = env["training"]
         s = env.get("simulation") or {}
+        termination = R.termination_fields(t, env.get("simulation"))
         out = {
             "status": "ok",
             "run_status": t.get("status"),
@@ -47,16 +50,16 @@ def register_results(mcp, settings: Settings) -> None:
             "software_version": t.get("software_version"),
             "simulation_ran": env["simulation_ran"],
             "simulation_cost": s.get("cost"),
-            **R.termination_fields(t, env.get("simulation")),
+            **termination,
         }
         if env.get("warnings"):
             out["warnings"] = env["warnings"]
-        if out["treino"].get("termination_reason") == "error":
+        if termination["training"].get("termination_reason") == "error":
             out.update(R.numeric_diagnosis(output_dir))
         return cap_envelope(out, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def results_convergence(output_dir: str, tail: int = 20) -> dict:
+    def results_convergence(output_dir: str, tail: int = 20) -> dict[str, Any]:
         """Trajetória de convergência: iteração final + últimas `tail` iterações.
 
         Lê `training/convergence.parquet` (bounds e gap por iteração).
@@ -74,15 +77,15 @@ def register_results(mcp, settings: Settings) -> None:
         output_dir: str,
         hydro_id: int | None = None,
         stage: int | None = None,
-        aberturas_do_estagio: int | None = None,
-    ) -> dict:
+        openings_stage: int | None = None,
+    ) -> dict[str, Any]:
         """Modelo estocástico ajustado no run: coeficientes do PAR(p) e árvore de aberturas.
 
         Lê pela biblioteca (`novomodelo.results.load_stochastic`) a pasta
         `stochastic/` da saída, que o run só grava com `exports.stochastic: true`
-        no config.json. `par.linhas`: {hydro_id, stage_id, lag, coefficient}
+        no config.json. `par.rows`: {hydro_id, stage_id, lag, coefficient}
         (lag a partir de 1), filtráveis por `hydro_id` e `stage`.
-        `aberturas_do_estagio`: devolve também a árvore desse estágio (linha k =
+        `openings_stage`: devolve também a árvore desse estágio (linha k =
         vetor de ruído da abertura k). Com teto de linhas.
         """
         if err := ensure_in_workspace(output_dir, settings=settings) or R.folder_above_runs(
@@ -95,7 +98,7 @@ def register_results(mcp, settings: Settings) -> None:
                     output_dir,
                     hydro_id=hydro_id,
                     stage=stage,
-                    openings_stage=aberturas_do_estagio,
+                    openings_stage=openings_stage,
                     max_rows=budget.row_limit(settings),
                 ),
                 settings,
@@ -106,7 +109,7 @@ def register_results(mcp, settings: Settings) -> None:
     @mcp.tool(annotations=READ_ONLY)
     def results_policy(
         output_dir: str, stage: int | None = None, policy_subdir: str = "policy"
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Resumo da política treinada (cortes de Benders) de um run, pela biblioteca.
 
         `metadata` (versão, data, estágios, iterações) e, por estágio, o número de
@@ -130,7 +133,7 @@ def register_results(mcp, settings: Settings) -> None:
         )
 
     @mcp.tool(annotations=READ_ONLY)
-    def results_list_entities(output_dir: str) -> dict:
+    def results_list_entities(output_dir: str) -> dict[str, Any]:
         """Lista as entidades de simulação disponíveis (hydros, costs, thermals, buses, ...)."""
         if err := ensure_in_workspace(output_dir, settings=settings) or R.folder_above_runs(
             output_dir
@@ -147,7 +150,7 @@ def register_results(mcp, settings: Settings) -> None:
         agg: str | None = None,
         scenario: int | None = None,
         limit: int | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Consulta a simulação particionada `simulation/<entity>/` (por scenario_id).
 
         `entity`: hydros | costs | thermals | buses | ... (ver results_list_entities).

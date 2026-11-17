@@ -1,0 +1,27 @@
+---
+title: Buses and subsystems
+description: How Novomodelo treats buses and subsystems — the node where energy is balanced, where deficit closes the gap and where the marginal cost of operation (CMO) forms.
+---
+
+## Why it matters
+
+## The balance at one bus
+
+## What the model decides
+
+## What you provide
+
+- A bus identifier and name.
+- The `bus_id` of every entity that attaches to it: hydro plants, thermal plants, non-controllable sources, pumping stations, energy contracts and the two ends of each line.
+- Optionally, deficit segments for this bus, which replace the case default. They cannot vary by stage.
+- The load at the bus, supplied as scenario data (see the [Load](/en/entities/consumption/load/) page).
+
+## Subsystems, copper plate and multi-bus
+
+- **Subsystem.** In the Brazilian grid, a subsystem is a region of the interconnected system (SE/CO, S, NE, N). Real-world dispatch studies often model buses at that scale, but finer decompositions are equally valid.
+- **Single bus (copper plate).** All generation and load sit in one node: no flow limits, no transmission losses and no locational price differentiation. It is the right starting point to isolate dispatch economics from network effects.
+- **Multi-bus.** Buses are connected by lines. Once a line capacity binds, each bus resolves its own marginal price, and dispatch in one bus cannot freely substitute for a shortfall in another.
+
+## Go deeper
+
+## For those who run the model

@@ -28,19 +28,21 @@ def _sessao(cmd: list[str]):
         encoding="utf-8",
         errors="replace",
     )
+    stdin, stdout, stderr = proc.stdin, proc.stdout, proc.stderr
+    assert stdin is not None and stdout is not None and stderr is not None
     ids = iter(range(1, 1000))
 
     def pedir(method: str, params: dict | None = None) -> dict:
         req_id = next(ids)
-        proc.stdin.write(
+        stdin.write(
             json.dumps({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params or {}})
             + "\n"
         )
-        proc.stdin.flush()
+        stdin.flush()
         while True:
-            line = proc.stdout.readline()
+            line = stdout.readline()
             if not line:
-                raise Falha(f"o servidor fechou a saída ({method}): {proc.stderr.read()[-2000:]}")
+                raise Falha(f"o servidor fechou a saída ({method}): {stderr.read()[-2000:]}")
             msg = json.loads(line)
             if msg.get("id") == req_id:
                 if "error" in msg:
@@ -48,8 +50,8 @@ def _sessao(cmd: list[str]):
                 return msg["result"]
 
     def avisar(method: str) -> None:
-        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": method}) + "\n")
-        proc.stdin.flush()
+        stdin.write(json.dumps({"jsonrpc": "2.0", "method": method}) + "\n")
+        stdin.flush()
 
     return proc, pedir, avisar
 
@@ -78,18 +80,20 @@ def conferir(cmd: list[str], versao: str, server_info: bool) -> list[str]:
         if server_info:
             res = pedir("tools/call", {"name": "server_info", "arguments": {}})
             info = json.loads(res["content"][0]["text"])
-            if info.get("versao_mcp") != versao:
-                raise Falha(f"server_info.versao_mcp = {info.get('versao_mcp')}, esperada {versao}")
-            if info.get("docs", {}).get("origem") != "embutidas":
+            if info.get("mcp_version") != versao:
+                raise Falha(
+                    f"server_info.mcp_version = {info.get('mcp_version')}, esperada {versao}"
+                )
+            if info.get("docs", {}).get("origin") != "embutidas":
                 raise Falha(f"docs não são as embutidas: {info.get('docs')}")
-            pecas = info.get("versoes", {})
+            pecas = info.get("versions", {})
             linhas.append(
                 "server_info: "
                 + ", ".join(
-                    f"{k} {v.get('versao')}" for k, v in pecas.items() if isinstance(v, dict)
+                    f"{k} {v.get('version')}" for k, v in pecas.items() if isinstance(v, dict)
                 )
             )
-            linhas += [f"aviso: {a}" for a in info.get("avisos_de_versao", [])]
+            linhas += [f"aviso: {a}" for a in info.get("version_warnings", [])]
     finally:
         proc.stdin.close()
         try:
