@@ -71,9 +71,11 @@ só do MCP vira `X.Y.Z.postN`.
 - O MCP pareia com o novomodelo 0.21.0 e o novomodelo-bridge 0.21.0. As docs embutidas
   são as da 0.21.0, e as páginas `changelog/novomodelo` e `changelog/novomodelo-bridge`
   trazem a seção da 0.21.0.
-- **Para quem atualiza da 0.20:** `uv tool upgrade novomodelo-mcp` e fechar e abrir o
-  cliente basta: o agente lê os nomes novos do servidor a cada conversa, e a lista de tools
-  de leitura que o `configurar` libera é a mesma. Só precisa agir quem liberou à mão
+- **Para quem atualiza da 0.20:** `uv tool upgrade novomodelo-mcp`, fechar e abrir o
+  cliente e atualizar o executável `novomodelo` para a 0.21: peça ao agente "instale o
+  executável do novomodelo", como o aviso de versão indica. O agente lê os nomes novos do
+  servidor a cada conversa, e a lista de tools de leitura que o `configurar` libera é a
+  mesma. Fora isso, só precisa agir quem liberou à mão
   `incluir_pastas` ou `instalar_novomodelo` no cliente (troque pelos nomes novos) ou tem
   script, integração ou instruções próprias com os nomes antigos (veja as tabelas acima).
   A linha que o `configurar --instrucoes` gravou no `~/.claude/CLAUDE.md` continua
