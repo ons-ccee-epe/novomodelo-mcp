@@ -4,6 +4,7 @@ pedido = """
 nunca usei o novomodelo. cria um caso de exemplo pequeno pra eu aprender e me explica o que tem nele
 """
 tools_esperadas = ["case_init"]
+liberar = ["case_init"]
 contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
 timeout_s = 1500
 gabarito = """
