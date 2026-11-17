@@ -5,13 +5,12 @@ template: splash
 hero:
   tagline: Multi-stage stochastic hydrothermal dispatch with SDDP — the method and the software in one place.
   actions:
-    - text: Install and run Novomodelo
-      link: /getting-started/installation
+    - text: Explore the entities
+      link: "#entities"
       icon: right-arrow
       variant: primary
-    - text: SDDP in one page
-      link: /overview/sddp-framework-overview
-      icon: open-book
+    - text: Installation
+      link: /en/getting-started/installation/
       variant: minimal
 ---
 
@@ -21,37 +20,20 @@ simulates it, from the command line or from Python. This site documents the
 method and the software together, from the mathematics and worked examples to
 installing Novomodelo, running studies and reading their results.
 
-## Where to start
+## How the model decides
 
-  - [Run studies](/getting-started/quickstart): Scaffold, validate and run a first study from the command line.
-  - [Coming from other software?](/running/case-conversion): Convert an existing case to Novomodelo's input format and compare the results.
-  - [Study SDDP](/math/sddp-algorithm): The algorithm chapters: forward and backward passes, cuts, bounds and stopping rules.
-  - [Work in Python](/getting-started/python-quickstart): Run a study and read its results from Python.
+<div class="home-steps">
+  <div class="home-step"><span class="home-step__n">1</span><strong>Imagine the future</strong><p>It generates many inflow scenarios from the streamflow history.</p></div>
+  <div class="home-step"><span class="home-step__n">2</span><strong>Dispatch stage by stage</strong><p>At each stage it chooses how much each plant generates to meet the load at the lowest cost.</p></div>
+  <div class="home-step"><span class="home-step__n">3</span><strong>Weigh today against tomorrow</strong><p>The future cost function says what it is worth to keep water in the reservoir: that is the value of water.</p></div>
+</div>
 
-## Theory
+[How the model decides](/en/overview/how-the-model-decides/)
 
-  - [Introduction](/overview/sddp-framework-overview): The SDDP framework in one page, the notation, and how to read this site.
-  - [System Modelling](/math/system-elements): The power system's elements and the stage linear programme Novomodelo solves.
-  - [Stochastic Modelling](/math/par-inflow-model): The inflow model and how scenarios are generated.
-  - [The SDDP Algorithm](/math/sddp-algorithm): Passes, cuts, bounds, risk measures, stopping rules and determinism.
-  - [Coupling & Boundary Conditions](/math/horizon-modes): Horizon modes, the post-study boundary and discounting.
-  - [Worked Examples](/examples/toy-single-reservoir): Single- and four-reservoir systems small enough to trace by hand.
+## Running studies
 
-## Running Novomodelo
-
-  - [Running Studies](/running/running-studies): Run a study end to end and check its results.
-  - [Configuration](/running/configuration): The study configuration file and its settings.
-  - [Policy Management](/running/policy-management): Warm start, resume and simulation-only runs from a saved policy, and boundary cuts.
-  - [Convergence & Diagnostics](/running/interpreting-results): Read the convergence record and the simulation results.
-  - [Performance Accelerators](/running/performance): The performance settings to tune and what to read back from a run.
-  - [HPC & Cluster Deployment](/running/hpc-deployment): Run the MPI build on a cluster.
-  - [AI Agents](/running/mcp-server): Let an AI agent validate, run and read cases, and answer from this documentation.
-
-## Reference
-
-  - [CLI Reference](/reference/cli-reference): Every subcommand and flag of the command-line program.
-  - [JSON Schemas](/reference/json-schemas): The schemas of the case input files.
-  - [Error Codes](/reference/error-codes): Error kinds, their messages and exit codes.
-  - [Generic Constraints](/reference/generic-constraints): User-defined linear constraints on a case.
-  - [Glossary](/reference/glossary): The terms used across this site.
-  - [Bibliography](/reference/bibliography): The works the methodology cites.
+<div class="home-paths">
+  <a class="home-path" href="/en/getting-started/quickstart/"><strong>Quickstart</strong><span>Install, scaffold, validate and run a first study from the command line or from Python.</span></a>
+  <a class="home-path" href="/en/examples/toy-single-reservoir/"><strong>Worked examples</strong><span>Single- and four-reservoir systems small enough to trace by hand.</span></a>
+  <a class="home-path" href="/en/reference/cli-reference/"><strong>Execution reference</strong><span>The CLI, the Python API, the JSON schemas, the error codes and the generic-constraint language.</span></a>
+</div>

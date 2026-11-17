@@ -2,11 +2,11 @@
 
 import os
 
-from _fakes import fake_bin
-
 from novomodelo_mcp.adapters.bridge import run_bridge
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.shaping import cap_envelope
+
+from ._fakes import fake_bin
 
 FAKE = fake_bin("fake_novomodelo_bridge.py")
 
@@ -68,6 +68,7 @@ def test_bridge_do_pacote_vem_antes_do_path(tmp_path, monkeypatch):
     fake = _scripts_dir_with_fake_bridge(tmp_path, monkeypatch)
     monkeypatch.delenv("NOVOMODELO_MCP_BRIDGE_BIN", raising=False)
     path, origin = bridge_origin(load_settings())
+    assert path is not None
     assert (os.path.normcase(path), origin) == (os.path.normcase(fake), "pacote")
 
 
@@ -103,6 +104,7 @@ def test_sem_pacote_cai_no_path(tmp_path, monkeypatch):
     (no_path / name).chmod(0o755)
     monkeypatch.setenv("PATH", str(no_path))
     path, origin = bridge_origin(load_settings())
+    assert path is not None
     assert (os.path.normcase(path), origin) == (os.path.normcase(no_path / name), "path")
 
 
@@ -122,5 +124,5 @@ def test_server_info_mostra_a_origem_do_bridge(tmp_path, monkeypatch):
     versions.reset_caches()
     info = {t.name: t.fn for t in build_server()._tool_manager.list_tools()}["server_info"]()
     versions.reset_caches()
-    assert info["bridge"]["origem"] == "pacote"
-    assert info["versoes"]["bridge"]["origem"] == "pacote"
+    assert info["bridge"]["origin"] == "pacote"
+    assert info["versions"]["bridge"]["origin"] == "pacote"

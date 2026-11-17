@@ -1,0 +1,27 @@
+---
+title: Lines and interchanges
+description: How Novomodelo treats transmission lines and interchanges — flow in each direction, directional capacity, no losses in the dispatch and a small exchange cost.
+---
+
+## Why it matters
+
+## Flow in both directions
+
+## What the model decides
+
+## What you provide
+
+- The source bus and the target bus. The source-to-target direction defines the direct flow.
+- The capacity in the direct direction and in the reverse direction, in MW.
+- Optionally, a loss percentage. It is used for reporting only and does not enter the dispatch.
+- Optionally, an exchange cost for this line, which replaces the case default.
+- Entry and exit stages, when the line does not exist throughout the study.
+- Optionally, capacities that vary by stage and, if you wish, by block, in absolute MW. They replace the base capacities. A value of zero closes the line in that direction.
+
+## The exchange cost
+
+The exchange cost is a small cost per MWh of flow. It is a regularization term, not a real transmission cost: it prevents degenerate solutions with unnecessary power circulation and encourages minimal transfers when the model is indifferent. It is set well below every generation and deficit cost, so that it only breaks ties. If it noticeably changes dispatch decisions, it is set too high.
+
+## Go deeper
+
+## For those who run the model

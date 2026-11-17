@@ -49,7 +49,7 @@ def test_pasta_do_caso_e_recusada_com_a_rodada_sugerida(caso, tool):
     pasta, tools = caso
     out = tools[tool](output_dir=str(pasta), **CHAMADAS[tool])
     assert out["status"] == "error"
-    assert out["output_sugerido"] == str(pasta / "output")
+    assert out["suggested_output"] == str(pasta / "output")
 
 
 def test_list_entities_nao_responde_vazio_para_a_pasta_do_caso(caso):
@@ -59,8 +59,8 @@ def test_list_entities_nao_responde_vazio_para_a_pasta_do_caso(caso):
 
 def test_instrucoes_mandam_direto_para_as_tools_de_resultados():
     assert "`results_*`" in SERVER_INSTRUCTIONS
-    assert "output_sugerido" in SERVER_INSTRUCTIONS
-    assert "`rodadas`" in SERVER_INSTRUCTIONS
+    assert "suggested_output" in SERVER_INSTRUCTIONS
+    assert "`runs`" in SERVER_INSTRUCTIONS
 
 
 def test_busca_de_rodadas_nao_segue_link_para_fora(tmp_path):

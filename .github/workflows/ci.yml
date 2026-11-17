@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   lint:
-    name: ruff + gates
+    name: ruff + ty + gates
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -28,15 +28,19 @@ jobs:
         with:
           python-version: "3.13"
 
-      # --locked: falha se o uv.lock não corresponder ao pyproject.toml.
+      # --locked: falha se o uv.lock não corresponder ao pyproject.toml. --all-packages: o ty
+      # resolve os imports do membro e2e/, que tem dependências próprias.
       - name: Sincronizar dependências
-        run: uv sync --dev --locked
+        run: uv sync --all-packages --locked
 
       - name: Lint (ruff)
         run: uv run ruff check .
 
       - name: Formatação (ruff format)
         run: uv run ruff format --check .
+
+      - name: Tipos (ty)
+        run: uv run --all-packages ty check
 
       # Convenções em .claude/rules/; cada gate está descrito no CONTRIBUTING.md.
       - name: Sem vocabulário de plano
@@ -108,7 +112,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: tests/e2e/frontend
+        working-directory: e2e/frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -162,8 +166,8 @@ jobs:
         run: uv run pytest -q
 
   e2e:
-    # A bateria de ponta a ponta (tests/e2e) tem o grupo de dependências próprio; o
-    # pytest padrão a ignora (addopts), então só este job a roda.
+    # A bateria de ponta a ponta (e2e/) é um membro próprio do workspace do uv, com as
+    # dependências dela; o pytest padrão só coleta tests/, então só este job a roda.
     strategy:
       fail-fast: false
       matrix:
@@ -183,15 +187,15 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: Sincronizar dependências
-        run: uv sync --group e2e --locked
+        run: uv sync --package novomodelo-mcp-e2e --locked
 
       - name: Testes (pytest e2e)
-        run: uv run --group e2e pytest tests/e2e -q -o addopts=--strict-markers
+        run: uv run --package novomodelo-mcp-e2e pytest e2e -q
 
   executaveis-reais:
     # Todas as tools contra o executável novomodelo, o novomodelo-bridge e o
     # novomodelo-python reais da versão esperada (o pin do bridge), em cada alvo.
-    # O executável vem pela própria tool instalar_novomodelo (instalador oficial, hash
+    # O executável vem pela própria tool install_novomodelo (instalador oficial, hash
     # conferido); os decks são os mínimos do bridge na tag da versão.
     strategy:
       fail-fast: false
@@ -251,7 +255,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ons-ccee-epe/novomodelo
-          ref: 55a2181eaba612d4f5d84d2731120356713e230d  # v0.20.0
+          ref: b4197620a9f8c3d76bc6bf1153d98468a8bf1826  # v0.21.0
           path: _upstream
           sparse-checkout: scripts/rebrand
           persist-credentials: false

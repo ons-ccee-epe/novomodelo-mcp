@@ -44,7 +44,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--instalar-executavel",
         action="store_true",
         default=False,
-        help="antes da bateria, instala o executável pela tool instalar_novomodelo",
+        help="antes da bateria, instala o executável pela tool install_novomodelo",
     )
     grupo.addoption(
         "--bridge-repo",

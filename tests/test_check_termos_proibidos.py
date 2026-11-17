@@ -110,7 +110,7 @@ def test_credito_ons_ccee_epe_no_pyproject_passa(repo):
         repo,
         {
             "pyproject.toml": 'authors = [{ name = "Operador Nacional do Sistema Eletrico - ONS" }]\n',
-            "tests/e2e/README.md": "Mantido por ONS, CCEE e EPE.\n",
+            "e2e/README.md": "Mantido por ONS, CCEE e EPE.\n",
         },
     )
     res = _rodar(repo)
@@ -145,15 +145,15 @@ def test_bateria_sem_marca_nem_referencia_de_spec(repo):
     _commit(
         repo,
         {
-            "tests/e2e/painel.md": "Homologado pela ONS\n",
-            "tests/e2e/outro.md": "ver Req 3.2 da spec\n",
+            "e2e/painel.md": "Homologado pela ONS\n",
+            "e2e/outro.md": "ver Req 3.2 da spec\n",
             "README.md": "Mantido por ONS\n",
         },
     )
     res = _rodar(repo)
     assert res.returncode == 1
-    assert "tests/e2e/painel.md:1: marca ONS" in res.stdout
-    assert "tests/e2e/outro.md:1: referencia de spec" in res.stdout
+    assert "e2e/painel.md:1: marca ONS" in res.stdout
+    assert "e2e/outro.md:1: referencia de spec" in res.stdout
     assert "README.md" not in res.stdout
 
 
@@ -255,10 +255,10 @@ def test_arquivo_fora_de_utf8_ainda_e_checado(repo):
     assert "latin.txt:2: caminho de maquina" in res.stdout
 
 
-def test_marca_ons_so_acusa_dentro_de_tests_e2e(repo):
-    _commit(repo, {"docs/a.md": "feito pela ONS\n", "tests/e2e/a.md": "feito pela ONS\n"})
+def test_marca_ons_so_acusa_dentro_da_bateria_e2e(repo):
+    _commit(repo, {"docs/a.md": "feito pela ONS\n", "e2e/a.md": "feito pela ONS\n"})
     res = _rodar(repo)
-    assert "tests/e2e/a.md:1: marca ONS" in res.stdout
+    assert "e2e/a.md:1: marca ONS" in res.stdout
     assert "docs/a.md" not in res.stdout
 
 
@@ -267,7 +267,7 @@ TOML_PADRAO = RAIZ / "scripts" / "ci" / "termos_proibidos.toml"
 
 
 def _repo_com_tres_padroes(repo: Path) -> None:
-    _commit(repo, {"tests/e2e/a.md": TRES_PADROES})
+    _commit(repo, {"e2e/a.md": TRES_PADROES})
 
 
 def test_historico_ignora_os_padroes_da_secao(repo):
@@ -283,7 +283,7 @@ def test_arvore_e_desde_continuam_acusando(repo):
         res = _rodar(repo, *args)
         assert res.returncode == 1
         for nome in ("nome antigo", "referencia de spec", "diretorio kiro"):
-            assert "tests/e2e/a.md" in res.stdout and nome in res.stdout, (args, nome)
+            assert "e2e/a.md" in res.stdout and nome in res.stdout, (args, nome)
 
 
 def test_historico_nunca_ignora_a_lista_interna(repo, tmp_path):
@@ -303,10 +303,10 @@ def test_toml_nao_contem_literalmente_os_termos_da_receita():
 
 
 def test_historico_ainda_acusa_padrao_fora_da_secao(repo):
-    _commit(repo, {"tests/e2e/a.md": TRES_PADROES + f"veja {CAMINHO_PESSOAL}\n"})
+    _commit(repo, {"e2e/a.md": TRES_PADROES + f"veja {CAMINHO_PESSOAL}\n"})
     res = _rodar(repo, "--historico", "--mensagens")
     assert res.returncode == 1
-    assert "tests/e2e/a.md:4: caminho de maquina" in res.stdout
+    assert "e2e/a.md:4: caminho de maquina" in res.stdout
     for nome in ("nome antigo", "referencia de spec", "diretorio kiro"):
         assert nome not in res.stdout
 
@@ -315,3 +315,22 @@ def test_toda_excecao_por_caminho_aponta_para_algo_que_existe():
     permitidos = tomllib.loads(TOML_PADRAO.read_text(encoding="utf-8"))["permitidos"]
     faltam = [caminho for caminho in permitidos if not (RAIZ / caminho).exists()]
     assert faltam == []
+
+
+def test_excecao_do_historico_vale_so_no_historico(repo, tmp_path):
+    toml = tmp_path / "termos.toml"
+    toml.write_text(
+        '[[padroes]]\nnome = "caminho de maquina"\nregex = "/home/[a-z]+/"\n\n'
+        '[historico.permitidos]\n"antigo/" = { padroes = ["caminho de maquina"], motivo = "x" }\n',
+        encoding="utf-8",
+    )
+    _commit(repo, {"antigo/a.md": f"{CAMINHO_PESSOAL}\n"}, mensagem="chore: base")
+    (repo / "antigo" / "a.md").rename(repo / "b.md")
+    _commit(repo, {}, mensagem="chore: move")
+    historico = _rodar(repo, "--historico", toml=toml)
+    assert "antigo/a.md" not in historico.stdout
+    assert historico.returncode == 0, historico.stdout
+    assert "b.md:1: caminho de maquina" in _rodar(repo, toml=toml).stdout
+    _commit(repo, {"antigo/c.md": f"{CAMINHO_PESSOAL}\n"}, mensagem="chore: volta")
+    assert "antigo/c.md:1" in _rodar(repo, toml=toml).stdout
+    assert "antigo/c.md:1" in _rodar(repo, "--desde", "HEAD~1", toml=toml).stdout

@@ -1,0 +1,33 @@
+---
+title: Deficit
+description: How Novomodelo treats deficit — unserved load as a high-cost slack on the bus balance, priced by depth segments.
+---
+
+## Why it matters
+
+## A high-cost slack closes the gap
+
+## What the model decides
+
+## What you provide
+
+- The deficit segments, in order: for each one, a depth in MW and a cost per MWh. The costs must be positive and strictly increasing.
+- The last segment has no depth, which makes it unbounded.
+- A case-level default for all buses, optionally replaced for a given bus.
+- Deficit segments cannot vary by stage.
+
+## How the deficit cost is resolved
+
+Deficit segments come from exactly two sources: the segments declared on the bus in its registry, and, when the bus declares none, the default of the case-level penalty file. The first MW of unmet demand cost the first segment cost, the next ones cost the second segment cost, and so on.
+
+## The mirror: excess
+
+Excess generation is the opposite slack of the same balance: a small regularization cost removes spurious surplus generation. Unlike deficit, its cost has no per-bus field, only the case default, which may be refined by stage.
+
+## In the results
+
+Each bus and block reports its deficit in MW and its deficit energy in MWh. The stage cost breakdown has a column with the cost of unserved load.
+
+## Go deeper
+
+## For those who run the model

@@ -26,7 +26,7 @@ Fontes dos pontos:
   1. registro de calibração do MCP (`calibration.json` no state dir), alimentado
      por runs do run_start e indexado por `machine_id` (independe de hostname);
   2. `training/metadata.json` no workspace com o mesmo hostname NORMALIZADO.
-Sem pontos: `calibration_probe` é o gancho (1dtoy, 1 iteração) — não implementado.
+Sem pontos, o plano reporta "sem referência".
 """
 
 from __future__ import annotations
@@ -233,16 +233,6 @@ def record_calibration(path: Path, machine_id: str, point: dict[str, Any]) -> No
                 ensure_ascii=False,
             ),
         )
-
-
-def calibration_probe(*_args, **_kwargs) -> dict[str, Any] | None:
-    """GANCHO: medir a máquina rodando o template `1dtoy` por 1 iteração.
-
-    Ainda não implementado — devolve None; o plano reporta "sem referência".
-    Útil sobretudo como razão de velocidade ENTRE máquinas (o LP do 1dtoy é
-    ordens de grandeza menor que o de um caso real).
-    """
-    return None
 
 
 # ── seleção da referência ─────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ READ_ONLY_NET = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 
 #: Tools que usam a rede: o teste de anotações confere que são exatamente as de
 #: `openWorldHint=True`.
-NETWORK_TOOLS = frozenset({"server_info", "instalar_novomodelo"})
+NETWORK_TOOLS = frozenset({"server_info", "install_novomodelo"})
 
 #: Grava arquivos novos (deck convertido, relatório, dashboard, caso de template)
 #: sem apagar dados existentes; sobrescrever exige `force`, que é controlado.

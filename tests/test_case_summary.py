@@ -4,12 +4,15 @@ import dataclasses
 import hashlib
 import sys
 import types
+from typing import Any
 
 import pytest
 
 import novomodelo_mcp.tools.pre_run as pre_run
 from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
+
+from ._fakes import install_fake_novomodelo
 
 
 def _item(i, prefixo):
@@ -47,7 +50,7 @@ class _CaptureMCP:
 
 @pytest.fixture
 def tool(monkeypatch, tmp_path):
-    estado = {"erro": None, "chamadas": []}
+    estado: dict[str, Any] = {"erro": None, "chamadas": []}
 
     def load_case(path):
         estado["chamadas"].append(path)
@@ -56,10 +59,7 @@ def tool(monkeypatch, tmp_path):
         return _system()
 
     monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
-    pkg = types.ModuleType("novomodelo")
-    pkg.io = types.SimpleNamespace(load_case=load_case)
-    monkeypatch.setitem(sys.modules, "novomodelo", pkg)
-    monkeypatch.setitem(sys.modules, "novomodelo.io", pkg.io)
+    install_fake_novomodelo(monkeypatch, io=types.SimpleNamespace(load_case=load_case))
     case = tmp_path / "ws" / "caso"
     case.mkdir(parents=True)
     (case / "config.json").write_text("{}", encoding="utf-8")
@@ -74,20 +74,20 @@ def test_contagens_e_teto_da_lista_de_ids(tool):
     fn, case, _ = tool
     env = fn(str(case))
     assert env["status"] == "ok"
-    assert env["contagens"] == {
-        "barras": 2,
-        "linhas": 1,
-        "hidros": 8,
-        "termicas": 3,
-        "estagios": 12,
-        "contratos": 0,
-        "bombeamento": 1,
-        "fontes_nao_controlaveis": 0,
+    assert env["counts"] == {
+        "buses": 2,
+        "lines": 1,
+        "hydros": 8,
+        "thermals": 3,
+        "stages": 12,
+        "contracts": 0,
+        "pumping_stations": 1,
+        "non_controllable_sources": 0,
     }
-    hidros = env["itens"]["hidros"]
-    assert len(hidros["lista"]) == 5 and hidros["truncado"] is True
-    assert hidros["lista"][0] == {"id": 0, "name": "usina 0"}
-    assert env["itens"]["termicas"]["truncado"] is False
+    hidros = env["items"]["hydros"]
+    assert len(hidros["entries"]) == 5 and hidros["truncated"] is True
+    assert hidros["entries"][0] == {"id": 0, "name": "usina 0"}
+    assert env["items"]["thermals"]["truncated"] is False
 
 
 def test_caso_invalido_vira_envelope(tool):

@@ -5,14 +5,16 @@ tool recusa sem chamá-la.
 """
 
 import dataclasses
-import sys
 import types
+from typing import Any
 
 import pytest
 
 from novomodelo_mcp.adapters import budget
 from novomodelo_mcp.config import load_settings
 from novomodelo_mcp.tools.results import register_results
+
+from ._fakes import install_fake_novomodelo
 
 
 def _policy(n_stages=3, n_cuts=8, dim=4):
@@ -75,7 +77,7 @@ class OutputError(Exception):
 
 @pytest.fixture
 def tool(monkeypatch, tmp_path):
-    estado = {"erro": None, "chamadas": []}
+    estado: dict[str, Any] = {"erro": None, "chamadas": []}
 
     def load_policy(output_dir, policy_subdir="policy"):
         estado["chamadas"].append((output_dir, policy_subdir))
@@ -84,10 +86,7 @@ def tool(monkeypatch, tmp_path):
         return _policy()
 
     monkeypatch.setattr(budget, "row_limit", lambda settings: 5)
-    pkg = types.ModuleType("novomodelo")
-    pkg.results = types.SimpleNamespace(load_policy=load_policy)
-    monkeypatch.setitem(sys.modules, "novomodelo", pkg)
-    monkeypatch.setitem(sys.modules, "novomodelo.results", pkg.results)
+    install_fake_novomodelo(monkeypatch, results=types.SimpleNamespace(load_policy=load_policy))
     out = tmp_path / "ws" / "output"
     (out / "policy" / "cuts").mkdir(parents=True)
     (out / "policy" / "cuts" / "000.bin").write_bytes(b"x" * 100)
@@ -104,24 +103,24 @@ def test_resumo_sem_os_coeficientes_dos_cortes(tool):
     env = fn(out)
     assert env["status"] == "ok"
     assert env["metadata"]["software_version"] == "0.18.0"
-    assert [e["n_cortes"] for e in env["estagios"]] == [8, 8, 8]
-    assert env["estagios"][0]["n_ativos"] == 4
+    assert [e["n_cuts"] for e in env["stages"]] == [8, 8, 8]
+    assert env["stages"][0]["n_active"] == 4
     assert "coefficients" not in str(env) and "stage_bases" not in env
 
 
 def test_estagio_devolve_cortes_com_teto_e_sem_coeficientes(tool):
     fn, out, _ = tool
     env = fn(out, stage=1)
-    cortes = env["cortes"]
-    assert cortes["estagio"] == 1 and cortes["total"] == 8 and cortes["truncado"] is True
-    assert len(cortes["linhas"]) == 5
-    assert cortes["linhas"][0] == {
+    cortes = env["cuts"]
+    assert cortes["stage"] == 1 and cortes["total"] == 8 and cortes["truncated"] is True
+    assert len(cortes["rows"]) == 5
+    assert cortes["rows"][0] == {
         "cut_id": 0,
         "iteration": 1,
         "forward_pass_index": 0,
         "intercept": 0.0,
         "is_active": True,
-        "n_coeficientes": 4,
+        "n_coefficients": 4,
     }
 
 

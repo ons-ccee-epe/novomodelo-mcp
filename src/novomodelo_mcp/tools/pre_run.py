@@ -5,6 +5,8 @@ Cada função envelopa um subcomando de CLI existente. Zero regra de negócio.
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..adapters import budget
 from ..adapters.bridge import run_bridge
 from ..adapters.discovery import find_novomodelo
@@ -13,10 +15,10 @@ from ..adapters.novomodelo import case_summary_binding, validate_deck_binding, v
 from ..adapters.paths import ensure_in_workspace
 from ..config import Settings
 from .annotations import READ_ONLY, WRITES
-from .shaping import attach_artifact, cap_envelope, group_diagnostics
+from .shaping import attach_artifact, cap_bridge_envelope, cap_envelope, group_diagnostics
 
 
-def _force_gate(force: bool, dry_run: bool, settings: Settings) -> dict | None:
+def _force_gate(force: bool, dry_run: bool, settings: Settings) -> dict[str, Any] | None:
     """O `--force` do bridge limpa o deck de destino antes de converter."""
     if force and not dry_run and not settings.allow_force:
         return error(
@@ -32,7 +34,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
     """Registra as tools de pré-rodada no servidor `mcp`."""
 
     @mcp.tool(annotations=READ_ONLY)
-    def bridge_check_newave(src: str) -> dict:
+    def bridge_check_newave(src: str) -> dict[str, Any]:
         """Pré-valida as ENTRADAS de um caso NEWAVE, sem converter (read-only).
 
         `src`: pasta do caso NEWAVE. Rode isto ANTES de converter para pegar
@@ -41,7 +43,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         if err := ensure_in_workspace(src, settings=settings):
             return err
         env = run_bridge(["check", "newave", src], settings=settings)
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)
 
     @mcp.tool(annotations=WRITES)
     def bridge_convert_newave(
@@ -50,7 +52,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         validate: bool = True,
         force: bool = False,
         dry_run: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Converte um caso NEWAVE para deck Novomodelo, escrevendo em `dst`.
 
         `validate=True` (recomendado) também valida o deck resultante numa
@@ -72,10 +74,10 @@ def register_pre_run(mcp, settings: Settings) -> None:
         env = run_bridge(argv, settings=settings)
         if env.get("exit_code") == 0 and not dry_run:
             attach_artifact(env, "deck", dst)
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def case_validate(case_dir: str, output_dir: str | None = None) -> dict:
+    def case_validate(case_dir: str, output_dir: str | None = None) -> dict[str, Any]:
         """Valida se um deck Novomodelo JÁ convertido está pronto para rodar (read-only).
 
         Envelopa `novomodelo validate <case_dir> --json` (pipeline de validação em 6
@@ -101,20 +103,20 @@ def register_pre_run(mcp, settings: Settings) -> None:
         warnings = env.get("warnings")
         if isinstance(warnings, list):
             grouped = group_diagnostics(warnings, settings.max_diagnostics)
-            env["warnings"] = grouped["grupos"]
+            env["warnings"] = grouped["groups"]
             env["warnings_total"] = grouped["total"]
-            env["warnings_grupos_total"] = grouped["grupos_total"]
-            env["warnings_agrupados"] = True
+            env["warnings_groups_total"] = grouped["groups_total"]
+            env["warnings_grouped"] = True
         return cap_envelope(env, settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def case_summary(case_dir: str) -> dict:
+    def case_summary(case_dir: str) -> dict[str, Any]:
         """O caso como o novomodelo o lê e interpreta (`novomodelo.io.load_case`).
 
         Diferente do `deck_list` (os arquivos), mostra o caso já validado:
-        `contagens` por tipo (barras, linhas, hidros, térmicas, contratos,
-        bombeamento, fontes não controláveis, estágios) e `itens` com
-        `{id, name}` de cada tipo, com teto. Caso inválido → erro com a mensagem
+        `counts` por tipo (buses, lines, hydros, thermals, contracts,
+        pumping_stations, non_controllable_sources, stages) e `items` com
+        `{id, name}` de cada tipo em `entries`, com teto. Caso inválido → erro com a mensagem
         do novomodelo. Não grava nada.
         """
         if err := ensure_in_workspace(case_dir, settings=settings):
@@ -130,7 +132,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         )
 
     @mcp.tool(annotations=READ_ONLY)
-    def bridge_check_decomp(src: str) -> dict:
+    def bridge_check_decomp(src: str) -> dict[str, Any]:
         """Pré-valida as ENTRADAS de um caso DECOMP, sem converter (read-only).
 
         `src`: pasta da revisão DECOMP. Rode antes de converter. Devolve o
@@ -139,7 +141,7 @@ def register_pre_run(mcp, settings: Settings) -> None:
         if err := ensure_in_workspace(src, settings=settings):
             return err
         env = run_bridge(["check", "decomp", src], settings=settings)
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)
 
     @mcp.tool(annotations=WRITES)
     def bridge_convert_decomp(
@@ -148,13 +150,13 @@ def register_pre_run(mcp, settings: Settings) -> None:
         validate: bool = True,
         force: bool = False,
         dry_run: bool = False,
-        importar_fcf: bool = True,
-    ) -> dict:
+        import_fcf: bool = True,
+    ) -> dict[str, Any]:
         """Converte uma revisão DECOMP para deck Novomodelo, escrevendo em `dst`.
 
         Espelha `bridge_convert_newave`: `validate=True` valida o deck resultante,
         `force` apaga e regrava `dst` (exige NOVOMODELO_MCP_ALLOW_FORCE=1), `dry_run` não
-        escreve. Caminho do deck em `artifacts.deck`. `importar_fcf=False` converte sem importar os cortes da
+        escreve. Caminho do deck em `artifacts.deck`. `import_fcf=False` converte sem importar os cortes da
         FCF declarados no deck (`--no-fcf`); só no DECOMP, o conversor NEWAVE não
         tem essa opção.
         """
@@ -169,9 +171,9 @@ def register_pre_run(mcp, settings: Settings) -> None:
             argv.append("--force")
         if dry_run:
             argv.append("--dry-run")
-        if not importar_fcf:
+        if not import_fcf:
             argv.append("--no-fcf")
         env = run_bridge(argv, settings=settings)
         if env.get("exit_code") == 0 and not dry_run:
             attach_artifact(env, "deck", dst)
-        return cap_envelope(env, settings)
+        return cap_bridge_envelope(env, settings)

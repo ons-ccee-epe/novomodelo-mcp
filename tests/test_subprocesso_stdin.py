@@ -14,7 +14,8 @@ from pathlib import Path
 
 import anyio
 import pytest
-from _fakes import fake_bin
+
+from ._fakes import fake_bin
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "novomodelo_mcp"
 CHAMADAS = {"run", "Popen", "check_output", "check_call", "call"}

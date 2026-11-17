@@ -6,7 +6,7 @@ description: The constraints/ files that override entity bounds per stage and bl
 This page documents the `constraints/` files that override entity bounds per stage and block
 (thermal, hydro, hydro unit group, line, pumping, contract and NCS bounds) and the files that define
 generic constraints: `generic_constraints.json`, `generic_constraint_bounds.parquet` and
-`generic_parameters.json`. The other case files, including the penalty overrides that share the `constraints/` directory, are listed in the [Case Format](/reference/case-format/#file-summary) overview.
+`generic_parameters.json`. The other case files, including the penalty overrides that share the `constraints/` directory, are listed in the [Case Format](/en/reference/case-format/#file-summary) overview.
 
 All bounds Parquet files use sparse storage: only `(entity_id, stage_id)` pairs
 that differ from the base entity-level value need rows. Absent rows use the
@@ -16,22 +16,24 @@ entity-level value unchanged.
 
 ## `constraints/thermal_bounds.parquet`
 
-**Methodology:** [Equipment-Specific Formulations](/math/equipment-formulations/)
+**Methodology:** [Equipment-Specific Formulations](/en/math/equipment-formulations/)
 
 Stage-varying generation and cost overrides for thermal plants.
 
-| Name                | Type             | Required | Default | Units   | Description                                                                                                                                                                                                                                                                              |
-| ------------------- | ---------------- | -------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `thermal_id`        | Int32            | Yes      | —       | —       | Thermal plant ID                                                                                                                                                                                                                                                                         |
-| `stage_id`          | Int32            | Yes      | —       | —       | Stage ID                                                                                                                                                                                                                                                                                 |
-| `min_generation_mw` | Float64          | No       | —       | MW      | Minimum generation override (MW)                                                                                                                                                                                                                                                         |
-| `max_generation_mw` | Float64          | No       | —       | MW      | Maximum generation override (MW)                                                                                                                                                                                                                                                         |
-| `cost_per_mwh`      | Float64          | No       | —       | USD/MWh | Dispatch cost override (USD/MWh)                                                                                                                                                                                                                                                         |
-| `block_id`          | Int32 (nullable) | No       | —       | —       | Zero-based block index within the stage, selecting one block's `min_generation_mw`/`max_generation_mw` override. `null` applies at the stage level. A non-null `cost_per_mwh` on the same row, or any `block_id` on a thermal declaring `anticipated_config`, is rejected at validation. |
+| Name                | Type             | Required | Default | Units   | Description                                                                                                                                                                                                                                              |
+| ------------------- | ---------------- | -------- | ------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `thermal_id`        | Int32            | Yes      | —       | —       | Thermal plant ID                                                                                                                                                                                                                                         |
+| `stage_id`          | Int32            | Yes      | —       | —       | Stage ID                                                                                                                                                                                                                                                 |
+| `min_generation_mw` | Float64          | No       | —       | MW      | Minimum generation override (MW)                                                                                                                                                                                                                         |
+| `max_generation_mw` | Float64          | No       | —       | MW      | Maximum generation override (MW)                                                                                                                                                                                                                         |
+| `cost_per_mwh`      | Float64          | No       | —       | USD/MWh | Dispatch cost override (USD/MWh): for the stage on a row with a null `block_id`, for that block on a row with one                                                                                                                                        |
+| `block_id`          | Int32 (nullable) | No       | —       | —       | Zero-based block index within the stage, selecting one block's `min_generation_mw`/`max_generation_mw`/`cost_per_mwh` override. `null` applies at the stage level. Any `block_id` on a thermal declaring `anticipated_config` is rejected at validation. |
 
-`cost_per_mwh` is deliberately **not** block-eligible, unlike
-[`contract_bounds.price_per_mwh`](#constraintscontract_boundsparquet) — commitment is a stage-level decision,
-so a per-block dispatch cost has nothing to attach to.
+`cost_per_mwh` is block-eligible, like
+[`contract_bounds.price_per_mwh`](#constraintscontract_boundsparquet). Each column resolves on its own for
+each block: the value on the block's row, else the value on the stage row, else the plant's value in
+[`system/thermals.json`](/en/reference/case-format/system/#systemthermalsjson) (`thermals[].cost_per_mwh` for the
+cost). A null value falls through to the next level; an explicit `0.0` is kept.
 
 **Validation:**
 
@@ -41,7 +43,7 @@ so a per-block dispatch cost has nothing to attach to.
 
 ## `constraints/hydro_bounds.parquet`
 
-**Methodology:** [System Element Modeling Overview](/math/system-elements/)
+**Methodology:** [System Element Modeling Overview](/en/math/system-elements/)
 
 Stage-varying operational bound overrides for hydro plants.
 
@@ -49,13 +51,13 @@ Stage-varying operational bound overrides for hydro plants.
 | ---------------------- | ---------------- | -------- | ------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hydro_id`             | Int32            | Yes      | —       | —     | Hydro plant ID                                                                                                                                                                                                                                                                                                                                                         |
 | `stage_id`             | Int32            | Yes      | —       | —     | Stage ID                                                                                                                                                                                                                                                                                                                                                               |
-| `min_turbined_m3s`     | Float64          | No       | —       | m³/s  | Plant-level minimum turbined flow (m³/s). Where it exceeds the sum of the unit groups' resolved minima, it binds on the plant's total turbined flow, a shortfall charged once at the plant's penalty; a lower value leaves the groups' minima binding, and setup warns about it |
+| `min_turbined_m3s`     | Float64          | No       | —       | m³/s  | Plant-level minimum turbined flow (m³/s). Where it exceeds the sum of the unit groups' resolved minima, it binds on the plant's total turbined flow, a shortfall charged once at the plant's penalty; a lower value leaves the groups' minima binding, and setup warns about it. It is dropped, not charged, where the plant cannot produce, for example at a block where it has no [turbine capacity](/en/math/hydro-production-models#plants-and-cells-without-turbine-capacity) ([Plant Minimum and Maximum](/en/math/lp-formulation#plant-minimum-and-maximum)) |
 | `max_turbined_m3s`     | Float64          | No       | —       | m³/s  | Maximum turbined flow (m³/s). Caps every bus's share, and, on a plant whose unit groups sit on several buses, the plant's total where it is below the sum of the buses' capacities |
 | `min_storage_hm3`      | Float64          | No       | —       | hm³   | Minimum reservoir storage (hm³)                                                                                                                                                                                                                                                                                                                                        |
 | `max_storage_hm3`      | Float64          | No       | —       | hm³   | Maximum reservoir storage (hm³)                                                                                                                                                                                                                                                                                                                                        |
 | `min_outflow_m3s`      | Float64          | No       | —       | m³/s  | Minimum total outflow (m³/s)                                                                                                                                                                                                                                                                                                                                           |
 | `max_outflow_m3s`      | Float64          | No       | —       | m³/s  | Maximum total outflow (m³/s)                                                                                                                                                                                                                                                                                                                                           |
-| `min_generation_mw`    | Float64          | No       | —       | MW    | Plant-level minimum generation (MW). Where it exceeds the sum of the unit groups' resolved minima, it binds on the plant's total generation, a shortfall charged once at the plant's penalty; a lower value leaves the groups' minima binding, and setup warns about it |
+| `min_generation_mw`    | Float64          | No       | —       | MW    | Plant-level minimum generation (MW). Where it exceeds the sum of the unit groups' resolved minima, it binds on the plant's total generation, a shortfall charged once at the plant's penalty; a lower value leaves the groups' minima binding, and setup warns about it. It is dropped, not charged, where the plant cannot produce, for example at a block where it has no [turbine capacity](/en/math/hydro-production-models#plants-and-cells-without-turbine-capacity) ([Plant Minimum and Maximum](/en/math/lp-formulation#plant-minimum-and-maximum)) |
 | `max_generation_mw`    | Float64          | No       | —       | MW    | Maximum generation (MW). Caps every bus's share, and, on a plant whose unit groups sit on several buses, the plant's total where it is below the sum of the buses' capacities |
 | `max_diversion_m3s`    | Float64          | No       | —       | m³/s  | Maximum diversion flow (m³/s); a positive value requires a declared `diversion` channel |
 | `min_diversion_m3s`    | Float64          | No       | —       | m³/s  | Minimum diversion flow (m³/s); a positive value requires a declared `diversion` channel |
@@ -71,12 +73,12 @@ diversion column is pinned `[0, 0]`: a positive floor would be infeasible, and a
 positive ceiling would divert water that no plant receives. `min_diversion_m3s`,
 `min_spillage_m3s`, and `max_spillage_m3s` must each be non-negative, and a
 row combining `min_spillage_m3s` and `max_spillage_m3s` with
-`min_spillage_m3s > max_spillage_m3s` is rejected. See [Error Codes](/reference/error-codes) for
+`min_spillage_m3s > max_spillage_m3s` is rejected. See [Error Codes](/en/reference/error-codes) for
 the full failure-mode catalog.
 
 A plant's own declared minima cannot exceed its unit groups' summed minima, and
 its declared maxima cannot fall below their summed maxima (see
-[`system/hydros.json`](/reference/case-format/hydros/#systemhydrosjson)), so
+[`system/hydros.json`](/en/reference/case-format/hydros/#systemhydrosjson)), so
 only an override in this file binds the plant's total. A
 `min_turbined_m3s` or `min_generation_mw` override below the groups' summed
 minima has no effect: setup prints a `WARN` line naming the hydro, the field,
@@ -85,11 +87,17 @@ the groups' own, in
 [`constraints/hydro_unit_group_bounds.parquet`](#constraintshydro_unit_group_boundsparquet).
 The plant minimum's shortfall is reported in the `turbined_slack_m3s` and
 `generation_slack_mw` columns of
-[`simulation/hydros/`](/reference/output/simulation/#simulationhydros).
+[`simulation/hydros/`](/en/reference/output/simulation/#simulationhydros).
 
 **Validation:**
 
 - A row's `max_turbined_m3s` or `max_generation_mw` must not exceed the plant's declared value.
+- A row's `max_storage_hm3` must not exceed the reservoir's `max_storage_hm3` in
+  [`system/hydros.json`](/en/reference/case-format/hydros/#systemhydrosjson), and its `min_storage_hm3` must
+  not lie below the reservoir's `min_storage_hm3`.
+- On every study stage, the storage minimum in force must not exceed the maximum in force. Each is the
+  value on the stage's row, else the reservoir's own; equal bounds are accepted. See
+  [Stage storage bounds refused at load](/en/reference/error-codes/#stage-storage-bounds-refused-at-load).
 - Every override value must be finite.
 - `filling_min_rate_m3s` must be `>= 0`.
 
@@ -97,11 +105,11 @@ The plant minimum's shortfall is reported in the `turbined_slack_m3s` and
 
 ## `constraints/hydro_unit_group_bounds.parquet`
 
-**Methodology:** [System Element Modeling Overview](/math/system-elements/)
+**Methodology:** [System Element Modeling Overview](/en/math/system-elements/)
 
 Stage-varying, optionally per-block bound overrides for a hydro plant's
 declared unit groups (`hydros[].unit_groups[]`; see
-[`system/hydros.json`](/reference/case-format/hydros/#systemhydrosjson)). A row overrides one of a
+[`system/hydros.json`](/en/reference/case-format/hydros/#systemhydrosjson)). A row overrides one of a
 group's four declared bounds for one `(hydro_id, hydro_unit_group_id,
 stage_id)`, optionally narrowed to a single block; a group with no override
 row reads its declared value. Group `id` is unique within its
@@ -127,7 +135,7 @@ plant, not necessarily dense or 0-based, and `hydro_unit_group_id` addresses the
 
 ## `constraints/line_bounds.parquet`
 
-**Methodology:** [Equipment-Specific Formulations](/math/equipment-formulations/)
+**Methodology:** [Equipment-Specific Formulations](/en/math/equipment-formulations/)
 
 Stage-varying, absolute-MW flow capacity overrides for transmission lines.
 
@@ -147,7 +155,7 @@ closes the line in the direct direction for that block, or for the stage when
 
 ## `constraints/pumping_bounds.parquet`
 
-**Methodology:** [Equipment-Specific Formulations](/math/equipment-formulations/)
+**Methodology:** [Equipment-Specific Formulations](/en/math/equipment-formulations/)
 
 Stage-varying flow bounds for pumping stations.
 
@@ -168,7 +176,7 @@ Stage-varying flow bounds for pumping stations.
 
 ## `constraints/contract_bounds.parquet`
 
-**Methodology:** [Equipment-Specific Formulations](/math/equipment-formulations/)
+**Methodology:** [Equipment-Specific Formulations](/en/math/equipment-formulations/)
 
 Stage-varying power and price overrides for energy contracts.
 
@@ -181,25 +189,25 @@ Stage-varying power and price overrides for energy contracts.
 | `price_per_mwh` | Float64          | No       | —       | USD/MWh | Price override (USD/MWh)                                                                                                                      |
 | `block_id`      | Int32 (nullable) | No       | —       | —       | Zero-based block index within the stage, selecting one block's `min_mw`/`max_mw`/`price_per_mwh` override. `null` applies at the stage level. |
 
-`price_per_mwh` is block-eligible — a study's simulation cost path honors a
-per-block contract price — deliberately asymmetric with
-[`thermal_bounds.cost_per_mwh`](#constraintsthermal_boundsparquet), which is not.
+`price_per_mwh` is block-eligible, like
+[`thermal_bounds.cost_per_mwh`](#constraintsthermal_boundsparquet): a study's simulation cost path honors a
+per-block contract price.
 
 ---
 
 ## `constraints/ncs_bounds.parquet`
 
-**Methodology:** [Equipment-Specific Formulations](/math/equipment-formulations/)
+**Methodology:** [Equipment-Specific Formulations](/en/math/equipment-formulations/)
 
 Stage-varying available generation bounds for non-controllable sources. Absent rows keep the entity's
 declared `max_generation_mw` unchanged; a present row overrides that entity
 capacity with its per-stage `available_generation_mw` for the `(ncs_id, stage_id)` cell.
 The rows apply to a source with no stochastic availability model. A source with rows in
-[`scenarios/non_controllable_stats.parquet`](/reference/case-format/scenarios/#scenariosnon_controllable_statsparquet), or one that draws its
+[`scenarios/non_controllable_stats.parquet`](/en/reference/case-format/scenarios/#scenariosnon_controllable_statsparquet), or one that draws its
 availability from
-[`scenarios/external_ncs_scenarios.parquet`](/reference/case-format/scenarios/#scenariosexternal_ncs_scenariosparquet) under the `external` scheme,
+[`scenarios/external_ncs_scenarios.parquet`](/en/reference/case-format/scenarios/#scenariosexternal_ncs_scenariosparquet) under the `external` scheme,
 ignores its rows here: its available generation follows the model or the realizations (see
-[Equipment-Specific Formulations §6](/math/equipment-formulations#6-non-controllable-generation-sources)).
+[Equipment-Specific Formulations §6](/en/math/equipment-formulations#6-non-controllable-generation-sources)).
 
 | Name                      | Type    | Required | Default | Units | Description                                                     |
 | ------------------------- | ------- | -------- | ------- | ----- | --------------------------------------------------------------- |
@@ -217,7 +225,7 @@ For a source these rows apply to, the per-block available generation bound in th
 
 ## `constraints/generic_constraints.json`
 
-**Methodology:** [Generic Constraints](/reference/generic-constraints/) · [LP Formulation](/math/lp-formulation/)
+**Methodology:** [Generic Constraints](/en/reference/generic-constraints/) · [LP Formulation](/en/math/lp-formulation/)
 
 User-defined linear constraints, added to every stage's LP alongside the
 built-in constraint set. The file is optional; when absent, no generic
@@ -255,7 +263,7 @@ constraints are added.
 | `constraints[].slack`         | object         | Yes         | —       | —     | Slack variable configuration: `enabled`, `penalty` and `penalty_basis`.                                                |
 | `constraints[].slack.enabled` | boolean        | Yes         | —       | —     | Whether a slack variable is allowed.                                                                                   |
 | `constraints[].slack.penalty` | number \| null | Conditional | —       | USD/(row unit·h) or USD/row unit | Penalty per unit of violation, read under `penalty_basis`. Required and `> 0` when `enabled` is `true`; absent when it is `false`. |
-| `constraints[].slack.penalty_basis` | string \| null | Conditional | —  | —     | One of `"per_hour"`, `"per_unit"`. `"per_hour"` charges the penalty per hour of the row's period: use it for a row in MW or m³/s; `"per_unit"` charges it once per unit of violation: use it for a row in MWh or hm³. Required when `enabled` is `true`; absent when it is `false`. See [Penalty basis](/reference/generic-constraints/#penalty-basis). |
+| `constraints[].slack.penalty_basis` | string \| null | Conditional | —  | —     | One of `"per_hour"`, `"per_unit"`. `"per_hour"` charges the penalty per hour of the row's period: use it for a row in MW or m³/s; `"per_unit"` charges it once per unit of violation: use it for a row in MWh or hm³. Required when `enabled` is `true`; absent when it is `false`. See [Penalty basis](/en/reference/generic-constraints/#penalty-basis). |
 
 **Named expressions (`expressions[]`):**
 
@@ -268,17 +276,17 @@ constraints are added.
 
 The `expression` grammar, the variables it can name, named expressions (`@name`) and how a
 constraint's shape follows from its bounds are specified in
-[Generic Constraints](/reference/generic-constraints/):
-[Expression grammar](/reference/generic-constraints/#expression-grammar),
-[Variable catalog](/reference/generic-constraints/#variable-catalog),
-[The `@name` grammar](/reference/generic-constraints/#the-name-grammar),
-[Interval and shape derivation](/reference/generic-constraints/#interval-and-shape-derivation).
+[Generic Constraints](/en/reference/generic-constraints/):
+[Expression grammar](/en/reference/generic-constraints/#expression-grammar),
+[Variable catalog](/en/reference/generic-constraints/#variable-catalog),
+[The `@name` grammar](/en/reference/generic-constraints/#the-name-grammar),
+[Interval and shape derivation](/en/reference/generic-constraints/#interval-and-shape-derivation).
 
 ---
 
 ## `constraints/generic_constraint_bounds.parquet`
 
-**Methodology:** [Generic Constraints](/reference/generic-constraints/) · [LP Formulation](/math/lp-formulation/)
+**Methodology:** [Generic Constraints](/en/reference/generic-constraints/) · [LP Formulation](/en/math/lp-formulation/)
 
 Stage-varying, optionally per-block RHS bound overrides for generic
 constraints declared in `constraints/generic_constraints.json`. This table
@@ -291,20 +299,20 @@ value instead — see below).
 | --------------- | ------------------ | -------- | ------- | ----- | ----------------------------------------------------------------------------------------- |
 | `constraint_id` | Int32              | Yes      | —       | —     | Generic constraint ID                                                                     |
 | `stage_id`      | Int32              | Yes      | —       | —     | Stage ID                                                                                  |
-| `block_id`      | Int32 (nullable)   | No       | —       | —     | Zero-based block index within the stage. `null` applies to all blocks of the given stage. |
+| `block_id`      | Int32 (nullable)   | No       | —       | —     | Zero-based block index within the stage. `null` applies to all blocks of the given stage. A constraint with a [stage-volume](/en/reference/generic-constraints/#stage-volumes) term takes `null` only. |
 | `bound_lower`   | Float64 (nullable) | No       | —       | —     | Lower interval endpoint. `null` when the constraint is unbounded below at this cell.      |
 | `bound_upper`   | Float64 (nullable) | No       | —       | —     | Upper interval endpoint. `null` when the constraint is unbounded above at this cell.      |
 
 How the two endpoints set the shape:
-[Interval and shape derivation](/reference/generic-constraints/#interval-and-shape-derivation).
+[Interval and shape derivation](/en/reference/generic-constraints/#interval-and-shape-derivation).
 Which rows are rejected:
-[The activation grid](/reference/generic-constraints/#the-activation-grid).
+[The activation grid](/en/reference/generic-constraints/#the-activation-grid).
 
 ---
 
 ## `constraints/generic_parameters.json`
 
-**Methodology:** [Generic Constraints](/reference/generic-constraints/) · [LP Formulation](/math/lp-formulation/)
+**Methodology:** [Generic Constraints](/en/reference/generic-constraints/) · [LP Formulation](/en/math/lp-formulation/)
 
 Named scalar parameters that can be referenced from generic-constraint coefficient
 expressions using the `@name` sigil. The file is optional; when absent, no
@@ -362,7 +370,7 @@ by `@name`.
 | `max_stored_energy_mwh`                           | `max_stored_energy` × 10⁶/3600, in MWh                                                                                      |
 
 The productivity and stored-energy quantities these tags resolve to are defined in
-[Hydro Production Function Models §4](/math/hydro-production-models#4-energy-conversion-quantities).
+[Hydro Production Function Models §4](/en/math/hydro-production-models#4-energy-conversion-quantities).
 
 **Validation:**
 
@@ -392,4 +400,4 @@ The productivity and stored-energy quantities these tags resolve to are defined 
 - Unknown JSON fields on any entry are rejected immediately.
 
 For what each kind means, see
-[The parameter kinds](/reference/generic-constraints/#generic_parametersjson-the-parameter-kinds).
+[The parameter kinds](/en/reference/generic-constraints/#generic_parametersjson-the-parameter-kinds).

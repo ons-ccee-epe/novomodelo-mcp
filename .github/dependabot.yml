@@ -32,7 +32,7 @@ updates:
   # Painel da bateria e2e: dependências de desenvolvimento, fora do pacote. Uma PR
   # por semana com todas as atualizações juntas.
   - package-ecosystem: "npm"
-    directory: "/tests/e2e/frontend"
+    directory: "/e2e/frontend"
     target-branch: "develop"
     schedule:
       interval: "weekly"

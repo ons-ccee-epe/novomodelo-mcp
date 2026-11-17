@@ -1,4 +1,4 @@
-"""`docs_read(page, secao)`: só a seção (por âncora ou título); `docs_list` com título e descrição."""
+"""`docs_read(page, section)`: só a seção (por âncora ou título); `docs_list` com título e descrição."""
 
 import dataclasses
 
@@ -49,7 +49,7 @@ def settings(tmp_path):
 
 def test_secao_por_ancora_inclui_as_subsecoes_e_para_na_proxima_do_mesmo_nivel(settings):
     env = REF.read_doc(settings, "math/hydro", 20000, section="2-constant-productivity")
-    assert env["status"] == "ok" and env["secao"] == "2-constant-productivity"
+    assert env["status"] == "ok" and env["section"] == "2-constant-productivity"
     assert "Constant text." in env["content"] and "Detail text." in env["content"]
     assert "echo ok" in env["content"] and "FPHA text." not in env["content"]
 
@@ -62,8 +62,8 @@ def test_secao_por_titulo_ignora_caixa_e_acento(settings):
 
 def test_comentario_em_bloco_de_codigo_nao_e_titulo(settings):
     ancoras = [
-        s["ancora"]
-        for s in REF.read_doc(settings, "math/hydro", 20000, section="nao-existe")["secoes"]
+        s["anchor"]
+        for s in REF.read_doc(settings, "math/hydro", 20000, section="nao-existe")["sections"]
     ]
     assert not any("comentario" in a for a in ancoras)
 
@@ -76,31 +76,31 @@ def test_titulo_repetido_ganha_sufixo_como_no_site(settings):
 def test_secao_inexistente_lista_as_secoes(settings):
     env = REF.read_doc(settings, "math/hydro", 20000, section="nao-existe")
     assert env["status"] == "error" and env["exit_code"] == 2
-    assert {"titulo": "3 FPHA", "ancora": "3-fpha"} in env["secoes"]
+    assert {"title": "3 FPHA", "anchor": "3-fpha"} in env["sections"]
 
 
 def test_ancora_do_docs_search_abre_a_mesma_secao(settings):
-    for r in REF.search_docs(settings, "FPHA detail constant", k=10)["resultados"]:
-        if not r["secao"]:
+    for r in REF.search_docs(settings, "FPHA detail constant", k=10)["results"]:
+        if not r["section"]:
             continue
-        env = REF.read_doc(settings, r["pagina"], 20000, section=r["secao"])
-        assert env["status"] == "ok" and env["titulo"] == r["titulo"], r
+        env = REF.read_doc(settings, r["page"], 20000, section=r["section"])
+        assert env["status"] == "ok" and env["title"] == r["title"], r
 
 
 def test_docs_list_traz_titulo_e_descricao(settings):
     env = REF.list_docs(settings)
     assert env["pages"] == ["math/hydro", "math/outra"]
-    assert env["itens"] == [
+    assert env["items"] == [
         {
-            "pagina": "math/hydro",
-            "titulo": "Hydro Production Models",
-            "descricao": "How generation depends on head.",
+            "page": "math/hydro",
+            "title": "Hydro Production Models",
+            "description": "How generation depends on head.",
         },
-        {"pagina": "math/outra", "titulo": "Outra", "descricao": "Desc."},
+        {"page": "math/outra", "title": "Outra", "description": "Desc."},
     ]
 
 
 def test_docs_list_embutido_tem_titulo_em_todas_as_paginas(monkeypatch):
     monkeypatch.delenv("NOVOMODELO_MCP_DOCS_DIR", raising=False)
     env = REF.list_docs(dataclasses.replace(load_settings(), docs_dir=None))
-    assert env["count"] > 0 and all(i["titulo"] for i in env["itens"])
+    assert env["count"] > 0 and all(i["title"] for i in env["items"])

@@ -1,0 +1,33 @@
+---
+title: Load
+description: How Novomodelo treats load — the demand at each bus, its uncertainty by stage and its shape across load blocks.
+---
+
+## Why it matters
+
+## Demand per block
+
+## What the model decides
+
+Nothing about the load itself: it is data, not a decision. What the model decides is how to meet it, with the generation, imports and line flows available, and with deficit as the last resort (see the [Deficit](/en/entities/consumption/deficit/) page).
+
+## What you provide
+
+- For each bus and stage, the mean load and its standard deviation, in MW. A standard deviation of zero makes the load deterministic.
+- Optionally, load factors for each bus, stage and block, which must be positive. A block with no factor carries the stage load unchanged, and without the factor file every factor is 1.
+- Optionally, pre-computed load scenarios, when the load comes from an external source.
+- Optionally, correlation between the loads of different buses, through correlation groups.
+
+## How the load is formed
+
+- **Without load statistics**, every bus carries zero load, unless the load scheme is external in training.
+- **With load statistics**, each scenario draws a realization for each bus and stage from the mean plus the standard deviation times a random noise, and the result is never negative: it is truncated at zero. Load has no autoregressive structure.
+- **By block**, the load realization of the stage is multiplied by the block factor of the bus.
+
+## In the results
+
+The simulation output reports, for each bus and block, the load in MW and the load energy over the block in MWh, next to the deficit, the excess and the spot price.
+
+## Go deeper
+
+## For those who run the model

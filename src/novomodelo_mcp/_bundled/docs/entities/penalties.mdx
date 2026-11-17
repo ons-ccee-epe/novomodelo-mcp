@@ -1,0 +1,28 @@
+---
+title: Penalties and deficit cost
+description: The costs that keep the stage problem always feasible and signal how severe a violation is — the three purposes of penalties, their priority order and how values are resolved.
+---
+
+## Why it matters
+
+## The priority ladder
+
+The deficit, charged by depth segments with rising costs, is detailed on the [Deficit](/en/entities/consumption/deficit/) page. Above it sits the violation of the minimum storage of a plant being filled: keeping the reservoir above its dead volume is more critical than serving the load, because operating below it endangers the dam. The filling target sits on a separate rung, below the deficit. Its position relative to the operational constraints is left to the study's calibration.
+
+The costs have different units (\$/MWh, \$/hm³, \$/(m³/s·h)). The ordering is expressed in energy-equivalent costs, in \$/MWh. The load-time check compares the values as given, without that conversion, so a case can pass it and still invert the energy-equivalent ordering.
+
+## What the model decides
+
+## What you provide
+
+- The global default for each cost, in `penalties.json`, with four required sections: buses, lines, hydro plants and non-controllable sources. Required costs must be positive, except the turbining cost and the curtailment cost, which may be zero.
+- Optionally, sparse per-stage overrides, in separate files for buses, lines, hydro plants and non-controllable sources. Rows exist only for the entity-stage pairs where the value differs from the default.
+- The deficit segments: in each bus's registry or, when the bus declares none, in the case default.
+
+## How each cost value is resolved
+
+The cascade has three levels of specificity. The per-stage override, defined for an entity at a stage, is the most specific. The per-entity override comes next, and the case-wide global default is the last resort. The most specific value present wins.
+
+## Go deeper
+
+## For those who run the model

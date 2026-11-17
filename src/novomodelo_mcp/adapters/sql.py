@@ -159,7 +159,7 @@ def _looks_like_path(lit: str) -> bool:
     return low.endswith(_PATH_EXT)
 
 
-def guard_sql(query: str, roots: list[Path]) -> dict | None:
+def guard_sql(query: str, roots: list[Path]) -> dict[str, Any] | None:
     """None se a query e leitura segura e confinada; senao, um envelope de erro.
 
     Puro (sem DuckDB), para ser testavel isoladamente — e a parte critica.
@@ -254,7 +254,8 @@ def run_readonly_sql(
         try:
             con.execute(f"SET allowed_directories=[{lista}]")
             con.execute("SET enable_external_access=false")
-            gravadas = con.execute("SELECT current_setting('allowed_directories')").fetchone()[0]
+            linha = con.execute("SELECT current_setting('allowed_directories')").fetchone()
+            gravadas = linha[0] if linha else []
             if not set(pastas) <= set(gravadas):
                 raise ValueError(f"allowed_directories gravado diverge: {gravadas}")
         except Exception as exc:  # noqa: BLE001 - qualquer falha aqui recusa a query

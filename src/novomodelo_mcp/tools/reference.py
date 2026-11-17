@@ -1,12 +1,13 @@
 """Tools de referência (read-only): JSON Schemas de entrada e documentação.
 
-Também registra o resource `novomodelo://schema/{tipo}` como afordância para o agente
+Também registra o resource `novomodelo://schema/{type}` como afordância para o agente
 consultar sem uma chamada de tool. Sem regra de negócio.
 """
 
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from ..adapters import reference as REF
 from ..config import Settings
@@ -19,23 +20,25 @@ def register_reference(mcp, settings: Settings) -> None:
     """Registra as tools de referência e o resource de schema no servidor `mcp`."""
 
     @mcp.tool(annotations=READ_ONLY)
-    def schema_list() -> dict:
+    def schema_list() -> dict[str, Any]:
         """Lista os tipos de arquivo de deck que têm JSON Schema oficial disponível."""
         return {"status": "ok", "types": REF.list_schema_types(settings)}
 
     @mcp.tool(annotations=READ_ONLY)
-    def schema_get(tipo: str) -> dict:
+    def schema_get(type: str) -> dict[str, Any]:
         """JSON Schema oficial de um tipo de arquivo do deck (ex.: hydros, config, penalties)."""
-        return cap_envelope(REF.read_schema(settings, tipo), settings)
+        return cap_envelope(REF.read_schema(settings, type), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def docs_list(section: str | None = None) -> dict:
-        """Páginas das docs embutidas, com título e descrição (opcional: filtra por prefixo,
-        ex.: 'reference')."""
-        return cap_envelope(REF.list_docs(settings, section), settings)
+    def docs_list(prefix: str | None = None) -> dict[str, Any]:
+        """Páginas das docs embutidas, com título e descrição.
+
+        `prefix`: só as páginas cujo caminho começa por ele (ex.: 'reference').
+        """
+        return cap_envelope(REF.list_docs(settings, prefix), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def docs_search(consulta: str, k: int = 5) -> dict:
+    def docs_search(query: str, k: int = 5) -> dict[str, Any]:
         """Busca nas docs embutidas do novomodelo (as da versão instalada) por palavra.
 
         Use sempre que a pergunta for sobre como o novomodelo modela, calcula ou
@@ -44,35 +47,38 @@ def register_reference(mcp, settings: Settings) -> None:
         árvore de aberturas, valor da água, EARM. Busque em inglês: as docs estão em
         inglês, e os termos em português que estão no glossário das docs são traduzidos
         (ex.: afluência → inflow). Devolve as `k` seções mais relevantes (até 20):
-        `pagina`, `secao` (âncora), `titulo`, `trecho` e `score`. Abra a seção com
-        `docs_read(page, secao)`.
+        `page`, `section` (âncora), `title`, `snippet` e `score`. Abra a seção com
+        `docs_read(page, section)`.
         """
-        return cap_envelope(REF.search_docs(settings, consulta, k), settings)
+        return cap_envelope(REF.search_docs(settings, query, k), settings)
 
     @mcp.tool(annotations=READ_ONLY)
-    def docs_read(page: str | None = None, secao: str | None = None) -> dict:
+    def docs_read(page: str | None = None, section: str | None = None) -> dict[str, Any]:
         """Lê uma página das docs embutidas (ex.: 'reference/cli-reference').
 
-        `secao`: âncora (a `secao` que o docs_search devolve) ou título; devolve só a
+        `page` também aceita o link como as páginas o trazem (`/en/running/x/#ancora`),
+        o endereço do site e a página em pt-BR: lê a página em inglês e diz isso em `note`.
+
+        `section`: âncora (a `section` que o docs_search devolve) ou título; devolve só a
         seção, com as subseções. Seção inexistente → erro com a lista de seções.
         Sem `page`: a lista de páginas, como o docs_list.
         """
         if not page:
             return {
                 **cap_envelope(REF.list_docs(settings, None), settings),
-                "aviso": "faltou `page`: escolha uma das páginas abaixo e chame docs_read(page, secao)",
+                "note": "faltou `page`: escolha uma das páginas abaixo e chame docs_read(page, section)",
             }
         return cap_envelope(
-            REF.read_doc(settings, page, settings.max_summary_chars, secao), settings
+            REF.read_doc(settings, page, settings.max_summary_chars, section), settings
         )
 
     # Afordância de resource (best-effort: não derruba o servidor se o cliente/SDK
     # não suportar templates de resource).
     try:
 
-        @mcp.resource(f"{URI_SCHEME}://schema/{{tipo}}")
-        def _schema_resource(tipo: str) -> str:  # pragma: no cover
-            r = REF.read_schema(settings, tipo)
+        @mcp.resource(f"{URI_SCHEME}://schema/{{type}}")
+        def _schema_resource(type: str) -> str:  # pragma: no cover
+            r = REF.read_schema(settings, type)
             return json.dumps(r.get("schema", r), ensure_ascii=False, indent=2)
     except Exception:  # noqa: BLE001
         pass

@@ -35,7 +35,7 @@ def test_clone_ao_lado_sem_variavel_usa_as_embutidas(tmp_path, monkeypatch):
     lst = REF.list_docs(_settings(docs_dir=None))
     assert lst["status"] == "ok" and "pagina-do-clone" not in lst["pages"]
     assert lst["docs_dir"].endswith(str(REF.Path("_bundled") / "docs"))
-    assert REF.docs_origin(_settings(docs_dir=None))["origem"] == "embutidas"
+    assert REF.docs_origin(_settings(docs_dir=None))["origin"] == "embutidas"
 
 
 def test_pasta_de_desenvolvimento_e_usada_e_avisada(tmp_path):
@@ -47,14 +47,14 @@ def test_pasta_de_desenvolvimento_e_usada_e_avisada(tmp_path):
     lst = REF.list_docs(settings)
     assert lst["pages"] == ["math/pagina"]
     origem = REF.docs_origin(settings)
-    assert origem == {"origem": "pasta_de_desenvolvimento", "caminho": str(dev)}
+    assert origem == {"origin": "pasta_de_desenvolvimento", "path": str(dev)}
     assert any("pasta de desenvolvimento" in a for a in V.version_warnings(settings))
 
 
 def test_server_info_mostra_a_origem_das_docs(monkeypatch):
     monkeypatch.delenv("NOVOMODELO_MCP_DOCS_DIR", raising=False)
     info = {t.name: t.fn for t in build_server()._tool_manager.list_tools()}["server_info"]()
-    assert info["docs"]["origem"] == "embutidas" and info["docs"]["versao"]
+    assert info["docs"]["origin"] == "embutidas" and info["docs"]["version"]
 
 
 def test_descoberta_de_clone_nao_existe_mais():

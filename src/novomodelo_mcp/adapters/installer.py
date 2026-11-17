@@ -20,7 +20,7 @@ from typing import Any
 
 from . import versions
 from .discovery import tool_version
-from .envelope import error
+from .envelope import MAX_DETAIL_CHARS, error
 from .subproc import NO_WINDOW
 
 #: Variáveis que fazem o instalador oficial baixar de outro lugar: nunca repassadas.
@@ -43,10 +43,10 @@ def installer_url(version: str) -> str:
     return f"{versions.CLI_RELEASES}/download/v{version}/{_installer_name()}"
 
 
-def _binary_dir(pasta: str | None) -> Path:
+def _binary_dir(install_dir: str | None) -> Path:
     """Onde o instalador põe o binário (layout `cargo-home`: `<raiz>/bin`)."""
     root = (
-        pasta
+        install_dir
         or os.environ.get("NOVOMODELO_CLI_INSTALL_DIR")
         or os.environ.get("CARGO_DIST_FORCE_INSTALL_DIR")
         or os.environ.get("CARGO_HOME")
@@ -73,16 +73,18 @@ def _expected_sha256(version: str) -> str | dict[str, str]:
     try:
         assets = json.loads(body).get("assets") or []
     except (ValueError, AttributeError):
-        return {"aviso_rede": "resposta da API do GitHub ilegível"}
-    digest = next((a.get("digest") for a in assets if a.get("name") == _installer_name()), None)
-    if not (digest or "").startswith("sha256:"):
-        return {"erro": f"o release v{version} não publica o SHA-256 de {_installer_name()}"}
+        return {"network_warning": "resposta da API do GitHub ilegível"}
+    digest = (
+        next((a.get("digest") for a in assets if a.get("name") == _installer_name()), None) or ""
+    )
+    if not digest.startswith("sha256:"):
+        return {"error": f"o release v{version} não publica o SHA-256 de {_installer_name()}"}
     return digest.split(":", 1)[1]
 
 
 def _run_installer(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     # argv em lista e sem shell: roda o instalador oficial baixado, só depois de conferir o
-    # SHA-256 publicado no release e com confirmar=True.
+    # SHA-256 publicado no release e com confirm=True.
     return subprocess.run(
         cmd,
         stdin=subprocess.DEVNULL,
@@ -94,49 +96,49 @@ def _run_installer(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     )
 
 
-def _installer_env(pasta: str | None) -> dict[str, str]:
+def _installer_env(install_dir: str | None) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k not in SCRUBBED_ENV}
-    if pasta:
-        env["NOVOMODELO_CLI_INSTALL_DIR"] = pasta
+    if install_dir:
+        env["NOVOMODELO_CLI_INSTALL_DIR"] = install_dir
     return env
 
 
 def _fail(code: int, message: str, manual: str, detail: str = "", **extra) -> dict[str, Any]:
-    return {**error(code, message, detail), "comando_manual": manual, **extra}
+    return error(code, message, detail, manual_command=manual, **extra)
 
 
-def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, Any]:
+def install(*, confirm: bool = False, install_dir: str | None = None) -> dict[str, Any]:
     version = versions.expected_version()
     if not version:
         return error(2, "versão esperada desconhecida (pacote do MCP sem metadados)")
     manual = versions.cli_install_command(version)
-    if pasta is not None and not Path(pasta).is_absolute():
-        return _fail(22, f"`pasta` precisa ser caminho absoluto: {pasta!r}", manual)
-    url, dest = installer_url(version), _binary_dir(pasta)
+    if install_dir is not None and not Path(install_dir).is_absolute():
+        return _fail(22, f"`install_dir` precisa ser caminho absoluto: {install_dir!r}", manual)
+    url, dest = installer_url(version), _binary_dir(install_dir)
     sha = _expected_sha256(version)
     if isinstance(sha, dict):
-        if "aviso_rede" in sha:
+        if "network_warning" in sha:
             return _fail(
                 2,
                 "não foi possível consultar o release oficial",
                 manual,
-                aviso_rede=sha["aviso_rede"],
+                network_warning=sha["network_warning"],
             )
-        return _fail(2, sha["erro"], manual)
+        return _fail(2, sha["error"], manual)
     plan = {
-        "versao": version,
+        "version": version,
         "url": url,
         "sha256": sha,
-        "destino": str(dest),
-        "altera_path": _changes_path(),
+        "destination": str(dest),
+        "modifies_path": _changes_path(),
     }
-    if not confirmar:
+    if not confirm:
         return {
             "status": "ok",
-            "executado": False,
-            "plano": plan,
-            "comando_manual": manual,
-            "diagnostics": ["nada foi baixado; chame com confirmar=True para instalar"],
+            "executed": False,
+            "plan": plan,
+            "manual_command": manual,
+            "diagnostics": ["nada foi baixado; chame com confirm=True para instalar"],
         }
 
     body = versions.fetch_bytes(url, timeout=_DOWNLOAD_TIMEOUT_S)
@@ -145,8 +147,8 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             2,
             "não foi possível baixar o instalador",
             manual,
-            plano=plan,
-            aviso_rede=body["aviso_rede"],
+            plan=plan,
+            network_warning=body["network_warning"],
         )
     got = hashlib.sha256(body).hexdigest()
     if got != sha:
@@ -155,7 +157,7 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             "hash do instalador não confere; nada foi executado",
             manual,
             f"esperado {sha}, obtido {got}",
-            plano=plan,
+            plan=plan,
         )
 
     workdir = tempfile.mkdtemp(prefix="novomodelo-installer-")
@@ -168,13 +170,11 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             else ["sh", str(script)]
         )
         try:
-            proc = _run_installer(cmd, env=_installer_env(pasta), timeout=_INSTALL_TIMEOUT_S)
+            proc = _run_installer(cmd, env=_installer_env(install_dir), timeout=_INSTALL_TIMEOUT_S)
         except subprocess.TimeoutExpired:
-            return _fail(-1, f"o instalador passou de {_INSTALL_TIMEOUT_S} s", manual, plano=plan)
+            return _fail(-1, f"o instalador passou de {_INSTALL_TIMEOUT_S} s", manual, plan=plan)
         except OSError as exc:
-            return _fail(
-                127, "não foi possível executar o instalador", manual, str(exc), plano=plan
-            )
+            return _fail(127, "não foi possível executar o instalador", manual, str(exc), plan=plan)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
     if proc.returncode != 0:
@@ -182,8 +182,8 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             proc.returncode,
             "o instalador oficial terminou com erro",
             manual,
-            (proc.stderr or proc.stdout or "")[-2000:],
-            plano=plan,
+            (proc.stderr or proc.stdout or "")[-MAX_DETAIL_CHARS:],
+            plan=plan,
         )
 
     binary = dest / ("novomodelo.exe" if sys.platform == "win32" else "novomodelo")
@@ -194,15 +194,15 @@ def install(*, confirmar: bool = False, pasta: str | None = None) -> dict[str, A
             1,
             f"depois da instalação, {binary} responde {installed!r}, não {version}",
             manual,
-            plano=plan,
+            plan=plan,
         )
     versions.reset_caches()
     return {
         "status": "ok",
-        "executado": True,
-        "versao_instalada": installed,
-        "caminho": str(binary),
-        "plano": plan,
-        "configuracao": f'"NOVOMODELO_MCP_SOLVER_BIN": "{binary}"',
-        "diagnostics": [(proc.stdout or "").strip()[-2000:]],
+        "executed": True,
+        "installed_version": installed,
+        "path": str(binary),
+        "plan": plan,
+        "configuration": f'"NOVOMODELO_MCP_SOLVER_BIN": "{binary}"',
+        "diagnostics": [(proc.stdout or "").strip()[-MAX_DETAIL_CHARS:]],
     }

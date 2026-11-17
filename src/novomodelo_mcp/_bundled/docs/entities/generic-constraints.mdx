@@ -1,0 +1,40 @@
+---
+title: Generic constraints
+description: Linear rules you define over model quantities — floor, cap, equality or band — with an optional penalized slack that relaxes them instead of making the problem infeasible.
+---
+
+## Why it matters
+
+## One rule, its limits and the slack
+
+## What the model decides
+
+## What you provide
+
+- The constraints, in `generic_constraints.json`: each has an identifier, a name, the linear expression and the slack configuration, which is required on every constraint.
+- Where each constraint is active and its limits, in `generic_constraint_bounds.parquet`: one row per constraint, stage and, optionally, block.
+- Optionally, named scalar parameters, in `generic_parameters.json`, which expressions and limits reference as `@name`.
+- For each enabled slack, the penalty (greater than zero) and the penalty basis.
+
+## Where the constraint is active
+
+The bounds file is the activation grid: there is no other activation flag. A constraint is active at a stage and block if, and only if, a row exists for it there. A null block in the row applies to all blocks of the stage. The limits can come from the row itself, from the expression (for example a constant on the right-hand side), or from both, which add up at the same endpoint. A constraint whose limits come only from the expression, with no row in the grid, is rejected at validation.
+
+## Slack and penalty basis
+
+The slack is declared once per constraint and applies to every row the grid produces. A one-sided limit has one slack column; a two-sided limit (band or equality) has two, one for each direction, at the same cost per unit. In the results, the violation of a two-sided row is reported as the signed net of the two.
+
+The penalty basis says what one unit of violation is and, therefore, how the penalty becomes a cost:
+
+- **Per hour.** For a row whose quantity is a rate (MW, m³/s): the penalty is a price per unit and per hour, multiplied by the hours the row covers.
+- **Per unit.** For a row whose quantity is an amount (MWh, hm³): the penalty is a price per unit, whatever the duration of the stage.
+
+The basis is declared, never inferred from the expression: choose it by the unit of the row, not by the variables it contains.
+
+## In the results
+
+The model writes the resolved echo: the fully resolved form of every constraint built, one row per constraint, stage, block and term. The simulation writes, in `simulation/violations/generic/`, the slack cost of each row at the same cost per unit used in the problem. The cost of generic-constraint violations also appears as a column of the per-stage cost breakdown.
+
+## Go deeper
+
+## For those who run the model

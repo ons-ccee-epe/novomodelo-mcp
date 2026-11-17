@@ -54,12 +54,12 @@ def test_deck_read_parquet_com_url_nao_sai_para_a_rede(tmp_path, monkeypatch):
     hits = []
 
     class _H(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):  # noqa: N802
+        def do_GET(self):
             hits.append(self.path)
             self.send_response(404)
             self.end_headers()
 
-        def log_message(self, *a):
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     srv = http.server.HTTPServer(("127.0.0.1", 0), _H)

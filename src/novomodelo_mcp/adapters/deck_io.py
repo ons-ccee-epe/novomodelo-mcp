@@ -19,6 +19,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .envelope import error
+
 _MISSING = object()
 
 
@@ -126,7 +128,7 @@ def read_json(path: str) -> Any:
 
 def edit_json(
     path: str,
-    changes: list[dict],
+    changes: list[dict[str, Any]],
     *,
     schemas_dir: str | None = None,
     dry_run: bool = False,
@@ -139,22 +141,22 @@ def edit_json(
     """
     p = Path(path)
     if not p.exists():
-        return {"status": "error", "diagnostics": [f"arquivo não existe: {path}"]}
+        return error(2, f"arquivo não existe: {path}")
     raw = p.read_bytes()
     try:
         original = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
-        return {"status": "error", "diagnostics": [f"arquivo não está em UTF-8: {exc}"]}
+        return error(22, f"arquivo não está em UTF-8: {exc}")
     try:
         obj = json.loads(original)
     except json.JSONDecodeError as exc:
-        return {"status": "error", "diagnostics": [f"JSON inválido: {exc}"]}
+        return error(22, f"JSON inválido: {exc}")
 
     applied = []
     for ch in changes:
         cpath = ch.get("path")
         if cpath is None:
-            return {"status": "error", "diagnostics": ["cada item de 'changes' precisa de 'path'"]}
+            return error(22, "cada item de 'changes' precisa de 'path'")
         try:
             old = get_by_path(obj, cpath)
         except (KeyError, IndexError, TypeError, ValueError):
@@ -162,10 +164,7 @@ def edit_json(
         try:
             set_by_path(obj, cpath, ch.get("value"))
         except (KeyError, IndexError, TypeError, ValueError) as exc:
-            return {
-                "status": "error",
-                "diagnostics": [f"não foi possível aplicar '{cpath}': {exc}"],
-            }
+            return error(22, f"não foi possível aplicar '{cpath}': {exc}")
         applied.append(
             {"path": cpath, "old": None if old is _MISSING else old, "new": ch.get("value")}
         )
@@ -175,16 +174,14 @@ def edit_json(
     schema_errors = val.get("errors", [])
 
     if schema_errors and not force:
-        return {
-            "status": "error",
-            "written": False,
-            "changes": applied,
-            "schema": schema,
-            "schema_errors": schema_errors,
-            "diagnostics": [
-                "edição violaria o schema — nada gravado (use force=True para gravar mesmo assim)"
-            ],
-        }
+        return error(
+            22,
+            "edição violaria o schema — nada gravado (use force=True para gravar mesmo assim)",
+            written=False,
+            changes=applied,
+            schema=schema,
+            schema_errors=schema_errors,
+        )
 
     if dry_run:
         return {
@@ -276,7 +273,7 @@ def describe_parquet(path: str) -> dict[str, Any]:
 
 
 def edit_parquet(
-    path: str, where: dict, set_values: dict, *, dry_run: bool = False
+    path: str, where: dict[str, Any], set_values: dict[str, Any], *, dry_run: bool = False
 ) -> dict[str, Any]:
     """Edita células de um Parquet PRESERVANDO o schema.
 
@@ -286,17 +283,14 @@ def edit_parquet(
     schema (colunas/dtypes) — é essa a "trava de contrato" do Parquet.
     """
     if not set_values:
-        return {"status": "error", "diagnostics": ["'set_values' vazio"]}
+        return error(22, "'set_values' vazio")
     pl = _pl()
     df = pl.read_parquet(path)
     before = _schema_map(df)
 
     for col in list(where) + list(set_values):
         if col not in df.columns:
-            return {
-                "status": "error",
-                "diagnostics": [f"coluna inexistente: {col}", f"colunas: {df.columns}"],
-            }
+            return error(22, f"coluna inexistente: {col}", f"colunas: {df.columns}")
 
     mask = pl.lit(True)
     for col, val in where.items():
@@ -312,15 +306,13 @@ def edit_parquet(
 
     if after != before:
         changed = {c: (before[c], after[c]) for c in before if before[c] != after[c]}
-        return {
-            "status": "error",
-            "written": False,
-            "matched_rows": n_match,
-            "diagnostics": [
-                "edição mudaria o schema do Parquet — abortado",
-                f"dtypes alterados: {changed}",
-            ],
-        }
+        return error(
+            22,
+            "edição mudaria o schema do Parquet — abortado",
+            f"dtypes alterados: {changed}",
+            written=False,
+            matched_rows=n_match,
+        )
 
     if dry_run:
         return {

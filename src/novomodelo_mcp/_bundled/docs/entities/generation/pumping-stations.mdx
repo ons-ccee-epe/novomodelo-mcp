@@ -1,0 +1,29 @@
+---
+title: Pumping stations
+description: How Novomodelo treats pumping stations — water moved between reservoirs, power drawn from a bus and no cost of their own.
+---
+
+## Why it matters
+
+## Water out, power in
+
+## What the model decides
+
+## What you provide
+
+- The bus from which the station draws power.
+- The source hydro plant, whose reservoir loses the water, and the destination hydro plant, whose reservoir receives it.
+- The power drawn per unit of pumped flow, in MW/(m³/s).
+- The minimum and maximum pumped flow, in m³/s. The maximum is the installed pump capacity.
+- Entry and exit stages, when the station does not exist throughout the study.
+- Optionally, flow limits that vary by stage, which replace those of the registry.
+
+## Pumping and the economics
+
+- **No objective cost.** A pumping station has no cost term in the objective function. The cost of pumping is captured implicitly through the energy it consumes: the marginal cost of energy at the connected bus sets the effective cost.
+- **Economic incentive.** Pumping is attractive when energy prices are low, for example with excess hydro or renewable generation, and unattractive when prices are high, for example with thermal dispatch at the margin.
+- **In the results.** The station's cost column in the simulation output is always zero: its power enters the bus balance.
+
+## Go deeper
+
+## For those who run the model

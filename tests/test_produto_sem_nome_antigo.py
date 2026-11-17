@@ -1,4 +1,4 @@
-"""O código, os testes e o README do produto não citam o nome antigo.
+"""O código, os testes, a bateria e2e e o README do produto não citam o nome antigo.
 
 É o mesmo critério do checador de nome do repositório de destino: o trecho, em
 qualquer caixa, em qualquer arquivo de texto.
@@ -13,7 +13,7 @@ ANTIGO = bytes.fromhex("636f627265").decode()
 
 def _arquivos():
     yield RAIZ / "README.md"
-    for base in ("src", "tests"):
+    for base in ("src", "tests", "e2e"):
         for path in sorted((RAIZ / base).rglob("*")):
             if path.is_file() and "_bundled" not in path.parts and "__pycache__" not in path.parts:
                 yield path

@@ -1,6 +1,6 @@
 [project]
 name = "novomodelo-mcp"
-version = "0.20.0"
+version = "0.21.0"
 description = "Servidor MCP (fachada local) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,17 +23,17 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "mcp>=1.2.0,<2",  # mcp 2.x renomeou FastMCP->MCPServer e quebra o import; manter <2
-    "polars>=2.0",
-    "jsonschema>=4.0",
+    "mcp>=1.30.0,<2",  # mcp 2.x renomeou FastMCP->MCPServer e quebra o import; manter <2
+    "polars>=2.1.0",
+    "jsonschema>=4.26.0",
     # O solver só carrega uma política gravada pela mesma versão do binding. O pin
     # exato fica só no bridge, que fixa a mesma versão do binding: assim o Dependabot
     # sobe a versão com um bump só (o binding vem junto pelo uv.lock), e
     # `versions.expected_version()` lê a versão esperada deste pin.
     "novomodelo-python",
-    "novomodelo-bridge==0.20.0",
-    "duckdb>=1.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
-    "truststore>=0.10",  # HTTPS com os certificados do sistema (proxy corporativo)
+    "novomodelo-bridge==0.21.0",
+    "duckdb>=2.0.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
+    "truststore>=0.10.5",  # HTTPS com os certificados do sistema (proxy corporativo)
     # O cryptography (via mcp -> pyjwt[crypto]) publica wheel para macOS Intel só até a
     # 48.x; sem o limite, quem instala nesse alvo compila o sdist (Rust e OpenSSL). A
     # faixa complementar obriga o uv.lock a resolver as duas versões: com uma só, ele
@@ -68,30 +68,36 @@ artifacts = [
 ]
 
 [tool.hatch.build.targets.sdist]
-# Fora do sdist: regras de agente, caches e os checkouts que a release faz na raiz
-# (_docs, _novomodelo, _bridge). O hatchling inclui o .gitignore de qualquer jeito.
-exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md"]
+# Fora do sdist: regras de agente, caches, os checkouts que a release faz na raiz
+# (_docs, _novomodelo, _bridge) e a bateria e2e, que não é publicada. O hatchling inclui
+# o .gitignore de qualquer jeito.
+exclude = ["/.*", "/_*", "/CLAUDE.md", "/AGENTS.md", "/e2e"]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "hypothesis>=6"]
-e2e = [
-    "fastapi==0.159.1",
-    "httpx==0.28.1",
-    "jsonschema==4.26.0",
-    "platformdirs==4.14.0",
-    "pyyaml==6.0.3",
-    "uvicorn==0.54.0",
-]
+dev = ["pytest>=9.2.0", "ruff>=0.17.3", "ty>=0.0.94", "hypothesis>=6.170.13"]
+
+[tool.uv.workspace]
+members = ["e2e"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = ["--strict-markers", "--ignore=tests/e2e"]
+addopts = ["--strict-markers"]
 markers = [
     "executaveis_reais: precisa do novomodelo e do novomodelo-bridge instalados (--executaveis-reais)",
     "rede: acessa a rede, só os domínios oficiais (--com-rede)",
 ]
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src", "tests", "scripts", "e2e"]
+exclude = ["e2e/frontend"]
+
+[tool.ty.terminal]
+error-on-warning = true
 
 [tool.ruff]
 line-length = 100
@@ -100,10 +106,12 @@ target-version = "py312"
 extend-exclude = [".claude", ".kiro"]
 
 [tool.ruff.lint]
-# PGH proíbe supressão em branco: todo `# noqa` e `# type: ignore` nomeia o código.
+# PGH proíbe supressão em branco: todo `# noqa` e `# type: ignore` nomeia o código, e o
+# RUF100 recusa o `# noqa` que não suprime nada. BLE: o never-raise pega `Exception` só
+# onde a falha vira envelope, cada vez com o motivo ao lado.
 # PLW1514 (open/read_text/write_text sem `encoding`) só existe em preview; o
 # `explicit-preview-rules` liga essa e nenhuma outra regra de preview.
-select = ["E", "F", "I", "B", "UP", "PGH", "PLW1514"]
+select = ["E", "F", "I", "B", "BLE", "UP", "PGH", "RUF100", "PLW1514"]
 preview = true
 explicit-preview-rules = true
 

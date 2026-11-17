@@ -226,10 +226,12 @@ def _perf_cpus_linux() -> int | None:
 
 
 def _perf_cpus_windows() -> int | None:
+    if sys.platform != "win32":
+        return None
     import ctypes
 
     try:
-        k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        k32 = ctypes.windll.kernel32
         length = ctypes.c_ulong(0)
         k32.GetLogicalProcessorInformationEx(0, None, ctypes.byref(length))
         buf = ctypes.create_string_buffer(length.value)
@@ -256,6 +258,8 @@ def detect_performance_cpus() -> int | None:
 
 
 def _ram_windows() -> int | None:
+    if sys.platform != "win32":
+        return None
     import ctypes
 
     class MEMORYSTATUSEX(ctypes.Structure):
@@ -274,7 +278,7 @@ def _ram_windows() -> int | None:
     st = MEMORYSTATUSEX()
     st.dwLength = ctypes.sizeof(st)
     try:
-        ok = ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st))  # type: ignore[attr-defined]
+        ok = ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st))
     except (AttributeError, OSError):
         return None
     return int(st.ullTotalPhys) if ok else None
@@ -285,6 +289,8 @@ def _ram_macos() -> int | None:
 
 
 def _ram_posix_sysconf() -> int | None:
+    if sys.platform == "win32":
+        return None
     try:
         return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
     except (AttributeError, ValueError, OSError):

@@ -20,13 +20,12 @@ from typing import Any
 from ..config import Settings, load_settings
 from ..names import BRIDGE_CLI
 from .discovery import find_bridge
-from .envelope import MAX_DETAIL_CHARS
 from .envelope import error as _error
 from .obs import log
 from .subproc import NO_WINDOW
 
 
-def _parse_envelope(stdout: str, stderr: str) -> dict[str, Any]:
+def _parse_envelope(stdout: str, stderr: str, returncode: int) -> dict[str, Any]:
     """Interpreta a saída como o envelope JSON do bridge.
 
     Tolera logs impressos antes do JSON: se o parse direto falhar, procura a
@@ -34,10 +33,7 @@ def _parse_envelope(stdout: str, stderr: str) -> dict[str, Any]:
     """
     text = (stdout or "").strip()
     if not text:
-        return {
-            "status": "error",
-            "diagnostics": ["saída vazia da CLI", (stderr or "")[:MAX_DETAIL_CHARS]],
-        }
+        return _error(returncode, "saída vazia da CLI", stderr or "")
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -48,10 +44,7 @@ def _parse_envelope(stdout: str, stderr: str) -> dict[str, Any]:
                     return json.loads(line)
                 except json.JSONDecodeError:
                     continue
-        return {
-            "status": "error",
-            "diagnostics": ["saída não-JSON da CLI", text[:MAX_DETAIL_CHARS]],
-        }
+        return _error(returncode, "saída não-JSON da CLI", text)
 
 
 def run_bridge(
@@ -90,7 +83,7 @@ def run_bridge(
     except OSError as exc:  # pragma: no cover - defensivo
         return _error(-1, f"erro ao executar novomodelo-bridge: {exc}")
 
-    envelope = _parse_envelope(proc.stdout, proc.stderr)
+    envelope = _parse_envelope(proc.stdout, proc.stderr, proc.returncode)
     envelope["exit_code"] = proc.returncode
     log(settings, "bridge.done", exit_code=envelope.get("exit_code"), status=envelope.get("status"))
     return envelope

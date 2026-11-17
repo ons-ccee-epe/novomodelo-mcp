@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -57,7 +57,7 @@ def atomic_write_text(path: Path, text: str, *, retries: int = 20) -> None:
 
 
 @contextmanager
-def file_lock(path: Path, *, timeout: float = 10.0, stale_after: float = 60.0) -> Iterator[None]:
+def file_lock(path: Path, *, timeout: float = 10.0, stale_after: float = 60.0) -> Generator[None]:
     """Lock entre processos por criação exclusiva de arquivo (portável).
 
     Lock órfão (processo morreu segurando) é quebrado após `stale_after` segundos.

@@ -1,0 +1,41 @@
+---
+title: Risk aversion (CVaR)
+description: How Novomodelo puts more weight on the worst scenarios — the combination of expected value and CVaR, its two per-stage parameters and the effect on the SDDP bounds.
+---
+
+## Why it matters
+
+## The tail of the worst outcomes
+
+<figure class="entity-illustration entity-rules">
+
+  <figcaption>Figure: cost distribution, with the mean, the value at risk (VaR) and the CVaR marked and the tail of the worst outcomes shaded. The CVaR is the average cost inside the tail.</figcaption>
+</figure>
+
+## What the model decides
+
+## What you provide
+
+- The risk measure of each stage, in the `risk_measure` field of `stages.json`. The value `"expectation"`, assumed when the field is absent, is risk-neutral. Any other string is rejected.
+- For CVaR, the two parameters, both required: the tail fraction (`alpha`, greater than 0 and up to 1) and the weight on the CVaR (`lambda`, from 0 to 1).
+- A zero weight is equivalent to the expected value, whatever the tail fraction.
+- The measure can vary from one stage to another.
+
+:::caution[The tail fraction is not a confidence level]
+`alpha` is the fraction of the worst outcomes that enters the CVaR. So `0.95` averages the worst 95% of outcomes and is nearly risk-neutral; the worst 5% correspond to `0.05`. A tool that takes a confidence level `c` corresponds to `alpha = 1 - c`.
+:::
+
+## Which stage weights what
+
+A stage's `risk_measure` weights the next stage's openings in the cuts that stage stores. The first stage's also weights the first stage's own openings in the lower bound. The last stage's does not enter any cut.
+
+## What changes in the bounds
+
+- **Lower bound.** Under a coherent measure, the training lower bound remains valid, whether or not the measure varies across stages, and does not decrease across iterations. Its validity rests on the methodology's Tier 1 assumptions.
+- **Upper bound.** A sampled forward pass does not give an exact upper bound. The mean cost of the sampled paths estimates the policy's expected cost, not its risk-adjusted value, and can fall below the lower bound.
+- **Gap certificate.** The gap stopping rule requires an enumerated forward pass and a measure that is uniform across all stages: the expected value or the same CVaR measure.
+- **In practice.** To monitor convergence, the methodology recommends lower-bound stalling. The simulation reports the policy's cost distribution, which bounds no risk-adjusted value.
+
+## Go deeper
+
+## For those who run the model
