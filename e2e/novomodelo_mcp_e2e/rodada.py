@@ -501,6 +501,7 @@ def _execucao_usuario(
         imagem=tag_imagem(config, agente),
         montar_em=c.montar_em,
         sem_output=c.sem_output,
+        liberar=c.liberar,
     )
     return Planejada(e, c, pulado)
 

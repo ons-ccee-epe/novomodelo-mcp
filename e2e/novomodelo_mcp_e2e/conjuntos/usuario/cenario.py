@@ -37,6 +37,7 @@ class Cenario:
     acerto_pela_resposta: bool = False
     sem_output: bool = False
     juiz_ve_tools: bool = False
+    liberar: tuple[str, ...] = ()
     gabarito: str = ""
 
 
@@ -75,6 +76,7 @@ def ler_cenario(arquivo: Path) -> Cenario:
         acerto_pela_resposta=bool(dados.get("acerto_pela_resposta", False)),
         sem_output=bool(dados.get("sem_output", False)),
         juiz_ve_tools=bool(dados.get("juiz_ve_tools", False)),
+        liberar=tuple(dados.get("liberar", ())),
         gabarito=dados.get("gabarito", "").strip(),
     )
 

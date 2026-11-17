@@ -501,6 +501,12 @@ def test_execucao_leva_montar_em_e_sem_output_do_cenario(tmp_path):
     assert por_id["c08-pasta-fora"].liberar == ()
 
 
+def test_execucao_leva_as_tools_que_o_cenario_libera(tmp_path):
+    (tmp_path / "cache" / "preparados" / "bridge_decomp_mini").mkdir(parents=True)
+    [p] = rodada.planejar([_wheel(tmp_path)], ["usuario"], ["claude"], 1, _cfg(tmp_path), "c21b*")
+    assert p.execucao.liberar == ("bridge_convert_decomp",)
+
+
 def test_registros_do_junit(tmp_path):
     junit = tmp_path / "j.xml"
     junit.write_text(

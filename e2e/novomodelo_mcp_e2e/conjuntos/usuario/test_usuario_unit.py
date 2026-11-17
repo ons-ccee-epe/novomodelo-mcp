@@ -268,6 +268,13 @@ def test_carrega_toml_com_acento(tmp_path):
     assert c.caso == "exemplo_1dtoy" and c.pedido == "olá"
 
 
+def test_cenario_le_as_tools_a_liberar(tmp_path):
+    _toml(tmp_path, "a", 'liberar = ["bridge_convert_decomp"]\n')
+    _toml(tmp_path, "b")
+    assert ler_cenario(tmp_path / "a.toml").liberar == ("bridge_convert_decomp",)
+    assert ler_cenario(tmp_path / "b.toml").liberar == ()
+
+
 def test_campo_obrigatorio_ausente_da_erro_claro(tmp_path):
     (tmp_path / "b.toml").write_text('id = "b"\n', encoding="utf-8")
     with pytest.raises(CenarioInvalido, match="persona"):

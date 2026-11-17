@@ -6,6 +6,7 @@ Converte esse deck DECOMP para o novomodelo.
 """
 tools_esperadas = ["bridge_convert_decomp"]
 primeira_aceita = ["bridge_check_decomp"]
+liberar = ["bridge_convert_decomp"]
 contorno = ["duckdb", "polars", "pandas", "pyarrow", "inewave", "idecomp"]
 timeout_s = 1500
 gabarito = """
