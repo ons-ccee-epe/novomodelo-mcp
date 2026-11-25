@@ -24,6 +24,9 @@ dele; uma correção só do MCP, ou um patch só do bridge depois do release do 
 
 - O `server_info` anuncia um MCP `X.Y.Z.postN` novo, e o comando de reinstalar o MCP nos
   `version_warnings` fixa a versão instalada, com o `.postN`.
+- O `docs_search` dá ao título de uma seção o dobro do peso que dava: a seção cujo título
+  nomeia o termo buscado vem antes das que só o citam no texto. Com as docs da 0.22.0, a
+  busca por `inflow non-negativity` deixava a página `math/inflow-nonnegativity` em 6º lugar.
 
 ## [0.21.0] - 2026-11-17
 

@@ -112,3 +112,28 @@ def test_indice_embutido_real_responde(monkeypatch):
     env = REF.search_docs(dataclasses.replace(load_settings(), docs_dir=None), "FPHA", k=5)
     assert env["status"] == "ok" and env["results"]
     assert any(r["page"] == "math/hydro-production-models" for r in env["results"])
+
+
+def test_secao_cujo_titulo_nomeia_o_termo_vem_antes_da_que_so_o_cita_no_texto(tmp_path):
+    paginas = {
+        "math/inflow-nonnegativity.md": (
+            "---\ntitle: Inflow Non-Negativity\n---\n\n## 2 The Inflow Non-Negativity Slack\n\n"
+            + "The slack lifts a sampled value to zero at the cost of the method. " * 3
+        ),
+        "running/configuration.md": (
+            "---\ntitle: Configuration\n---\n\n## modeling.inflow_residual\n\n"
+            + (
+                "The inflow residual is lognormal; under the inflow non-negativity method "
+                "none an inflow can be negative. "
+            )
+            * 3
+        ),
+    }
+    for rel, text in paginas.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    settings = dataclasses.replace(load_settings(), docs_dir=str(tmp_path))
+    paginas_achadas = [
+        r["page"] for r in REF.search_docs(settings, "inflow non-negativity")["results"]
+    ]
+    assert paginas_achadas == ["math/inflow-nonnegativity", "running/configuration"]
