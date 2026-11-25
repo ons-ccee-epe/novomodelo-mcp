@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from novomodelo_mcp.adapters.versions import expected_version
+from novomodelo_mcp.adapters.versions import expected_bridge_version, expected_version
 from novomodelo_mcp_e2e.config import MOTIVO_MOTOR, Config, motor_suportado
 from novomodelo_mcp_e2e.executor.container import (
     ENDURECIMENTO,
@@ -109,7 +109,7 @@ def aviso_do_bridge(c: ConfigMCP) -> str | None:
     if c.wheel is None:
         return None
     da_wheel = pin_do_bridge(c.wheel)
-    do_checkout = expected_version()
+    do_checkout = expected_bridge_version()
     if do_checkout is not None and da_wheel != do_checkout:
         return (
             f"a wheel {c.wheel.name} fixa o novomodelo-bridge {da_wheel}; "
@@ -125,19 +125,24 @@ def tag_imagem(c: ConfigMCP, agente: str) -> str:
 
 
 def versoes_fixadas() -> dict[str, str]:
-    """Os `--build-arg` das versões; o novomodelo e o bridge seguem o pin do próprio MCP.
+    """Os `--build-arg` das versões: o bridge segue o pin do próprio MCP, e o novomodelo, o
+    pin da biblioteca nesse bridge.
 
     Raises:
-        FalhaPreparo: o pin do bridge não está nos metadados do novomodelo-mcp instalado.
+        FalhaPreparo: o pin do bridge não está nos metadados do novomodelo-mcp instalado,
+            ou o da biblioteca não está nos do bridge.
     """
-    novomodelo = expected_version()
-    if novomodelo is None:
-        raise FalhaPreparo("pin do novomodelo-bridge ausente nos metadados do novomodelo-mcp")
+    novomodelo, bridge = expected_version(), expected_bridge_version()
+    if novomodelo is None or bridge is None:
+        raise FalhaPreparo(
+            "pin do novomodelo-bridge ausente nos metadados do novomodelo-mcp, "
+            "ou o da novomodelo-python nos do bridge"
+        )
     return {
         "CLAUDE_CODE_VERSAO": CLAUDE_CODE_VERSAO,
         "KIRO_CLI_VERSAO": KIRO_CLI_VERSAO or "",
         "NOVOMODELO_VERSAO": novomodelo,
-        "BRIDGE_VERSAO": novomodelo,
+        "BRIDGE_VERSAO": bridge,
     }
 
 

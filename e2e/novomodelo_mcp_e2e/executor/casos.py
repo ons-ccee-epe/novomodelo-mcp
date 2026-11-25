@@ -279,13 +279,17 @@ def preparar_1dtoy_rodado(imagem: str, cfg: Config, rodar: Rodar = subprocess.ru
     return destino
 
 
-def preparar_publicos(versao: str, imagem: str, cfg: Config) -> list[str]:
+def preparar_publicos(
+    versao_novomodelo: str, versao_bridge: str, imagem: str, cfg: Config
+) -> list[str]:
     """Baixa e confere os casos públicos e gera o rodado; devolve os nomes preparados.
 
     Raises:
         FalhaPreparo: a versão não tem commit em `fontes.toml` ou qualquer etapa falhou.
     """
-    preparar_decks(versao, commit_esperado(REPO_BRIDGE, versao), cfg)
-    preparar_exemplo_1dtoy(versao, commit_esperado(REPO_NOVOMODELO, versao), cfg)
+    preparar_decks(versao_bridge, commit_esperado(REPO_BRIDGE, versao_bridge), cfg)
+    preparar_exemplo_1dtoy(
+        versao_novomodelo, commit_esperado(REPO_NOVOMODELO, versao_novomodelo), cfg
+    )
     preparar_1dtoy_rodado(imagem, cfg)
     return sorted(PUBLICOS)
