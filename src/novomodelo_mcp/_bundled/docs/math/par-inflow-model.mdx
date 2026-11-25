@@ -110,7 +110,7 @@ Other PAR(p) implementations may follow different conventions:
 
 - they often write the autoregressive coefficients as $\phi$, which this chapter writes $\psi$ (original units) and $\psi^*$ (standardized);
 - some store the innovation standard deviation, while this model stores the seasonal sample standard deviation $s_m$ and derives the innovation standard deviation $\sigma_m = s_m\, r_m$ at load (§4);
-- some draw residuals from a lognormal distribution, while this model's innovations are Gaussian and negative realizations are treated as in [Inflow Non-Negativity Solution Methods](/en/math/inflow-nonnegativity).
+- some draw residuals from a lognormal distribution; this model's residuals are Gaussian unless `modeling.inflow_residual.distribution` selects the lognormal residual of §2.7, and negative realizations are treated as in [Inflow Non-Negativity Solution Methods](/en/math/inflow-nonnegativity).
 
 For equivalent terms in other planning tools, see the [Glossary](/en/reference/glossary).
 :::
@@ -210,6 +210,26 @@ Whether the lagged inflows enter a stage's cuts is a per-stage choice; a cut tha
 | Deterministic base | $b_{h,m(t)}$       | One per hydro        | Realized inflow (fixed term)              | Precomputed from $\mu$ and $\psi$                                      |
 | Noise scale        | $\sigma_{m(t)}$    | One per hydro        | Realized inflow (noise factor)            | Derived from the closure-derived $r_m$ (§4.1) and $s_m$ at initialization (§2.2) |
 
+### 2.7 Lognormal Residual
+
+With `modeling.inflow_residual.distribution = "lognormal_3p"` ([Configuration](/en/running/configuration/#modelinginflow_residual)), the noise term $\sigma_{m(t)} \cdot \varepsilon_t$ of §2.5 is replaced by a lognormal residual formed from the conditional mean of the solve,
+
+$$
+p_h = b_{h,m(t)} + \sum_{\ell=1}^{p} \psi_{m(t),\ell} \cdot \hat{a}_{h,\ell}
+$$
+
+so that
+
+$$
+\hat{z}_h = p_h \exp\!\left(\tilde{\sigma}_h \varepsilon_t - \tfrac{1}{2} \tilde{\sigma}_h^2\right), \qquad \tilde{\sigma}_h^2 = \ln\!\left(1 + \left(\sigma_{m(t)} / p_h\right)^2\right)
+$$
+
+For a standard-normal $\varepsilon_t$, $\hat{z}_h$ has mean $p_h$ and standard deviation $\sigma_{m(t)}$, the moments of the Gaussian residual, and is never negative: the residual is a three-parameter lognormal with its lower bound at zero inflow, applied to the hydro's incremental inflow. The draws $\varepsilon_t$, their correlation and the opening tree are those of the Gaussian residual.
+
+Where $p_h \le 0$, or $p_h$ is so close to zero that $(\sigma_{m(t)} / p_h)^2$ overflows, the hydro takes the Gaussian residual $\sigma_{m(t)} \cdot \varepsilon_t$ at that solve, and [inflow non-negativity](/en/math/inflow-nonnegativity) treats a negative $\hat{z}_h$ as under the Gaussian residual. At $\sigma_{m(t)} = 0$, $\hat{z}_h = p_h$.
+
+The residual depends on the incoming lags through $p_h$. The cut coefficients on the lags hold the residual at its trial-point value (the chain rule of [PAR(p) Folding](/en/math/par-folding) carries no derivative of the transform), so, as with the truncation amount of [Inflow Non-Negativity §7](/en/math/inflow-nonnegativity#7-truncation-and-the-lower-bound), each cut is tight at its trial point, but the lower bound is not guaranteed to stay below the optimal value, and it can exceed the upper bound.
+
 ## 3. Estimation
 
 For multi-resolution studies (monthly→quarterly aggregation), the same fitting procedure applies after duration-weighted aggregation; see [Multi-Resolution Studies](/en/math/multi-resolution-studies).
@@ -251,7 +271,7 @@ coefficients $\psi$ and noise scale $\sigma$ follow
 direction: down
 
 classes: {
-  hydro: {style: {stroke: "#4a90b8"}}
+  hydro: {style: {stroke: "#3378a3"}}
 }
 
 hist: "Inflow history" {shape: parallelogram; class: hydro}
@@ -592,21 +612,15 @@ Inflows are correlated across hydro plants: §6.1 estimates the cross-hydro corr
 
 ### 6.1 Correlation Estimation
 
-When the inflow model is fitted from the inflow history, in whole or in part, and the case supplies no correlation, the correlation matrix is estimated from the history, from one of two standardized series chosen per study. The **standardized inflow** of hydro $h$ at historical period $t$ is
+When the inflow model is fitted from the inflow history, in whole or in part, and the case supplies no correlation, the correlation matrix is estimated from the standardized historical inflows. The **standardized inflow** of hydro $h$ at historical period $t$ is
 
 $$
 \tilde{a}_{h,t} = \frac{a_{h,t} - \hat{\mu}_{m(t)}}{\hat{s}_{m(t)}}
 $$
 
-the inflow standardized by the seasonal statistics of §3.2, set to zero when $\hat{s}_{m(t)} = 0$; every observed period has one. The **standardized residual** of the autoregression is
+the inflow standardized by the seasonal statistics of §3.2, set to zero when $\hat{s}_{m(t)} = 0$; every observed period has one. The series measures the correlation of the inflows themselves; the scenario generator applies it to the innovations $\varepsilon_t$ of §1, whose correlation it equals in a season in which every hydro has order zero.
 
-$$
-\tilde{\varepsilon}_{h,t} = \tilde{a}_{h,t} - \sum_{\ell=1}^{p_{m(t)}} \psi^*_{m(t),\ell}\, \tilde{a}_{h,t-\ell}
-$$
-
-where $\psi^*_{m,\ell}$ are the model's standardized coefficients (§1.2). A period has a residual only when all $p_{m(t)}$ of its lagged inflows are observed. On the PAR(p)-A path the residual uses the lag coefficients only: the annual term of §7.1 does not enter it. The residual series measures the correlation of the innovations $\varepsilon_t$ of §1, the noise the scenario generator correlates; the standardized-inflow series measures the correlation of the inflows themselves. The two coincide in a season in which every hydro has order zero.
-
-Two estimates are formed from the chosen series: the pooled estimate $\hat{C}$ from its values in every season, and the per-season estimate $\hat{C}_m$ from its values at the periods in season $m$. Each off-diagonal entry is the Pearson correlation of the two hydros' values over the periods at which both hydros have one (a pairwise-complete estimate), with the covariance and the standard deviations taken with the Bessel divisor, one less than the number of such periods, unlike the population divisor of §3.2. The entry is zero when fewer than two such periods exist or when either standard deviation over them is below machine epsilon, and it is clamped to $[-1, 1]$; every diagonal entry is one. On the standardized-inflow series, a hydro whose seasonal standard deviation is zero in season $m$ has the value zero at every period of that season, so its off-diagonal entries of $\hat{C}_m$ are zero.
+Two estimates are formed from this series: the pooled estimate $\hat{C}$ from its values in every season, and the per-season estimate $\hat{C}_m$ from its values at the periods in season $m$. Each off-diagonal entry is the Pearson correlation of the two hydros' values over the periods at which both hydros have one (a pairwise-complete estimate), with the covariance and the standard deviations taken with the Bessel divisor, one less than the number of such periods, unlike the population divisor of §3.2. The entry is zero when fewer than two such periods exist or when either standard deviation over them is below machine epsilon, and it is clamped to $[-1, 1]$; every diagonal entry is one. A hydro whose seasonal standard deviation is zero in season $m$ has the value zero at every period of that season, so its off-diagonal entries of $\hat{C}_m$ are zero.
 
 The stages of season $m$ use $\hat{C}_m$ when every pair of hydros has at least 30 such periods in season $m$; all other stages use $\hat{C}$. Because each entry is computed over its own set of periods, neither estimate need be positive semidefinite; §6.3 handles an indefinite matrix.
 
@@ -822,8 +836,7 @@ The `estimation` block is a top-level key of `config.json` (a sibling of
     "max_order": 6,
     "order_selection": "pacf",
     "min_observations_per_season": 30,
-    "max_coefficient_magnitude": null,
-    "correlation_target": "inflows"
+    "max_coefficient_magnitude": null
   }
 }
 ```
@@ -831,12 +844,6 @@ The `estimation` block is a top-level key of `config.json` (a sibling of
 The [`estimation`](/en/running/configuration/#estimation) section of the
 configuration reference lists every field and its default, and states the
 `min_observations_per_season` behaviour.
-
-`correlation_target` selects the series of methodology §6.1 that an estimated
-correlation is computed from: `"inflows"`, the default, for the standardized
-inflows, or `"residuals"` for the residuals of the fitted autoregression. It has
-no effect on a path that estimates no correlation (rows 1–3 and 7 of the table
-below) or when `scenarios/correlation.json` is supplied.
 
 `history_years` limits the years of `scenarios/inflow_history.parquet` the
 estimation reads, as an inclusive range such as `{"from": 1931, "to": 2024}`;
@@ -880,7 +887,7 @@ always overwrite it with fitted values.
 | 2 | 0 | 1 | 0 | `UserStatsWhiteNoise` | user file | order-0 (white noise) | identity, unless `correlation.json` provided |
 | 3 | 0 | 1 | 1 | `UserProvidedNoHistory` | user file | user file | identity, unless `correlation.json` provided |
 | 4 | 1 | 0 | 0 | `FullEstimation` | fitted from H | fitted from H (PACF + Yule-Walker + Maceira & Damázio) | estimated from H, unless `correlation.json` provided |
-| 5 | 1 | 0 | 1 | `UserArHistoryStats` | fitted from H | user file | estimated from H (on `"residuals"`, the residuals of the user coefficients), unless `correlation.json` provided |
+| 5 | 1 | 0 | 1 | `UserArHistoryStats` | fitted from H | user file | estimated from H, unless `correlation.json` provided |
 | 6 | 1 | 1 | 0 | `PartialEstimation` | user file (the fit uses statistics estimated from H) | fitted from H | estimated from H, unless `correlation.json` provided |
 | 7 | 1 | 1 | 1 | `UserProvidedAll` | user file | user file | identity, unless `correlation.json` provided (history is not re-consumed) |
 
@@ -888,7 +895,8 @@ Cases with `R = 1` but `H = 0` and `S = 0` collapse to row 1 — AR coefficients
 alone cannot drive estimation.
 
 An estimated correlation (rows 4–6, when no `correlation.json` is provided)
-holds a pooled `"default"` profile. In a cycle of more than one season it also
+is computed from the standardized inflows of methodology §6.1 and holds a
+pooled `"default"` profile. In a cycle of more than one season it also
 holds one `season_<id>` profile for each season whose every hydro pair has
 at least 30 periods with a value of both hydros — the season `id` zero-padded to the width of the
 largest id, as in `season_03` for a twelve-season cycle — and a schedule that
@@ -1238,6 +1246,14 @@ run or how hydros are distributed across them. See
 mechanism, which this chapter's estimation pipeline shares with the
 computed-FPHA fitting pipeline described in
 [Hydro Production Function Models](/en/math/hydro-production-models).
+
+### PAR model across MPI ranks
+
+On two or more MPI processes, `novomodelo run` checks after setup that every rank built the same PAR model. Each rank hashes its model with 64-bit FNV-1a over the stage count, the hydro count, the largest AR order, each hydro's AR order and whether it carries an annual component, and the bit pattern of every value of its deterministic-base, innovation-standard-deviation and AR-coefficient tables, and the ranks exchange the smallest and the largest digest. When the two differ, the run stops with exit `4` before training ([Communication failures](/en/reference/error-codes/#communication-failures)):
+
+```text
+PAR model differs across MPI ranks (fingerprints {min:#018x} to {max:#018x}); every rank must build the same PAR model from the broadcast inputs
+```
 
 ## Cross-References
 

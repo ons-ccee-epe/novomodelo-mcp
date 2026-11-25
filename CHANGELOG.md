@@ -10,6 +10,8 @@ dele; uma correção só do MCP, ou um patch só do bridge depois do release do 
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-24
+
 ### Added
 
 - O `server_info` traz em `versions.expected_bridge` a versão do bridge que o MCP fixa, que
@@ -17,6 +19,15 @@ dele; uma correção só do MCP, ou um patch só do bridge depois do release do 
 
 ### Changed
 
+- O MCP pareia com o novomodelo 0.22.0 e o novomodelo-bridge 0.22.1. As docs embutidas
+  são as da 0.22.0; a página `changelog/novomodelo` traz a seção da 0.22.0, e a
+  `changelog/novomodelo-bridge`, as da 0.22.0 e da 0.22.1.
+- **Para quem atualiza da 0.21:** `uv tool upgrade novomodelo-mcp`, fechar e abrir o
+  cliente e atualizar o executável `novomodelo` para a 0.22: peça ao agente "instale o
+  executável do novomodelo", como o aviso de versão indica. Os resultados mudam: converta
+  de novo os casos NEWAVE e DECOMP e rode-os com a 0.22. O novomodelo 0.22 recusa um
+  `post_study_stages.json` com a chave `stages` e as chaves que a seção 0.22.0 de
+  `changelog/novomodelo` lista em `Removed`.
 - Um patch só do bridge pareia com o novomodelo da mesma versão: o executável, a biblioteca
   e as docs seguem a versão do novomodelo que o bridge fixa, e o bridge, o pin do MCP.
 

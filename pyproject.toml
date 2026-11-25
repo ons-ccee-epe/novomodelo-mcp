@@ -1,6 +1,6 @@
 [project]
 name = "novomodelo-mcp"
-version = "0.21.0"
+version = "0.22.0"
 description = "Servidor MCP (fachada local) sobre as CLIs do Novomodelo e do novomodelo-bridge"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -27,11 +27,11 @@ dependencies = [
     "polars>=2.1.0",
     "jsonschema>=4.26.0",
     # O solver só carrega uma política gravada pela mesma versão do binding. O pin
-    # exato fica só no bridge, que fixa a mesma versão do binding: assim o Dependabot
-    # sobe a versão com um bump só (o binding vem junto pelo uv.lock), e
-    # `versions.expected_version()` lê a versão esperada deste pin.
+    # exato do binding fica só no bridge: assim o Dependabot sobe a versão com um bump
+    # só (o binding vem junto pelo uv.lock). `versions.expected_bridge_version()` lê
+    # o pin do bridge abaixo, e `versions.expected_version()`, o do binding no bridge.
     "novomodelo-python",
-    "novomodelo-bridge==0.21.0",
+    "novomodelo-bridge==0.22.1",
     "duckdb>=2.0.0",  # consulta SQL read-only sobre parquet/csv/json (deck_sql)
     "truststore>=0.10.5",  # HTTPS com os certificados do sistema (proxy corporativo)
     # O cryptography (via mcp -> pyjwt[crypto]) publica wheel para macOS Intel só até a
