@@ -152,7 +152,8 @@ def build_server() -> FastMCP:
     def server_info() -> dict[str, Any]:
         """Diagnóstico do próprio MCP: binários, versões e se há versão nova.
 
-        `versions`: executável, biblioteca, bridge e docs, com a versão esperada.
+        `versions`: executável, biblioteca, bridge e docs, com a versão esperada do
+        novomodelo (`expected`) e a do bridge (`expected_bridge`), que pode ser um patch.
         `new_version`: consulta, no máximo a cada 6 horas e em até alguns segundos, os
         releases do novomodelo e do bridge (domínios oficiais); sem rede, diz que
         não foi possível verificar e mostra onde conferir.
@@ -167,7 +168,11 @@ def build_server() -> FastMCP:
         return {
             "server": f"{SERVER_NAME}-mcp",
             "mcp_version": __version__,
-            "versions": {**pieces, "expected": versions.expected_version()},
+            "versions": {
+                **pieces,
+                "expected": versions.expected_version(),
+                "expected_bridge": versions.expected_bridge_version(),
+            },
             "new_version": newer,
             "bridge": {
                 "path": bridge,

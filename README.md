@@ -16,11 +16,12 @@ comparação. Fala **stdio**, não abre porta e é iniciado pelo cliente MCP com
 uv tool install --compile-bytecode novomodelo-mcp
 ```
 
-O pacote traz o `novomodelo-bridge`, a biblioteca `novomodelo-python` e as docs da mesma
-versão. O executável `novomodelo` é instalado à parte, na mesma versão: peça ao agente
-"instale o executável do novomodelo" (tool `install_novomodelo`, que usa o instalador
-oficial da release e confere o SHA-256), ou use o instalador da
-[release](https://github.com/ons-ccee-epe/novomodelo/releases) da versão do MCP.
+O pacote traz a biblioteca `novomodelo-python` e as docs da mesma versão, e o
+`novomodelo-bridge` dessa versão ou de um patch só dele. O executável `novomodelo` é
+instalado à parte, na mesma versão: peça ao agente "instale o executável do novomodelo"
+(tool `install_novomodelo`, que usa o instalador oficial da release e confere o SHA-256), ou
+use o instalador da [release](https://github.com/ons-ccee-epe/novomodelo/releases) da
+versão do MCP.
 
 Requisitos: Python 3.12 ou mais novo e [`uv`](https://docs.astral.sh/uv/). Os requisitos do
 executável por sistema estão na página de instalação das
@@ -211,12 +212,13 @@ Edições com `force=True` (gravar violando o schema), `case_init(force=True)`
 
 ## Versões e rede
 
-O MCP conversa com o executável, a biblioteca (`novomodelo-python`) e o bridge da
-mesma versão. Se alguma peça estiver em outra versão, ou faltar, **toda** resposta traz
-`version_warnings` com os comandos para alinhar; a chamada continua, e a instrução do
-servidor pede ao agente que ofereça rodar os comandos, com o ok da pessoa. A peça mais
-velha que o MCP sobe até a versão dele. Para a mais nova há dois caminhos: atualizar o
-MCP para a versão dela, ou voltar a peça para a versão do MCP.
+O MCP conversa com o executável e a biblioteca (`novomodelo-python`) da versão dele, e com
+o bridge que ele fixa, da mesma versão ou de um patch só do bridge. Se alguma peça estiver
+em outra versão, ou faltar, **toda** resposta traz `version_warnings` com os comandos para
+alinhar; a chamada continua, e a instrução do servidor pede ao agente que ofereça rodar os
+comandos, com o ok da pessoa. A peça mais velha sobe até a versão do MCP (o bridge, até a
+que o MCP fixa). Para a mais nova há dois caminhos: atualizar o MCP para um que a traga, ou
+voltar a peça para a versão do MCP.
 
 A rede é usada só pelo `server_info`, para ver se há versão nova do novomodelo, do bridge e
 do MCP (no máximo uma vez a cada 6 horas, em poucos segundos), e pelo `install_novomodelo`,

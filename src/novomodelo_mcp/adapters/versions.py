@@ -62,23 +62,43 @@ def normalize_version(version: Any) -> str | None:
 
 
 def _version_key(version: str) -> tuple[int, ...]:
-    return tuple(int(n) for n in re.findall(r"\d+", version)[:3])
+    """(major, minor, patch, post): o `.postN` conta, e o MCP `X.Y.Z.postN` é mais novo."""
+    numbers = [int(n) for n in re.findall(r"\d+", re.sub(r"\.post\d+$", "", version))[:3]]
+    post = re.search(r"\.post(\d+)$", version)
+    return (*numbers, int(post[1]) if post else 0) if numbers else ()
 
 
-def expected_version() -> str | None:
-    """O pin exato do bridge nos metadados do próprio pacote do MCP.
-
-    O bridge fixa a mesma versão da biblioteca, então o pin dele vale para as duas.
-    Não é a versão do MCP: o pacote só passa a ter a versão do novomodelo no release.
-    """
+def _exact_pin(dist: str, requirement: str) -> str | None:
     try:
-        requirements = metadata.requires(MCP_DIST) or []
+        requirements = metadata.requires(dist) or []
     except metadata.PackageNotFoundError:
         return None
     for req in requirements:
-        if m := re.match(rf"^{re.escape(BRIDGE_DIST)}\s*==\s*([^;\s,]+)", req):
+        if m := re.match(rf"^{re.escape(requirement)}\s*==\s*([^;\s,]+)", req):
             return normalize_version(m.group(1))
     return None
+
+
+def expected_version() -> str | None:
+    """A versão do novomodelo que o MCP espera: o pin exato da biblioteca no bridge fixado.
+
+    Vale para o executável, a biblioteca e as docs. Não é a versão do bridge, que pode ter
+    um patch só dele, nem a do MCP, que só passa a ter a do novomodelo no release.
+    """
+    return _exact_pin(BRIDGE_DIST, BINDING_DIST)
+
+
+def expected_bridge_version() -> str | None:
+    """O pin exato do bridge nos metadados do próprio pacote do MCP."""
+    return _exact_pin(MCP_DIST, BRIDGE_DIST)
+
+
+def mcp_version() -> str | None:
+    """A versão instalada do MCP, com o `.postN`: a que o comando de reinstalar fixa."""
+    try:
+        return metadata.version(MCP_DIST)
+    except metadata.PackageNotFoundError:
+        return None
 
 
 def _piece(version: Any, missing: str) -> dict[str, Any]:
@@ -144,9 +164,9 @@ def mcp_install_command(version: str) -> str:
     )
 
 
-def _bridge_command(version: str, origin: str | None = None) -> str:
+def _bridge_command(version: str, origin: str | None, reinstall_mcp: str) -> str:
     if origin == "pacote":
-        return mcp_install_command(version)
+        return reinstall_mcp
     return f"uv tool install --force {BRIDGE_CLI}=={version}"
 
 
@@ -160,25 +180,41 @@ def _newer_piece_warning(label: str, version: str, expected: str, align: str) ->
     )
 
 
-def _piece_warnings(settings, expected: str) -> list[str]:
+def _newer_bridge_warning(label: str, version: str, pinned: str, align: str) -> str:
+    # Um patch só do bridge sai num MCP `X.Y.Z.postN`: sem rede, não dá para nomear o MCP.
+    return (
+        f"O {BRIDGE_CLI} está na {version} e o MCP fixa o bridge na {pinned}; o MCP foi "
+        f"testado com o bridge dessa versão. Para alinhar, atualize o MCP, se já houver um "
+        f"com o bridge {version}, ou volte {label} para a {pinned}: {align}."
+    )
+
+
+def _piece_warnings(settings, expected: str, expected_bridge: str) -> list[str]:
     """Avisos com a versão do MCP como referência, cada um com os comandos para alinhar.
 
-    A peça mais velha sobe até a versão do MCP. Para a mais nova há dois caminhos, porque
-    sem rede o MCP não sabe se já saiu o MCP da versão dela: atualizar o MCP ou voltar a
-    peça para a versão do MCP.
+    O executável, a biblioteca e as docs seguem a versão do novomodelo; o bridge, o pin do
+    MCP, que pode ser um patch só do bridge. A peça mais velha sobe até a sua referência.
+    Para a mais nova há dois caminhos, porque sem rede o MCP não sabe se já saiu o MCP da
+    versão dela: atualizar o MCP ou voltar a peça para a referência.
     """
     pieces = local_versions(settings)
+    reinstall = mcp_install_command(mcp_version() or expected)
     actions = {
         "executable": (
             "o executável novomodelo",
             f"{ASK_AGENT_TO_INSTALL}. Manual: {cli_install_command(expected)}",
+            expected,
         ),
-        "library": ("a biblioteca novomodelo-python", mcp_install_command(expected)),
-        "bridge": (f"o {BRIDGE_CLI}", _bridge_command(expected, pieces["bridge"].get("origin"))),
-        "docs": ("as docs embutidas", mcp_install_command(expected)),
+        "library": ("a biblioteca novomodelo-python", reinstall, expected),
+        "bridge": (
+            f"o {BRIDGE_CLI}",
+            _bridge_command(expected_bridge, pieces["bridge"].get("origin"), reinstall),
+            expected_bridge,
+        ),
+        "docs": ("as docs embutidas", reinstall, expected),
     }
     lines = []
-    for key, (label, action) in actions.items():
+    for key, (label, action, reference) in actions.items():
         version = normalize_version(pieces[key]["version"])
         verb = "" if key == "executable" else "Instale: "
         name = label.split(" ", 1)[1]
@@ -187,16 +223,17 @@ def _piece_warnings(settings, expected: str) -> list[str]:
         if version is None:
             if key != "docs":
                 lines.append(f"{name} {pieces[key]['reason']}. {verb}{action}")
-        elif _version_key(version) < _version_key(expected):
+        elif _version_key(version) < _version_key(reference):
             verb = "" if key == "executable" else "Atualize: "
-            lines.append(f"{name} na versão {version}; a do MCP é {expected}. {verb}{action}")
-        elif _version_key(version) > _version_key(expected):
+            lines.append(f"{name} na versão {version}; a do MCP é {reference}. {verb}{action}")
+        elif _version_key(version) > _version_key(reference):
+            newer = _newer_bridge_warning if key == "bridge" else _newer_piece_warning
             notes = {
                 "executable": ("novomodelo", CLI_RELEASES),
                 "bridge": ("bridge", BRIDGE_RELEASES),
             }.get(key)
             lines.append(
-                _newer_piece_warning(label, version, expected, action)
+                newer(label, version, reference, action)
                 + (_notes_text(notes[0], version, notes[1]) if notes else "")
             )
     return lines
@@ -207,8 +244,10 @@ def version_warnings(settings) -> list[str]:
     aviso de docs lidas de uma pasta de desenvolvimento."""
     from .reference import docs_origin
 
-    expected = expected_version()
-    lines = _piece_warnings(settings, expected) if expected else []
+    expected, expected_bridge = expected_version(), expected_bridge_version()
+    lines = (
+        _piece_warnings(settings, expected, expected_bridge) if expected and expected_bridge else []
+    )
     origin = docs_origin(settings)
     if origin["origin"] == "pasta_de_desenvolvimento":
         lines.append(
@@ -309,7 +348,12 @@ _UPDATE: dict[str, Any] = {}
 
 
 def _newer(
-    current: str | None, fetched: dict[str, Any], extract, manual: str, command
+    current: str | None,
+    fetched: dict[str, Any],
+    extract,
+    manual: str,
+    *,
+    keep_post: bool = False,
 ) -> dict[str, Any]:
     if "network_warning" in fetched:
         return {
@@ -318,7 +362,10 @@ def _newer(
             "check_at": manual,
         }
     try:
-        latest = normalize_version(extract(fetched["data"]))
+        raw = extract(fetched["data"])
+        latest = (
+            (str(raw or "").strip().lstrip("vV") or None) if keep_post else normalize_version(raw)
+        )
     except (KeyError, TypeError):
         latest = None
     if not latest:
@@ -329,7 +376,7 @@ def _newer(
         }
     if current and _version_key(latest) <= _version_key(current):
         return {"status": "atual", "latest": latest}
-    return {"status": "nova", "latest": latest, "command": command(latest)}
+    return {"status": "nova", "latest": latest}
 
 
 def _shorten(text: str, limit: int) -> str:
@@ -403,10 +450,17 @@ def _notes_text(piece: str, version: str, releases: str) -> str:
     return f" Notas da {version}: {link}"
 
 
-def _release_note(piece: str, newest: str, current: str | None) -> str:
+def _release_note(newest: str, current: str | None) -> str:
     return (
-        f"o {piece} {newest} saiu; o MCP está na {current}. Quando sair o MCP {newest}, "
+        f"o novomodelo {newest} saiu; o MCP está na {current}. Quando sair o MCP {newest}, "
         f"atualize as peças juntas: {mcp_install_command(newest)}."
+    )
+
+
+def _bridge_release_note(newest: str, pinned: str | None) -> str:
+    return (
+        f"o {BRIDGE_CLI} {newest} saiu; o MCP fixa o bridge na {pinned}. Quando sair um MCP "
+        f"com o bridge {newest}, atualize as peças juntas pelo MCP."
     )
 
 
@@ -423,7 +477,8 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
         return _UPDATE["result"]
     pieces = local_versions(settings)
     current = expected_version() or pieces["executable"]["version"]
-    origin = pieces["bridge"].get("origin")
+    current_bridge = expected_bridge_version() or pieces["bridge"]["version"]
+    installed_mcp = mcp_version() or current
     pool = ThreadPoolExecutor(max_workers=4)
     futures = {
         "mcp": pool.submit(fetch_json, MCP_PYPI, timeout=budget_s),
@@ -435,16 +490,8 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
     pool.shutdown(wait=False, cancel_futures=True)
     late = {"network_warning": f"tempo esgotado ({budget_s:g} s)"}
     got = {k: (f.result() if f.done() else late) for k, f in futures.items()}
-    cli = _newer(
-        current, got["novomodelo"], lambda d: d["tag_name"], CLI_RELEASES, cli_install_command
-    )
-    bridge = _newer(
-        current,
-        got["bridge"],
-        lambda d: d["info"]["version"],
-        BRIDGE_PAGE,
-        lambda v: _bridge_command(v, origin),
-    )
+    cli = _newer(current, got["novomodelo"], lambda d: d["tag_name"], CLI_RELEASES)
+    bridge = _newer(current_bridge, got["bridge"], lambda d: d["info"]["version"], BRIDGE_PAGE)
     notes: dict[str, dict[str, Any]] = {}
     if cli.get("latest"):
         notes["novomodelo"] = {
@@ -456,27 +503,28 @@ def update_check(settings, *, budget_s: float = UPDATE_BUDGET_S) -> dict[str, An
             "version": bridge["latest"],
             **_release_notes(got["bridge_notes"], bridge["latest"], BRIDGE_RELEASES),
         }
-    mcp = _newer(current, got["mcp"], lambda d: d["info"]["version"], MCP_PAGE, mcp_install_command)
+    mcp = _newer(
+        installed_mcp,
+        got["mcp"],
+        lambda d: d["info"]["version"],
+        MCP_PAGE,
+        keep_post=True,
+    )
     if mcp["status"] == "nova":
+        mcp["command"] = mcp_install_command(mcp["latest"])
         mcp["release_notes"] = f"{MCP_RELEASES}/tag/v{mcp['latest']}"
     if cli["status"] == "nova":
         newest = cli["latest"]
-        note = _release_note("novomodelo", newest, current)
-        cli = (
-            {k: v for k, v in cli.items() if k != "command"}
-            | {"note": note}
-            | {k: v for k, v in notes["novomodelo"].items() if k != "version"}
-        )
+        note = _release_note(newest, installed_mcp)
+        cli |= {"note": note} | {k: v for k, v in notes["novomodelo"].items() if k != "version"}
         if mcp["status"] != "nova":
             mcp = {"status": "a_conferir", "novomodelo": newest, "note": note}
     elif mcp["status"] == "nao_foi_possivel_verificar":
         mcp = {"status": cli["status"], "note": "inferida pela versão do novomodelo"}
     if bridge["status"] == "nova":
-        bridge = (
-            {k: v for k, v in bridge.items() if k != "command"}
-            | {"note": _release_note(BRIDGE_CLI, bridge["latest"], current)}
-            | {k: v for k, v in notes["bridge"].items() if k != "version"}
-        )
+        bridge |= {"note": _bridge_release_note(bridge["latest"], current_bridge)} | {
+            k: v for k, v in notes["bridge"].items() if k != "version"
+        }
     _UPDATE["result"] = {"novomodelo": cli, "bridge": bridge, "mcp": mcp}
     _UPDATE["release_notes"] = notes
     _UPDATE["checked_at"] = time.monotonic()

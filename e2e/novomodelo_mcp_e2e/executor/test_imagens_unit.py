@@ -33,6 +33,7 @@ from novomodelo_mcp_e2e.executor.imagens import (
 
 TOKEN_FALSO = "sk-ant-teste-000000000000"
 NOVOMODELO = "9.8.7"
+BRIDGE = "9.8.8"
 WHEEL = "novomodelo_mcp-1.2.3-py3-none-any.whl"
 
 
@@ -48,7 +49,7 @@ def _cfg(tmp_path: Path, motor: str = "podman") -> Config:
     )
 
 
-def _wheel(tmp_path: Path, nome: str = WHEEL, pin: str | None = NOVOMODELO) -> Path:
+def _wheel(tmp_path: Path, nome: str = WHEEL, pin: str | None = BRIDGE) -> Path:
     arquivo = tmp_path / nome
     linhas = ["Metadata-Version: 2.4", "Name: novomodelo-mcp", "Requires-Dist: mcp>=1"]
     if pin is not None:
@@ -88,6 +89,7 @@ def _build_args(cmd: list[str]) -> dict[str, str]:
 @pytest.fixture(autouse=True)
 def _versao_esperada(monkeypatch):
     monkeypatch.setattr(imagens, "expected_version", lambda: NOVOMODELO)
+    monkeypatch.setattr(imagens, "expected_bridge_version", lambda: BRIDGE)
 
 
 def test_config_mcp_sem_e_wheel(tmp_path):
@@ -114,7 +116,7 @@ def test_config_mcp_recusa_versao_vazia(tmp_path):
         ler_config_mcp(str(_wheel(tmp_path, "novomodelo_mcp--py3-none-any.whl")))
 
 
-def _versoes_mcp(mcp: str, bridge: str = NOVOMODELO) -> dict[str, str]:
+def _versoes_mcp(mcp: str, bridge: str = BRIDGE) -> dict[str, str]:
     return {
         "novomodelo": NOVOMODELO,
         "novomodelo-bridge": bridge,
@@ -156,7 +158,7 @@ def test_aviso_quando_o_bridge_da_wheel_diverge_do_checkout(tmp_path):
     assert aviso_do_bridge(ler_config_mcp(str(_wheel(tmp_path)))) is None
     outra = ler_config_mcp(str(_wheel(tmp_path, "novomodelo_mcp-2.0.0-py3-none-any.whl", "5.0.0")))
     aviso = aviso_do_bridge(outra)
-    assert aviso is not None and "5.0.0" in aviso and NOVOMODELO in aviso
+    assert aviso is not None and "5.0.0" in aviso and BRIDGE in aviso
 
 
 def test_tag_por_agente_e_config(tmp_path):
@@ -173,12 +175,13 @@ def test_tag_por_agente_e_config(tmp_path):
 def test_versoes_fixadas_do_novomodelo_vem_do_pin_do_produto():
     versoes = versoes_fixadas()
     assert versoes["NOVOMODELO_VERSAO"] == NOVOMODELO
-    assert versoes["BRIDGE_VERSAO"] == NOVOMODELO
+    assert versoes["BRIDGE_VERSAO"] == BRIDGE
     assert versoes["CLAUDE_CODE_VERSAO"] == CLAUDE_CODE_VERSAO
 
 
-def test_versoes_fixadas_sem_pin_do_produto_falha(monkeypatch):
-    monkeypatch.setattr(imagens, "expected_version", lambda: None)
+@pytest.mark.parametrize("pin", ["expected_version", "expected_bridge_version"])
+def test_versoes_fixadas_sem_pin_do_produto_falha(monkeypatch, pin):
+    monkeypatch.setattr(imagens, pin, lambda: None)
     with pytest.raises(FalhaPreparo):
         versoes_fixadas()
 
@@ -188,7 +191,7 @@ def test_build_passa_as_versoes_fixadas(tmp_path):
     motor = MotorFalso(
         {
             "novomodelo": NOVOMODELO,
-            "novomodelo-bridge": NOVOMODELO,
+            "novomodelo-bridge": BRIDGE,
             "claude-code": CLAUDE_CODE_VERSAO,
             "novomodelo-mcp": "1.2.3",
         }
@@ -220,16 +223,14 @@ def test_build_passa_as_versoes_fixadas(tmp_path):
     assert leitura[-2:] == ["cat", f"{HOME_AGENTE}/versoes.json"]
     assert versoes == {
         "novomodelo": NOVOMODELO,
-        "novomodelo-bridge": NOVOMODELO,
+        "novomodelo-bridge": BRIDGE,
         "claude-code": CLAUDE_CODE_VERSAO,
         "mcp:mcp-1.2.3": "1.2.3",
     }
 
 
 def test_build_sem_mcp_leva_contexto_vazio(tmp_path):
-    motor = MotorFalso(
-        {"novomodelo": NOVOMODELO, "novomodelo-bridge": NOVOMODELO, "kiro-cli": "1.0.0"}
-    )
+    motor = MotorFalso({"novomodelo": NOVOMODELO, "novomodelo-bridge": BRIDGE, "kiro-cli": "1.0.0"})
     versoes = construir(ler_config_mcp("sem"), "kiro", _cfg(tmp_path), rodar=motor)
     args = _build_args(motor.chamadas[0][0])
     assert args["CONFIG"] == "sem-mcp"
@@ -249,9 +250,9 @@ def test_build_com_falha_do_motor_nao_le_versoes(tmp_path):
 @pytest.mark.parametrize(
     "versoes",
     [
-        {"novomodelo": NOVOMODELO, "novomodelo-bridge": NOVOMODELO},
-        {"novomodelo": NOVOMODELO, "novomodelo-bridge": NOVOMODELO, "claude-code": "0.0.1"},
-        {"novomodelo": "0.0.1", "novomodelo-bridge": NOVOMODELO, "claude-code": CLAUDE_CODE_VERSAO},
+        {"novomodelo": NOVOMODELO, "novomodelo-bridge": BRIDGE},
+        {"novomodelo": NOVOMODELO, "novomodelo-bridge": BRIDGE, "claude-code": "0.0.1"},
+        {"novomodelo": "0.0.1", "novomodelo-bridge": BRIDGE, "claude-code": CLAUDE_CODE_VERSAO},
         {"novomodelo": NOVOMODELO, "novomodelo-bridge": "0.0.1", "claude-code": CLAUDE_CODE_VERSAO},
     ],
 )

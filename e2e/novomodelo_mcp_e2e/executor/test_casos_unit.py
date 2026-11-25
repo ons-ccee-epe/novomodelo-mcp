@@ -11,7 +11,7 @@ from typing import NoReturn
 
 import pytest
 
-from novomodelo_mcp.adapters.versions import expected_version
+from novomodelo_mcp.adapters.versions import expected_bridge_version, expected_version
 from novomodelo_mcp_e2e.config import Config
 from novomodelo_mcp_e2e.executor import casos
 from novomodelo_mcp_e2e.executor.casos import (
@@ -231,10 +231,13 @@ def test_1dtoy_rodado_exige_o_exemplo_preparado(tmp_path):
         preparar_1dtoy_rodado("imagem:x", _cfg(tmp_path), rodar=_motor_que_nao_roda)
 
 
-def test_fontes_tem_o_commit_da_versao_esperada_do_bridge():
-    versao = expected_version()
-    assert versao is not None
-    for repo in (casos.REPO_BRIDGE, casos.REPO_NOVOMODELO):
+def test_fontes_tem_o_commit_das_versoes_esperadas():
+    pares = {
+        casos.REPO_BRIDGE: expected_bridge_version(),
+        casos.REPO_NOVOMODELO: expected_version(),
+    }
+    for repo, versao in pares.items():
+        assert versao is not None, repo
         assert len(commit_esperado(repo, versao)) == 40
 
 
