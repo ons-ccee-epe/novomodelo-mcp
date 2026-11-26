@@ -10,7 +10,7 @@ dele; uma correção só do MCP, ou um patch só do bridge depois do release do 
 
 ## [Unreleased]
 
-## [0.22.0] - 2026-11-24
+## [0.22.0] - 2026-11-26
 
 ### Added
 
