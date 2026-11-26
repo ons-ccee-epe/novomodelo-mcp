@@ -131,8 +131,8 @@ the validity of the lower bound.
    and MPI configurations (see section 2.2)
 3. Correlation is applied per the active profile for each stage (see section
    2.4)
-4. Optionally, the inflow noise of each stage is **moment-matched** over the
-   stage's openings. For hydro $i$, let $\bar{\varepsilon}_i$ and $s_i$ be the
+4. The inflow noise of each stage is **moment-matched** over the stage's
+   openings. For hydro $i$, let $\bar{\varepsilon}_i$ and $s_i$ be the
    mean and the standard deviation, with divisor $N_t$, of its correlated noise
    values $\varepsilon_{i,1}, \ldots, \varepsilon_{i,N_t}$ at the stage. Each
    value is replaced by
@@ -470,7 +470,7 @@ and the study is refused.
 direction: down
 
 classes: {
-  hydro: {style: {stroke: "#4a90b8"}}
+  hydro: {style: {stroke: "#3378a3"}}
 }
 
 study: "Study stages · replayed" {
@@ -612,37 +612,29 @@ lag buffer for the next):
    shadowed day-wise by the initial conditions' recent observations wherever the
    two overlap (see §4.5 for the reason this is the only admissible seed).
 2. For each stage $t$: compute the deterministic PAR component, solve for
-   $\varepsilon_t$, update the lag buffer with $a_t^{\text{target}}$.
-3. Validate the inverted noise:
-   - When $\sigma_m = 0$, the inverted noise is $0$ if $a_t^{\text{target}}$
-     equals the deterministic component to within a numerical tolerance, and
-     otherwise has no finite value, which refuses the study (the PAR model
-     says the series is deterministic, but the scenario disagrees).
-   - Building the inverted window pool, which serves both the historical
-     replay and the historical-residual openings (§2.5), refuses the study
-     when a study stage has no season, when an inverted noise value is the
-     $\sigma_m = 0$ mismatch above or is not a number, or when the window pool
-     is empty. [Error Codes](/en/reference/error-codes/#stochasticpreparationerror)
-     lists the messages and the exit codes.
+   $\varepsilon_t$, update the lag buffer with $a_t^{\text{target}}$. When
+   $\sigma_m = 0$ the noise cannot move the inflow, so $\varepsilon_t = 0$
+   whatever $a_t^{\text{target}}$ is, and the replay takes the deterministic
+   component in place of the target value at that stage.
+3. Validate the inverted noise: building the inverted window pool, which
+   serves both the historical replay and the historical-residual openings
+   (§2.5), refuses the study when a study stage has no season, when an
+   inverted noise value is not finite, or when the window pool is empty.
+   [Error Codes](/en/reference/error-codes/#stochasticpreparationerror) lists
+   the messages and the exit codes.
 
 ### 4.4 Deterministic (σ = 0) External Columns
 
 A class's external column may be **constant** — every realization identical,
-standard deviation zero. Because the class statistics are derived from the
-samples themselves (§4.1), Novomodelo reads that as a genuinely deterministic series
-rather than a malformed one, and **accepts** it for load, for non-controllable
-sources, and for an inflow with an **order-0** model (no autoregressive lag and
-no annual component): the deterministic base is exactly that constant value.
-
-A constant column is **rejected** only for an inflow whose model has an
-autoregressive lag or an annual component. A single deterministic value cannot
-stand in for such a model: it would have to equal the model's own stage-by-stage
-deterministic PAR output — which depends on the evolving lag state and is not
-reconstructed from a flat column — so the load fails, naming the class, stage,
-and entity. This is distinct from the §4.3 inversion anchor check: it is a
-load-time admissibility rule on the column, not a per-stage residual test. (The
-concrete rejection message is a software-layer concern — see
-[Error Codes](/en/reference/error-codes).)
+standard deviation zero. Novomodelo reads that as a deterministic series rather
+than a malformed one and **accepts** it for every class. For load, for
+non-controllable sources and for an inflow with an **order-0** model (no
+autoregressive lag and no annual component), the class statistics are derived
+from the samples themselves (§4.1), so the deterministic base is exactly that
+constant value. An inflow whose model has an autoregressive lag or an annual
+component keeps its model's statistics, and the inversion of §4.3 turns the
+constant into one noise value per stage, which the forward pass replays as the
+recorded value (except at a season whose $\sigma_m$ is zero, step 2 of §4.3).
 
 ### 4.5 x₀ Consistency Under Historical Replay
 
@@ -844,7 +836,7 @@ For `out_of_sample`, the forward draw is fresh noise from a seed independent of 
 
 ### Moment matching
 
-Step 4 of [§2.3](/en/math/scenario-generation#23-opening-tree) defines the moment matching of a generated opening tree. `training.scenario_source.openings.moment_matching` selects it: `"per_coordinate"`, the default and the mode when `openings` is absent, matches the inflow openings of every generated stage, and `"none"` keeps them as drawn. A tree read from `scenarios/noise_openings.parquet` is used as supplied and takes no `moment_matching`. The tree that `exports.stochastic` writes to `stochastic/noise_openings.parquet` holds the matched openings. [`training.scenario_source.openings`](/en/running/configuration/#trainingscenario_sourceopenings) owns the field table.
+Step 4 of [§2.3](/en/math/scenario-generation#23-opening-tree) defines the moment matching every generated opening tree receives: at each generated stage, the inflow openings of every hydro are shifted and scaled to mean 0 and the variance of its correlated noise. A tree read from `scenarios/noise_openings.parquet` is used as supplied. The tree that `exports.stochastic` writes to `stochastic/noise_openings.parquet` holds the matched openings. [`training.scenario_source.openings`](/en/running/configuration/#trainingscenario_sourceopenings) selects where the tree comes from.
 
 ### Seeds
 
@@ -893,9 +885,9 @@ The inversion of §4.3 advances its lag chain with the per-stage lag transitions
 
 The library carries a fingerprint of the inflow-lag seed that rooted its inversion chain: a SipHash-1-3 digest of the seed's lag values as little-endian `f64` bytes. Novomodelo reports it as `historical_library_seed_digest` in `training/model_provenance.json` (see [Metadata Files](/en/reference/output/metadata/#trainingmodel_provenancejson)) and omits it when no library was built. A digest that differs from the one of the freshly derived seed marks a library inverted against a different x₀, whose replay is not exact.
 
-### Deterministic tolerance
+### Zero standard deviation
 
-The σ = 0 rule of §4.3 compares the standard deviation with `0.0` exactly. At σ = 0 the inversion returns noise `0` when the target differs from the deterministic value by less than `1e-10` in magnitude, and `NEG_INFINITY` otherwise. The library validation refuses a `NEG_INFINITY` or NaN noise value. Check V2.3 covers the historical window pool and check V3.7 an external library; the error messages carry these identifiers (see [Error Codes](/en/reference/error-codes/#stochasticpreparationerror)).
+The σ = 0 rule of §4.3 compares the standard deviation with `0.0` exactly; at σ = 0 the inversion returns noise `0` without reading the target. The library validation refuses a noise value that is not finite. Check V2.3 covers the historical window pool and check V3.7 an external library; the error messages carry these identifiers (see [Error Codes](/en/reference/error-codes/#stochasticpreparationerror)).
 
 ### Warnings
 
@@ -957,7 +949,7 @@ The Sobol direction numbers cover `SOBOL_MAX_DIM: usize = 21201` dimensions. A s
 On two or more MPI processes, `novomodelo run` checks after setup that every rank built the same opening tree. Each rank hashes its tree with 64-bit FNV-1a over the stage count, the noise dimension, the per-stage opening counts, the bit pattern of every noise value and the solve order, and the ranks exchange the smallest and the largest digest. When the two differ, the run stops with exit `4` before training ([Communication failures](/en/reference/error-codes/#communication-failures)):
 
 ```text
-opening tree differs across MPI ranks (fingerprints {min:#018x} to {max:#018x}); every rank must build the same tree from the broadcast inputs
+opening tree differs across MPI ranks (fingerprints {min:#018x} to {max:#018x}); every rank must build the same opening tree from the broadcast inputs
 ```
 
 ## Cross-References

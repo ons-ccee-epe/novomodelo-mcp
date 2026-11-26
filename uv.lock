@@ -556,7 +556,7 @@ wheels = [
 
 [[package]]
 name = "novomodelo-bridge"
-version = "0.21.0"
+version = "0.22.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cfinterface" },
@@ -570,14 +570,14 @@ dependencies = [
     { name = "rich" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5f/0d/b62425764b769d0d0133f5326f1774ddf44f9ed17ffb8b3e71b5a65bc6a2/novomodelo_bridge-0.21.0.tar.gz", hash = "sha256:771fa74bc29c2233484f4ff2b87ddb261d322b68e148a467b494195c98a98402", size = 2937700, upload-time = "2026-11-17T02:55:20.556Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/90/0903214293b1a1aac0ac1df2ba114b2a545b3a15ff4c25d18538f7bdb92b/novomodelo_bridge-0.22.1.tar.gz", hash = "sha256:8a82a86e11087925bea65d4c0181d0d6dd8d69d86b0f0262f4db03f4670ca450", size = 2971100, upload-time = "2026-11-25T01:13:19.129Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/a4/f416742350f4b5066ea213d232523c62ee0386a4eb91f536e4627744d9d3/novomodelo_bridge-0.21.0-py3-none-any.whl", hash = "sha256:089cbea1b2049898b399d6a921a7f1a271e64fdf5897d74d30528fb2873a8a81", size = 1101379, upload-time = "2026-11-17T02:55:18.613Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/f1/40e4c5151e322cbc17cee6518a1872796206d73fb4714c1cb8cca0eb9e60/novomodelo_bridge-0.22.1-py3-none-any.whl", hash = "sha256:7ab685bfde4627f1f658d27a6f0e7ca1079d698ea15ae2c8ddf00f826796e489", size = 1110324, upload-time = "2026-11-25T01:13:16.586Z" },
 ]
 
 [[package]]
 name = "novomodelo-mcp"
-version = "0.21.0"
+version = "0.22.0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography", version = "48.0.1", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
@@ -606,7 +606,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=2.0.0" },
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "mcp", specifier = ">=1.30.0,<2" },
-    { name = "novomodelo-bridge", specifier = "==0.21.0" },
+    { name = "novomodelo-bridge", specifier = "==0.22.1" },
     { name = "novomodelo-python" },
     { name = "polars", specifier = ">=2.1.0" },
     { name = "truststore", specifier = ">=0.10.5" },
@@ -655,16 +655,16 @@ dev = [{ name = "pytest", specifier = ">=9.2.0" }]
 
 [[package]]
 name = "novomodelo-python"
-version = "0.21.0"
+version = "0.22.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/2d/1c/56d140053884d9eda0e90974b618658fbe56c539f1750a0593652052ed80/novomodelo_python-0.21.0.tar.gz", hash = "sha256:31118c1fcd316ffe42cf3e67f8f7ad7f53ca8c53406f65775859d2c80437ba23", size = 12592464, upload-time = "2026-11-17T02:40:03.189Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/08/91/e1e2fd31a1786134501f1ca906d574e5f8a61d9defefd17f9351052fea97/novomodelo_python-0.22.0.tar.gz", hash = "sha256:a5c598764f21c5e98562a03d212b053cea3ed787227570ed55e374b1bdcfe00b", size = 12559152, upload-time = "2026-11-24T21:17:24.443Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/64/533ddd6aef0a26e600730c0dba7e6ba581491a827bec487ffe7034203bbc/novomodelo_python-0.21.0-cp312-abi3-macosx_10_12_x86_64.whl", hash = "sha256:eff5b268d7c961dbf069e1628bd0722d1fd3981299af6e9df790b596da9acee3", size = 9203853, upload-time = "2026-11-17T02:39:50.9Z" },
-    { url = "https://files.pythonhosted.org/packages/d8/6d/09818d8700b5607b5f830c1ca74be81f4a63de33158cc91afadd2f8835f7/novomodelo_python-0.21.0-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:46aa5049155bda54f357ba79a90327d4244f6d5ae713412763e703781057438a", size = 8421921, upload-time = "2026-11-17T02:39:52.819Z" },
-    { url = "https://files.pythonhosted.org/packages/35/19/8f0d8f7edc24c135b25ce9da46946aabb3166542cf74aafa1bd9de8276ed/novomodelo_python-0.21.0-cp312-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:7ad0b8e67eca9d7fbf601815edc4798475c53481e954cea44f2f0741ff3281f6", size = 9408939, upload-time = "2026-11-17T02:39:54.558Z" },
-    { url = "https://files.pythonhosted.org/packages/bc/e0/ef2abc47fff1cd345a3b26225debee81a5982e56d1d440e05c22751847cf/novomodelo_python-0.21.0-cp312-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:2500704e81be4f04b67b0251cadeffdcce2b60e94631935ddab337c2d8371f22", size = 10044516, upload-time = "2026-11-17T02:39:56.584Z" },
-    { url = "https://files.pythonhosted.org/packages/45/93/bc7323dd2bc25cb637938b1cd05ecefd04336ea1cd31580941bee7c541bd/novomodelo_python-0.21.0-cp312-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:011da5f94224dda2a520cb6860f74b39f71ed4c6811b83c6d71ae10622a2efcb", size = 16410108, upload-time = "2026-11-17T02:39:58.601Z" },
-    { url = "https://files.pythonhosted.org/packages/4b/b9/31a609d051b5437f9e43daa098680c3a94979f52b367e582da6ec284a6b9/novomodelo_python-0.21.0-cp312-abi3-win_amd64.whl", hash = "sha256:cf9bb10fd0edcd414dc25c52bc58ad86473c489189f96472a6fcab80d7a7422a", size = 8325396, upload-time = "2026-11-17T02:40:01.193Z" },
+    { url = "https://files.pythonhosted.org/packages/28/71/021e42a941646b6e3fd913df61e118ffd8c36c7b70acac82de571616e898/novomodelo_python-0.22.0-cp312-abi3-macosx_10_12_x86_64.whl", hash = "sha256:34cb392767b8f290ab9489f3f55709cf3b839c125f28cfc65ebee9a4945169d2", size = 9522970, upload-time = "2026-11-24T21:17:12.161Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/fe/da1d93e02739f1810d2da2e567b777532b148cc42e0fbc6bfd4dd1f96b11/novomodelo_python-0.22.0-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:bafb686af47d0c1c0b04c5db8ea60eb93864049a2bc8758c447b794b0a16239b", size = 8743218, upload-time = "2026-11-24T21:17:14.049Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/ab/cdd6dff516526bf083b5e4a6680eefba1e8dc198fc0ba1ed37ceb660eb44/novomodelo_python-0.22.0-cp312-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:a59857c2e4b83e7da99236a30f45c926eb2b395f31ff99f00d6e600bf2e61d9e", size = 9751899, upload-time = "2026-11-24T21:17:16.152Z" },
+    { url = "https://files.pythonhosted.org/packages/36/c8/c90fdc852839aa78c8488d2b8f0b7e0018ef3d4ab21c30456c318e16c6ef/novomodelo_python-0.22.0-cp312-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:360cd66bb7b534f462f23f3e856cb18a6740eb04cb4011f91319c52f370cf24e", size = 10395600, upload-time = "2026-11-24T21:17:18.242Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/49/dd83afad05917fc7f7948111052869f6a5870e9388e11cf68e31e03acc95/novomodelo_python-0.22.0-cp312-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:f8354ba38ed0024ad7cf473ce261d51ed4659db4e4e9241a267a86638a8f5133", size = 16754832, upload-time = "2026-11-24T21:17:20.288Z" },
+    { url = "https://files.pythonhosted.org/packages/34/b0/7cdc1a16035dab5d15501a7cada18c9d1ba9fdebbe61b8f4beb2d4c029fd/novomodelo_python-0.22.0-cp312-abi3-win_amd64.whl", hash = "sha256:8761f8e0071894b65231af8559e4a2a4d49009d701873d8f019a136e4411551b", size = 8702995, upload-time = "2026-11-24T21:17:22.351Z" },
 ]
 
 [[package]]
@@ -1462,17 +1462,18 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.27.3"
+version = "0.29.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
     { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "pydantic" },
     { name = "rich" },
     { name = "shellingham" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/03/51/d33db42cc72ffd8c30777547b42d01f0cbf9d95a770457698d0174b3ed71/typer-0.27.3.tar.gz", hash = "sha256:d0396f770a560ab1b0a8504e13b5f254b728cedb05c61cf0359e944e50ce8901", size = 205303, upload-time = "2026-10-06T17:24:16.61Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/21/37383ece7d0a4995fb8ea97729207c4292b3ff94085002f37b2387063cfb/typer-0.29.2.tar.gz", hash = "sha256:b1998dc5f2c3dedafa1517a9521fa944cc4dc1fadcea085d81a3b10ebcaeb075", size = 205728, upload-time = "2026-11-18T11:09:46.189Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/07/ea/2e31b67051e91a133189e9c000c222502ddc6969856416de0d095de4c0b0/typer-0.27.3-py3-none-any.whl", hash = "sha256:e50022f28b82a86313e54501317a1db64bf8f8d036ff8cfe5ca7e47675454aff", size = 123312, upload-time = "2026-10-06T17:24:15.054Z" },
+    { url = "https://files.pythonhosted.org/packages/62/f3/864dcb0e165b52e9f75aa3c7e0aeeb9876f139c66eb14d87856bb173b0fa/typer-0.29.2-py3-none-any.whl", hash = "sha256:f30731f8ca758368b836b3714872e58e395cef8fcaff918c853b1969ed5274e7", size = 121041, upload-time = "2026-11-18T11:09:45.03Z" },
 ]
 
 [[package]]
