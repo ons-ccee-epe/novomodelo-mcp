@@ -39,11 +39,11 @@ def test_versao_do_mcp_acompanha_a_do_novomodelo():
     assert base == versions.expected_version()
 
 
-def test_pin_exato_so_no_bridge_e_a_biblioteca_instalada_e_a_mesma():
+def test_pin_exato_so_no_bridge_e_a_biblioteca_instalada_e_a_do_pin_dele():
     deps = PYPROJECT["dependencies"]
-    assert f"{BRIDGE_DIST}=={versions.expected_version()}" in deps
+    assert f"{BRIDGE_DIST}=={versions.expected_bridge_version()}" in deps
     assert BINDING_DIST in deps, "a biblioteca fica sem pin: o bridge fixa a versão dela"
-    assert metadata.version(BINDING_DIST) == metadata.version(BRIDGE_DIST)
+    assert metadata.version(BINDING_DIST) == versions.expected_version()
 
 
 def test_autores_sao_os_tres_mantenedores_do_novomodelo():

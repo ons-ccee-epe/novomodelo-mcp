@@ -15,7 +15,7 @@ from typing import NoReturn
 
 import jsonschema
 
-from novomodelo_mcp.adapters.versions import expected_version
+from novomodelo_mcp.adapters.versions import expected_bridge_version, expected_version
 from novomodelo_mcp_e2e import rodada
 from novomodelo_mcp_e2e.config import avisos, carregar_config, verificar
 from novomodelo_mcp_e2e.executor.casos import (
@@ -266,10 +266,11 @@ def _preparar(cfg, configs: list[ConfigMCP], agentes: list[str]) -> int:
         print(f"problema [{problema.item}]: {problema.mensagem}")
     if problemas:
         return 1
-    versao = expected_version()
-    if versao is None:
+    novomodelo, bridge = expected_version(), expected_bridge_version()
+    if novomodelo is None or bridge is None:
         print(
-            "erro: pin do novomodelo-bridge ausente nos metadados do novomodelo-mcp",
+            "erro: pin do novomodelo-bridge ausente nos metadados do novomodelo-mcp, "
+            "ou o da novomodelo-python nos do bridge",
             file=sys.stderr,
         )
         return 1
@@ -285,7 +286,7 @@ def _preparar(cfg, configs: list[ConfigMCP], agentes: list[str]) -> int:
                 linha = {"imagem": tag_imagem(c, agente), "versoes": versoes}
                 print(json.dumps(linha, ensure_ascii=False), flush=True)
         primeira = tag_imagem(configs[0], agentes[0])
-        preparados = preparar_publicos(versao, primeira, cfg)
+        preparados = preparar_publicos(novomodelo, bridge, primeira, cfg)
         print(json.dumps({"casos_publicos": preparados}, ensure_ascii=False), flush=True)
         grandes = {
             nome: "disponivel" if resolver(nome, cfg, pasta_preparados(cfg)) else "ausente"

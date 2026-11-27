@@ -33,10 +33,11 @@ def ambiente(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "avisos", lambda cfg: [])
     monkeypatch.setattr(cli, "aviso_do_bridge", lambda c: None)
     monkeypatch.setattr(cli, "expected_version", lambda: "1.0.0")
+    monkeypatch.setattr(cli, "expected_bridge_version", lambda: "1.0.1")
     chamadas["publicos"] = []
 
-    def publicos(versao, imagem, cfg):
-        chamadas["publicos"].append((versao, imagem))
+    def publicos(versao_novomodelo, versao_bridge, imagem, cfg):
+        chamadas["publicos"].append((versao_novomodelo, versao_bridge, imagem))
         return ["exemplo_1dtoy"]
 
     monkeypatch.setattr(cli, "preparar_publicos", publicos)
@@ -76,7 +77,9 @@ def test_cli_preparar_constroi_uma_imagem_por_config_e_agente(ambiente, tmp_path
         (ConfigMCP("mcp-1.2.3", wheel.resolve()), "kiro"),
     ]
     assert len(chamadas["segredo"]) == 1
-    assert chamadas["publicos"] == [("1.0.0", "localhost/novomodelo-mcp-bateria:claude-sem-mcp")]
+    assert chamadas["publicos"] == [
+        ("1.0.0", "1.0.1", "localhost/novomodelo-mcp-bateria:claude-sem-mcp")
+    ]
     linhas = [json.loads(linha) for linha in capsys.readouterr().out.splitlines() if "{" in linha]
     imagens = [linha["imagem"] for linha in linhas if "imagem" in linha]
     assert imagens[0].endswith(":claude-sem-mcp")
@@ -122,7 +125,7 @@ def test_cli_preparar_avisa_bridge_divergente_sem_falhar(ambiente, monkeypatch, 
 
 
 def test_cli_preparar_falha_dos_casos_publicos_sai_1(ambiente, monkeypatch, capsys):
-    def falha(versao, imagem, cfg):
+    def falha(versao_novomodelo, versao_bridge, imagem, cfg):
         raise FalhaPreparo("commit da tag diferente")
 
     monkeypatch.setattr(cli, "preparar_publicos", falha)
@@ -130,7 +133,8 @@ def test_cli_preparar_falha_dos_casos_publicos_sai_1(ambiente, monkeypatch, caps
     assert "commit da tag diferente" in capsys.readouterr().err
 
 
-def test_cli_preparar_sem_pin_do_bridge_sai_1(ambiente, monkeypatch, capsys):
-    monkeypatch.setattr(cli, "expected_version", lambda: None)
+@pytest.mark.parametrize("pin", ["expected_version", "expected_bridge_version"])
+def test_cli_preparar_sem_pin_do_bridge_sai_1(ambiente, monkeypatch, capsys, pin):
+    monkeypatch.setattr(cli, pin, lambda: None)
     assert cli.main(["preparar", "--mcp", "sem", "--agentes", "kiro"]) == 1
     assert "pin do novomodelo-bridge" in capsys.readouterr().err

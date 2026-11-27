@@ -572,12 +572,12 @@ def _glossary_terms(con: sqlite3.Connection, normalized: str) -> list[str]:
 _SEARCH_SQL = {
     "secoes": (
         "SELECT pagina, titulo, ancora, snippet(secoes, 3, '', '', '…', 48), "
-        "bm25(secoes, 0.0, 5.0, 0.0, 1.0) AS r FROM secoes WHERE secoes MATCH ? "
+        "bm25(secoes, 0.0, 10.0, 0.0, 1.0) AS r FROM secoes WHERE secoes MATCH ? "
         "ORDER BY r LIMIT ?"
     ),
     "changelog": (
         "SELECT pagina, titulo, ancora, snippet(changelog, 3, '', '', '…', 48), "
-        "bm25(changelog, 0.0, 5.0, 0.0, 1.0) AS r FROM changelog WHERE changelog MATCH ? "
+        "bm25(changelog, 0.0, 10.0, 0.0, 1.0) AS r FROM changelog WHERE changelog MATCH ? "
         "ORDER BY r LIMIT ?"
     ),
 }

@@ -179,33 +179,37 @@ com a ferramenta do novomodelo fixada no commit de uma tag.
 
 ## Parear com uma versão do novomodelo
 
-O MCP `X.Y.Z` pareia com o novomodelo `X.Y.Z`. O MCP fixa `novomodelo-bridge==X.Y.Z`, o
-bridge fixa `novomodelo-python==X.Y.Z`, e `expected_version()`
-(`src/novomodelo_mcp/adapters/versions.py`) lê a versão esperada desse pin.
+O MCP `X.Y.Z` pareia com o novomodelo `X.Y.Z`. O MCP fixa `novomodelo-bridge==X.Y.W`, e o
+bridge fixa `novomodelo-python==X.Y.Z`; `W` passa de `Z` num patch só do bridge. Em
+`src/novomodelo_mcp/adapters/versions.py`, `expected_bridge_version()` lê o pin do MCP e
+`expected_version()`, o do bridge: o executável, a biblioteca e as docs seguem o
+novomodelo, e o bridge, o pin.
 
 O pareamento é um commit só, `build: pair with novomodelo X.Y.Z`, feito depois que o
-bridge `X.Y.Z` está no PyPI e a `main` das docs aponta para o novomodelo `vX.Y.Z` (`latest`
+bridge `X.Y.W` está no PyPI e a `main` das docs aponta para o novomodelo `vX.Y.Z` (`latest`
 no `versions.json`):
 
-1. `version` e o pin do bridge no `pyproject.toml`, e o lock:
+1. `version` (`X.Y.Z`) e o pin do bridge (`X.Y.W`) no `pyproject.toml`, e o lock:
    `uv lock --upgrade-package novomodelo-bridge --upgrade-package novomodelo-python`.
-   `tests/test_package_metadata.py` falha se a versão do MCP e o pin divergirem.
+   `tests/test_package_metadata.py` falha se a versão do MCP e a do novomodelo que o bridge
+   fixa divergirem.
 2. As docs embutidas da `main` das docs e os changelogs nas tags `vX.Y.Z` do novomodelo e
-   do bridge (seção acima).
+   `vX.Y.W` do bridge (seção acima).
 3. O `ref` do job `rename-guard` em `.github/workflows/ci.yml` para o commit da tag
    `vX.Y.Z` do novomodelo, com a tag no comentário:
    `git ls-remote https://github.com/ons-ccee-epe/novomodelo 'refs/tags/vX.Y.Z^{}'`.
-4. Os commits das tags `vX.Y.Z` do novomodelo e do bridge em
+4. Os commits das tags `vX.Y.Z` do novomodelo e `vX.Y.W` do bridge em
    `e2e/novomodelo_mcp_e2e/executor/fontes.toml`, pelo mesmo `git ls-remote` (no bridge, com
    `novomodelo-bridge` no lugar de `novomodelo`): a bateria de ponta a ponta confere
    os clones dos casos públicos contra eles.
 5. Cada opção nova das CLIs classificada em `tests/surface.toml`; confira com
-   `uv run pytest tests/test_surface_parity.py --executaveis-reais` contra o novomodelo e
-   o bridge `X.Y.Z` instalados.
+   `uv run pytest tests/test_surface_parity.py --executaveis-reais` contra o novomodelo
+   `X.Y.Z` e o bridge `X.Y.W` instalados.
 6. As entradas de `Unreleased` do `CHANGELOG.md` sob `## [X.Y.Z] - AAAA-MM-DD`: essa
    seção é a nota do release do GitHub (`scripts/notas_da_release.py`).
 
-Uma correção só do MCP vira `X.Y.Z.postN`.
+Uma correção só do MCP vira `X.Y.Z.postN`. Um patch só do bridge depois do release do MCP
+`X.Y.Z` também: é o pareamento acima, com a `version` em `X.Y.Z.postN`.
 
 Cada versão do `CHANGELOG.md` agrupa as entradas em `### Added`, `### Changed`,
 `### Removed` e `### Fixed`, com temas opcionais em `####`, em português. Cada entrada é

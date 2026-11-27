@@ -24,6 +24,7 @@ BASE = f"https://github.com/ons-ccee-epe/novomodelo/releases/download/v{VERSAO}/
 def _ambiente(monkeypatch):
     V.reset_caches()
     monkeypatch.setattr(V, "expected_version", lambda: VERSAO)
+    monkeypatch.setattr(V, "expected_bridge_version", lambda: VERSAO)
     yield
     V.reset_caches()
 

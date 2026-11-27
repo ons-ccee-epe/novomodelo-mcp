@@ -795,6 +795,66 @@ channel without a capacity limit leaves `max_flow_m3s` out or sets it to
 leave it out for a channel without a capacity limit. A per-stage or per-block
 `max_diversion_m3s` in `constraints/hydro_bounds.parquet` still caps the flow.
 
+#### Negative entity spillage bound
+
+**When it occurs:** A hydro's `spillage.min_spillage_m3s` or
+`spillage.max_spillage_m3s` in `system/hydros.json` is negative. Spillage is a
+flow, so the loader rejects a negative floor or ceiling.
+
+**Fields:**
+
+| Field         | Description |
+| ------------- | ----------- |
+| `description` | Contains a `[SchemaViolation] system/hydros.json: field hydros[<i>].spillage.<key>: <key> must be >= 0, got <value>` line, where `<i>` is the hydro's zero-based position in the file and `<key>` is `min_spillage_m3s` or `max_spillage_m3s` |
+
+**Example:**
+
+```text
+[SchemaViolation] system/hydros.json: field hydros[0].spillage.max_spillage_m3s: max_spillage_m3s must be >= 0, got -5
+```
+
+**Resolution:** Set the value to `0` or more, or leave the key out, or set it
+to `null`, for no bound on that side.
+
+#### Invalid tailrace flow declaration
+
+**When it occurs:** A hydro's `tailrace_flow` object in `system/hydros.json` breaks one of four rules:
+
+- `own_outflow_factor` is negative or not finite.
+- A `factor` in `outflow_influences` or `incremental_inflow_influences` is negative or not finite.
+- A hydro appears more than once in the same influence list.
+- A hydro lists itself in `outflow_influences`. A plant's own outflow is weighted by `own_outflow_factor` alone; the plant may list itself in `incremental_inflow_influences`.
+
+**Fields:**
+
+| Field         | Description |
+| ------------- | ----------- |
+| `description` | Contains a `[SchemaViolation] system/hydros.json: field hydros[<i>].tailrace_flow.<path>: <message>` line, where `<i>` is the hydro's zero-based position in the file and `<path>` names the offending key or list entry, such as `own_outflow_factor` or `outflow_influences[<j>].factor` |
+
+**Example:** One line per message form.
+
+```text
+[SchemaViolation] system/hydros.json: field hydros[0].tailrace_flow.own_outflow_factor: own_outflow_factor must be finite and >= 0, got -1
+```
+
+```text
+[SchemaViolation] system/hydros.json: field hydros[0].tailrace_flow.outflow_influences[0].factor: factor must be finite and >= 0, got -0.1
+```
+
+```text
+[SchemaViolation] system/hydros.json: field hydros[0].tailrace_flow.incremental_inflow_influences[1].hydro_id: hydro 20 is listed more than once in incremental_inflow_influences
+```
+
+```text
+[SchemaViolation] system/hydros.json: field hydros[0].tailrace_flow.outflow_influences[0].hydro_id: hydro 10 lists itself in outflow_influences; a hydro's own outflow is set by own_outflow_factor, not by listing itself
+```
+
+**Resolution:** Use a finite factor of `0` or more. List each hydro once per
+influence list. Set the plant's own share of the tailrace flow with
+`own_outflow_factor`. A self entry belongs in `incremental_inflow_influences`
+only. See [hydros case format](/en/reference/case-format/hydros) for the
+`tailrace_flow` fields.
+
 ---
 
 ### `InvalidReference`
@@ -812,10 +872,22 @@ plant's unit groups' `bus_id` references a bus that is not in
 [InvalidReference] system/hydros.json (Hydro 0 unit group 0): Hydro 0 unit group 0 references non-existent Bus 99 via field 'bus_id'
 ```
 
+A hydro whose `tailrace_flow` influence list names a hydro that does not exist:
+
+```text
+[InvalidReference] system/hydros.json (Hydro 3): Hydro 3 references non-existent Hydro 100 via field 'tailrace_flow.outflow_influences.hydro_id'
+```
+
+```text
+[InvalidReference] system/hydros.json (Hydro 3): Hydro 3 references non-existent Hydro 200 via field 'tailrace_flow.incremental_inflow_influences.hydro_id'
+```
+
 **Resolution:** Either add the referenced entity to its registry file, or
 correct the ID in the referencing file. Check all ID references:
 `unit_groups[].bus_id`, `thermals.bus_id`, `lines.source_bus_id`,
-`lines.target_bus_id`, `hydros.downstream_id`.
+`lines.target_bus_id`, `hydros.downstream_id`,
+`hydros.tailrace_flow.outflow_influences[].hydro_id`,
+`hydros.tailrace_flow.incremental_inflow_influences[].hydro_id`.
 
 **See also:** a `constraints/ncs_bounds.parquet` row with an undeclared `stage_id` is reported under this
 kind — see
@@ -915,6 +987,8 @@ this kind too — see
 An initial storage outside the hydro's storage range, or listed in the wrong
 `initial_conditions.json` array, is reported under this kind too — see
 [Initial storage refused at load](#initial-storage-refused-at-load).
+A hydro whose `spillage.min_spillage_m3s` exceeds its `spillage.max_spillage_m3s` is reported under this kind too — see
+[Inverted entity spillage bounds](#inverted-entity-spillage-bounds).
 
 #### Generic-constraint bounds row with neither endpoint and no affine remainder
 
@@ -1024,6 +1098,31 @@ the reservoir's `min_storage_hm3` to `max_storage_hm3` in `system/hydros.json`,
 or correct the reservoir's range when it is the value in error. On each listed
 stage, lower the minimum or raise the maximum in force. See
 [`constraints/hydro_bounds.parquet`](/en/reference/case-format/constraints/#constraintshydro_boundsparquet).
+
+#### Inverted entity spillage bounds
+
+**When it occurs:** A hydro's `spillage.min_spillage_m3s` in
+`system/hydros.json` is greater than its `spillage.max_spillage_m3s`. The
+business-rule check rejects the pair before it reaches the LP, because the
+interval `[min, max]` is empty. The check applies only when the hydro sets both
+bounds.
+
+**Fields:**
+
+| Field         | Description |
+| ------------- | ----------- |
+| `description` | Contains a `[InvalidValue] system/hydros.json (Hydro <id>): Hydro <id>: min_spillage_m3s (<min>) > max_spillage_m3s (<max>); spillage bounds are inconsistent` line |
+
+**Example:**
+
+```text
+[InvalidValue] system/hydros.json (Hydro 0): Hydro 0: min_spillage_m3s (20) > max_spillage_m3s (10); spillage bounds are inconsistent
+```
+
+**Resolution:** Make `min_spillage_m3s` less than or equal to
+`max_spillage_m3s` in the hydro's `spillage` object. A `min_spillage_m3s` or
+`max_spillage_m3s` value in `constraints/hydro_bounds.parquet` replaces the
+entity value for that stage or block.
 
 #### Initial storage refused at load
 
@@ -1165,42 +1264,6 @@ The horizon rule of [Invalid anticipated-thermal lead](#invalid-anticipated-ther
 The stage-volume rules of generic constraints are under
 [Stage-volume generic constraints](#stage-volume-generic-constraints).
 
-#### Deterministic external inflow column under an autoregressive model
-
-**When it occurs:** Under the `external` inflow sampling scheme, an inflow's
-seasonal mean and standard deviation are replaced by the sample moments of its
-external scenario file only for a hydro of autoregressive order 0 with no annual
-component; a hydro whose files declare a lag coefficient or an annual component
-keeps the statistics its own files declare. The substitution is per class: a
-load or non-controllable-source class takes its moments from its external file
-only when that class is itself `external`.
-
-A constant (σ = 0) column is accepted for load, NCS, and a hydro of order 0
-with no annual component, but **rejected** for a hydro whose files declare an
-autoregressive order above 0 or an annual component: a single deterministic
-value cannot stand in for such a model, since it would have to equal that
-model's own stage-by-stage deterministic PAR output, which the loader does not
-reconstruct from a flat column.
-
-**Fields:**
-
-| Field         | Description                                                                                              |
-| ------------- | ---------------------------------------------------------------------------------------------------------- |
-| `description` | Contains a `[BusinessRuleViolation] <external inflow file> (inflow entity <e> stage <stage_id>): <message>` line |
-
-**Example:**
-
-```
-constraint violation: [BusinessRuleViolation] scenarios/external_inflow_scenarios.parquet (inflow entity 7 stage 3): inflow external library at stage 3, entity 7: every scenario value is constant (σ = 0), but this hydro's inflow follows an autoregressive model of order > 0; a deterministic value here would have to equal that model's own deterministic PAR output at every stage, which this loader does not compute upstream
-```
-
-**Resolution:** Give the external column genuine stage-to-stage variation, or
-drop the plant's autoregressive inflow model to order 0 (no lag coefficient, no
-annual component) if its inflow really is deterministic. See
-[Scenario Generation §4.4](/en/math/scenario-generation) for the accept/reject
-rule and [`scenario_source`](/en/running/configuration/#trainingscenario_source) for the
-scheme configuration.
-
 #### Scalar parameters outside the constraints directory
 
 **When it occurs:** Scalar parameters are read from
@@ -1313,11 +1376,11 @@ The post-study failures, keyed to `post_study_stages.json`:
 **Example:**
 
 ```
-constraint violation: [BusinessRuleViolation] post_study_stages.json (stages[0].start_date): first post-study stage starts 2026-09-08 but the study horizon ends 2026-09-05; the post-study calendar must begin exactly at the study horizon end.
+constraint violation: [BusinessRuleViolation] post_study_stages.json (thermal_stages[0].start_date): first post-study stage starts 2026-09-08 but the study horizon ends 2026-09-05; the post-study calendar must begin exactly at the study horizon end.
 ```
 
 ```
-constraint violation: [BusinessRuleViolation] post_study_stages.json (stages start_date=2026-10-01): post-study stages are not date-contiguous: the stage starting 2026-09-05 ends 2026-09-28 but the next stage starts 2026-10-01; each stage must end exactly where the next begins.
+constraint violation: [BusinessRuleViolation] post_study_stages.json (thermal_stages start_date=2026-10-01): post-study stages are not date-contiguous: the stage starting 2026-09-05 ends 2026-09-28 but the next stage starts 2026-10-01; each stage must end exactly where the next begins.
 ```
 
 ```
@@ -1692,9 +1755,10 @@ disabled on every study stage despite supplied autoregressive coefficients, a
 negative value in `scenarios/inflow_history.parquet`, a season with none of
 the samples the estimation fits from that file, a hydro-season with at least one, but fewer than
 `estimation.min_observations_per_season`, fully covered season occurrences in that
-file, an advisory on a hydro's declared `travel_time_hours`, a hard storage floor that rises above the floor the previous stage leaves, a precomputed FPHA plane that falls below 0 MW at zero turbined flow, or an initial
+file, an advisory on a hydro's declared `travel_time_hours`, a hard storage floor that rises above the floor the previous stage leaves, a precomputed FPHA plane that falls below 0 MW with no turbined flow and no spillage, an initial
 storage outside the storage bounds at the end of the hydro's first operating
-stage. Each is reported as a warning.
+stage, a `tailrace_flow` declaration on a hydro that uses FPHA at no study stage, or, under a `lognormal_3p` inflow residual, a seasonal mean inflow at or
+below zero or the `none` inflow method. Each is reported as a warning.
 
 **Example:**
 
@@ -1755,17 +1819,39 @@ Each pair is written `Hydro {hydro_id} at stage {stage_id} ({floor} > {incoming}
 The precomputed-plane message, reported on `system/fpha_hyperplanes.parquet` for the hydro:
 
 ```text
-FPHA plane below zero at zero turbining: {entity} -- {n_pairs} (stage, plane) pair(s) at stages {stages} fall below 0 MW with no turbined flow; the earliest crosses 0 MW at {s_star} m³/s of spillage (stage {stage_id}, plane {plane_id}, storage {v_min} hm³, spillage up to {s_ref} m³/s), so while it spills the hydro turbines water at 0 MW, or reports fpha_violation_mw where turbining cannot lift the plane to 0 MW
+FPHA plane below zero at zero turbining: {entity} -- {n_pairs} (stage, plane) pair(s) at stages {stages} fall below 0 MW with no turbined flow and no spillage; the lowest reads {power_mw} MW (stage {stage_id}, plane {plane_id}, storage {v_min} hm³), so the hydro turbines water at 0 MW, or reports fpha_violation_mw where turbining cannot lift the plane to 0 MW
 ```
 
-The check skips a hydro with no FPHA entry, a hydro whose FPHA is computed (`source: "computed"`) and a hydro without turbine capacity. It covers each study stage whose entry resolves to `fpha`, and a stage uses its own `stage_id` rows, else the all-stage (`stage_id` null) rows. It evaluates each row at zero turbined flow, at the fitting window's minimum storage and at the upper end of the spillage fit range (`spillage_fit_max_m3s`, or its default), with `kappa` multiplying `gamma_0` only. `{s_star}` is the spillage at which the plane reaches 0 MW, (`kappa`·`gamma_0` + `gamma_v`·v_min)/|`gamma_s`| when that sum is positive and 0 otherwise. The earliest crossing is the smallest `{s_star}`, with ties broken by stage id and then plane id. `{stages}` lists the flagged stage ids as ascending runs written `a-b` (or a single id) and joined by `, `. One warning is reported per hydro.
+The check skips a hydro with no FPHA entry, a hydro whose FPHA is computed (`source: "computed"`) and a hydro without turbine capacity. It covers each study stage whose entry resolves to `fpha`, and a stage uses its own `stage_id` rows, else the all-stage (`stage_id` null) rows. It evaluates each row at zero turbined flow and zero spillage, at the fitting window's minimum storage, with `kappa` multiplying `gamma_0` only: `{power_mw}` is `kappa`·`gamma_0` + `gamma_v`·v_min. The lowest is the smallest `{power_mw}`, with ties broken by stage id and then plane id. `{stages}` lists the flagged stage ids as ascending runs written `a-b` (or a single id) and joined by `, `. One warning is reported per hydro.
+
+The tailrace-flow message, reported on `system/hydros.json` under rule `semantic.5a.70`:
+
+```text
+Hydro {name} (id={id}): tailrace_flow has no effect because the hydro uses FPHA at no study stage; select FPHA in extensions/production_models.json or remove tailrace_flow
+```
+
+The warning fires for a hydro with a non-default `tailrace_flow` that has no entry in `extensions/production_models.json`, or whose entry selects FPHA at no study stage. A `tailrace_flow` affects only the FPHA production function, so the declaration has no effect on such a hydro.
+
+The two `lognormal_3p` messages, which `novomodelo validate` reports and
+`novomodelo run` does not, the first on `scenarios/` and the second on
+`config.json`:
+
+```text
+modeling.inflow_residual.distribution = "lognormal_3p": the seasonal mean inflow is <= 0 at {list}; there the inflow takes the normal residual whenever its conditional mean is not positive
+modeling.inflow_residual.distribution = "lognormal_3p" with modeling.inflow_non_negativity.method = "none": an inflow that takes the normal residual can be negative
+```
+
+`{list}` names each hydro with its seasons, or with its stage ids at stages
+without a season, as ascending runs written `a-b` (or a single number) and
+joined by `, `, for example `hydro 0 (stages 0, 2), hydro 3 (seasons 0-11)`. It
+names at most ten hydros and counts the rest as `and {n} more`.
 
 **Resolution:** Review the flagged input. For a penalty-ordering warning, see
 [Load-time penalty checks](/en/math/penalty-system#implementation-in-novomodelo); for the
 inflow-lag warning, see
 [`stages[].state_variables` — Cut Projection](/en/math/cut-management/#stagesstate_variables--cut-projection);
 for the initial-storage warning, check that the first operating stage can reach
-its storage bounds, or move the initial storage inside them; for the rising-floor warning, lower the rising floor, raise the previous stage's floor, or use the `penalty` inflow method (see [the complete-recourse precondition](/en/math/penalty-system#complete-recourse-precondition)); for the precomputed-plane warning, raise the flagged plane's `gamma_s` to at least −(`kappa`·`gamma_0` + `gamma_v`·v_min)/S_ref, with the storage v_min and the spillage S_ref the message prints, or fit the planes from geometry with `source: "computed"`, whose planes get this limit ([Lateral-Flow Secant](/en/math/hydro-production-models#27-lateral-flow-secant)); a plane whose crossing is at 0 m³/s needs a larger `gamma_0` or `gamma_v`.
+its storage bounds, or move the initial storage inside them; for the rising-floor warning, lower the rising floor, raise the previous stage's floor, or use the `penalty` inflow method (see [the complete-recourse precondition](/en/math/penalty-system#complete-recourse-precondition)); for the precomputed-plane warning, raise the flagged plane's `gamma_0` or `gamma_v` until `kappa`·`gamma_0` + `gamma_v`·v_min is at least 0 at the storage v_min the message prints, or fit the planes from geometry with `source: "computed"`; for the tailrace-flow warning, select FPHA for the hydro in `extensions/production_models.json` or remove `tailrace_flow` from the hydro; for a `lognormal_3p` warning, check the flagged seasonal means, or set an [`inflow_non_negativity`](/en/running/configuration/#modelinginflow_non_negativity) method other than `none`.
 Warnings of this type do not prevent the solver from running.
 
 ---
@@ -2054,7 +2140,7 @@ Each message is `insufficient data: ` followed by the text below:
 - A residual of the pool is not finite:
 
   ```text
-  V2.3: historical library contains non-finite eta (NEG_INFINITY or NaN) at window year {year}, stage id {stage_id}, hydro id {hydro_id} — sigma=0 with non-matching historical observation or numerical failure
+  V2.3: historical library contains non-finite eta {value} at window year {year}, stage id {stage_id}, hydro id {hydro_id}
   ```
 
 V2.1 names the stage id, then the stage's 0-based index. A stage has no season
@@ -2064,7 +2150,7 @@ with an inflow model of order 1 and a `custom` season map that covers the first
 stage and its lag season but leaves one later stage's start date uncovered,
 `novomodelo validate` reports V2.1.
 
-V2.3 names the window's year, the stage id and the hydro id.
+V2.3 names the value, the window's year, the stage id and the hydro id.
 
 **Rendering under `novomodelo validate`:** the phase is `StochasticPreparationError`
 and the exit code is `1`. The `error:` line carries the file label and the
@@ -2187,8 +2273,8 @@ describes the `openings` key.
 **Severity:** Error
 
 **When it occurs:** Study construction fails on a case without `policy.boundary`: a scenario library (the
-forward `historical` scheme's included), an external-library check, a solver-profile check, or the admission
-gate of the `gap` rule and of the `dynamic` selection method and `max_active_per_stage`. File label: `scenarios/` for a stochastic-model error,
+forward `historical` scheme's included), an external-library check, a solver-profile check, the admission
+gate of the `gap` rule and of the `dynamic` selection method and `max_active_per_stage`, or the `lognormal_3p` gate of `modeling.inflow_residual.distribution`. File label: `scenarios/` for a stochastic-model error,
 `config.json` otherwise. On a case with `policy.boundary`, the same failures report
 [`BoundaryReconciliationError`](#boundaryreconciliationerror). `novomodelo validate` exits `1`.
 
@@ -2197,6 +2283,26 @@ gate of the `gap` rule and of the `dynamic` selection method and `max_active_per
 ```text
 scenarios/: stochastic error: insufficient data: no valid historical windows found: ensure that inflow history covers the required seasons for at least one starting year
 ```
+
+A `"lognormal_3p"` residual on a case that also uses an input it does not
+support ([`modeling.inflow_residual`](/en/running/configuration/#modelinginflow_residual))
+is refused with one message that names every conflict, joined by `; `:
+
+```text
+config.json: configuration validation error: modeling.inflow_residual.distribution = "lognormal_3p" does not support {conflicts}
+```
+
+Each conflict is one of:
+
+- `training.scenario_source.inflow.scheme = "{scheme}"` or
+  `simulation.scenario_source.inflow.scheme = "{scheme}"`, with `{scheme}`
+  `external` or `historical`;
+- `training.selection.method = "enumerated"` or
+  `simulation.selection.method = "enumerated"`;
+- `stages[].sampling_method = "historical_residuals" (stage {stage})`;
+- `policy_graph.nodes[].scenario_id (node {node}, stage {stage})`.
+
+Set `distribution` to `"normal"`, or change the conflicting inputs.
 
 ---
 
@@ -2647,24 +2753,6 @@ error: LP infeasible at stage 0, iteration 1, scenario 0
   -> run `novomodelo validate <CASE_DIR>` for a full diagnostic report
 ```
 
-### Solves that miss a row bound
-
-When any LP solve of the run returned an optimal primal solution that misses a
-row bound, `novomodelo run` prints one line on stderr when the run ends (rank 0
-only; `--quiet` does not suppress it). The run still succeeds and the exit code
-does not change:
-
-```text
-warning: LP solves returned a primal solution that misses a row bound by more than the primal feasibility tolerance plus 1e-11 of the row's magnitude: {n} of {m} (forward {f}, backward {b}, lower bound {l}, simulation {s}); per-stage counts are in the lp_row_violations column of solver/iterations.parquet
-```
-
-A row counts when its violation exceeds the solver's primal feasibility
-tolerance plus `1e-11` times the row's magnitude: the sum of the absolute values
-of its terms at the returned solution, taken as at least 1. The Python
-`novomodelo.run` prints the same text prefixed by `novomodelo-python: `. A count
-above zero means outputs recomputed from that solve (balances, duals, cuts) may
-not close; report it with the case.
-
 ### Simulation failures
 
 A stage-LP failure in simulation exits `3`, and every other simulation failure exits `4`.
@@ -2691,8 +2779,9 @@ A stage-LP failure in simulation exits `3`, and every other simulation failure e
 | `gather_basis_store: rank {rank} sent more than its {passes} rows at node {node}` or `gather_basis_store: rank {rank}'s basis payload at node {node} does not fit an i32 count` | `1` | Rank 0 cannot decode the stored LP bases it gathers from every process at a periodic checkpoint or at the end of training, or the bases one process holds for a node exceed an MPI count. The `novomodelo validate` hint after it does not apply. | Report the case with the message. |
 | `rank 0 signaled broadcast failure (length 0)`                                                                                                                                                                                                                                                                                                                                                                        | `4`       | Rank 0 fails while loading the case, before it broadcasts the study, so the other processes receive an empty broadcast; rank 0 exits with the code of its own error.                                                                                                                                                                               | Fix the error that rank 0 prints under its `rank 0:` line.                                                                                            |
 | `hydro model preprocessing error on non-root rank: {e}`                                                                                                                                                                                                                                                                                                                                                               | `4`       | A process other than rank 0 fails to prepare the hydro models, which it rebuilds from the case directory.                                                                                                                                                                                                                                          | Give every process read access to the same case directory, and read `{e}` for the cause.                                                              |
-| `opening tree differs across MPI ranks (fingerprints {min:#018x} to {max:#018x}); every rank must build the same tree from the broadcast inputs`                                                                                                                                                                                                                                                                      | `4`       | On two or more MPI processes, the digests of the opening tree that the ranks built differ after setup, so they would train against different trees; `{min}` and `{max}` are the smallest and the largest digest, each `0x` and 16 hexadecimal digits ([Opening tree across MPI ranks](/en/math/scenario-generation/#implementation-in-novomodelo)).   | Report the case with the message.                                                                                                                     |
-| `opening tree fingerprint exchange failed: {e}`                                                                                                                                                                                                                                                                                                                                                                       | `4`       | The exchange of the opening-tree digests across the MPI processes fails; `{e}` is the communication error.                                                                                                                                                                                                                                         | Read `{e}` for the failing operation.                                                                                                                 |
+| `opening tree differs across MPI ranks (fingerprints {min:#018x} to {max:#018x}); every rank must build the same opening tree from the broadcast inputs`                                                                                                                                                                                                                                                                      | `4`       | On two or more MPI processes, the digests of the opening tree that the ranks built differ after setup, so they would train against different trees; `{min}` and `{max}` are the smallest and the largest digest, each `0x` and 16 hexadecimal digits ([Opening tree across MPI ranks](/en/math/scenario-generation/#implementation-in-novomodelo)).   | Report the case with the message.                                                                                                                     |
+| `PAR model differs across MPI ranks (fingerprints {min:#018x} to {max:#018x}); every rank must build the same PAR model from the broadcast inputs` | `4` | On two or more MPI processes, the digests of the PAR model that the ranks built differ after setup, so they would compute inflows from different models; `{min}` and `{max}` are the smallest and the largest digest, each `0x` and 16 hexadecimal digits ([PAR model across MPI ranks](/en/math/par-inflow-model/#implementation-in-novomodelo)). | Report the case with the message. |
+| `{what} fingerprint exchange failed: {e}` | `4` | The exchange of the opening-tree or PAR-model digests across the MPI processes fails; `{what}` is `opening tree` or `PAR model`, and `{e}` is the communication error. | Read `{e}` for the failing operation. |
 | `enumerated training at world >= 2 requires a graph with no interior branching (a deterministic trunk + terminal fan): node {node_id} is a non-leaf node not shared by every root→leaf path — the enumerated forward's per-rank state exchange is elided for it, so the replicated backward would cut against a zeroed incoming state on any rank that never visits it, pending the interior-node state-exchange fix` | `1`       | Enumerated training (`training.selection.method` `"enumerated"`) runs on two or more MPI processes over a policy graph with an interior branching node; the message has no prefix and is followed by ``-> run `novomodelo validate <CASE_DIR>` for a full diagnostic report``, although `novomodelo validate` does not check this and exits `0` on the case. | Keep all branching at the last stage, run on one process, or use sampled selection.                                                                   |
 
 Requesting the MPI backend from a binary built without MPI support prints:

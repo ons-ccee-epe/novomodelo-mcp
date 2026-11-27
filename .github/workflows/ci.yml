@@ -194,9 +194,9 @@ jobs:
 
   executaveis-reais:
     # Todas as tools contra o executável novomodelo, o novomodelo-bridge e o
-    # novomodelo-python reais da versão esperada (o pin do bridge), em cada alvo.
+    # novomodelo-python reais das versões esperadas, em cada alvo.
     # O executável vem pela própria tool install_novomodelo (instalador oficial, hash
-    # conferido); os decks são os mínimos do bridge na tag da versão.
+    # conferido); os decks são os mínimos do bridge na tag do pin dele.
     strategy:
       fail-fast: false
       matrix:
@@ -220,9 +220,9 @@ jobs:
       - name: Sincronizar dependências
         run: uv sync --dev --locked
 
-      - name: Versão esperada
+      - name: Versão do bridge fixada
         id: versao
-        run: echo "v=$(uv run python -c 'from novomodelo_mcp.adapters.versions import expected_version; print(expected_version())')" >> "$GITHUB_OUTPUT"
+        run: echo "v=$(uv run python -c 'from novomodelo_mcp.adapters.versions import expected_bridge_version; print(expected_bridge_version())')" >> "$GITHUB_OUTPUT"
 
       - name: Decks mínimos do novomodelo-bridge na tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -242,7 +242,7 @@ jobs:
   rename-guard:
     # Falha se o nome antigo do produto reaparecer fora das exceções do mapa.
     # Usa a ferramenta do novomodelo (fonte única), fixada no commit de uma tag: o commit
-    # de pareamento sobe o `ref` (e a tag no comentário) junto com o pin do novomodelo-bridge.
+    # de pareamento sobe o `ref` (e a tag no comentário) para a tag do novomodelo pareado.
     name: Trava de nome (rebrand check)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -255,7 +255,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ons-ccee-epe/novomodelo
-          ref: b4197620a9f8c3d76bc6bf1153d98468a8bf1826  # v0.21.0
+          ref: 0b0b715c6ce1d71c6712d2d2da86905a2a0c0d35  # v0.22.0
           path: _upstream
           sparse-checkout: scripts/rebrand
           persist-credentials: false

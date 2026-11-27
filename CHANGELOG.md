@@ -4,10 +4,40 @@ As mudanças do novomodelo-mcp que alguém usando o servidor percebe ficam neste
 
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e o
 projeto adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/). O MCP
-`X.Y.Z` pareia com o novomodelo `X.Y.Z` e com o novomodelo-bridge `X.Y.Z`; uma correção
-só do MCP vira `X.Y.Z.postN`.
+`X.Y.Z` pareia com o novomodelo `X.Y.Z` e com o novomodelo-bridge `X.Y.Z` ou um patch só
+dele; uma correção só do MCP, ou um patch só do bridge depois do release do MCP, vira
+`X.Y.Z.postN`.
 
 ## [Unreleased]
+
+## [0.22.0] - 2026-11-26
+
+### Added
+
+- O `server_info` traz em `versions.expected_bridge` a versão do bridge que o MCP fixa, que
+  pode ser um patch só do bridge; `versions.expected` continua sendo a do novomodelo.
+
+### Changed
+
+- O MCP pareia com o novomodelo 0.22.0 e o novomodelo-bridge 0.22.1. As docs embutidas
+  são as da 0.22.0; a página `changelog/novomodelo` traz a seção da 0.22.0, e a
+  `changelog/novomodelo-bridge`, as da 0.22.0 e da 0.22.1.
+- **Para quem atualiza da 0.21:** `uv tool upgrade novomodelo-mcp`, fechar e abrir o
+  cliente e atualizar o executável `novomodelo` para a 0.22: peça ao agente "instale o
+  executável do novomodelo", como o aviso de versão indica. Os resultados mudam: converta
+  de novo os casos NEWAVE e DECOMP e rode-os com a 0.22. O novomodelo 0.22 recusa um
+  `post_study_stages.json` com a chave `stages` e as chaves que a seção 0.22.0 de
+  `changelog/novomodelo` lista em `Removed`.
+- Um patch só do bridge pareia com o novomodelo da mesma versão: o executável, a biblioteca
+  e as docs seguem a versão do novomodelo que o bridge fixa, e o bridge, o pin do MCP.
+
+### Fixed
+
+- O `server_info` anuncia um MCP `X.Y.Z.postN` novo, e o comando de reinstalar o MCP nos
+  `version_warnings` fixa a versão instalada, com o `.postN`.
+- O `docs_search` dá ao título de uma seção o dobro do peso que dava: a seção cujo título
+  nomeia o termo buscado vem antes das que só o citam no texto. Com as docs da 0.22.0, a
+  busca por `inflow non-negativity` deixava a página `math/inflow-nonnegativity` em 6º lugar.
 
 ## [0.21.0] - 2026-11-17
 

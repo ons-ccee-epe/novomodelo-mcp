@@ -39,6 +39,8 @@ def pecas(monkeypatch):
 
     monkeypatch.setattr(V, "_read_local", _ler)
     monkeypatch.setattr(V, "expected_version", lambda: "0.18.0")
+    monkeypatch.setattr(V, "expected_bridge_version", lambda: "0.18.0")
+    monkeypatch.setattr(V, "mcp_version", lambda: "0.18.0")
     return estado, chamadas
 
 
@@ -76,6 +78,58 @@ def test_mcp_em_post_casa_com_as_pecas(pecas):
     estado, _ = pecas
     estado["bridge"] = "0.18.0.post2"
     assert V.version_warnings(object()) == []
+
+
+def _metadados(monkeypatch, requisitos: dict[str, list[str]]):
+    def _requires(dist):
+        if dist not in requisitos:
+            raise V.metadata.PackageNotFoundError(dist)
+        return requisitos[dist]
+
+    monkeypatch.setattr(V.metadata, "requires", _requires)
+
+
+def test_versao_esperada_vem_do_pin_da_biblioteca_no_bridge(monkeypatch):
+    _metadados(
+        monkeypatch,
+        {
+            "novomodelo-mcp": ["mcp<2,>=1.30.0", "novomodelo-python", "novomodelo-bridge==0.22.1"],
+            "novomodelo-bridge": ["polars>=1.0", "novomodelo-python==0.22.0"],
+        },
+    )
+    assert V.expected_version() == "0.22.0"
+    assert V.expected_bridge_version() == "0.22.1"
+
+
+def test_sem_os_metadados_do_bridge_nao_ha_versao_esperada(monkeypatch):
+    _metadados(monkeypatch, {"novomodelo-mcp": ["novomodelo-bridge==0.22.1"]})
+    assert V.expected_version() is None
+    assert V.expected_bridge_version() == "0.22.1"
+
+
+def test_patch_so_do_bridge_nao_desalinha_as_outras_pecas(pecas, monkeypatch):
+    estado, _ = pecas
+    estado["bridge"] = "0.18.1"
+    monkeypatch.setattr(V, "expected_bridge_version", lambda: "0.18.1")
+    assert V.version_warnings(object()) == []
+    estado["executable"] = "0.17.0"
+    [aviso] = V.version_warnings(object())
+    assert "v0.18.0/novomodelo-cli-installer" in aviso and "0.18.1" not in aviso
+
+
+def test_bridge_atras_do_patch_fixado_sobe_ate_o_pin(pecas, monkeypatch):
+    monkeypatch.setattr(V, "expected_bridge_version", lambda: "0.18.1")
+    [aviso] = V.version_warnings(object())
+    assert aviso.startswith("novomodelo-bridge na versão 0.18.0; a do MCP é 0.18.1.")
+    assert "novomodelo-bridge==0.18.1" in aviso and "novomodelo-mcp==0.18.1" not in aviso
+
+
+def test_reinstalar_o_mcp_fixa_a_versao_instalada_com_o_post(pecas, monkeypatch):
+    estado, _ = pecas
+    estado["library"] = "0.17.0"
+    monkeypatch.setattr(V, "mcp_version", lambda: "0.18.0.post1")
+    [aviso] = V.version_warnings(object())
+    assert V.mcp_install_command("0.18.0.post1") in aviso
 
 
 # ── avisos locais ─────────────────────────────────────────────────────────────
@@ -164,8 +218,8 @@ def test_so_a_biblioteca_diverge(pecas):
 @pytest.mark.parametrize("peca,esperada", [("0.18.1", "0.18.0"), ("0.18.0", "0.18.1")])
 def test_patch_diferente_avisa_nos_dois_sentidos(pecas, monkeypatch, peca, esperada):
     estado, _ = pecas
-    estado.update(executable=esperada, library=esperada, bridge=peca)
-    monkeypatch.setattr(V, "expected_version", lambda: esperada)
+    estado["bridge"] = peca
+    monkeypatch.setattr(V, "expected_bridge_version", lambda: esperada)
     [aviso] = V.version_warnings(object())
     assert peca in aviso and esperada in aviso
 
@@ -236,8 +290,9 @@ def test_bridge_instalado_a_parte_e_mais_novo_da_os_dois_caminhos(pecas):
     estado, _ = pecas
     estado["bridge"] = "0.18.1"
     [aviso] = V.version_warnings(object())
-    assert aviso.startswith("O novomodelo-bridge está na 0.18.1 e o MCP na 0.18.0;")
-    assert V.mcp_install_command("0.18.1") in aviso and "novomodelo-bridge==0.18.0" in aviso
+    assert aviso.startswith("O novomodelo-bridge está na 0.18.1 e o MCP fixa o bridge na 0.18.0;")
+    assert "atualize o MCP, se já houver um com o bridge 0.18.1" in aviso
+    assert "novomodelo-bridge==0.18.0" in aviso and "novomodelo-mcp==" not in aviso
 
 
 _REBAIXAR = re.compile(r"volte|voltar|rebaix|downgrade|mantenha", re.I)
@@ -595,6 +650,38 @@ def test_mcp_no_pypi_na_versao_atual_nao_sugere_atualizar(pecas, monkeypatch):
     _respostas(monkeypatch, tag="v0.18.0", bridge="0.18.0", mcp="0.18.0")
     mcp = V.update_check(object())["mcp"]
     assert mcp["status"] == "atual" and "command" not in mcp
+
+
+def test_mcp_post_novo_no_pypi_vem_com_o_comando_do_post(pecas, monkeypatch):
+    _respostas(monkeypatch, tag="v0.18.0", bridge="0.18.1", mcp="0.18.0.post1")
+    mcp = V.update_check(object())["mcp"]
+    assert mcp["status"] == "nova" and mcp["latest"] == "0.18.0.post1"
+    assert mcp["command"] == V.mcp_install_command("0.18.0.post1")
+    assert mcp["release_notes"].endswith("/novomodelo-mcp/releases/tag/v0.18.0.post1")
+
+
+def test_mcp_post_instalado_nao_sugere_atualizar(pecas, monkeypatch):
+    monkeypatch.setattr(V, "mcp_version", lambda: "0.18.0.post1")
+    _respostas(monkeypatch, tag="v0.18.0", bridge="0.18.0", mcp="0.18.0.post1")
+    assert V.update_check(object())["mcp"]["status"] == "atual"
+
+
+def test_bridge_com_patch_novo_nao_nomeia_um_mcp_que_talvez_nao_exista(pecas, monkeypatch):
+    _respostas(monkeypatch, tag="v0.18.0", bridge="0.18.1", tag_bridge="v0.18.1")
+    nova = V.update_check(object())
+    assert nova["novomodelo"]["status"] == "atual"
+    bridge = nova["bridge"]
+    assert bridge["status"] == "nova" and bridge["latest"] == "0.18.1" and "command" not in bridge
+    assert "o MCP fixa o bridge na 0.18.0" in bridge["note"]
+    assert "MCP 0.18.1" not in bridge["note"] and "novomodelo-mcp==" not in bridge["note"]
+
+
+def test_bridge_no_patch_fixado_nao_e_versao_nova(pecas, monkeypatch):
+    estado, _ = pecas
+    estado["bridge"] = "0.18.1"
+    monkeypatch.setattr(V, "expected_bridge_version", lambda: "0.18.1")
+    _respostas(monkeypatch, tag="v0.18.0", bridge="0.18.1")
+    assert V.update_check(object())["bridge"]["status"] == "atual"
 
 
 def test_release_mais_novo_nao_manda_instalar_so_o_executavel(pecas, monkeypatch):
